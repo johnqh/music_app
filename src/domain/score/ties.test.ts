@@ -148,6 +148,44 @@ describe('tieChainFor', () => {
     expect(chainFromSecond.map((n) => n.id)).toEqual(['a', 'b']);
   });
 
+  it('returns the full chain across a measure boundary built via the real factory + splitNoteAcrossMeasures path, where each measure has its own distinct voice id', () => {
+    const score = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'Piano' }] });
+    const track = score.tracks[0];
+    const [m0, m1] = track.measures;
+    const measureTicks = m0.durationTicks;
+
+    // Sanity check on the premise: createEmptyScore (like the real fixtures) gives
+    // each measure its own freshly generated voice id, never a shared one.
+    expect(m0.voices[0].id).not.toBe(m1.voices[0].id);
+
+    // A note that spans the measure boundary, split the same way real code would
+    // split it (spec §4 utility), landing one segment in each measure's own voice.
+    const original = note({ id: 'n1', startTick: measureTicks - 240, durationTicks: 480 });
+    const [seg1, seg2] = splitNoteAcrossMeasures(original, [measureTicks]);
+
+    const scoreWithTie: Score = {
+      ...score,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            {
+              ...m0,
+              voices: [{ ...m0.voices[0], events: [{ ...seg1, voiceId: m0.voices[0].id, trackId: track.id }] }],
+            },
+            {
+              ...m1,
+              voices: [{ ...m1.voices[0], events: [{ ...seg2, voiceId: m1.voices[0].id, trackId: track.id }] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(tieChainFor(scoreWithTie, seg1.id).map((n) => n.id)).toEqual([seg1.id, seg2.id]);
+    expect(tieChainFor(scoreWithTie, seg2.id).map((n) => n.id)).toEqual([seg1.id, seg2.id]);
+  });
+
   it('returns a single-element chain for an untied note', () => {
     const a = note({ id: 'a', startTick: 0, durationTicks: 480 });
     const { score } = scoreWithVoiceEvents([a]);
