@@ -196,4 +196,67 @@ describe('tieChainFor', () => {
     const { score } = scoreWithVoiceEvents([]);
     expect(tieChainFor(score, 'missing')).toEqual([]);
   });
+
+  /**
+   * A hand-built 2-measure, 2-voice-per-measure score (no factory produces
+   * multi-voice measures yet, but spec §25 voice allocation will). Voice 0
+   * carries a real tie (a -> b) across the barline; voice 1 independently
+   * carries its own real tie (c -> d) at the exact same ticks and pitch,
+   * to serve as a worst-case coincidental decoy for voice 0's chain.
+   */
+  function twoVoiceScoreWithParallelTies(): Score {
+    const score = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'Piano' }] });
+    const track = score.tracks[0];
+    const [m0, m1] = track.measures;
+    const measureTicks = m0.durationTicks;
+    const tieStartTick = measureTicks - 240;
+
+    const a = note({ id: 'a', startTick: tieStartTick, durationTicks: 240, tieStart: true, voiceId: 'v0', trackId: track.id });
+    const c = note({ id: 'c', startTick: tieStartTick, durationTicks: 240, tieStart: true, voiceId: 'v1', trackId: track.id });
+    const b = note({ id: 'b', startTick: measureTicks, durationTicks: 240, tieStop: true, voiceId: 'v0', trackId: track.id });
+    const d = note({ id: 'd', startTick: measureTicks, durationTicks: 240, tieStop: true, voiceId: 'v1', trackId: track.id });
+
+    const score2: Score = {
+      ...score,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            {
+              ...m0,
+              voices: [
+                { id: 'v0', name: 'Voice 1', events: [a] },
+                { id: 'v1', name: 'Voice 2', events: [c] },
+              ],
+            },
+            {
+              ...m1,
+              // Deliberately list the decoy voice (index 1's partner) before
+              // the true-partner voice, and give both measures fresh voice
+              // ids per voice-index, matching how a real, non-hand-forced
+              // score would be built (see the factory-path test above).
+              voices: [
+                { id: 'v0-m1', name: 'Voice 1', events: [b] },
+                { id: 'v1-m1', name: 'Voice 2', events: [d] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    return score2;
+  }
+
+  it('does not splice a coincidental same-pitch, tie-flagged note from another voice into the chain at a barline', () => {
+    const score = twoVoiceScoreWithParallelTies();
+    expect(tieChainFor(score, 'a').map((n) => n.id)).toEqual(['a', 'b']);
+    expect(tieChainFor(score, 'c').map((n) => n.id)).toEqual(['c', 'd']);
+  });
+
+  it('finds the true partner across a measure boundary even when another voice has a note at the same startTick', () => {
+    const score = twoVoiceScoreWithParallelTies();
+    const chain = tieChainFor(score, 'a');
+    expect(chain).toHaveLength(2);
+    expect(chain[1].id).toBe('b'); // not 'd', despite 'd' sharing b's startTick/pitch/tieStop
+  });
 });

@@ -1,6 +1,6 @@
 import { createId } from '@/domain/score/ids';
 import { findEvent, findTrack } from '@/domain/score/queries';
-import type { MusicalEvent, NoteEvent, Pitch, Score, UUID } from '@/domain/score/types';
+import type { MusicalEvent, NoteEvent, Pitch, Score, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { splitAtBoundaries } from '@/domain/time/durations';
 
@@ -87,29 +87,76 @@ export function joinTiedNotes(events: MusicalEvent[]): MusicalEvent[] {
   return result;
 }
 
-/** A note event annotated with the index of the measure (within its track) it came from. */
-type ChainCandidate = { event: NoteEvent; measureIndex: number };
+/** A note event annotated with the index (within its track) of the measure it came from. */
+type ChannelCandidate = { event: NoteEvent; measureIndex: number };
 
 /**
- * Whether `prev` ties directly into `next` (contiguous, same pitch, tie
- * flags set on both ends). Voice-id equality is required only when both
- * candidates fall in the *same* measure (where each measure's voice ids
- * are freshly generated and thus meaningful/unique — see module note
- * below); across a measure boundary voice ids are not compared, since
- * nothing in this codebase keeps a voice's id stable from one measure to
- * the next (voice re-allocation per measure is expected, spec §25), so
- * gating on it there would silently truncate real cross-barline chains.
+ * The ordinal index (position within `measure.voices`) of the voice
+ * containing `noteId`, searching every measure of `track` in order.
+ * Returns -1 if `noteId` isn't found in any voice of this track.
  */
-function tiesInto(prev: ChainCandidate, next: ChainCandidate): boolean {
-  const voiceCompatible =
-    prev.measureIndex !== next.measureIndex || prev.event.voiceId === next.event.voiceId;
-  return (
-    voiceCompatible &&
-    Boolean(prev.event.tieStart) &&
-    Boolean(next.event.tieStop) &&
-    prev.event.startTick + prev.event.durationTicks === next.event.startTick &&
-    samePitch(prev.event.pitch, next.event.pitch)
-  );
+function locateVoiceIndex(track: Track, noteId: UUID): number {
+  for (const measure of track.measures) {
+    const voiceIndex = measure.voices.findIndex((voice) => voice.events.some((e) => e.id === noteId));
+    if (voiceIndex !== -1) return voiceIndex;
+  }
+  return -1;
+}
+
+/**
+ * Every note event from the voice at ordinal position `voiceIndex` in
+ * each of `track`'s measures (a measure with no voice at that index
+ * contributes nothing), in measure/tick order. This is the "channel" a
+ * tie chain is searched within.
+ *
+ * Voice ids are freshly generated per measure and so are not stable
+ * across a barline (spec §25 permits per-measure voice reallocation), so
+ * they can't be used to correlate "the same voice" from one measure to
+ * the next. A voice's *ordinal position* in `measure.voices` is used as
+ * a stand-in instead — a deliberate, documented approximation, not a
+ * guarantee that voice N in one measure is musically continuous with
+ * voice N in the next.
+ */
+function voiceChannel(track: Track, voiceIndex: number): ChannelCandidate[] {
+  const channel: ChannelCandidate[] = [];
+  track.measures.forEach((measure, measureIndex) => {
+    const voice = measure.voices[voiceIndex];
+    if (!voice) return;
+    for (const event of voice.events) {
+      if (isNoteEvent(event)) channel.push({ event, measureIndex });
+    }
+  });
+  channel.sort((a, b) => a.measureIndex - b.measureIndex || a.event.startTick - b.event.startTick);
+  return channel;
+}
+
+/**
+ * The note in `channel` that `note` ties into (its `tieStart` partner),
+ * found by explicit (tick, pitch, tie-flag) matching — never by array
+ * adjacency, so an unrelated same-tick note (e.g. a coincidental chord
+ * tone sharing `note`'s channel) can't be picked up by accident.
+ */
+function findForwardPartner(channel: ChannelCandidate[], note: NoteEvent): NoteEvent | undefined {
+  if (!note.tieStart) return undefined;
+  return channel.find(
+    (c) =>
+      c.event.id !== note.id &&
+      c.event.startTick === note.startTick + note.durationTicks &&
+      Boolean(c.event.tieStop) &&
+      samePitch(c.event.pitch, note.pitch),
+  )?.event;
+}
+
+/** The note in `channel` that ties into `note` (its `tieStop` partner); see `findForwardPartner`. */
+function findBackwardPartner(channel: ChannelCandidate[], note: NoteEvent): NoteEvent | undefined {
+  if (!note.tieStop) return undefined;
+  return channel.find(
+    (c) =>
+      c.event.id !== note.id &&
+      c.event.startTick + c.event.durationTicks === note.startTick &&
+      Boolean(c.event.tieStart) &&
+      samePitch(c.event.pitch, note.pitch),
+  )?.event;
 }
 
 /**
@@ -119,14 +166,16 @@ function tiesInto(prev: ChainCandidate, next: ChainCandidate): boolean {
  * not a note event; returns a single-element array for a note with no
  * ties.
  *
- * Cross-measure matching does *not* require a shared `voiceId`: measures
- * are built independently (each with its own freshly generated voice
- * ids — see `factory.ts`/`fixtures.ts`), so a voice id is only meaningful
- * as an identifier *within* a single measure, never as a stable "voice
- * slot" across measures. Chain membership across a measure boundary is
- * instead determined purely by track + tick-contiguity + same pitch +
- * tie flags, which is also more faithful to spec §25 (voice allocation
- * may reassign voice numbers per measure).
+ * Chain membership is searched only within the target's own "voice
+ * channel" (`voiceChannel`, above — the voice at the same ordinal
+ * position across every measure of the track), never across voices. This
+ * matters once a measure has more than one voice (spec §25 voice
+ * allocation): searching across all voices indiscriminately would let a
+ * coincidental same-pitch, tie-flagged note in an unrelated voice at a
+ * barline get spliced into the chain, or shadow the true partner when
+ * both share the same tick. Within the channel, a partner is found by
+ * explicit (tick, pitch, tie-flag) matching, not raw array adjacency, for
+ * the same reason.
  */
 export function tieChainFor(score: Score, noteId: UUID): NoteEvent[] {
   const target = findEvent(score, noteId);
@@ -135,28 +184,27 @@ export function tieChainFor(score: Score, noteId: UUID): NoteEvent[] {
   const track = findTrack(score, target.trackId);
   if (!track) return [target];
 
-  const candidates: ChainCandidate[] = [];
-  track.measures.forEach((measure, measureIndex) => {
-    for (const voice of measure.voices) {
-      for (const event of voice.events) {
-        if (isNoteEvent(event)) candidates.push({ event, measureIndex });
-      }
-    }
-  });
-  candidates.sort((a, b) => a.event.startTick - b.event.startTick);
+  const voiceIndex = locateVoiceIndex(track, target.id);
+  if (voiceIndex === -1) return [target];
 
-  const index = candidates.findIndex((c) => c.event.id === target.id);
-  if (index === -1) return [target];
+  const channel = voiceChannel(track, voiceIndex);
+  const chain: NoteEvent[] = [target];
 
-  let start = index;
-  while (start > 0 && tiesInto(candidates[start - 1], candidates[start])) {
-    start -= 1;
+  let current = target;
+  for (let guard = 0; guard < channel.length; guard += 1) {
+    const partner = findBackwardPartner(channel, current);
+    if (!partner) break;
+    chain.unshift(partner);
+    current = partner;
   }
 
-  let end = index;
-  while (end < candidates.length - 1 && tiesInto(candidates[end], candidates[end + 1])) {
-    end += 1;
+  current = target;
+  for (let guard = 0; guard < channel.length; guard += 1) {
+    const partner = findForwardPartner(channel, current);
+    if (!partner) break;
+    chain.push(partner);
+    current = partner;
   }
 
-  return candidates.slice(start, end + 1).map((c) => c.event);
+  return chain;
 }
