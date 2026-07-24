@@ -36,7 +36,12 @@ export type RenderResult = {
   idToElement: Map<string, SVGElement>;
   /** Note/rest event id -> that element's bounding box (page coordinates, SVG user units). */
   idToBBox: Map<string, BBox>;
-  /** Measure id -> the bounding box of that measure's stave (unioned across every rendered track). */
+  /**
+   * Measure id -> that measure's stave bounding box. Domain measures are
+   * per-track (each `Track.measures[i]` has its own id — spec §4), so this
+   * is naturally one entry per rendered (track, measure) stave, not a value
+   * unioned across tracks.
+   */
   measureIdToBBox: Map<string, BBox>;
   /** Total rendered height in pixels; combine with `options.width` (page) or the natural content width (continuous) for the viewport. */
   height: number;
