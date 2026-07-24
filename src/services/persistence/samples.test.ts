@@ -38,6 +38,24 @@ describe('installSampleProjects', () => {
     expect(all).toHaveLength(3);
   });
 
+  it('is idempotent under concurrent calls on the same db (no TOCTOU duplicate inserts)', async () => {
+    const [firstResult, secondResult] = await Promise.all([
+      installSampleProjects(db),
+      installSampleProjects(db),
+    ]);
+
+    // Together, exactly the three samples were created (split however the
+    // two racing calls happened to divide the work) — never six.
+    const combinedNames = [...firstResult, ...secondResult].map((p) => p.name).sort();
+    expect(combinedNames).toEqual(
+      ['Gentle Piano Melody', 'Orchestral Passage', 'Pop Arrangement'].sort(),
+    );
+
+    const all = await listProjects(db);
+    expect(all).toHaveLength(3);
+    expect(new Set(all.map((p) => p.name)).size).toBe(3);
+  });
+
   it('every installed sample is a structurally valid score with zero validation errors', async () => {
     const created = await installSampleProjects(db);
     for (const record of created) {

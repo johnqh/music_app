@@ -5,9 +5,14 @@
  * seeds, so every install produces byte-for-byte identical scores — no
  * checked-in fixture JSON to keep in sync with the generator.
  *
- * `installSampleProjects` is idempotent: it skips any sample whose name
- * already exists among the current projects, so calling it again (e.g. on
- * every app boot, per spec §32) never creates duplicates.
+ * `installSampleProjects` is idempotent — including under concurrent calls
+ * on the same `db` (e.g. two tabs booting at once): the "which samples are
+ * missing" check and the inserts happen inside a single `readwrite`
+ * transaction on `projects`, so IndexedDB's own transaction serialization
+ * rules out the check-then-insert race a naive "read names, then loop
+ * `add`" would have (two concurrent transactions on the same store never
+ * interleave; the second one's read is guaranteed to see the first one's
+ * writes once it commits).
  */
 import { MockGenerationProvider } from '@/services/generation/mock-provider';
 import type { GenerateScoreRequest } from '@/services/generation/types';
@@ -83,21 +88,42 @@ export const SAMPLE_DEFINITIONS: readonly SampleDefinition[] = [
  * Installs any sample project (from `SAMPLE_DEFINITIONS`) not already
  * present in `db` (matched by name), generating each via a fresh
  * `MockGenerationProvider` seeded per-sample. Returns the records that were
- * actually created (empty if every sample already existed). Safe to call
- * on every app boot: a second call with the same `db` creates nothing.
+ * actually created (empty if every sample already existed). Safe to call on
+ * every app boot, including concurrently from multiple tabs against the
+ * same `db`: a second (or simultaneous) call creates nothing.
  */
 export async function installSampleProjects(db: ScoreSmithDb): Promise<ProjectRecord[]> {
-  const existingNames = new Set((await listProjects(db)).map((project) => project.name));
+  // Generate every candidate score *before* opening the transaction below.
+  // A Dexie transaction auto-commits as soon as the callback awaits
+  // anything that isn't itself a Dexie operation on a table included in the
+  // transaction — `MockGenerationProvider.generateScore` isn't one, so it
+  // must not run inside the `db.transaction(...)` callback.
+  const candidates = await Promise.all(
+    SAMPLE_DEFINITIONS.map(async (sample) => {
+      const provider = new MockGenerationProvider({ seed: sample.seed });
+      const { score } = await provider.generateScore(sample.request);
+      return { sample, score };
+    }),
+  );
+
   const created: ProjectRecord[] = [];
 
-  for (const sample of SAMPLE_DEFINITIONS) {
-    if (existingNames.has(sample.name)) continue;
+  // Check-and-insert as one atomic readwrite transaction: re-reading
+  // `existingNames` *inside* the transaction (rather than once, up front)
+  // is what makes concurrent `installSampleProjects` calls on the same `db`
+  // race-free — IndexedDB serializes readwrite transactions on the same
+  // store, so the second call's read only happens after the first call's
+  // transaction (reads + writes) has fully committed.
+  await db.transaction('rw', db.projects, async () => {
+    const existingNames = new Set((await listProjects(db)).map((project) => project.name));
 
-    const provider = new MockGenerationProvider({ seed: sample.seed });
-    const { score } = await provider.generateScore(sample.request);
-    const record = await createProject(db, { name: sample.name, score });
-    created.push(record);
-  }
+    for (const { sample, score } of candidates) {
+      if (existingNames.has(sample.name)) continue;
+      const record = await createProject(db, { name: sample.name, score });
+      created.push(record);
+      existingNames.add(sample.name);
+    }
+  });
 
   return created;
 }
