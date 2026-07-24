@@ -121,7 +121,69 @@ describe('importMidi', () => {
     const { score, warnings } = importMidi(buffer, options);
 
     expect(allNotes(score).filter(isNoteEvent)).toHaveLength(1);
-    expect(warnings.some((w) => w.includes('dropped'))).toBe(true);
+    expect(warnings.some((w) => w.includes('dropped') && w.includes('shorter than'))).toBe(true);
+    // Only the short-note stage changed anything here - merge/overlap stages must stay silent.
+    expect(warnings.some((w) => w.includes('merged'))).toBe(false);
+    expect(warnings.some((w) => w.includes('trimmed'))).toBe(false);
+  });
+
+  it('merges near-duplicate same-pitch onsets when mergeNearDuplicates is true, warning only about the merge', () => {
+    const midi = new Midi();
+    midi.header.fromJSON({ name: 'Duplicates', ppq: 480, meta: [], tempos: [{ ticks: 0, bpm: 120 }], timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }], keySignatures: [] });
+    const track = midi.addTrack();
+    track.name = 'Piano';
+    // Two near-identical, overlapping C4 triggers 10 ticks apart - an accidental
+    // double-trigger, not a deliberate chord/repeat - plus an unrelated D4 note.
+    // importMidi's same-pitch-overlap guard (also used for sustain extension) first
+    // clamps the earlier note's raw duration down to that 10-tick onset gap, so
+    // minDurationTicks is set below 10 here to isolate the merge stage: this test
+    // is about attributing the resulting single note to "merged", not "dropped".
+    track.addNote({ midi: 60, ticks: 0, durationTicks: 470, velocity: 0.5 });
+    track.addNote({ midi: 60, ticks: 10, durationTicks: 460, velocity: 0.9 });
+    track.addNote({ midi: 62, ticks: 960, durationTicks: 480, velocity: 0.8 });
+
+    const buffer = toArrayBuffer(midi.toArray());
+    const summary = analyzeMidi(buffer);
+    const options = { ...defaultMidiImportOptions(summary), quantizeGrid: null, mergeNearDuplicates: true, minDurationTicks: 1 };
+    const { score, warnings } = importMidi(buffer, options);
+
+    const notes = allNotes(score)
+      .filter(isNoteEvent)
+      .sort((a, b) => a.startTick - b.startTick);
+    expect(notes).toHaveLength(2); // the two C4 duplicates collapsed into one, plus the D4
+    expect(notes[0].startTick).toBe(0);
+    expect(notes[0].durationTicks).toBe(470); // spans through the later onset's end (10 + 460)
+
+    expect(warnings.some((w) => w.includes('merged') && w.includes('near-duplicate'))).toBe(true);
+    // The merge must not be misattributed to the short-note or overlap stages.
+    expect(warnings.some((w) => w.includes('dropped'))).toBe(false);
+    expect(warnings.some((w) => w.includes('trimmed'))).toBe(false);
+  });
+
+  it('trims an overlapping note and warns, without misattributing it to a short-note drop', () => {
+    const midi = new Midi();
+    midi.header.fromJSON({ name: 'Overlap', ppq: 480, meta: [], tempos: [{ ticks: 0, bpm: 120 }], timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }], keySignatures: [] });
+    const track = midi.addTrack();
+    track.name = 'Piano';
+    // The C4 runs 20 ticks past the D4's onset - overlap resolution should trim it back to 480,
+    // not remove it (and definitely not blame it on minDurationTicks).
+    track.addNote({ midi: 60, ticks: 0, durationTicks: 500, velocity: 0.8 });
+    track.addNote({ midi: 62, ticks: 480, durationTicks: 480, velocity: 0.8 });
+
+    const buffer = toArrayBuffer(midi.toArray());
+    const summary = analyzeMidi(buffer);
+    const options = { ...defaultMidiImportOptions(summary), quantizeGrid: null };
+    const { score, warnings } = importMidi(buffer, options);
+
+    const notes = allNotes(score)
+      .filter(isNoteEvent)
+      .sort((a, b) => a.startTick - b.startTick);
+    expect(notes).toHaveLength(2); // trimming shortens a note, it never removes one
+    expect(notes[0].durationTicks).toBe(480); // trimmed from 500
+
+    expect(warnings.some((w) => w.includes('trimmed') && w.includes('overlapping'))).toBe(true);
+    expect(warnings.some((w) => w.includes('dropped'))).toBe(false);
+    expect(warnings.some((w) => w.includes('merged'))).toBe(false);
   });
 
   it('extends a note through a held sustain pedal when sustainPedal is "extend"', () => {

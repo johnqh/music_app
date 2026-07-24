@@ -37,7 +37,7 @@ describe('exportMidi', () => {
     expect(treble.notes).toHaveLength(expectedTrebleNotes.length);
   });
 
-  it('routes percussion-clef tracks to MIDI channel 9 regardless of the track"s own midiChannel', () => {
+  it("routes percussion-clef tracks to MIDI channel 9 regardless of the track's own midiChannel", () => {
     const score = createEmptyScore({
       title: 'Drums',
       measures: 1,

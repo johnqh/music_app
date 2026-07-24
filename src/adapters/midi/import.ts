@@ -37,6 +37,16 @@ const SUSTAIN_DOWN_THRESHOLD = 0.5;
 const DEFAULT_MAX_VOICES = 4;
 const DEFAULT_KEY_SIGNATURE: KeySignature = { fifths: 0, mode: 'major' };
 const PERCUSSION_CHANNEL = 9;
+/**
+ * Onsets of the same pitch within this many ticks of each other are treated
+ * as accidental duplicate triggers (not a deliberate ornament/grace note) by
+ * `mergeNearDuplicates`. Deliberately independent of `quantizeGrid` — this
+ * is about performance-timing noise, not the notation grid — roughly a
+ * 128th note at 480 ppq (half of `import-options.ts`'s default
+ * `minDurationTicks`, a 64th note, since a near-duplicate this close is
+ * almost always well inside whatever floor is configured).
+ */
+const NEAR_DUPLICATE_TOLERANCE_TICKS = 15;
 
 const ALWAYS_WARNING =
   'MIDI import approximates performance timing as notation: quantization, voice/staff assignment, and key detection are best-effort. Review the result before use.';
@@ -151,18 +161,70 @@ function extractRawNotes(sourceTrack: SourceMidiTrack, ratio: number, sustainPed
 
 // ---- Quantization -------------------------------------------------------------
 
-function quantizeOptionsFor(options: MidiImportOptions): QuantizeOptions {
-  const quantizing = options.quantizeGrid !== null;
-  const grid = quantizing ? ticksFor(options.quantizeGrid as NonNullable<MidiImportOptions['quantizeGrid']>, SCORE_PPQ) : 1;
-  return {
-    grid,
-    quantizeStarts: quantizing,
-    quantizeDurations: quantizing,
-    tripletGrid: quantizing && options.tripletDetection,
-    minDurationTicks: options.minDurationTicks,
-    chordToleranceTicks: options.mergeNearDuplicates ? Math.max(1, Math.round(grid / 4)) : undefined,
-    resolveOverlaps: true,
-  };
+/** Grid unit in ticks for `options.quantizeGrid`, or `1` (a no-op grid) when quantization is off. */
+function gridTicksFor(options: MidiImportOptions): number {
+  return options.quantizeGrid !== null ? ticksFor(options.quantizeGrid, SCORE_PPQ) : 1;
+}
+
+/**
+ * Merges runs of same-pitch onsets within `toleranceTicks` of each other
+ * into a single note (earliest start, spanning to the latest end, keeping
+ * the louder velocity) — genuine accidental-duplicate-trigger cleanup, not
+ * just onset repositioning (contrast `quantizeEvents`' `chordToleranceTicks`,
+ * which only snaps near-simultaneous onsets onto a shared tick and is
+ * meant for *chords*, i.e. different pitches — it never reduces note
+ * count, so it can't by itself implement "merge near-duplicate notes").
+ * Only ever compares notes of the *same* pitch, so legitimate chords
+ * (different pitches, same or near onset) are never affected. Returns the
+ * merged notes (sorted by `startTick`) and how many source notes were
+ * folded into another (i.e. `input.length - notes.length`).
+ */
+/** Folds `next` into `base`: keeps `base`'s start, extends to cover both spans, keeps the louder velocity. */
+function mergeInto(base: NoteEvent, next: NoteEvent): NoteEvent {
+  const end = Math.max(base.startTick + base.durationTicks, next.startTick + next.durationTicks);
+  return { ...base, durationTicks: end - base.startTick, velocity: Math.max(base.velocity, next.velocity) };
+}
+
+function mergeNearDuplicateNotes(notes: NoteEvent[], toleranceTicks: number): { notes: NoteEvent[]; mergedCount: number } {
+  const byPitch = new Map<number, NoteEvent[]>();
+  for (const note of notes) {
+    const midi = pitchToMidi(note.pitch);
+    const bucket = byPitch.get(midi);
+    if (bucket) bucket.push(note);
+    else byPitch.set(midi, [note]);
+  }
+
+  const kept: NoteEvent[] = [];
+  let mergedCount = 0;
+
+  for (const bucket of byPitch.values()) {
+    const sorted = [...bucket].sort((a, b) => a.startTick - b.startTick);
+    let current: NoteEvent | null = null;
+    for (const note of sorted) {
+      if (current !== null && note.startTick - current.startTick <= toleranceTicks) {
+        current = mergeInto(current, note);
+        mergedCount += 1;
+      } else {
+        if (current) kept.push(current);
+        current = note;
+      }
+    }
+    if (current) kept.push(current);
+  }
+
+  kept.sort((a, b) => a.startTick - b.startTick);
+  return { notes: kept, mergedCount };
+}
+
+/** Number of `after` notes whose `durationTicks` differs from the `before` note sharing its id (i.e. was trimmed by overlap resolution). Ids not present in `before` (there are none, by construction) would not count. */
+function countDurationChanges(before: NoteEvent[], after: NoteEvent[]): number {
+  const beforeById = new Map(before.map((n) => [n.id, n]));
+  let count = 0;
+  for (const note of after) {
+    const prior = beforeById.get(note.id);
+    if (prior && prior.durationTicks !== note.durationTicks) count += 1;
+  }
+  return count;
 }
 
 // ---- Prepared per-selection data ----------------------------------------------
@@ -173,13 +235,30 @@ type PreparedSelection = {
   notes: NoteEvent[];
 };
 
-/** Quantizes a selection's raw notes (dropping/merging/snapping per `options`), tagged with a temporary per-selection trackId so `quantizeEvents` groups them correctly. */
-function prepareSelectionNotes(
-  raw: RawNote[],
-  tempTrackId: string,
-  options: MidiImportOptions,
-): NoteEvent[] {
-  const events: NoteEvent[] = raw.map((n) => ({
+type PrepareStageCounts = { droppedShort: number; mergedDuplicates: number; trimmedOverlaps: number };
+
+type PreparedNotes = { notes: NoteEvent[] } & PrepareStageCounts;
+
+/**
+ * Turns a selection's raw notes into cleaned-up `NoteEvent`s per `options`,
+ * as three explicit, independently-measured stages so each cause of a note
+ * being dropped/merged/trimmed can be reported accurately (rather than one
+ * combined before/after count blamed entirely on `minDurationTicks`,
+ * regardless of which stage actually changed anything):
+ *
+ * 1. Drop notes shorter than `minDurationTicks` + snap starts/durations to
+ *    the quantization grid (`quantizeGrid`/`tripletDetection`). Only this
+ *    stage can remove notes, so any count delta here is `droppedShort`.
+ * 2. Merge near-duplicate same-pitch onsets (`mergeNearDuplicates`) via
+ *    `mergeNearDuplicateNotes`. Any count delta here is `mergedDuplicates`.
+ * 3. Resolve residual overlaps (always on) by trimming an overlapping
+ *    note's duration down to the next note's start — this never changes
+ *    note *count* (durations are floored at 1 tick, never dropped), so it's
+ *    measured as `trimmedOverlaps`: how many notes had their duration
+ *    shortened.
+ */
+function prepareSelectionNotes(raw: RawNote[], tempTrackId: string, options: MidiImportOptions): PreparedNotes {
+  const initialEvents: NoteEvent[] = raw.map((n) => ({
     id: createId(),
     pitch: midiToPitch(n.midi),
     startTick: n.startTick,
@@ -189,8 +268,27 @@ function prepareSelectionNotes(
     trackId: tempTrackId,
   }));
 
-  const quantized = quantizeEvents(events, quantizeOptionsFor(options));
-  return quantized.filter(isNoteEvent);
+  const quantizing = options.quantizeGrid !== null;
+  const grid = gridTicksFor(options);
+  const snapQuantizeOptions: QuantizeOptions = {
+    grid,
+    quantizeStarts: quantizing,
+    quantizeDurations: quantizing,
+    tripletGrid: quantizing && options.tripletDetection,
+    minDurationTicks: options.minDurationTicks,
+  };
+  const snapped = quantizeEvents(initialEvents, snapQuantizeOptions).filter(isNoteEvent);
+  const droppedShort = initialEvents.length - snapped.length;
+
+  const { notes: deduped, mergedCount: mergedDuplicates } = options.mergeNearDuplicates
+    ? mergeNearDuplicateNotes(snapped, NEAR_DUPLICATE_TOLERANCE_TICKS)
+    : { notes: snapped, mergedCount: 0 };
+
+  const overlapQuantizeOptions: QuantizeOptions = { grid: 1, quantizeStarts: false, quantizeDurations: false, resolveOverlaps: true };
+  const resolved = quantizeEvents(deduped, overlapQuantizeOptions).filter(isNoteEvent);
+  const trimmedOverlaps = countDurationChanges(deduped, resolved);
+
+  return { notes: resolved, droppedShort, mergedDuplicates, trimmedOverlaps };
 }
 
 // ---- Track assembly -------------------------------------------------------------
@@ -306,13 +404,18 @@ export function importMidi(data: ArrayBuffer, options: MidiImportOptions): MidiI
     }
 
     const raw = extractRawNotes(sourceTrack, ratio, options.sustainPedal);
-    const notes = prepareSelectionNotes(raw, `import-${selection.sourceIndex}`, options);
-    const dropped = raw.length - notes.length;
-    if (dropped > 0) {
-      warnings.push(`Track "${selection.name}": dropped ${dropped} note(s) shorter than ${options.minDurationTicks} ticks.`);
+    const prepared = prepareSelectionNotes(raw, `import-${selection.sourceIndex}`, options);
+    if (prepared.droppedShort > 0) {
+      warnings.push(`Track "${selection.name}": dropped ${prepared.droppedShort} note(s) shorter than ${options.minDurationTicks} ticks.`);
+    }
+    if (prepared.mergedDuplicates > 0) {
+      warnings.push(`Track "${selection.name}": merged ${prepared.mergedDuplicates} near-duplicate note(s).`);
+    }
+    if (prepared.trimmedOverlaps > 0) {
+      warnings.push(`Track "${selection.name}": trimmed ${prepared.trimmedOverlaps} overlapping note(s) to resolve timing conflicts.`);
     }
 
-    preparedSelections.push({ selection, sourceTrack, notes });
+    preparedSelections.push({ selection, sourceTrack, notes: prepared.notes });
   }
 
   if (preparedSelections.length === 0) {
