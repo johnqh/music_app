@@ -18,7 +18,14 @@ import { ticksFor } from '@/domain/time/ticks';
 import { transposePitch } from '@/domain/pitch/transpose';
 import type { ScoreCommand } from '@/domain/commands/types';
 import { transformCommand } from '@/domain/commands/snapshot';
-import { ensureVoiceAtIndex, insertNoteIntoTrack, removeNotesFromTrack, reflowVoice, withTracks } from '@/domain/commands/reflow';
+import {
+  clearDanglingTies,
+  ensureVoiceAtIndex,
+  insertNoteIntoTrack,
+  removeNotesFromTrack,
+  reflowVoice,
+  withTracks,
+} from '@/domain/commands/reflow';
 
 // ---- shared traversal helpers ------------------------------------------------
 
@@ -83,7 +90,24 @@ function addNote(score: Score, params: AddNoteParams): Score {
   return withTracks(score, tracks);
 }
 
-/** Adds a new note into `params.measureId`'s voice at `params.voiceIndex`, backfilling rests around it. */
+/**
+ * Adds a new note into `params.measureId`'s voice at `params.voiceIndex`,
+ * backfilling rests around it. If the new note overlaps an existing note
+ * in that voice, the overlap is resolved deterministically by
+ * `reflowVoice`'s "replace-on-overlap" rule (see `reflow.ts`): the new
+ * note wins, trimming or dropping whatever it overlaps.
+ *
+ * Only inserted into `params.measureId` itself: if `startTick +
+ * durationTicks` extends past that measure's end, the note is silently
+ * truncated to fit (by `reflowVoice`'s measure-clipping), not split into
+ * tied segments the way `moveNotesCommand`/`pasteEventsCommand` split a
+ * note that crosses a boundary. This is a deliberate, narrower behavior
+ * for `addNoteCommand` specifically (an add always targets one named
+ * measure, unlike a move/paste's computed destination) — callers that
+ * want boundary-spanning insertion should add the note measure-local and
+ * then use `moveNotesCommand`/`resizeNotesCommand` if it needs to extend
+ * further, or split it into per-measure `addNoteCommand` calls themselves.
+ */
 export function addNoteCommand(params: AddNoteParams): ScoreCommand {
   return transformCommand('Add note', (score) => addNote(score, params));
 }
@@ -92,11 +116,19 @@ export function addNoteCommand(params: AddNoteParams): ScoreCommand {
 
 function deleteEvents(score: Score, eventIds: readonly UUID[]): Score {
   const idSet = new Set(eventIds);
-  const tracks = score.tracks.map((track) => removeNotesFromTrack(track, idSet));
-  return withTracks(score, tracks);
+  // Clear tie flags left dangling on any surviving partner of a deleted
+  // note *before* actually removing the notes (clearDanglingTies needs
+  // the deleted notes still in place to find their chain partners).
+  const detied = clearDanglingTies(score, idSet);
+  const tracks = detied.tracks.map((track) => removeNotesFromTrack(track, idSet));
+  return withTracks(detied, tracks);
 }
 
-/** Deletes the given note events, backfilling rests so every affected measure stays full. */
+/**
+ * Deletes the given note events, backfilling rests so every affected
+ * measure stays full. If a deleted note was tied to a partner that isn't
+ * also being deleted, that partner's now-dangling tie flag is cleared.
+ */
 export function deleteEventsCommand(eventIds: UUID[]): ScoreCommand {
   return transformCommand('Delete notes', (score) => deleteEvents(score, eventIds));
 }
@@ -151,8 +183,11 @@ function moveNotesOnTrack(track: Track, eventIds: ReadonlySet<UUID>, params: Mov
 
 function moveNotes(score: Score, eventIds: readonly UUID[], params: MoveNotesParams): Score {
   const idSet = new Set(eventIds);
-  const tracks = score.tracks.map((track) => moveNotesOnTrack(track, idSet, params));
-  return withTracks(score, tracks);
+  // As in deleteEvents: clear dangling tie flags on any surviving partner
+  // of a moved note before moveNotesOnTrack relocates it away.
+  const detied = clearDanglingTies(score, idSet);
+  const tracks = detied.tracks.map((track) => moveNotesOnTrack(track, idSet, params));
+  return withTracks(detied, tracks);
 }
 
 /**
@@ -161,7 +196,9 @@ function moveNotes(score: Score, eventIds: readonly UUID[], params: MoveNotesPar
  * whose new position crosses a measure boundary is split into tied
  * segments (Task 3's `splitNoteAcrossMeasures`); any pre-existing tie
  * flags on the moved note are cleared first, since its former tie
- * partner(s) are no longer necessarily adjacent after the move.
+ * partner(s) are no longer necessarily adjacent after the move. If a
+ * moved note was tied to a partner that isn't also being moved, that
+ * partner's now-dangling tie flag is cleared too.
  */
 export function moveNotesCommand(eventIds: UUID[], params: MoveNotesParams): ScoreCommand {
   return transformCommand('Move notes', (score) => moveNotes(score, eventIds, params));

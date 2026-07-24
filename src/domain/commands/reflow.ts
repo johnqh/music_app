@@ -4,6 +4,8 @@
  * here returns new objects; none mutate their inputs.
  */
 import { createId } from '@/domain/score/ids';
+import { findEvent } from '@/domain/score/queries';
+import { tieChainFor } from '@/domain/score/ties';
 import type { Measure, MusicalEvent, NoteEvent, Score, ScoreMetadata, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 
@@ -27,14 +29,167 @@ export function withTracks(score: Score, tracks: Track[]): Score {
 }
 
 /**
+ * Clears the matching tie flag on the immediate tie-chain partner(s) of
+ * every note in `eventIds` that is *not itself* also in `eventIds` — so a
+ * note about to be moved or deleted never leaves a dangling `tieStart`/
+ * `tieStop` on a partner left behind. Must be called on `score` *before*
+ * the notes in `eventIds` are actually removed/relocated, since it relies
+ * on `tieChainFor`'s search of the note's current position; the notes in
+ * `eventIds` themselves are expected to have their own tie flags cleared
+ * separately by the caller (they're leaving their old position entirely).
+ * Returns `score` unchanged (referentially) if nothing needed clearing.
+ */
+export function clearDanglingTies(score: Score, eventIds: ReadonlySet<UUID>): Score {
+  const clears = new Map<UUID, { clearTieStart?: boolean; clearTieStop?: boolean }>();
+
+  for (const id of eventIds) {
+    const note = findEvent(score, id);
+    if (!note || !isNoteEvent(note) || (!note.tieStart && !note.tieStop)) continue;
+
+    const chain = tieChainFor(score, id);
+    const index = chain.findIndex((n) => n.id === id);
+    if (index === -1) continue;
+
+    if (note.tieStop && index > 0) {
+      const partner = chain[index - 1];
+      if (!eventIds.has(partner.id)) {
+        clears.set(partner.id, { ...clears.get(partner.id), clearTieStart: true });
+      }
+    }
+    if (note.tieStart && index < chain.length - 1) {
+      const partner = chain[index + 1];
+      if (!eventIds.has(partner.id)) {
+        clears.set(partner.id, { ...clears.get(partner.id), clearTieStop: true });
+      }
+    }
+  }
+
+  if (clears.size === 0) return score;
+
+  const tracks = score.tracks.map((track) => {
+    const measures = track.measures.map((measure) => {
+      const voices = measure.voices.map((voice) => {
+        const events = voice.events.map((event) => {
+          const clear = clears.get(event.id);
+          if (!clear || !isNoteEvent(event)) return event;
+          const updated: NoteEvent = { ...event };
+          if (clear.clearTieStart) delete updated.tieStart;
+          if (clear.clearTieStop) delete updated.tieStop;
+          return updated;
+        });
+        const changed = events.some((e, i) => e !== voice.events[i]);
+        return changed ? { ...voice, events } : voice;
+      });
+      const changed = voices.some((v, i) => v !== measure.voices[i]);
+      return changed ? { ...measure, voices } : measure;
+    });
+    const changed = measures.some((m, i) => m !== track.measures[i]);
+    return changed ? { ...track, measures } : track;
+  });
+
+  return withTracks(score, tracks);
+}
+
+type Interval = { start: number; end: number };
+
+/** `target` minus every interval in `claimed` (assumed pairwise disjoint), as the remaining disjoint pieces. */
+function subtractIntervals(target: Interval, claimed: readonly Interval[]): Interval[] {
+  let pieces: Interval[] = [target];
+  for (const c of claimed) {
+    const next: Interval[] = [];
+    for (const p of pieces) {
+      if (c.end <= p.start || c.start >= p.end) {
+        next.push(p); // no overlap with this claimed interval
+        continue;
+      }
+      if (c.start > p.start) next.push({ start: p.start, end: Math.min(c.start, p.end) });
+      if (c.end < p.end) next.push({ start: Math.max(c.end, p.start), end: p.end });
+    }
+    pieces = next.filter((iv) => iv.end > iv.start);
+  }
+  return pieces;
+}
+
+/** The longest of `pieces` (ties broken by earliest start), or `null` for an empty list. */
+function largestPiece(pieces: readonly Interval[]): Interval | null {
+  return pieces.reduce<Interval | null>((best, p) => {
+    if (!best) return p;
+    const bestLen = best.end - best.start;
+    const pLen = p.end - p.start;
+    if (pLen > bestLen || (pLen === bestLen && p.start < best.start)) return p;
+    return best;
+  }, null);
+}
+
+/**
+ * Resolves overlapping notes within one voice's note list into a set of
+ * pairwise-disjoint placements (chords aside — see below), deterministically:
+ *
+ * - Notes sharing the *exact* same `(startTick, durationTicks)` are a
+ *   chord (per `allocateVoices`'s `groupChordClusters`/spec §25): they
+ *   never compete with each other and all survive at their shared span.
+ * - Between genuinely different spans that overlap, **last-in-array
+ *   wins**: every command in this module that inserts/moves/resizes a
+ *   note builds its voice's event list as `[...existingNotes, editedOrNewNote]`,
+ *   so "last" always means "the note this edit just touched." The
+ *   winning note keeps its full span; whatever it overlaps is trimmed
+ *   down to its own remaining (non-overlapping) piece, or dropped
+ *   entirely if fully covered. If trimming would leave a note with two
+ *   disjoint remaining pieces (a higher-priority note punched a hole in
+ *   its middle), only the longer piece survives — a note can't be split
+ *   into two fragments by this step (Task 3's `splitNoteAcrossMeasures`
+ *   is the tool for genuine multi-segment splitting, at measure
+ *   boundaries; mid-note deletion-by-overlap is a deliberately simpler,
+ *   documented edge case here).
+ *
+ * This is "replace-on-overlap" by design: it's what lets a piano-roll
+ * drag/insert land a new note and have it take precedence over whatever
+ * it's dropped onto, matching common DAW behavior, while still keeping
+ * `reflowVoice`'s output well-formed (no silently-overlapping notes).
+ */
+function resolveOverlaps(originalNotes: readonly NoteEvent[]): NoteEvent[] {
+  type Cluster = { startTick: number; durationTicks: number; notes: NoteEvent[]; priority: number };
+  const clusters = new Map<string, Cluster>();
+
+  originalNotes.forEach((note, priority) => {
+    const key = `${note.startTick}:${note.durationTicks}`;
+    const existing = clusters.get(key);
+    if (existing) {
+      existing.notes.push(note);
+      existing.priority = Math.max(existing.priority, priority);
+    } else {
+      clusters.set(key, { startTick: note.startTick, durationTicks: note.durationTicks, notes: [note], priority });
+    }
+  });
+
+  const orderedByPriorityDesc = [...clusters.values()].sort((a, b) => b.priority - a.priority);
+  const claimed: Interval[] = [];
+  const placed: NoteEvent[] = [];
+
+  for (const cluster of orderedByPriorityDesc) {
+    const target: Interval = { start: cluster.startTick, end: cluster.startTick + cluster.durationTicks };
+    const chosen = largestPiece(subtractIntervals(target, claimed));
+    if (!chosen) continue; // fully covered by a higher-priority note/chord; drop this cluster entirely
+
+    for (const note of cluster.notes) {
+      placed.push({ ...note, startTick: chosen.start, durationTicks: chosen.end - chosen.start });
+    }
+    claimed.push(chosen);
+  }
+
+  return placed;
+}
+
+/**
  * Rebuilds the voice at `voiceId` within `measure` so its note content is
- * exactly what was already there (existing `RestEvent`s are discarded and
- * regenerated) but gap-filled with fresh rests and trimmed to fit the
- * measure: notes are sorted by `startTick`, clipped to the measure's span,
- * and any silent gap between/after them (up to the measure's end) is
- * filled with a new `RestEvent`. A note that would end up with zero
- * remaining duration after clipping is dropped. Returns `measure`
- * unchanged (referentially) if it has no voice with `voiceId`.
+ * exactly what was already there — minus overlap resolution (see
+ * `resolveOverlaps`) — but gap-filled with fresh rests and trimmed to fit
+ * the measure: notes are grouped into non-overlapping (chord-aware)
+ * placements, clipped to the measure's span, and any silent gap
+ * between/after them (up to the measure's end) is filled with a new
+ * `RestEvent`. Existing `RestEvent`s are discarded and regenerated from
+ * scratch. Returns `measure` unchanged (referentially) if it has no voice
+ * with `voiceId`.
  *
  * `trackId` is taken as an explicit parameter (rather than read off an
  * existing event) so this still works when the voice's note content is
@@ -47,23 +202,37 @@ export function reflowVoice(measure: Measure, voiceId: UUID, trackId: UUID): Mea
 
   const measureStart = measure.startTick;
   const measureEnd = measure.startTick + measure.durationTicks;
-  const notes = voice.events
-    .filter(isNoteEvent)
-    .slice()
-    .sort((a, b) => a.startTick - b.startTick);
+
+  const originalNotes = voice.events.filter(isNoteEvent);
+  const resolved = resolveOverlaps(originalNotes);
+
+  // Re-group the (now pairwise-disjoint, chords aside) resolved notes by
+  // their final span, so chord siblings are emitted together without a
+  // spurious rest/cursor-advance between them.
+  type Group = { startTick: number; durationTicks: number; notes: NoteEvent[] };
+  const groupsByKey = new Map<string, Group>();
+  for (const note of resolved) {
+    const key = `${note.startTick}:${note.durationTicks}`;
+    const group = groupsByKey.get(key);
+    if (group) group.notes.push(note);
+    else groupsByKey.set(key, { startTick: note.startTick, durationTicks: note.durationTicks, notes: [note] });
+  }
+  const groups = [...groupsByKey.values()].sort((a, b) => a.startTick - b.startTick);
 
   const events: MusicalEvent[] = [];
   let cursor = measureStart;
 
-  for (const note of notes) {
-    const start = Math.max(note.startTick, cursor, measureStart);
-    const end = Math.min(note.startTick + note.durationTicks, measureEnd);
+  for (const group of groups) {
+    const start = Math.max(group.startTick, cursor, measureStart);
+    const end = Math.min(group.startTick + group.durationTicks, measureEnd);
     if (end <= start) continue;
 
     if (start > cursor) {
       events.push({ id: createId(), startTick: cursor, durationTicks: start - cursor, voiceId, trackId });
     }
-    events.push({ ...note, startTick: start, durationTicks: end - start, voiceId, trackId });
+    for (const note of group.notes) {
+      events.push({ ...note, startTick: start, durationTicks: end - start, voiceId, trackId });
+    }
     cursor = end;
   }
 

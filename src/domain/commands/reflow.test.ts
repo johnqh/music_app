@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyScore } from '@/domain/score/factory';
 import {
+  clearDanglingTies,
   ensureVoiceAtIndex,
   insertNoteIntoTrack,
   reflowVoice,
@@ -96,6 +97,73 @@ describe('reflowVoice', () => {
     const measure = measureWith([]);
     const result = reflowVoice(measure, 'v1', 't1');
     expect(result.voices[0].events).toEqual([expect.objectContaining({ startTick: 0, durationTicks: 1920 })]);
+  });
+});
+
+describe('reflowVoice overlap resolution', () => {
+  it('keeps all notes of a chord (identical startTick/durationTicks) rather than dropping later ones', () => {
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'c1'),
+      noteAt(0, 480, 'v1', 't1', 'c2'),
+      noteAt(0, 480, 'v1', 't1', 'c3'),
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent);
+
+    expect(notes.map((n) => n.id).sort()).toEqual(['c1', 'c2', 'c3']);
+    notes.forEach((n) => expect(n).toMatchObject({ startTick: 0, durationTicks: 480 }));
+    // No rest inserted between chord siblings; only the trailing gap.
+    expect(result.voices[0].events.filter((e) => !isNoteEvent(e))).toHaveLength(1);
+  });
+
+  it('drops an existing note fully covered by a later-array (higher-priority) note', () => {
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'existing'),
+      noteAt(0, 1920, 'v1', 't1', 'covering'), // added last -> wins
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent);
+
+    expect(notes.map((n) => n.id)).toEqual(['covering']);
+    expect(notes[0]).toMatchObject({ startTick: 0, durationTicks: 1920 });
+  });
+
+  it('trims an existing note whose head is overlapped by a later (higher-priority) note', () => {
+    // existing: [480, 960); new (added last, wins): [0, 720) overlaps existing's head.
+    const measure = measureWith([
+      noteAt(480, 480, 'v1', 't1', 'existing'),
+      noteAt(0, 720, 'v1', 't1', 'new'),
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent).sort((a, b) => a.startTick - b.startTick);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatchObject({ id: 'new', startTick: 0, durationTicks: 720 });
+    expect(notes[1]).toMatchObject({ id: 'existing', startTick: 720, durationTicks: 240 }); // trimmed to its surviving tail
+  });
+
+  it('trims an existing note whose tail is overlapped by a later (higher-priority) note', () => {
+    // existing: [0, 480); new (added last, wins): [240, 720) overlaps existing's tail.
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'existing'),
+      noteAt(240, 480, 'v1', 't1', 'new'),
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent).sort((a, b) => a.startTick - b.startTick);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatchObject({ id: 'existing', startTick: 0, durationTicks: 240 }); // trimmed to its surviving head
+    expect(notes[1]).toMatchObject({ id: 'new', startTick: 240, durationTicks: 480 });
+  });
+
+  it('an identical (startTick, durationTicks) re-insertion (e.g. re-adding the same span) is treated as a chord, not a self-conflict', () => {
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'existing'),
+      noteAt(0, 480, 'v1', 't1', 'new'),
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent);
+    expect(notes.map((n) => n.id).sort()).toEqual(['existing', 'new']);
   });
 });
 
@@ -201,5 +269,71 @@ describe('touchMetadata', () => {
     expect(result.title).toBe('T');
     expect(result.createdAt).toBe(metadata.createdAt);
     expect(typeof result.updatedAt).toBe('string');
+  });
+});
+
+describe('clearDanglingTies', () => {
+  /** A 2-measure score where measure 0's note 'a' (tieStart) is tied to measure 1's note 'b' (tieStop). */
+  function tiedScore() {
+    const score = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'Piano' }] });
+    const track = score.tracks[0];
+    const v0 = track.measures[0].voices[0].id;
+    const v1 = track.measures[1].voices[0].id;
+    const noteA: NoteEvent = {
+      id: 'a',
+      pitch: PITCH,
+      startTick: 1680,
+      durationTicks: 240,
+      velocity: 80,
+      voiceId: v0,
+      trackId: track.id,
+      tieStart: true,
+    };
+    const noteB: NoteEvent = {
+      id: 'b',
+      pitch: PITCH,
+      startTick: 1920,
+      durationTicks: 240,
+      velocity: 80,
+      voiceId: v1,
+      trackId: track.id,
+      tieStop: true,
+    };
+    return {
+      ...score,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            { ...track.measures[0], voices: [{ ...track.measures[0].voices[0], events: [noteA] }] },
+            { ...track.measures[1], voices: [{ ...track.measures[1].voices[0], events: [noteB] }] },
+          ],
+        },
+      ],
+    };
+  }
+
+  it('clears the surviving partner tieStop when its tieStart partner is in eventIds', () => {
+    const score = tiedScore();
+    const result = clearDanglingTies(score, new Set(['a']));
+    const partner = result.tracks[0].measures[1].voices[0].events.find((e) => e.id === 'b') as NoteEvent;
+    expect(partner.tieStop).toBeUndefined();
+  });
+
+  it('clears the surviving partner tieStart when its tieStop partner is in eventIds', () => {
+    const score = tiedScore();
+    const result = clearDanglingTies(score, new Set(['b']));
+    const partner = result.tracks[0].measures[0].voices[0].events.find((e) => e.id === 'a') as NoteEvent;
+    expect(partner.tieStart).toBeUndefined();
+  });
+
+  it('does nothing (returns score unchanged) when both tie partners are in eventIds', () => {
+    const score = tiedScore();
+    expect(clearDanglingTies(score, new Set(['a', 'b']))).toBe(score);
+  });
+
+  it('does nothing when no note in eventIds has a tie', () => {
+    const score = createEmptyScore({ title: 'S', tracks: [{ name: 'Piano' }] });
+    expect(clearDanglingTies(score, new Set(['missing']))).toBe(score);
   });
 });

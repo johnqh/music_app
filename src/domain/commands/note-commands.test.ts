@@ -43,6 +43,13 @@ function firstNoteId(score: ReturnType<typeof withOneNote>) {
   return note.id;
 }
 
+/** Builds a score with a genuine tied pair: a note split across the measure 0/1 boundary via moveNotesCommand. */
+function withTiedPair() {
+  const withNote = withOneNote();
+  const noteId = firstNoteId(withNote);
+  return moveNotesCommand([noteId], { deltaTicks: 1800, deltaSemitones: 0 }).execute(withNote);
+}
+
 describe('addNoteCommand', () => {
   it('adds a note and backfills the remaining rest, keeping the measure valid', () => {
     const score = baseScore();
@@ -81,6 +88,58 @@ describe('addNoteCommand', () => {
     const next = cmd.execute(score);
     expect(next.tracks).toEqual(score.tracks);
   });
+
+  it('replaces (trims) an existing note it overlaps, deterministically', () => {
+    const withNote = withOneNote(); // C4 [0, 480)
+    const track = withNote.tracks[0];
+    const cmd = addNoteCommand({
+      trackId: track.id,
+      measureId: track.measures[0].id,
+      voiceIndex: 0,
+      pitch: { step: 'G', accidental: 0, octave: 4 },
+      startTick: 240,
+      durationTicks: 480, // overlaps the existing note's tail half [240, 480) and extends to 720
+    });
+
+    const next = cmd.execute(withNote);
+    const notes = next.tracks[0].measures[0].voices[0].events
+      .filter(isNoteEvent)
+      .sort((a, b) => a.startTick - b.startTick);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatchObject({ startTick: 0, durationTicks: 240, pitch: PITCH }); // original, trimmed to its surviving head
+    expect(notes[1]).toMatchObject({
+      startTick: 240,
+      durationTicks: 480,
+      pitch: { step: 'G', accidental: 0, octave: 4 },
+    });
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(withNote);
+  });
+
+  it('truncates (does not split into tied segments) a note that would cross a measure boundary', () => {
+    const score = baseScore();
+    const track = score.tracks[0];
+    const measureTicks = track.measures[0].durationTicks;
+    const cmd = addNoteCommand({
+      trackId: track.id,
+      measureId: track.measures[0].id,
+      voiceIndex: 0,
+      pitch: PITCH,
+      startTick: measureTicks - 100,
+      durationTicks: 400, // would extend 300 ticks into measure 1
+    });
+
+    const next = cmd.execute(score);
+    const m0Notes = next.tracks[0].measures[0].voices[0].events.filter(isNoteEvent);
+    const m1Notes = next.tracks[0].measures[1].voices[0].events.filter(isNoteEvent);
+
+    expect(m0Notes).toHaveLength(1);
+    expect(m0Notes[0]).toMatchObject({ startTick: measureTicks - 100, durationTicks: 100 });
+    expect(m1Notes).toHaveLength(0);
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(score);
+  });
 });
 
 describe('deleteEventsCommand', () => {
@@ -99,6 +158,23 @@ describe('deleteEventsCommand', () => {
     const withNote = withOneNote();
     const cmd = deleteEventsCommand(['missing']);
     expect(cmd.execute(withNote)).toEqual(withNote);
+  });
+
+  it('clears a dangling tie on the surviving partner when only one half of a tied pair is deleted', () => {
+    const tied = withTiedPair();
+    const m0Note = tied.tracks[0].measures[0].voices[0].events.find(isNoteEvent);
+    const m1Note = tied.tracks[0].measures[1].voices[0].events.find(isNoteEvent);
+    expect(m0Note?.tieStart).toBe(true);
+    expect(m1Note?.tieStop).toBe(true);
+
+    const cmd = deleteEventsCommand([m0Note!.id]);
+    const next = cmd.execute(tied);
+    const survivingPartner = next.tracks[0].measures[1].voices[0].events.find(isNoteEvent);
+
+    expect(survivingPartner).toBeDefined();
+    expect(survivingPartner?.tieStop).toBeUndefined();
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(tied);
   });
 });
 
@@ -152,6 +228,51 @@ describe('moveNotesCommand', () => {
     const withNote = withOneNote();
     const cmd = moveNotesCommand(['missing'], { deltaTicks: 100, deltaSemitones: 1 });
     expect(cmd.execute(withNote)).toEqual(withNote);
+  });
+
+  it('clears a dangling tie on the surviving partner when only one half of a tied pair is moved away', () => {
+    const tied = withTiedPair();
+    const m0Note = tied.tracks[0].measures[0].voices[0].events.find(isNoteEvent);
+    expect(m0Note?.tieStart).toBe(true);
+
+    // Move the measure-0 half elsewhere within measure 0, leaving its measure-1 partner behind.
+    const cmd = moveNotesCommand([m0Note!.id], { deltaTicks: -240, deltaSemitones: 0 });
+    const next = cmd.execute(tied);
+    const survivingPartner = next.tracks[0].measures[1].voices[0].events.find(isNoteEvent);
+
+    expect(survivingPartner).toBeDefined();
+    expect(survivingPartner?.tieStop).toBeUndefined();
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(tied);
+  });
+
+  it('replaces (trims) an existing note it lands on top of, deterministically', () => {
+    const score = baseScore();
+    const track = score.tracks[0];
+    const withTwoNotes = addNoteCommand({
+      trackId: track.id,
+      measureId: track.measures[0].id,
+      voiceIndex: 0,
+      pitch: { step: 'G', accidental: 0, octave: 4 },
+      startTick: 480,
+      durationTicks: 480,
+    }).execute(withOneNote(score)); // C4 [0,480), G4 [480,960)
+    const gNoteId = withTwoNotes.tracks[0].measures[0].voices[0].events.find(
+      (e) => isNoteEvent(e) && e.pitch.step === 'G',
+    )!.id;
+
+    // Move the G4 note left by 240 ticks so it lands overlapping the C4 note's tail.
+    const cmd = moveNotesCommand([gNoteId], { deltaTicks: -240, deltaSemitones: 0 });
+    const next = cmd.execute(withTwoNotes);
+    const notes = next.tracks[0].measures[0].voices[0].events
+      .filter(isNoteEvent)
+      .sort((a, b) => a.startTick - b.startTick);
+
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toMatchObject({ startTick: 0, durationTicks: 240, pitch: PITCH }); // C4 trimmed to its surviving head
+    expect(notes[1]).toMatchObject({ startTick: 240, durationTicks: 480, pitch: { step: 'G', accidental: 0, octave: 4 } });
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(withTwoNotes);
   });
 });
 
