@@ -1,16 +1,6 @@
 /**
  * Canonical score-model types (spec §4).
  *
- * NOTE: This file is intentionally minimal for now. It contains only the
- * types consumed by the time/fraction/tick and pitch utilities built in
- * Task 2 (`Fraction`, `TimeSignature`, `TempoEvent`, `Pitch`,
- * `KeySignature`, `DurationName`), plus the small set of supporting types
- * those directly depend on (`UUID`, `PitchStep`, `Accidental`). Task 3
- * completes this file with the remaining score-model types (`NoteEvent`,
- * `RestEvent`, `MusicalEvent`, `Voice`, `Measure`, `Track`,
- * `ScoreMetadata`, `Score`) per spec §4. Import paths (`@/domain/score/types`)
- * are stable across that change.
- *
  * Domain code must remain independent of React, MUI, VexFlow, Tone.js,
  * @tonejs/midi, Dexie, and browser-only APIs (spec §3, §37).
  */
@@ -56,3 +46,83 @@ export type DurationName =
   | 'triplet-eighth'
   | 'triplet-sixteenth'
   | 'triplet-thirtysecond';
+
+export type Articulation = 'staccato' | 'accent' | 'tenuto' | 'marcato';
+
+export type Clef = 'treble' | 'bass' | 'alto' | 'tenor' | 'percussion';
+
+export type NoteEvent = {
+  id: UUID;
+  pitch: Pitch;
+  startTick: number;
+  durationTicks: number;
+  velocity: number;
+  voiceId: UUID;
+  trackId: UUID;
+  tieStart?: boolean;
+  tieStop?: boolean;
+  articulation?: Articulation;
+};
+
+export type RestEvent = {
+  id: UUID;
+  startTick: number;
+  durationTicks: number;
+  voiceId: UUID;
+  trackId: UUID;
+};
+
+export type MusicalEvent = NoteEvent | RestEvent;
+
+export type Voice = { id: UUID; name: string; events: MusicalEvent[] };
+
+export type Measure = {
+  id: UUID;
+  index: number;
+  startTick: number;
+  durationTicks: number;
+  timeSignature: TimeSignature;
+  keySignature: KeySignature;
+  voices: Voice[];
+};
+
+export type Track = {
+  id: UUID;
+  name: string;
+  instrumentName: string;
+  midiProgram: number;
+  midiChannel: number;
+  clef: Clef;
+  volume: number;
+  pan: number;
+  muted: boolean;
+  solo: boolean;
+  measures: Measure[];
+};
+
+export type ScoreMetadata = {
+  title: string;
+  composer?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Score = {
+  id: UUID;
+  version: number;
+  ppq: number;
+  metadata: ScoreMetadata;
+  tempoMap: TempoEvent[];
+  tracks: Track[];
+};
+
+/** True for `NoteEvent`s (distinguished from `RestEvent` by the `pitch` property). */
+export function isNoteEvent(event: MusicalEvent): event is NoteEvent {
+  return 'pitch' in event;
+}
+
+/** True for `RestEvent`s (distinguished from `NoteEvent` by lacking a `pitch` property). */
+export function isRestEvent(event: MusicalEvent): event is RestEvent {
+  return !('pitch' in event);
+}
