@@ -6,8 +6,8 @@ const PPQ = 480;
 describe('TempoMap', () => {
   it('defaults to 120 bpm when the event list is empty', () => {
     const map = new TempoMap([], PPQ);
-    expect(map.getBpmAtTick(0)).toBe(120);
-    expect(map.getBpmAtTick(10_000)).toBe(120);
+    expect(map.bpmAt(0)).toBe(120);
+    expect(map.bpmAt(10_000)).toBe(120);
   });
 
   it('converts ticks to seconds at the default 120 bpm', () => {
@@ -32,10 +32,10 @@ describe('TempoMap', () => {
       PPQ,
     );
 
-    expect(map.getBpmAtTick(0)).toBe(120);
-    expect(map.getBpmAtTick(4 * PPQ - 1)).toBe(120);
-    expect(map.getBpmAtTick(4 * PPQ)).toBe(60);
-    expect(map.getBpmAtTick(4 * PPQ + 1)).toBe(60);
+    expect(map.bpmAt(0)).toBe(120);
+    expect(map.bpmAt(4 * PPQ - 1)).toBe(120);
+    expect(map.bpmAt(4 * PPQ)).toBe(60);
+    expect(map.bpmAt(4 * PPQ + 1)).toBe(60);
   });
 
   it('accumulates seconds correctly across a tempo change', () => {

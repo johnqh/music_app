@@ -80,7 +80,7 @@ export class TempoMap {
   }
 
   /** The bpm in effect at the given tick. */
-  getBpmAtTick(tick: number): number {
+  bpmAt(tick: number): number {
     return this.breakpointForTick(tick).bpm;
   }
 
