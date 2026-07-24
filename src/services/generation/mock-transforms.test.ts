@@ -62,8 +62,21 @@ describe('pickTransformKind', () => {
     ['Preserve rhythm but change harmony', 'default'], // "harmony" is the thing CHANGED here, not preserved
     ['Keep the harmony, vary the melody', 'preserveHarmony'],
     ['Thin out the orchestration', 'simplify'],
+    // Regression: keyword matching must be word-boundary-aware, not plain substring
+    // matching — "thin"/"lower" are real English substrings of unrelated words.
+    ['Add something interesting to the bassline', 'default'],
+    ['Do nothing to the melody', 'default'],
+    ['Think of a new rhythm', 'default'],
+    ['Add flowery ornamentation', 'default'],
   ] as const)('%s -> %s', (instruction, expected) => {
     expect(pickTransformKind(instruction)).toBe(expected);
+  });
+
+  it('does not match "thin" or "lower" embedded inside an unrelated word', () => {
+    expect(pickTransformKind('Add something interesting to the bassline')).not.toBe('simplify');
+    expect(pickTransformKind('Do nothing to the melody')).not.toBe('simplify');
+    expect(pickTransformKind('Think of a new rhythm')).not.toBe('simplify');
+    expect(pickTransformKind('Add flowery ornamentation')).not.toBe('lower');
   });
 
   // spec §12's full preset instruction list: every one must classify to *something*

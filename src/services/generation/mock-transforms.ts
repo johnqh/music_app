@@ -53,6 +53,27 @@ export type TransformKind =
  */
 const PRESERVE_TARGET_PATTERN = /\b(?:preserv\w*|keep(?:ing)?)\s+(?:the\s+)?(melody|harmony)\b/i;
 
+/**
+ * Word-boundary-aware keyword patterns for the rest of `pickTransformKind`.
+ * Every alternative is anchored with a leading `\b` so it can only match at
+ * the *start* of a word, never embedded partway through an unrelated one
+ * (plain `String.includes` has no such notion — `"flower".includes("lower")`
+ * is true, `"something".includes("thin")` is true, etc., and both were real
+ * false-positive bugs here). Words with common suffixed inflections we still
+ * want to catch (e.g. "darker", "simplify", "syncopated") stay leading-`\b`
+ * *prefix* matches; words with no such inflection risk of a longer word
+ * innocently starting with the same letters right after a boundary (namely
+ * "thin" — "think"/"thing" both start with "thin" at a genuine word
+ * boundary) get a trailing `\b` too, requiring the whole word.
+ */
+const DRAMATIC_PATTERN = /\b(?:dramatic|energetic|upbeat)/;
+const THIN_WORD_PATTERN = /\bthin\b/;
+const SIMPLIFY_STEM_PATTERN = /\bsimpl/;
+const SYNCOPATE_STEM_PATTERN = /\bsyncopat/;
+const MINOR_PATTERN = /\b(?:dark|minor)/;
+const HIGHER_PATTERN = /\bhigher\b/;
+const LOWER_PATTERN = /\blower\b/;
+
 /** Maps an instruction's keywords to a transform kind (spec §12's preset instructions covered by "dramatic"/"upbeat" -> dramatic, "simplify"/"thin" -> simplify, etc.). The preserve-target check runs first (see `PRESERVE_TARGET_PATTERN`) since it's the most semantically load-bearing distinction. */
 export function pickTransformKind(instruction: string): TransformKind {
   const preserveMatch = PRESERVE_TARGET_PATTERN.exec(instruction);
@@ -61,12 +82,12 @@ export function pickTransformKind(instruction: string): TransformKind {
   }
 
   const s = instruction.toLowerCase();
-  if (s.includes('dramatic') || s.includes('energetic') || s.includes('upbeat')) return 'dramatic';
-  if (s.includes('thin') || s.includes('simpl')) return 'simplify';
-  if (s.includes('syncopat')) return 'syncopate';
-  if (s.includes('dark') || s.includes('minor')) return 'minor';
-  if (s.includes('higher')) return 'higher';
-  if (s.includes('lower')) return 'lower';
+  if (DRAMATIC_PATTERN.test(s)) return 'dramatic';
+  if (THIN_WORD_PATTERN.test(s) || SIMPLIFY_STEM_PATTERN.test(s)) return 'simplify';
+  if (SYNCOPATE_STEM_PATTERN.test(s)) return 'syncopate';
+  if (MINOR_PATTERN.test(s)) return 'minor';
+  if (HIGHER_PATTERN.test(s)) return 'higher';
+  if (LOWER_PATTERN.test(s)) return 'lower';
   return 'default';
 }
 
