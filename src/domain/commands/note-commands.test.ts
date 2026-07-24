@@ -117,6 +117,28 @@ describe('addNoteCommand', () => {
     expect(cmd.undo(next)).toEqual(withNote);
   });
 
+  it('replaces (not duplicates) an existing note of the same pitch at the identical span', () => {
+    const withNote = withOneNote(); // C4 [0, 480), velocity 80 (the withOneNote default)
+    const track = withNote.tracks[0];
+    const cmd = addNoteCommand({
+      trackId: track.id,
+      measureId: track.measures[0].id,
+      voiceIndex: 0,
+      pitch: PITCH, // same pitch as the existing note
+      startTick: 0,
+      durationTicks: 480, // identical span
+      velocity: 42, // distinguishes the new note from the original (velocity 80) once we assert only one survives
+    });
+
+    const next = cmd.execute(withNote);
+    const notes = next.tracks[0].measures[0].voices[0].events.filter(isNoteEvent);
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ startTick: 0, durationTicks: 480, pitch: PITCH, velocity: 42 });
+    expect(validateScore(next)).toEqual([]);
+    expect(cmd.undo(next)).toEqual(withNote);
+  });
+
   it('truncates (does not split into tied segments) a note that would cross a measure boundary', () => {
     const score = baseScore();
     const track = score.tracks[0];

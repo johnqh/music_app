@@ -8,6 +8,7 @@ import { findEvent } from '@/domain/score/queries';
 import { tieChainFor } from '@/domain/score/ties';
 import type { Measure, MusicalEvent, NoteEvent, Score, ScoreMetadata, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
+import { pitchToMidi } from '@/domain/pitch/pitch';
 
 /** Returns `metadata` with `updatedAt` refreshed to now. */
 export function touchMetadata(metadata: ScoreMetadata): ScoreMetadata {
@@ -122,12 +123,40 @@ function largestPiece(pieces: readonly Interval[]): Interval | null {
 }
 
 /**
+ * Within notes that all share one identical span (a same-span cluster —
+ * see `resolveOverlaps`), keeps only the last (highest original-array-
+ * index) note per pitch (compared by MIDI, so enharmonic respellings of
+ * the same physical pitch also dedupe), dropping earlier same-pitch
+ * duplicates. Different-pitch notes at the identical span are unaffected
+ * and all survive — that's the real, legitimate chord case. This exists
+ * because "same span" alone isn't sufficient to call two notes a chord:
+ * two *same-pitch* notes at the identical span are a genuine duplicate/
+ * conflicting edit (e.g. a note dropped exactly onto an existing note of
+ * the same pitch), and `validateScore`'s `checkOverlappingSamePitch`
+ * correctly flags that as an error — silently keeping both would produce
+ * an invalid score.
+ */
+function dedupeSamePitch(notes: readonly NoteEvent[]): NoteEvent[] {
+  const byMidi = new Map<number, NoteEvent>();
+  for (const note of notes) {
+    // A later entry for the same pitch overwrites an earlier one, so the
+    // last (highest-priority) note of that pitch wins — consistent with
+    // resolveOverlaps's documented last-in-array-wins rule.
+    byMidi.set(pitchToMidi(note.pitch), note);
+  }
+  return [...byMidi.values()];
+}
+
+/**
  * Resolves overlapping notes within one voice's note list into a set of
  * pairwise-disjoint placements (chords aside — see below), deterministically:
  *
- * - Notes sharing the *exact* same `(startTick, durationTicks)` are a
- *   chord (per `allocateVoices`'s `groupChordClusters`/spec §25): they
- *   never compete with each other and all survive at their shared span.
+ * - Notes sharing the *exact* same `(startTick, durationTicks)` are
+ *   candidate chord members (per `allocateVoices`'s `groupChordClusters`/
+ *   spec §25). Among same-span notes, only *different-pitch* ones form a
+ *   real chord and all survive; same-pitch duplicates at that span are
+ *   deduped down to the last one (see `dedupeSamePitch`) rather than kept
+ *   as "overlapping."
  * - Between genuinely different spans that overlap, **last-in-array
  *   wins**: every command in this module that inserts/moves/resizes a
  *   note builds its voice's event list as `[...existingNotes, editedOrNewNote]`,
@@ -145,7 +174,8 @@ function largestPiece(pieces: readonly Interval[]): Interval | null {
  * This is "replace-on-overlap" by design: it's what lets a piano-roll
  * drag/insert land a new note and have it take precedence over whatever
  * it's dropped onto, matching common DAW behavior, while still keeping
- * `reflowVoice`'s output well-formed (no silently-overlapping notes).
+ * `reflowVoice`'s output well-formed (no silently-overlapping, no
+ * silently-duplicate-pitch notes).
  */
 function resolveOverlaps(originalNotes: readonly NoteEvent[]): NoteEvent[] {
   type Cluster = { startTick: number; durationTicks: number; notes: NoteEvent[]; priority: number };
@@ -171,7 +201,8 @@ function resolveOverlaps(originalNotes: readonly NoteEvent[]): NoteEvent[] {
     const chosen = largestPiece(subtractIntervals(target, claimed));
     if (!chosen) continue; // fully covered by a higher-priority note/chord; drop this cluster entirely
 
-    for (const note of cluster.notes) {
+    const survivors = dedupeSamePitch(cluster.notes);
+    for (const note of survivors) {
       placed.push({ ...note, startTick: chosen.start, durationTicks: chosen.end - chosen.start });
     }
     claimed.push(chosen);

@@ -9,12 +9,21 @@ import {
   touchMetadata,
 } from '@/domain/commands/reflow';
 import { isNoteEvent } from '@/domain/score/types';
-import type { Measure, NoteEvent, Track } from '@/domain/score/types';
+import type { Measure, NoteEvent, Pitch, Track } from '@/domain/score/types';
 
-const PITCH = { step: 'C' as const, accidental: 0 as const, octave: 4 };
+const PITCH: Pitch = { step: 'C', accidental: 0, octave: 4 };
+const PITCH_E: Pitch = { step: 'E', accidental: 0, octave: 4 };
+const PITCH_G: Pitch = { step: 'G', accidental: 0, octave: 4 };
 
-function noteAt(startTick: number, durationTicks: number, voiceId: string, trackId: string, id = `n-${startTick}`): NoteEvent {
-  return { id, pitch: PITCH, startTick, durationTicks, velocity: 80, voiceId, trackId };
+function noteAt(
+  startTick: number,
+  durationTicks: number,
+  voiceId: string,
+  trackId: string,
+  id = `n-${startTick}`,
+  pitch: Pitch = PITCH,
+): NoteEvent {
+  return { id, pitch, startTick, durationTicks, velocity: 80, voiceId, trackId };
 }
 
 /** A single 1920-tick (4/4 @ 480ppq) measure whose voice 0 has just `events`. */
@@ -101,11 +110,11 @@ describe('reflowVoice', () => {
 });
 
 describe('reflowVoice overlap resolution', () => {
-  it('keeps all notes of a chord (identical startTick/durationTicks) rather than dropping later ones', () => {
+  it('keeps all notes of a real chord (identical span, distinct pitches) rather than dropping later ones', () => {
     const measure = measureWith([
-      noteAt(0, 480, 'v1', 't1', 'c1'),
-      noteAt(0, 480, 'v1', 't1', 'c2'),
-      noteAt(0, 480, 'v1', 't1', 'c3'),
+      noteAt(0, 480, 'v1', 't1', 'c1', PITCH), // C4
+      noteAt(0, 480, 'v1', 't1', 'c2', PITCH_E), // E4
+      noteAt(0, 480, 'v1', 't1', 'c3', PITCH_G), // G4
     ]);
     const result = reflowVoice(measure, 'v1', 't1');
     const notes = result.voices[0].events.filter(isNoteEvent);
@@ -156,14 +165,42 @@ describe('reflowVoice overlap resolution', () => {
     expect(notes[1]).toMatchObject({ id: 'new', startTick: 240, durationTicks: 480 });
   });
 
-  it('an identical (startTick, durationTicks) re-insertion (e.g. re-adding the same span) is treated as a chord, not a self-conflict', () => {
+  it('dedupes a same-pitch, identical-span duplicate down to the last (higher-priority) entry, not kept as a chord', () => {
+    // Same pitch AND same span is a genuine duplicate/conflicting edit
+    // (e.g. a note dropped exactly onto an existing same-pitch note), not
+    // a chord — validateScore's checkOverlappingSamePitch would flag two
+    // same-pitch notes at an identical span as an error, so both must
+    // never survive together.
     const measure = measureWith([
-      noteAt(0, 480, 'v1', 't1', 'existing'),
-      noteAt(0, 480, 'v1', 't1', 'new'),
+      noteAt(0, 480, 'v1', 't1', 'existing', PITCH),
+      noteAt(0, 480, 'v1', 't1', 'new', PITCH), // same pitch, same span, added last -> wins
     ]);
     const result = reflowVoice(measure, 'v1', 't1');
     const notes = result.voices[0].events.filter(isNoteEvent);
-    expect(notes.map((n) => n.id).sort()).toEqual(['existing', 'new']);
+    expect(notes.map((n) => n.id)).toEqual(['new']);
+  });
+
+  it('dedupes by MIDI pitch, so an enharmonic respelling of the same physical pitch also dedupes', () => {
+    const cSharp = { step: 'C' as const, accidental: 1 as const, octave: 4 };
+    const dFlat = { step: 'D' as const, accidental: -1 as const, octave: 4 }; // same MIDI as C#4
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'existing', cSharp),
+      noteAt(0, 480, 'v1', 't1', 'new', dFlat), // enharmonically identical pitch, same span, added last -> wins
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent);
+    expect(notes.map((n) => n.id)).toEqual(['new']);
+  });
+
+  it('within a same-span cluster, dedupes only matching pitches, keeping distinct ones as a chord', () => {
+    const measure = measureWith([
+      noteAt(0, 480, 'v1', 't1', 'existing-c', PITCH), // C4, will be deduped by 'new-c'
+      noteAt(0, 480, 'v1', 't1', 'existing-e', PITCH_E), // E4, survives (distinct pitch)
+      noteAt(0, 480, 'v1', 't1', 'new-c', PITCH), // C4 again, added last -> wins over 'existing-c'
+    ]);
+    const result = reflowVoice(measure, 'v1', 't1');
+    const notes = result.voices[0].events.filter(isNoteEvent);
+    expect(notes.map((n) => n.id).sort()).toEqual(['existing-e', 'new-c']);
   });
 });
 
