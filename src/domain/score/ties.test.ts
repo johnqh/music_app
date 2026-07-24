@@ -1,0 +1,161 @@
+import { describe, expect, it } from 'vitest';
+import { createEmptyScore } from '@/domain/score/factory';
+import { joinTiedNotes, splitNoteAcrossMeasures, tieChainFor } from '@/domain/score/ties';
+import type { MusicalEvent, NoteEvent, Score } from '@/domain/score/types';
+
+function note(overrides: Partial<NoteEvent> & Pick<NoteEvent, 'id' | 'startTick' | 'durationTicks'>): NoteEvent {
+  return {
+    pitch: { step: 'C', accidental: 0, octave: 4 },
+    velocity: 80,
+    voiceId: 'v1',
+    trackId: 't1',
+    ...overrides,
+  };
+}
+
+describe('splitNoteAcrossMeasures', () => {
+  it('returns the note unchanged when no boundary falls inside its span', () => {
+    const n = note({ id: 'n1', startTick: 0, durationTicks: 480 });
+    expect(splitNoteAcrossMeasures(n, [1920, 3840])).toEqual([n]);
+  });
+
+  it('splits a note spanning one boundary into two tied segments', () => {
+    const n = note({ id: 'n1', startTick: 1680, durationTicks: 480 }); // crosses tick 1920
+    const segments = splitNoteAcrossMeasures(n, [1920]);
+
+    expect(segments).toHaveLength(2);
+    const [first, second] = segments;
+
+    expect(first.id).toBe('n1');
+    expect(first.startTick).toBe(1680);
+    expect(first.durationTicks).toBe(240);
+    expect(first.tieStart).toBe(true);
+    expect(first.tieStop).toBeUndefined();
+
+    expect(second.startTick).toBe(1920);
+    expect(second.durationTicks).toBe(240);
+    expect(second.tieStart).toBeUndefined();
+    expect(second.tieStop).toBe(true);
+    expect(second.id).not.toBe('n1');
+  });
+
+  it('preserves an existing incoming tie on the first segment and outgoing tie on the last', () => {
+    const n = note({ id: 'n1', startTick: 1680, durationTicks: 480, tieStop: true, tieStart: true });
+    const [first, second] = splitNoteAcrossMeasures(n, [1920]);
+    expect(first.tieStop).toBe(true); // preserved incoming tie
+    expect(first.tieStart).toBe(true); // now ties into `second`
+    expect(second.tieStop).toBe(true); // tied from `first`
+    expect(second.tieStart).toBe(true); // preserved outgoing tie
+  });
+
+  it('middle segments of a note spanning two boundaries are tied on both sides', () => {
+    const n = note({ id: 'n1', startTick: 100, durationTicks: 4000 });
+    const segments = splitNoteAcrossMeasures(n, [1920, 3840]);
+    expect(segments).toHaveLength(3);
+    const [, middle] = segments;
+    expect(middle.tieStart).toBe(true);
+    expect(middle.tieStop).toBe(true);
+  });
+});
+
+describe('joinTiedNotes', () => {
+  it('merges a chain of tied notes into a single note spanning the combined duration', () => {
+    const a = note({ id: 'a', startTick: 0, durationTicks: 240, tieStart: true });
+    const b = note({ id: 'b', startTick: 240, durationTicks: 240, tieStop: true });
+    const events: MusicalEvent[] = [a, b];
+
+    const joined = joinTiedNotes(events);
+    expect(joined).toHaveLength(1);
+    const [merged] = joined as NoteEvent[];
+    expect(merged.id).toBe('a');
+    expect(merged.startTick).toBe(0);
+    expect(merged.durationTicks).toBe(480);
+    expect(merged.tieStart).toBeUndefined();
+  });
+
+  it('leaves untied notes and rests untouched', () => {
+    const a = note({ id: 'a', startTick: 0, durationTicks: 240 });
+    const rest: MusicalEvent = { id: 'r', startTick: 240, durationTicks: 240, voiceId: 'v1', trackId: 't1' };
+    const events: MusicalEvent[] = [a, rest];
+
+    expect(joinTiedNotes(events)).toEqual([a, rest]);
+  });
+
+  it('does not join tied notes of different pitch (a data-integrity edge case, not a valid tie)', () => {
+    const a = note({ id: 'a', startTick: 0, durationTicks: 240, tieStart: true });
+    const b = note({
+      id: 'b',
+      startTick: 240,
+      durationTicks: 240,
+      tieStop: true,
+      pitch: { step: 'D', accidental: 0, octave: 4 },
+    });
+    const joined = joinTiedNotes([a, b]);
+    expect(joined).toHaveLength(2);
+  });
+
+  it('joins a three-segment chain into one note', () => {
+    const a = note({ id: 'a', startTick: 0, durationTicks: 240, tieStart: true });
+    const b = note({ id: 'b', startTick: 240, durationTicks: 240, tieStart: true, tieStop: true });
+    const c = note({ id: 'c', startTick: 480, durationTicks: 240, tieStop: true });
+    const joined = joinTiedNotes([a, b, c]);
+    expect(joined).toHaveLength(1);
+    expect((joined[0] as NoteEvent).durationTicks).toBe(720);
+  });
+});
+
+describe('tieChainFor', () => {
+  function scoreWithVoiceEvents(events: NoteEvent[]): { score: Score; trackId: string; voiceId: string } {
+    const score = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'Piano' }] });
+    const track = score.tracks[0];
+    const voiceId = track.measures[0].voices[0].id;
+    const measureTicks = track.measures[0].durationTicks;
+    const m0Events = events.filter((e) => e.startTick < measureTicks);
+    const m1Events = events.filter((e) => e.startTick >= measureTicks);
+
+    const withVoiceId = (e: NoteEvent) => ({ ...e, voiceId, trackId: track.id });
+
+    const built: Score = {
+      ...score,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            {
+              ...track.measures[0],
+              voices: [{ ...track.measures[0].voices[0], events: m0Events.map(withVoiceId) }],
+            },
+            {
+              ...track.measures[1],
+              voices: [{ ...track.measures[1].voices[0], id: voiceId, name: 'Voice 1', events: m1Events.map(withVoiceId) }],
+            },
+          ],
+        },
+      ],
+    };
+    return { score: built, trackId: track.id, voiceId };
+  }
+
+  it('returns the full chain of tied notes spanning a measure boundary, given any note in the chain', () => {
+    const a = note({ id: 'a', startTick: 1680, durationTicks: 240, tieStart: true });
+    const b = note({ id: 'b', startTick: 1920, durationTicks: 240, tieStop: true });
+    const { score } = scoreWithVoiceEvents([a, b]);
+
+    const chainFromFirst = tieChainFor(score, 'a');
+    expect(chainFromFirst.map((n) => n.id)).toEqual(['a', 'b']);
+
+    const chainFromSecond = tieChainFor(score, 'b');
+    expect(chainFromSecond.map((n) => n.id)).toEqual(['a', 'b']);
+  });
+
+  it('returns a single-element chain for an untied note', () => {
+    const a = note({ id: 'a', startTick: 0, durationTicks: 480 });
+    const { score } = scoreWithVoiceEvents([a]);
+    expect(tieChainFor(score, 'a').map((n) => n.id)).toEqual(['a']);
+  });
+
+  it('returns an empty array for an unknown note id', () => {
+    const { score } = scoreWithVoiceEvents([]);
+    expect(tieChainFor(score, 'missing')).toEqual([]);
+  });
+});
