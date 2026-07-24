@@ -306,37 +306,43 @@ function parseArticulation(noteEl: Element, warnings: WarningCollector): NoteEve
   return found;
 }
 
+type ParsedNote = {
+  /** `null` when this note must be skipped (grace note, or unsupported/malformed content). */
+  raw: RawEvent | null;
+  /**
+   * How far the shared cursor should advance because of this note, even
+   * when `raw` is `null` — e.g. an unpitched/malformed note that still
+   * carries a real `<duration>` still occupies that much time, so skipping
+   * *emitting* it must not also desynchronize every note that follows it
+   * in the same voice. A grace note is the one skip case that correctly
+   * advances by 0 (it has no duration in the main rhythm at all).
+   */
+  cursorAdvance: number;
+};
+
 /**
- * Parses one `<note>` element into a `RawEvent` (measure-relative ticks),
- * or `null` if it carries no usable pitch/rest/duration information (grace
- * notes, or a note missing both `<pitch>`/`<rest>`/`<unpitched>`) and must
- * be skipped. `cursor` is the shared measure-relative tick cursor *before*
- * this note; `measureEndTick` bounds a `<rest measure="yes">` shorthand.
+ * Parses one `<note>` element into a `RawEvent` (measure-relative ticks).
+ * `cursor` is the shared measure-relative tick cursor *before* this note;
+ * `measureEndTick` bounds a `<rest measure="yes">` shorthand.
  */
-function parseNote(
-  noteEl: Element,
-  cursor: number,
-  measureEndTick: number,
-  ratio: number,
-  warnings: WarningCollector,
-): RawEvent | null {
+function parseNote(noteEl: Element, cursor: number, measureEndTick: number, ratio: number, warnings: WarningCollector): ParsedNote {
   warnUnsupportedNoteChildren(noteEl, warnings);
 
   if (directChild(noteEl, 'grace')) {
-    return null;
+    return { raw: null, cursorAdvance: 0 };
   }
 
   const restEl = directChild(noteEl, 'rest');
   const pitchEl = directChild(noteEl, 'pitch');
   const unpitchedEl = directChild(noteEl, 'unpitched');
+  const hasUsablePitchOrRest = Boolean(restEl) || Boolean(pitchEl);
 
-  if (!restEl && !pitchEl) {
-    if (unpitchedEl) {
-      warnings.add('Unpitched (percussion) notes are not supported and were skipped.');
-    } else {
-      warnings.add('A note with neither <pitch> nor <rest> was skipped.');
-    }
-    return null;
+  if (!hasUsablePitchOrRest) {
+    warnings.add(
+      unpitchedEl
+        ? 'Unpitched (percussion) notes are not supported and were skipped.'
+        : 'A note with neither <pitch> nor <rest> was skipped.',
+    );
   }
 
   const durationEl = directChild(noteEl, 'duration');
@@ -353,12 +359,18 @@ function parseNote(
       durationTicks = ticksForNotatedType(typeText, dots, SCORE_PPQ);
     } else {
       warnings.add('A note with no <duration> and no usable <type> was skipped.');
-      return null;
+      return { raw: null, cursorAdvance: 0 };
     }
   }
   if (durationTicks <= 0) {
     warnings.add('A note with non-positive duration was clamped to 1 tick.');
     durationTicks = 1;
+  }
+
+  if (!hasUsablePitchOrRest) {
+    // Skipped for lack of pitch/rest info, but its duration is known, so
+    // the cursor still advances by it (see `ParsedNote.cursorAdvance`).
+    return { raw: null, cursorAdvance: durationTicks };
   }
 
   const pitch = restEl ? null : pitchEl ? parsePitch(pitchEl, warnings) : null;
@@ -368,21 +380,31 @@ function parseNote(
   const tieStart = tieEls.some((t) => t.getAttribute('type') === 'start');
   const tieStop = tieEls.some((t) => t.getAttribute('type') === 'stop');
 
-  return { startTick: cursor, durationTicks, pitch, voiceNumber, articulation, tieStart, tieStop };
+  const raw: RawEvent = { startTick: cursor, durationTicks, pitch, voiceNumber, articulation, tieStart, tieStop };
+  return { raw, cursorAdvance: durationTicks };
 }
 
 // ---- Gap-filling within a measure's voice ------------------------------------
 
 /**
  * Fills the gaps in one measure-voice's raw (measure-relative) events with
- * rests, and trims any event extending past the measure end, so the voice's
- * events cover `[0, durationTicks)` exactly (spec §23's "voice content sums
- * exactly to measure duration" invariant) — the counterpart of
- * `adapters/midi/measures.ts`'s private `fillVoiceGaps`, kept as a local
- * copy since import here works from already-measure-scoped XML content
- * rather than a continuous cross-measure timeline.
+ * rests, trims any event extending past the measure end, and offsets every
+ * event by `measureStartTick` to produce absolute score ticks — so the
+ * voice's events cover `[measureStartTick, measureStartTick + durationTicks)`
+ * exactly (spec §23's "voice content sums exactly to measure duration"
+ * invariant). The counterpart of `adapters/midi/measures.ts`'s private
+ * `fillVoiceGaps`, kept as a local copy since import here works from
+ * already-measure-scoped XML content rather than a continuous cross-measure
+ * timeline.
  */
-function fillAndClip(raw: RawEvent[], durationTicks: number, trackId: string, voiceId: string, warnings: WarningCollector): MusicalEvent[] {
+function fillAndClip(
+  raw: RawEvent[],
+  durationTicks: number,
+  measureStartTick: number,
+  trackId: string,
+  voiceId: string,
+  warnings: WarningCollector,
+): MusicalEvent[] {
   const sorted = [...raw].sort((a, b) => a.startTick - b.startTick);
   const events: MusicalEvent[] = [];
   let cursor = 0;
@@ -390,7 +412,7 @@ function fillAndClip(raw: RawEvent[], durationTicks: number, trackId: string, vo
   for (const item of sorted) {
     const start = Math.max(0, item.startTick);
     if (start > cursor) {
-      events.push({ id: createId(), startTick: cursor, durationTicks: start - cursor, voiceId, trackId });
+      events.push({ id: createId(), startTick: measureStartTick + cursor, durationTicks: start - cursor, voiceId, trackId });
     }
     let duration = item.durationTicks;
     if (start + duration > durationTicks) {
@@ -401,7 +423,7 @@ function fillAndClip(raw: RawEvent[], durationTicks: number, trackId: string, vo
       const note: NoteEvent = {
         id: createId(),
         pitch: item.pitch,
-        startTick: start,
+        startTick: measureStartTick + start,
         durationTicks: duration,
         velocity: DEFAULT_VELOCITY,
         voiceId,
@@ -412,14 +434,14 @@ function fillAndClip(raw: RawEvent[], durationTicks: number, trackId: string, vo
       };
       events.push(note);
     } else {
-      const rest: RestEvent = { id: createId(), startTick: start, durationTicks: duration, voiceId, trackId };
+      const rest: RestEvent = { id: createId(), startTick: measureStartTick + start, durationTicks: duration, voiceId, trackId };
       events.push(rest);
     }
     cursor = Math.max(cursor, start + duration);
   }
 
   if (cursor < durationTicks) {
-    events.push({ id: createId(), startTick: cursor, durationTicks: durationTicks - cursor, voiceId, trackId });
+    events.push({ id: createId(), startTick: measureStartTick + cursor, durationTicks: durationTicks - cursor, voiceId, trackId });
   }
 
   return events;
@@ -473,7 +495,7 @@ function parseMeasure(
         // notes that follow it).
         const eventStart = isChord ? lastNoteStart : cursor;
         const measureEndTick = measureDurationTicks(state.timeSignature, SCORE_PPQ);
-        const raw = parseNote(child, eventStart, measureEndTick, state.ratio, warnings);
+        const { raw, cursorAdvance } = parseNote(child, eventStart, measureEndTick, state.ratio, warnings);
         if (raw) {
           const bucket = buckets.get(raw.voiceNumber) ?? [];
           buckets.set(raw.voiceNumber, bucket);
@@ -481,7 +503,7 @@ function parseMeasure(
         }
         if (!isChord) {
           lastNoteStart = cursor;
-          cursor += raw?.durationTicks ?? 0;
+          cursor += cursorAdvance;
         }
         break;
       }
@@ -526,7 +548,7 @@ function parseMeasure(
     return {
       id: voiceId,
       name: `Voice ${i + 1}`,
-      events: fillAndClip(raw, durationTicks, trackId, voiceId, warnings),
+      events: fillAndClip(raw, durationTicks, startTick, trackId, voiceId, warnings),
     };
   });
 

@@ -253,6 +253,24 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
     expect(warnings.some((w) => /grace/i.test(w))).toBe(true);
   });
 
+  it('skips an unpitched note but still advances the cursor by its duration, so later notes keep their correct position', () => {
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+<note><unpitched><display-step>C</display-step><display-octave>5</display-octave></unpitched><duration>480</duration><voice>1</voice><type>quarter</type></note>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>1440</duration><voice>1</voice><type>half</type><dot/></note>
+</measure>`);
+    const { score, warnings } = importMusicXml(xml);
+    const events = score.tracks[0].measures[0].voices[0].events;
+    // The unpitched note is skipped (a rest fills its slot); the pitched
+    // note that follows must start at tick 480 (after it), not tick 0.
+    expect(events).toHaveLength(2);
+    expect(isRestEvent(events[0])).toBe(true);
+    expect(events[0].startTick).toBe(0);
+    expect(events[0].durationTicks).toBe(480);
+    expect(isNoteEvent(events[1]) && events[1].startTick).toBe(480);
+    expect(warnings.some((w) => /unpitched/i.test(w))).toBe(true);
+  });
+
   it('warns about ornaments and unsupported time-modification (tuplets) without throwing', () => {
     const xml = MINIMAL_HEADER(`<measure number="1">
 <attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
