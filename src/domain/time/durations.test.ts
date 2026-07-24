@@ -27,7 +27,10 @@ describe('decomposeDuration', () => {
 
   it('decomposes a whole note plus a quarter note as two segments', () => {
     const ticks = ticksFor('whole', PPQ) + ticksFor('quarter', PPQ);
-    expect(decomposeDuration(ticks, PPQ)).toEqual([ticksFor('whole', PPQ), ticksFor('quarter', PPQ)]);
+    expect(decomposeDuration(ticks, PPQ)).toEqual([
+      ticksFor('whole', PPQ),
+      ticksFor('quarter', PPQ),
+    ]);
   });
 
   it('falls back to a non-standard leftover segment when the remainder is smaller than the smallest duration', () => {

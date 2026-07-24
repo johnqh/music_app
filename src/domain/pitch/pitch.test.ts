@@ -24,11 +24,13 @@ describe('pitchToMidi', () => {
   });
 
   it('handles a double sharp', () => {
-    expect(pitchToMidi({ step: 'F', accidental: 2, octave: 4 })).toBe(pitchToMidi({
-      step: 'G',
-      accidental: 0,
-      octave: 4,
-    }));
+    expect(pitchToMidi({ step: 'F', accidental: 2, octave: 4 })).toBe(
+      pitchToMidi({
+        step: 'G',
+        accidental: 0,
+        octave: 4,
+      }),
+    );
   });
 });
 
