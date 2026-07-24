@@ -4,12 +4,26 @@
  * here returns new objects; none mutate their inputs.
  */
 import { createId } from '@/domain/score/ids';
-import type { Measure, MusicalEvent, NoteEvent, ScoreMetadata, Track, UUID } from '@/domain/score/types';
+import type { Measure, MusicalEvent, NoteEvent, Score, ScoreMetadata, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 
 /** Returns `metadata` with `updatedAt` refreshed to now. */
 export function touchMetadata(metadata: ScoreMetadata): ScoreMetadata {
   return { ...metadata, updatedAt: new Date().toISOString() };
+}
+
+/**
+ * Returns `{ ...score, tracks }` with `metadata.updatedAt` refreshed, but
+ * only if `tracks` actually differs from `score.tracks` (checked
+ * per-element by reference — every helper in this module returns an
+ * unchanged track/measure/voice by reference when it made no edit, so this
+ * is an exact "did anything really change" test). A true no-op command
+ * (e.g. deleting an id that doesn't exist) therefore returns `score`
+ * itself, not just a structurally-equal copy with a bumped timestamp.
+ */
+export function withTracks(score: Score, tracks: Track[]): Score {
+  const changed = tracks.length !== score.tracks.length || tracks.some((t, i) => t !== score.tracks[i]);
+  return changed ? { ...score, tracks, metadata: touchMetadata(score.metadata) } : score;
 }
 
 /**
@@ -117,7 +131,8 @@ export function removeNotesFromTrack(track: Track, eventIds: ReadonlySet<UUID>):
     return changed ? nextMeasure : measure;
   });
 
-  return { ...track, measures };
+  const trackChanged = measures.some((m, i) => m !== track.measures[i]);
+  return trackChanged ? { ...track, measures } : track;
 }
 
 /**
@@ -150,5 +165,6 @@ export function insertNoteIntoTrack(track: Track, note: NoteEvent, voiceIndex: n
     return reflowVoice(withInserted, voice.id, track.id);
   });
 
-  return { ...track, measures };
+  const trackChanged = measures.some((m, i) => m !== track.measures[i]);
+  return trackChanged ? { ...track, measures } : track;
 }
