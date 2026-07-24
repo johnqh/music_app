@@ -1,0 +1,57 @@
+/**
+ * VexFlow renderer adapter contract (spec §7, §26).
+ *
+ * This file is the cross-task contract: Task 12 (score editor feature)
+ * imports `ScoreRenderer`, `RenderOptions`, `RenderResult`, and
+ * `ScoreChangeSet` verbatim. Keep these four shapes stable; add new
+ * capabilities alongside them (e.g. as extra exported types/functions)
+ * rather than by editing their fields.
+ */
+import type { Score } from '@/domain/score/types';
+
+/** Colors used to paint highlight states; see `applyHighlights` in `renderer.ts`. */
+export type RenderTheme = {
+  foreground: string;
+  selection: string;
+  playback: string;
+  preview: string;
+};
+
+export type RenderOptions = {
+  /** Linear scale factor applied to the whole render (measure width, stave height, font size). */
+  zoom: number;
+  /** "page" wraps systems to fit `width`; "continuous" lays out every measure in one long system. */
+  layoutMode: 'page' | 'continuous';
+  /** Available width in pixels (page mode wraps to this; continuous mode ignores it for layout). */
+  width: number;
+  /** Track ids to render, in the order they should be stacked top-to-bottom; omit/empty = all tracks in score order. */
+  trackIds?: string[];
+  theme: RenderTheme;
+};
+
+export type BBox = { x: number; y: number; width: number; height: number };
+
+export type RenderResult = {
+  /** Note/rest event id -> the SVG group VexFlow drew it into. */
+  idToElement: Map<string, SVGElement>;
+  /** Note/rest event id -> that element's bounding box (page coordinates, SVG user units). */
+  idToBBox: Map<string, BBox>;
+  /** Measure id -> the bounding box of that measure's stave (unioned across every rendered track). */
+  measureIdToBBox: Map<string, BBox>;
+  /** Total rendered height in pixels; combine with `options.width` (page) or the natural content width (continuous) for the viewport. */
+  height: number;
+};
+
+/**
+ * `"all"`: re-render everything. `{ dirtyMeasureIds }`: only these measures'
+ * content changed (their notes/rests/voices) — reserved for a future
+ * incremental `update`; the Task 11 MVP `update` always re-renders fully
+ * regardless of which variant is passed (see `renderer.ts`).
+ */
+export type ScoreChangeSet = { dirtyMeasureIds: string[] } | 'all';
+
+export interface ScoreRenderer {
+  render(score: Score, container: HTMLElement, options: RenderOptions): RenderResult;
+  update(score: Score, changes: ScoreChangeSet, container: HTMLElement, previous: RenderResult): RenderResult;
+  dispose(): void;
+}
