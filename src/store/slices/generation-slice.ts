@@ -32,10 +32,12 @@ export type GenerationMode = 'generate' | 'regenerate';
  * events/measures, or an explicit tick range) puts the generation panel in
  * "regenerate" mode; an empty selection (including a bare track-only
  * selection, which has no tick extent of its own) means "generate" a whole
- * new score. Exported so `selection-slice` can recompute it, in the same
- * `set()` call, every time the selection changes — kept as real state
- * (not a selector) so components can read it without knowing the
- * derivation rule.
+ * new score. Kept as real state (not a read-time selector) so components
+ * can read it without knowing the derivation rule — but the *write* is
+ * this slice's own responsibility (`syncModeFromSelection`, below):
+ * `selection-slice` calls that action after every selection change rather
+ * than writing `state.mode` itself, so `generation-slice` stays the only
+ * code that ever touches its own field.
  */
 export function deriveGenerationMode(selection: ScoreSelection): GenerationMode {
   const hasContent =
@@ -54,6 +56,8 @@ export type GenerationSlice = {
   lastRequest: GenerateScoreRequest | PreparedRegenerationRequest | null;
   error: string | null;
 
+  /** Recomputes `mode` from `selection` via `deriveGenerationMode`. Called by `selection-slice`'s mutators after every selection change; not normally called directly by UI code. */
+  syncModeFromSelection: (selection: ScoreSelection) => void;
   /** Generates a brand-new score from `params` and adopts it (spec §39 items 3-5): validated/repaired via `sanitizeGeneratedScore`, then `setScore(..., { resetHistory: true })`. */
   generate: (params: GenerateScoreRequest) => Promise<void>;
   /** Requests 1-3 regeneration candidates for the current selection (spec §12 items 1-6); does not touch the committed score. Throws no further than setting `error` if the selection isn't regenerable or the provider rejects the request. */
@@ -71,111 +75,182 @@ export const createGenerationSlice: StateCreator<
   [['zustand/immer', never]],
   [],
   GenerationSlice
-> = (set, get) => ({
-  mode: 'generate',
-  pending: false,
-  candidates: [],
-  activeCandidateId: null,
-  previewFragment: null,
-  lastRequest: null,
-  error: null,
+> = (set, get) => {
+  // `requestToken`/`abortController` guard against out-of-order responses:
+  // `generate`/`regenerate` are async and there's nothing stopping a
+  // component from firing a second call (a new prompt, a revised
+  // instruction) before the first one's provider round-trip has settled.
+  // Without this, the *older* call's `.then`/`.catch` can land after the
+  // newer one and clobber its `pending`/`candidates`/`score` with stale
+  // data. `beginRequest()` bumps `requestToken` and aborts+replaces
+  // `abortController` every time either action starts, so:
+  //  - the previous in-flight provider call gets an aborted `AbortSignal`
+  //    (both `MusicGenerationProvider` methods accept one) and, once its
+  //    promise actually settles, is silently discarded on the `token !==
+  //    requestToken` check below — never writing over the newer call's
+  //    state.
+  //  - a real (non-abort) error from a since-superseded call is likewise
+  //    discarded, not surfaced as `error` (only the *current* call's own
+  //    outcome should ever reach the user).
+  // One shared token/controller for both actions (rather than one each) is
+  // deliberate: `generate` and `regenerate` both drive the same
+  // `pending`/`error` fields, so starting either one should supersede
+  // whatever async generation-panel request was previously in flight,
+  // regardless of which action it was.
+  let requestToken = 0;
+  let abortController: AbortController | null = null;
 
-  generate: async (params) => {
-    set((state) => {
-      state.pending = true;
-      state.error = null;
-    });
-    try {
-      const result = await getProvider().generateScore(params);
-      const { score } = sanitizeGeneratedScore(result.score);
-      get().setScore(score, { resetHistory: true });
+  function beginRequest(): { token: number; signal: AbortSignal } {
+    abortController?.abort();
+    const controller = new AbortController();
+    abortController = controller;
+    requestToken += 1;
+    return { token: requestToken, signal: controller.signal };
+  }
+
+  return {
+    mode: 'generate',
+    pending: false,
+    candidates: [],
+    activeCandidateId: null,
+    previewFragment: null,
+    lastRequest: null,
+    error: null,
+
+    syncModeFromSelection: (selection) => {
       set((state) => {
-        state.pending = false;
-        state.lastRequest = params;
+        state.mode = deriveGenerationMode(selection);
       });
-      get().markDirty();
-    } catch (error) {
+    },
+
+    generate: async (params) => {
+      const { token, signal } = beginRequest();
       set((state) => {
-        state.pending = false;
-        state.error = errorMessage(error);
+        state.pending = true;
+        state.error = null;
       });
-    }
-  },
+      try {
+        const result = await getProvider().generateScore(params, signal);
+        if (token !== requestToken) return; // superseded by a newer generate()/regenerate() call
+        const { score } = sanitizeGeneratedScore(result.score);
+        get().setScore(score, { resetHistory: true });
+        set((state) => {
+          state.pending = false;
+          state.lastRequest = params;
+        });
+        get().markDirty();
+      } catch (error) {
+        if (token !== requestToken) return; // superseded; the newer call now owns pending/error
+        if (isAbortError(error)) {
+          set((state) => {
+            state.pending = false;
+          });
+          return;
+        }
+        set((state) => {
+          state.pending = false;
+          state.error = errorMessage(error);
+        });
+      }
+    },
 
-  regenerate: async (instruction, options) => {
-    const { score, selection } = get();
-    if (!score) {
+    regenerate: async (instruction, options) => {
+      const { token, signal } = beginRequest();
+      const { score, selection } = get();
+
+      if (!score) {
+        set((state) => {
+          state.pending = false;
+          state.error = 'Cannot regenerate: no score is loaded.';
+        });
+        return;
+      }
+      if (!selectionIsRegenerable(score, selection)) {
+        set((state) => {
+          state.pending = false;
+          state.error = 'Select a region of the score before regenerating.';
+        });
+        return;
+      }
+
       set((state) => {
-        state.error = 'Cannot regenerate: no score is loaded.';
+        state.pending = true;
+        state.error = null;
+        state.candidates = [];
+        state.activeCandidateId = null;
+        state.previewFragment = null;
       });
-      return;
-    }
-    if (!selectionIsRegenerable(score, selection)) {
+
+      try {
+        const prepared = prepareRegenerationRequest(score, selection, instruction, options);
+        const result = await getProvider().regenerateRegion(prepared, signal);
+        if (token !== requestToken) return; // superseded by a newer generate()/regenerate() call
+        const first = result.candidates[0] ?? null;
+        set((state) => {
+          state.pending = false;
+          state.lastRequest = prepared;
+          state.candidates = result.candidates;
+          state.activeCandidateId = first?.id ?? null;
+          state.previewFragment = first?.fragment ?? null;
+        });
+      } catch (error) {
+        if (token !== requestToken) return; // superseded; the newer call now owns pending/error
+        if (isAbortError(error)) {
+          set((state) => {
+            state.pending = false;
+          });
+          return;
+        }
+        set((state) => {
+          state.pending = false;
+          state.error = errorMessage(error);
+        });
+      }
+    },
+
+    selectCandidate: (id) => {
       set((state) => {
-        state.error = 'Select a region of the score before regenerating.';
+        const candidate = id === null ? null : (state.candidates.find((c) => c.id === id) ?? null);
+        state.activeCandidateId = candidate?.id ?? null;
+        state.previewFragment = candidate?.fragment ?? null;
       });
-      return;
-    }
+    },
 
-    set((state) => {
-      state.pending = true;
-      state.error = null;
-      state.candidates = [];
-      state.activeCandidateId = null;
-      state.previewFragment = null;
-    });
+    acceptCandidate: () => {
+      const { score, candidates, activeCandidateId } = get();
+      if (!score) return;
+      const candidate = candidates.find((c) => c.id === activeCandidateId);
+      if (!candidate) return;
 
-    try {
-      const prepared = prepareRegenerationRequest(score, selection, instruction, options);
-      const result = await getProvider().regenerateRegion(prepared);
-      const first = result.candidates[0] ?? null;
+      const command = applyCandidate(score, candidate);
+      get().dispatchCommand(command);
+
       set((state) => {
-        state.pending = false;
-        state.lastRequest = prepared;
-        state.candidates = result.candidates;
-        state.activeCandidateId = first?.id ?? null;
-        state.previewFragment = first?.fragment ?? null;
+        state.candidates = [];
+        state.activeCandidateId = null;
+        state.previewFragment = null;
       });
-    } catch (error) {
+    },
+
+    rejectCandidates: () => {
       set((state) => {
-        state.pending = false;
-        state.error = errorMessage(error);
+        state.candidates = [];
+        state.activeCandidateId = null;
+        state.previewFragment = null;
       });
-    }
-  },
+    },
+  };
+};
 
-  selectCandidate: (id) => {
-    set((state) => {
-      const candidate = id === null ? null : (state.candidates.find((c) => c.id === id) ?? null);
-      state.activeCandidateId = candidate?.id ?? null;
-      state.previewFragment = candidate?.fragment ?? null;
-    });
-  },
-
-  acceptCandidate: () => {
-    const { score, candidates, activeCandidateId } = get();
-    if (!score) return;
-    const candidate = candidates.find((c) => c.id === activeCandidateId);
-    if (!candidate) return;
-
-    const command = applyCandidate(score, candidate);
-    get().dispatchCommand(command);
-
-    set((state) => {
-      state.candidates = [];
-      state.activeCandidateId = null;
-      state.previewFragment = null;
-    });
-  },
-
-  rejectCandidates: () => {
-    set((state) => {
-      state.candidates = [];
-      state.activeCandidateId = null;
-      state.previewFragment = null;
-    });
-  },
-});
+/** True for the `AbortError` a `MusicGenerationProvider` call rejects with when its `AbortSignal` fires (both the mock provider's `throwIfAborted` and the DOM `fetch`/`AbortController` convention use this name). Cancellations from `beginRequest()` superseding an in-flight call are intentionally silent — never surfaced via `error` — since they reflect the *user* moving on to a newer request, not a failure. */
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name: unknown }).name === 'AbortError'
+  );
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof GenerationValidationError) return error.message;

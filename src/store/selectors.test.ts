@@ -22,13 +22,11 @@ describe('selectors', () => {
       store.getState().setScore(score);
       const notes = score.tracks[0].measures[0].voices[0].events;
 
-      store
-        .getState()
-        .setSelection({
-          eventIds: [notes[0].id, notes[2].id, 'stale'],
-          measureIds: [],
-          trackIds: [],
-        });
+      store.getState().setSelection({
+        eventIds: [notes[0].id, notes[2].id, 'stale'],
+        measureIds: [],
+        trackIds: [],
+      });
 
       const selected = selectSelectedNotes(store.getState());
       expect(selected.map((n) => n.id).sort()).toEqual([notes[0].id, notes[2].id].sort());
@@ -85,6 +83,54 @@ describe('selectors', () => {
       store.getState().setPositionTick(1_000_000);
       const lastMeasure = score.tracks[0].measures[score.tracks[0].measures.length - 1];
       expect(selectCurrentMeasureBeat(store.getState())!.measureIndex).toBe(lastMeasure.index + 1);
+    });
+  });
+
+  describe('memoization (finding 3)', () => {
+    it('selectSelectedNotes returns the same array reference across repeated calls with unchanged inputs, and a new one once the selection changes', () => {
+      const store = createAppStore();
+      const score = twinkleScore();
+      store.getState().setScore(score);
+      const noteId = score.tracks[0].measures[0].voices[0].events[0].id;
+      store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+
+      const first = selectSelectedNotes(store.getState());
+      const second = selectSelectedNotes(store.getState());
+      expect(second).toBe(first);
+      expect(second).toEqual([expect.objectContaining({ id: noteId })]);
+
+      store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [] });
+      const third = selectSelectedNotes(store.getState());
+      expect(third).not.toBe(first);
+    });
+
+    it('selectSelectedMeasureRange returns the same object reference across repeated calls with unchanged inputs, and a new one once the selection changes', () => {
+      const store = createAppStore();
+      const score = twinkleScore();
+      store.getState().setScore(score);
+      store.getState().selectMeasures([score.tracks[0].measures[0].id]);
+
+      const first = selectSelectedMeasureRange(store.getState());
+      const second = selectSelectedMeasureRange(store.getState());
+      expect(second).toBe(first);
+
+      store.getState().selectMeasures([score.tracks[0].measures[1].id]);
+      const third = selectSelectedMeasureRange(store.getState());
+      expect(third).not.toBe(first);
+    });
+
+    it('selectCurrentMeasureBeat returns the same object reference across repeated calls with unchanged inputs, and a new one once positionTick changes', () => {
+      const store = createAppStore();
+      store.getState().setScore(twinkleScore());
+      store.getState().setPositionTick(480);
+
+      const first = selectCurrentMeasureBeat(store.getState());
+      const second = selectCurrentMeasureBeat(store.getState());
+      expect(second).toBe(first);
+
+      store.getState().setPositionTick(960);
+      const third = selectCurrentMeasureBeat(store.getState());
+      expect(third).not.toBe(first);
     });
   });
 });

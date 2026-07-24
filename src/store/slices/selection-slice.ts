@@ -15,7 +15,6 @@ import type { NoteEvent, Score, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { pasteEventsCommand } from '@/domain/commands/edit-commands';
 import { deleteEventsCommand } from '@/domain/commands/note-commands';
-import { deriveGenerationMode } from '@/store/slices/generation-slice';
 import type { AppState } from '@/store/useAppStore';
 
 export type ClipboardData = { events: NoteEvent[]; anchorTick: number };
@@ -65,18 +64,19 @@ export const createSelectionSlice: StateCreator<
   setSelection: (selection) => {
     set((state) => {
       state.selection = selection;
-      state.mode = deriveGenerationMode(selection);
     });
+    // Routed through generation-slice's own action (rather than this slice
+    // writing `state.mode` itself) so generation-slice stays the only code
+    // that ever touches its own field.
+    get().syncModeFromSelection(selection);
   },
 
   toggleEvent: (eventId) => {
-    set((state) => {
-      const eventIds = state.selection.eventIds.includes(eventId)
-        ? state.selection.eventIds.filter((id: UUID) => id !== eventId)
-        : [...state.selection.eventIds, eventId];
-      state.selection = { ...state.selection, eventIds };
-      state.mode = deriveGenerationMode(state.selection);
-    });
+    const current = get().selection;
+    const eventIds = current.eventIds.includes(eventId)
+      ? current.eventIds.filter((id) => id !== eventId)
+      : [...current.eventIds, eventId];
+    get().setSelection({ ...current, eventIds });
   },
 
   selectMeasures: (measureIds) => {

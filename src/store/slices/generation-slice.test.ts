@@ -1,8 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createAppStore } from '@/store/useAppStore';
-import { resetProvider } from '@/services/generation/registry';
+import { resetProvider, setProvider } from '@/services/generation/registry';
+import { extractFragment } from '@/domain/score/fragment';
+import { selectionToRange } from '@/domain/selection/selection';
 import { twinkleScore } from '@/test/fixtures';
-import type { GenerateScoreRequest } from '@/services/generation/types';
+import type { Score } from '@/domain/score/types';
+import { isNoteEvent } from '@/domain/score/types';
+import type {
+  GenerateScoreRequest,
+  GenerateScoreResult,
+  MusicGenerationProvider,
+  RegenerateRegionRequest,
+  RegenerateRegionResult,
+  RegenerationCandidate,
+} from '@/services/generation/types';
 
 const REQUEST: GenerateScoreRequest = {
   prompt: 'Create a gentle eight-measure piano piece in A minor',
@@ -14,7 +25,111 @@ afterEach(() => {
   resetProvider();
 });
 
+/** Strips ids (and real-clock-dependent timestamps) so two independently-sanitized-and-id-regenerated scores can be compared for musical equivalence. `sanitizeGeneratedScore` regenerates every id via `createId()` (unseeded `crypto.randomUUID`) by design, so a store-level "same seed -> deep-equal score" comparison must look past ids. */
+function normalizeForComparison(score: Score) {
+  return {
+    ppq: score.ppq,
+    title: score.metadata.title,
+    tempoMap: score.tempoMap.map((t) => ({ tick: t.tick, bpm: t.bpm })),
+    tracks: score.tracks.map((t) => ({
+      name: t.name,
+      instrumentName: t.instrumentName,
+      midiProgram: t.midiProgram,
+      clef: t.clef,
+      measures: t.measures.map((m) => ({
+        index: m.index,
+        startTick: m.startTick,
+        durationTicks: m.durationTicks,
+        timeSignature: m.timeSignature,
+        keySignature: m.keySignature,
+        voices: m.voices.map((v) => ({
+          events: v.events.map((e) =>
+            isNoteEvent(e)
+              ? {
+                  kind: 'note' as const,
+                  pitch: e.pitch,
+                  startTick: e.startTick,
+                  durationTicks: e.durationTicks,
+                  velocity: e.velocity,
+                }
+              : { kind: 'rest' as const, startTick: e.startTick, durationTicks: e.durationTicks },
+          ),
+        })),
+      })),
+    })),
+  };
+}
+
+/**
+ * A `MusicGenerationProvider` whose calls stay pending until the test
+ * resolves/rejects them by hand (via `generateCalls`/`regenerateCalls`),
+ * and which honors `AbortSignal` the same way a real network-backed
+ * provider would (rejecting with an `AbortError` `DOMException` once the
+ * signal fires) — for exercising generation-slice's request-supersession
+ * behavior (finding 2) under manual control.
+ */
+class ControllableProvider implements MusicGenerationProvider {
+  readonly id = 'controllable';
+  readonly name = 'Controllable Test Provider';
+  readonly generateCalls: Array<{
+    request: GenerateScoreRequest;
+    resolve: (result: GenerateScoreResult) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+  readonly regenerateCalls: Array<{
+    request: RegenerateRegionRequest;
+    resolve: (result: RegenerateRegionResult) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+
+  generateScore(request: GenerateScoreRequest, signal?: AbortSignal): Promise<GenerateScoreResult> {
+    return new Promise((resolve, reject) => {
+      this.generateCalls.push({ request, resolve, reject });
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('The operation was aborted.', 'AbortError')),
+      );
+    });
+  }
+
+  regenerateRegion(
+    request: RegenerateRegionRequest,
+    signal?: AbortSignal,
+  ): Promise<RegenerateRegionResult> {
+    return new Promise((resolve, reject) => {
+      this.regenerateCalls.push({ request, resolve, reject });
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('The operation was aborted.', 'AbortError')),
+      );
+    });
+  }
+}
+
 describe('generation-slice', () => {
+  describe('syncModeFromSelection (finding 4)', () => {
+    it('derives "regenerate" from a selection carrying content, and "generate" from an empty one', () => {
+      const store = createAppStore();
+      expect(store.getState().mode).toBe('generate');
+
+      store.getState().syncModeFromSelection({ eventIds: ['a'], measureIds: [], trackIds: [] });
+      expect(store.getState().mode).toBe('regenerate');
+
+      store.getState().syncModeFromSelection({ eventIds: [], measureIds: [], trackIds: [] });
+      expect(store.getState().mode).toBe('generate');
+    });
+
+    it('is the only path that writes `mode`: selection-slice mutators call it rather than touching the field themselves', () => {
+      const store = createAppStore();
+      // setSelection (and everything built on it -- toggleEvent,
+      // selectMeasures, selectTrack, clearSelection) must still end up
+      // deriving `mode` correctly, now that it's routed through this
+      // action instead of being written inline by selection-slice.
+      store.getState().setSelection({ eventIds: [], measureIds: ['m1'], trackIds: [] });
+      expect(store.getState().mode).toBe('regenerate');
+      store.getState().clearSelection();
+      expect(store.getState().mode).toBe('generate');
+    });
+  });
+
   describe('generate', () => {
     it('adopts the provider-generated score, resets history, and marks the project dirty', async () => {
       const store = createAppStore();
@@ -37,6 +152,77 @@ describe('generation-slice', () => {
       expect(store.getState().pending).toBe(true);
       await promise;
       expect(store.getState().pending).toBe(false);
+    });
+
+    it('defaults to the shared DEFAULT_MOCK_SEED: two fresh stores generating the same request, with no prior setMockSeed/setDevSettings call, produce musically-identical scores (finding 1)', async () => {
+      const storeA = createAppStore();
+      const storeB = createAppStore();
+
+      await storeA.getState().generate(REQUEST);
+      await storeB.getState().generate(REQUEST);
+
+      expect(normalizeForComparison(storeA.getState().score!)).toEqual(
+        normalizeForComparison(storeB.getState().score!),
+      );
+    });
+  });
+
+  describe('request supersession (finding 2)', () => {
+    it('a slower generate() call is superseded by a faster later one: final state reflects only the newer call, and the superseded call does not clobber it or set an error', async () => {
+      const provider = new ControllableProvider();
+      setProvider(provider);
+      const store = createAppStore();
+
+      const slow = store.getState().generate(REQUEST);
+      expect(provider.generateCalls).toHaveLength(1);
+
+      const fast = store.getState().generate({ ...REQUEST, durationMeasures: 8 });
+      expect(provider.generateCalls).toHaveLength(2);
+
+      const fastScore = twinkleScore();
+      provider.generateCalls[1].resolve({ score: fastScore, warnings: [] });
+      await fast;
+      // Let the superseded (slow) call's own abort-rejection settle too --
+      // it must not touch state after the fact.
+      await slow;
+
+      const state = store.getState();
+      expect(state.pending).toBe(false);
+      expect(state.error).toBeNull(); // the aborted call's rejection was never surfaced as an error
+      expect(state.score?.metadata.title).toBe(fastScore.metadata.title);
+      expect(state.lastRequest).toEqual({ ...REQUEST, durationMeasures: 8 });
+    });
+
+    it('a slower regenerate() call is superseded by a faster later one: final candidates reflect only the newer call', async () => {
+      const provider = new ControllableProvider();
+      setProvider(provider);
+      const store = createAppStore();
+      const score = twinkleScore();
+      store.getState().setScore(score);
+      store.getState().selectMeasures([score.tracks[0].measures[0].id]);
+      const range = selectionToRange(score, store.getState().selection)!;
+
+      const slow = store.getState().regenerate('Make this more dramatic');
+      expect(provider.regenerateCalls).toHaveLength(1);
+
+      const fast = store.getState().regenerate('Simplify this passage');
+      expect(provider.regenerateCalls).toHaveLength(2);
+
+      const fastCandidate: RegenerationCandidate = {
+        id: 'fast-candidate',
+        label: 'Fast',
+        fragment: extractFragment(score, range),
+      };
+      provider.regenerateCalls[1].resolve({ candidates: [fastCandidate], warnings: [] });
+      await fast;
+      await slow;
+
+      const state = store.getState();
+      expect(state.pending).toBe(false);
+      expect(state.error).toBeNull();
+      expect(state.candidates).toEqual([fastCandidate]);
+      expect(state.activeCandidateId).toBe('fast-candidate');
+      expect(state.score).toBe(score); // still untouched (non-destructive preview)
     });
   });
 

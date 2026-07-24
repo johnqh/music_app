@@ -7,7 +7,7 @@
 import type { StateCreator } from 'zustand';
 import { createId } from '@/domain/score/ids';
 import type { DurationName } from '@/domain/score/types';
-import { setMockSeed } from '@/services/generation/registry';
+import { DEFAULT_MOCK_SEED, setMockSeed } from '@/services/generation/registry';
 import type { AppState } from '@/store/useAppStore';
 
 export type ViewMode = 'notation' | 'piano-roll';
@@ -23,7 +23,11 @@ export type ToastSeverity = 'info' | 'success' | 'warning' | 'error';
 export type Toast = { id: string; message: string; severity: ToastSeverity };
 
 const DEFAULT_DEV_SETTINGS: DevSettings = {
-  seed: 'scoresmith-mock',
+  // Shares registry.ts's DEFAULT_MOCK_SEED (rather than a locally hardcoded
+  // string) so the seed this panel *displays* as the default can never
+  // silently disagree with the seed the registry's provider actually boots
+  // with (see registry.ts's DEFAULT_MOCK_SEED doc comment).
+  seed: DEFAULT_MOCK_SEED,
   showIds: false,
   showTicks: false,
 };

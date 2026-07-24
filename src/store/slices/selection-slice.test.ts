@@ -88,13 +88,11 @@ describe('selection-slice', () => {
       store.getState().setScore(score);
       const notes = score.tracks[0].measures[0].voices[0].events;
 
-      store
-        .getState()
-        .setSelection({
-          eventIds: [notes[0].id, notes[1].id, 'stale-id'],
-          measureIds: [],
-          trackIds: [],
-        });
+      store.getState().setSelection({
+        eventIds: [notes[0].id, notes[1].id, 'stale-id'],
+        measureIds: [],
+        trackIds: [],
+      });
       store.getState().copySelection();
 
       const clipboard = store.getState().clipboard;

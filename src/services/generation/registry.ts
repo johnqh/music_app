@@ -11,13 +11,27 @@
  * `setProvider` exists so tests (and, later, a real AI backend swapped in
  * behind the same `MusicGenerationProvider` interface) can substitute a
  * different provider without reaching into this module's internals.
+ *
+ * `DEFAULT_MOCK_SEED` is exported so `ui-slice.ts`'s `DEFAULT_DEV_SETTINGS.
+ * seed` can import the exact same constant, rather than each module
+ * hardcoding its own copy of `'scoresmith-mock'` that could silently drift
+ * apart. Without that, the registry's default provider and the developer
+ * settings' displayed default seed disagree until a user (or test) happens
+ * to trigger `setDevSettings({ seed })` — i.e. the app boots with output
+ * that *looks* seeded/deterministic in the devSettings UI but isn't
+ * actually seeded in the registry until something writes to it.
  */
 import { MockGenerationProvider } from '@/services/generation/mock-provider';
 import type { MusicGenerationProvider } from '@/services/generation/types';
 
-let currentProvider: MusicGenerationProvider = new MockGenerationProvider();
+/** The seed every fresh app boot (and every `resetProvider()`) starts with, absent an explicit `setMockSeed`/`setDevSettings({ seed })` call. Shared with `ui-slice.ts`'s `DEFAULT_DEV_SETTINGS.seed` so the two can never drift apart. */
+export const DEFAULT_MOCK_SEED = 'scoresmith-mock';
 
-/** The active generation provider. Defaults to an unseeded `MockGenerationProvider` until `setProvider`/`setMockSeed` is called. */
+let currentProvider: MusicGenerationProvider = new MockGenerationProvider({
+  seed: DEFAULT_MOCK_SEED,
+});
+
+/** The active generation provider. Defaults to a `MockGenerationProvider` seeded with `DEFAULT_MOCK_SEED` until `setProvider`/`setMockSeed` replaces it. */
 export function getProvider(): MusicGenerationProvider {
   return currentProvider;
 }
@@ -32,7 +46,7 @@ export function setMockSeed(seed: number | string): void {
   currentProvider = new MockGenerationProvider({ seed });
 }
 
-/** Resets the registry to an unseeded `MockGenerationProvider` (test teardown convenience). */
+/** Resets the registry to a fresh `MockGenerationProvider` seeded with `DEFAULT_MOCK_SEED` (test teardown convenience). */
 export function resetProvider(): void {
-  currentProvider = new MockGenerationProvider();
+  currentProvider = new MockGenerationProvider({ seed: DEFAULT_MOCK_SEED });
 }
