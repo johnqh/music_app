@@ -70,4 +70,27 @@ describe('parsePrompt', () => {
     expect(hints.style).toBe('jazz');
     expect(hints.keySignature).toEqual({ fifths: 0, mode: 'major' });
   });
+
+  describe('does not mistake the article "a"/"an" for the pitch letter A (regression)', () => {
+    it('"Create a minor pentatonic riff" detects no key signature', () => {
+      const hints = parsePrompt('Create a minor pentatonic riff');
+      expect(hints.keySignature).toBeUndefined();
+    });
+
+    it('"a minor" scale/chord phrasing elsewhere in a prompt also detects no key signature', () => {
+      expect(parsePrompt('Write a minor blues lick').keySignature).toBeUndefined();
+      expect(parsePrompt('Give me a major scale exercise').keySignature).toBeUndefined();
+    });
+
+    it('an explicit "in <key>" context cue still parses correctly, including a lowercase bare letter', () => {
+      expect(parsePrompt('Create a piece in a minor').keySignature).toEqual({ fifths: 0, mode: 'minor' }); // A minor
+      expect(parsePrompt('Create a piece in C major').keySignature).toEqual({ fifths: 0, mode: 'major' });
+    });
+
+    it('a bare uppercase key name (no "in") still parses correctly', () => {
+      expect(parsePrompt('Db major, four measures').keySignature).toBeDefined();
+      expect(keyTonicPitchClass(parsePrompt('Db major, four measures').keySignature!)).toBe(1); // Db
+      expect(parsePrompt('C major scale study').keySignature).toEqual({ fifths: 0, mode: 'major' });
+    });
+  });
 });

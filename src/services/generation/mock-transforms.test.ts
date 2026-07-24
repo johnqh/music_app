@@ -56,7 +56,34 @@ describe('pickTransformKind', () => {
     ['Play it lower', 'lower'],
     ['Create a variation while preserving the melody', 'preserveMelody'],
     ['Add harmonic tension', 'default'],
+    // Regression: "harmony" and "melody" can both appear in one instruction; the
+    // classifier must key off which noun "preserve"/"keep" actually governs.
+    ['Preserve harmony but change melody', 'preserveHarmony'],
+    ['Preserve rhythm but change harmony', 'default'], // "harmony" is the thing CHANGED here, not preserved
+    ['Keep the harmony, vary the melody', 'preserveHarmony'],
+    ['Thin out the orchestration', 'simplify'],
   ] as const)('%s -> %s', (instruction, expected) => {
+    expect(pickTransformKind(instruction)).toBe(expected);
+  });
+
+  // spec §12's full preset instruction list: every one must classify to *something*
+  // sensible (never throw, never silently invert a preserve-target instruction).
+  it.each([
+    ['Make this more dramatic', 'dramatic'],
+    ['Simplify this passage', 'simplify'],
+    ['Add rhythmic variation', 'default'],
+    ['Make the melody more memorable', 'default'],
+    ['Create a stronger transition', 'default'],
+    ['Add harmonic tension', 'default'],
+    ['Resolve the phrase', 'default'],
+    ['Make this more upbeat', 'dramatic'],
+    ['Make this darker', 'minor'],
+    ['Create a variation while preserving the melody', 'preserveMelody'],
+    ['Preserve rhythm but change harmony', 'default'],
+    ['Preserve harmony but change melody', 'preserveHarmony'],
+    ['Add accompaniment', 'default'],
+    ['Thin out the orchestration', 'simplify'],
+  ] as const)('spec §12 preset: %s -> %s', (instruction, expected) => {
     expect(pickTransformKind(instruction)).toBe(expected);
   });
 });
@@ -152,10 +179,10 @@ describe('transformFragment', () => {
     expect('pitch' in lowerEvent && lowerEvent.pitch.octave).toBe(3);
   });
 
-  it('preserveMelody keeps the first track unchanged while varying other tracks', () => {
+  function twoTrackFragment() {
     const score = createEmptyScore({
       title: 'S',
-      measures: 1,
+      measures: 2,
       tracks: [
         { name: 'Melody', clef: 'treble' },
         { name: 'Accompaniment', clef: 'treble' },
@@ -165,6 +192,16 @@ describe('transformFragment', () => {
     const accompTrack = score.tracks[1];
     const measureTicks = melodyTrack.measures[0].durationTicks;
 
+    // Multiple distinct-pitch notes per measure/track, so a variation transform that
+    // only changes *some* notes probabilistically is still overwhelmingly likely to
+    // produce a detectable difference (avoids test flakiness from a single-note fixture).
+    const pitches: Array<{ step: 'C' | 'D' | 'E' | 'F'; octave: number }> = [
+      { step: 'C', octave: 4 },
+      { step: 'D', octave: 4 },
+      { step: 'E', octave: 4 },
+      { step: 'F', octave: 4 },
+    ];
+
     const fill = (track: typeof melodyTrack) => ({
       ...track,
       measures: track.measures.map((measure) => ({
@@ -173,40 +210,67 @@ describe('transformFragment', () => {
           {
             id: `${measure.id}-v`,
             name: 'Voice 1',
-            events: [
-              {
-                id: `${measure.id}-n`,
-                pitch: { step: 'C' as const, accidental: 0 as const, octave: 4 },
-                startTick: measure.startTick,
-                durationTicks: measureTicks,
-                velocity: 80,
-                voiceId: `${measure.id}-v`,
-                trackId: track.id,
-              },
-            ],
+            events: pitches.map((p, i) => ({
+              id: `${measure.id}-n${i}`,
+              pitch: { step: p.step, accidental: 0 as const, octave: p.octave },
+              startTick: measure.startTick + i * (measureTicks / pitches.length),
+              durationTicks: measureTicks / pitches.length,
+              velocity: 80,
+              voiceId: `${measure.id}-v`,
+              trackId: track.id,
+            })),
           },
         ],
       })),
     });
 
     const filledScore = { ...score, tracks: [fill(melodyTrack), fill(accompTrack)] };
-    const range = { startTick: 0, endTick: measureTicks, trackIds: [melodyTrack.id, accompTrack.id] };
-    const fragment = extractFragment(filledScore, range);
+    const range = { startTick: 0, endTick: measureTicks * 2, trackIds: [melodyTrack.id, accompTrack.id] };
+    return { fragment: extractFragment(filledScore, range), melodyTrackId: melodyTrack.id, accompTrackId: accompTrack.id };
+  }
 
-    const rng = new SeededRng('preserve');
+  function pitchesOf(fragment: ReturnType<typeof twoTrackFragment>['fragment'], trackId: string) {
+    const track = fragment.tracks.find((t) => t.trackId === trackId)!;
+    return track.measures.flatMap((m) => m.voices.flatMap((v) => v.events.map((e) => ('pitch' in e ? e.pitch : null))));
+  }
+
+  it('preserveMelody keeps the first track unchanged while actually varying the other tracks', () => {
+    const { fragment, melodyTrackId, accompTrackId } = twoTrackFragment();
+
     const result = transformFragment(
       fragment,
       'Create a variation while preserving the melody',
       { ...BASE_CONSTRAINTS, preserveMelody: true },
-      rng,
+      new SeededRng('preserve-melody'),
       0,
     );
 
-    const originalMelodyEvent = fragment.tracks[0].measures[0].voices[0].events[0];
-    const resultMelodyEvent = result.tracks[0].measures[0].voices[0].events[0];
-    expect('pitch' in resultMelodyEvent && resultMelodyEvent.pitch).toEqual(
-      'pitch' in originalMelodyEvent && originalMelodyEvent.pitch,
+    expect(pitchesOf(result, melodyTrackId)).toEqual(pitchesOf(fragment, melodyTrackId));
+    expect(pitchesOf(result, accompTrackId)).not.toEqual(pitchesOf(fragment, accompTrackId));
+  });
+
+  it('preserveHarmony (constraint) keeps every other track unchanged while actually varying the first (melody) track', () => {
+    const { fragment, melodyTrackId, accompTrackId } = twoTrackFragment();
+
+    const result = transformFragment(
+      fragment,
+      'Preserve harmony but change melody',
+      { ...BASE_CONSTRAINTS, preserveHarmony: true },
+      new SeededRng('preserve-harmony'),
+      0,
     );
+
+    expect(pitchesOf(result, accompTrackId)).toEqual(pitchesOf(fragment, accompTrackId));
+    expect(pitchesOf(result, melodyTrackId)).not.toEqual(pitchesOf(fragment, melodyTrackId));
+  });
+
+  it('"Preserve harmony but change melody" instruction alone (no explicit constraint) has the same effect', () => {
+    const { fragment, melodyTrackId, accompTrackId } = twoTrackFragment();
+
+    const result = transformFragment(fragment, 'Preserve harmony but change melody', BASE_CONSTRAINTS, new SeededRng('preserve-harmony-2'), 0);
+
+    expect(pitchesOf(result, accompTrackId)).toEqual(pitchesOf(fragment, accompTrackId));
+    expect(pitchesOf(result, melodyTrackId)).not.toEqual(pitchesOf(fragment, melodyTrackId));
   });
 
   it('respects allowedPitchRangeByTrack and maximumPolyphony constraints', () => {

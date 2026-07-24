@@ -3,11 +3,20 @@
  * `MockGenerationProvider.regenerateRegion` (spec §11, §12): turns a
  * selected `ScoreFragment` into one candidate fragment per call, styled by
  * keywords found in the regeneration instruction — dramatic (wider range +
- * higher velocity + octave doublings), simplify (longer durations, fewer
- * notes), syncopate (offbeat duration reassignment), darker/minor (mode
- * transform), higher/lower (octave transposition), preserve-melody (keep
- * the first track's content, vary the rest), and a default rhythmic/
- * melodic variation otherwise.
+ * higher velocity + octave doublings), simplify/thin (longer durations,
+ * fewer notes), syncopate (offbeat duration reassignment), darker/minor
+ * (mode transform), higher/lower (octave transposition), preserve-melody
+ * (keep the first track's content, vary the rest), preserve-harmony (the
+ * inverse: keep every other track, vary the first track), and a default
+ * rhythmic/melodic variation otherwise.
+ *
+ * The preserve-melody/preserve-harmony distinction is deliberately
+ * phrase-aware, not a bag-of-words match: spec §12's preset "Preserve
+ * harmony but change melody" mentions both "harmony" and "melody", but
+ * asks for the *opposite* of "Create a variation while preserving the
+ * melody" — `pickTransformKind` identifies which noun "preserve"/"keep"
+ * actually governs (`PRESERVE_TARGET_PATTERN`) rather than checking for
+ * "preserve" and "melody" anywhere in the string.
  */
 import { midiToPitch, pitchToMidi } from '@/domain/pitch/pitch';
 import { transposeDiatonicOctave } from '@/domain/pitch/transpose';
@@ -29,18 +38,35 @@ export type TransformKind =
   | 'higher'
   | 'lower'
   | 'preserveMelody'
+  | 'preserveHarmony'
   | 'default';
 
-/** Maps an instruction's keywords to a transform kind (first match wins; spec §12's preset instructions covered by "dramatic"/"upbeat" -> dramatic, "simplify" -> simplify, etc.). */
+/**
+ * Matches "preserve"/"preserving"/"keep"/"keeping" immediately governing
+ * "melody" or "harmony" (optionally through "the"), e.g. "preserving the
+ * melody" or "Preserve harmony". Deliberately requires *immediate*
+ * adjacency (only "the"/whitespace may sit between the verb and the noun)
+ * so it does not fire on "Preserve **rhythm** but change harmony" — there,
+ * "harmony" is the thing being *changed*, not the thing preserve governs,
+ * and the gap between "preserve" and "harmony" ("rhythm but change") is
+ * far wider than the pattern allows.
+ */
+const PRESERVE_TARGET_PATTERN = /\b(?:preserv\w*|keep(?:ing)?)\s+(?:the\s+)?(melody|harmony)\b/i;
+
+/** Maps an instruction's keywords to a transform kind (spec §12's preset instructions covered by "dramatic"/"upbeat" -> dramatic, "simplify"/"thin" -> simplify, etc.). The preserve-target check runs first (see `PRESERVE_TARGET_PATTERN`) since it's the most semantically load-bearing distinction. */
 export function pickTransformKind(instruction: string): TransformKind {
+  const preserveMatch = PRESERVE_TARGET_PATTERN.exec(instruction);
+  if (preserveMatch) {
+    return preserveMatch[1].toLowerCase() === 'melody' ? 'preserveMelody' : 'preserveHarmony';
+  }
+
   const s = instruction.toLowerCase();
   if (s.includes('dramatic') || s.includes('energetic') || s.includes('upbeat')) return 'dramatic';
-  if (s.includes('simpl')) return 'simplify';
+  if (s.includes('thin') || s.includes('simpl')) return 'simplify';
   if (s.includes('syncopat')) return 'syncopate';
   if (s.includes('dark') || s.includes('minor')) return 'minor';
   if (s.includes('higher')) return 'higher';
   if (s.includes('lower')) return 'lower';
-  if (s.includes('preserv') && s.includes('melody')) return 'preserveMelody';
   return 'default';
 }
 
@@ -129,8 +155,15 @@ function applyStyleTransform(steps: Step[], kind: TransformKind, rng: SeededRng,
     case 'lower':
       return lowerTransform(steps);
     case 'preserveMelody':
-      // Handled at the fragment level (transformFragment): the "melody" track's steps pass through unchanged.
-      return steps;
+      // The melody track itself is routed straight through by transformFragment's
+      // `passthrough` flag, bypassing this function entirely — so reaching this case
+      // means `steps` belongs to an *accompaniment* track, which should actually vary.
+      return defaultVariationTransform(steps, rng, key);
+    case 'preserveHarmony':
+      // Symmetric to preserveMelody: harmony/accompaniment tracks are routed straight
+      // through via `passthrough`, so reaching this case means `steps` belongs to the
+      // melody track, which should vary (spec §12: "Preserve harmony but change melody").
+      return defaultVariationTransform(steps, rng, key);
     default:
       return defaultVariationTransform(steps, rng, key);
   }
@@ -213,9 +246,14 @@ function transformMeasure(
  * that multiple candidates for the *same* instruction still differ from
  * each other (the primary style transforms — e.g. `higherTransform` — are
  * otherwise pure functions of the input, so every candidate would
- * otherwise be identical). `constraints.preserveMelody` (or a "preserve
- * ... melody" instruction) keeps the first track's content unchanged and
- * varies the rest.
+ * otherwise be identical).
+ *
+ * `constraints.preserveMelody` (or a "preserve ... melody" instruction)
+ * keeps the first track's content unchanged and varies the rest.
+ * `constraints.preserveHarmony` (or a "preserve ... harmony" instruction)
+ * is the inverse: the first track (treated as the melody/lead line, the
+ * same heuristic used for preserveMelody) varies, every other track is
+ * kept unchanged.
  */
 export function transformFragment(
   selectedFragment: ScoreFragment,
@@ -224,16 +262,22 @@ export function transformFragment(
   rng: SeededRng,
   candidateIndex: number,
 ): ScoreFragment {
-  const kind = constraints.preserveMelody ? 'preserveMelody' : pickTransformKind(instruction);
+  const kind = constraints.preserveHarmony
+    ? 'preserveHarmony'
+    : constraints.preserveMelody
+      ? 'preserveMelody'
+      : pickTransformKind(instruction);
   const melodyTrackId = selectedFragment.tracks[0]?.trackId;
   const key = firstKeySignature(selectedFragment) ?? { fifths: 0, mode: 'major' };
 
   const tracks = selectedFragment.tracks.map((trackFragment) => {
-    const isMelodyTrack = kind === 'preserveMelody' && trackFragment.trackId === melodyTrackId;
+    const isMelodyTrack = trackFragment.trackId === melodyTrackId;
+    const passthrough =
+      (kind === 'preserveMelody' && isMelodyTrack) || (kind === 'preserveHarmony' && !isMelodyTrack);
 
     const measures = trackFragment.measures.map((measure) => {
-      let transformed = transformMeasure(measure, trackFragment.trackId, kind, isMelodyTrack, constraints, rng, key);
-      if (candidateIndex > 0 && !isMelodyTrack) {
+      let transformed = transformMeasure(measure, trackFragment.trackId, kind, passthrough, constraints, rng, key);
+      if (candidateIndex > 0 && !passthrough) {
         transformed = transformMeasure(transformed, trackFragment.trackId, 'default', false, constraints, rng, key);
       }
       return transformed;

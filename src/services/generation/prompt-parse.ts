@@ -19,8 +19,26 @@ export type PromptHints = {
   mood?: string;
 };
 
-/** Recognizes "A minor", "C major", "F# major", "Bb minor", etc. */
-const KEY_NAME_PATTERN = /\b([A-G])(#|b)?\s+(major|minor)\b/i;
+/**
+ * Recognizes a key name in one of three ways, tried in order, none of
+ * which lets the English article "a"/"A" (as in "Create **a** minor
+ * pentatonic riff") masquerade as the pitch letter A:
+ *
+ * 1. An explicit "in <key>" context cue (e.g. "in a minor", "in C major",
+ *    "in Db major") — case-insensitive, since "in" itself is the
+ *    disambiguating cue, not the letter's case.
+ * 2. A bare, case-sensitive **uppercase** letter (e.g. "C major", "Db
+ *    major" — the accidental token may still be lowercase "b"/"#") with no
+ *    "in" needed.
+ * 3. A bare **lowercase** letter, but only when an accidental token is
+ *    also present (e.g. "db major") — an unaccompanied lowercase letter
+ *    ("a minor") is exactly the shape of the "a"/"an" article problem, so
+ *    it's only accepted with an explicit "in" (pattern 1) or an accidental
+ *    that a stray article could never carry.
+ */
+const KEY_NAME_WITH_CONTEXT_PATTERN = /\bin\s+([A-Ga-g])(#|b)?\s+(major|minor)\b/i;
+const KEY_NAME_BARE_UPPERCASE_PATTERN = /\b([A-G])(#|b)?\s+(major|minor)\b/;
+const KEY_NAME_BARE_LOWERCASE_WITH_ACCIDENTAL_PATTERN = /\b([a-g])(#|b)\s+(major|minor)\b/;
 
 /** Recognizes an explicit meter like "3/4" or "6 / 8". */
 const METER_PATTERN = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/;
@@ -42,12 +60,22 @@ function keySignatureFromNoteName(letter: string, accidentalToken: string | unde
 /**
  * Extracts whatever key/tempo/meter/style/mood hints can be recognized in
  * `prompt`'s free text. Fields with no match are omitted (never guessed).
+ *
+ * Deliberately does **not** support a "mode without a tonic" hint (e.g.
+ * treating a bare "minor" in "Create a minor pentatonic riff" as "some
+ * unspecified minor key"): a tonic-less key signature isn't representable
+ * by `KeySignature`, and guessing a default tonic would be indistinguishable
+ * from the article/pitch-letter ambiguity this function is careful to avoid
+ * elsewhere. Such a prompt simply yields no `keySignature` hint.
  */
 export function parsePrompt(prompt: string): PromptHints {
   const hints: PromptHints = {};
   const lower = prompt.toLowerCase();
 
-  const keyMatch = KEY_NAME_PATTERN.exec(prompt);
+  const keyMatch =
+    KEY_NAME_WITH_CONTEXT_PATTERN.exec(prompt) ??
+    KEY_NAME_BARE_UPPERCASE_PATTERN.exec(prompt) ??
+    KEY_NAME_BARE_LOWERCASE_WITH_ACCIDENTAL_PATTERN.exec(prompt);
   if (keyMatch) {
     const mode = keyMatch[3].toLowerCase() === 'minor' ? 'minor' : 'major';
     hints.keySignature = keySignatureFromNoteName(keyMatch[1], keyMatch[2], mode);
