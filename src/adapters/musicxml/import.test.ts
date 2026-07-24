@@ -302,4 +302,55 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
     expect(score.tracks[0].clef).toBe('bass');
     expect(warnings.some((w) => /clef/i.test(w))).toBe(false);
   });
+
+  it('a single-clef part across multiple measures keeps that clef and emits no clef warning', () => {
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<note><rest/><duration>1920</duration><voice>1</voice></note>
+</measure>
+<measure number="2">
+<note><rest/><duration>1920</duration><voice>1</voice></note>
+</measure>`);
+    const { score, warnings } = importMusicXml(xml);
+    expect(score.tracks[0].clef).toBe('treble');
+    expect(warnings.some((w) => /clef/i.test(w))).toBe(false);
+  });
+
+  it('keeps the first clef and drops a mid-score clef change with a warning naming the measure (Track has no per-measure clef)', () => {
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<note><pitch><step>C</step><octave>5</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type></note>
+</measure>
+<measure number="2">
+<attributes><clef><sign>F</sign><line>4</line></clef></attributes>
+<note><pitch><step>C</step><octave>3</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type></note>
+</measure>`);
+    const { score, warnings } = importMusicXml(xml);
+    // The track keeps the FIRST clef (treble) rather than silently
+    // flipping to whatever clef was last seen anywhere in the part.
+    expect(score.tracks[0].clef).toBe('treble');
+    // Notes themselves are still imported correctly regardless of clef;
+    // only the *rendered staff* would be affected, and that's out of
+    // scope for the domain model (no per-measure clef field to hold it).
+    const notes = score.tracks[0].measures.flatMap((m) => m.voices[0].events);
+    expect(notes.map((n) => n.durationTicks)).toEqual([1920, 1920]);
+    expect(warnings.some((w) => /clef change.*measure 2.*dropped/i.test(w))).toBe(true);
+  });
+
+  it('keeps the previous time signature (not 4/4) on a senza-misura/malformed <time>, and says so', () => {
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>
+<note><rest/><duration>1440</duration><voice>1</voice></note>
+</measure>
+<measure number="2">
+<attributes><time><senza-misura/></time></attributes>
+<note><rest/><duration>1440</duration><voice>1</voice></note>
+</measure>`);
+    const { score, warnings } = importMusicXml(xml);
+    // Kept measure 1's 3/4, *not* reset to 4/4 -- the warning message must
+    // describe this actual behavior, not claim a 4/4 default that doesn't
+    // happen here.
+    expect(score.tracks[0].measures[1].timeSignature).toEqual({ numerator: 3, denominator: 4 });
+    expect(warnings.some((w) => /measure 2/.test(w) && /kept/i.test(w) && !/defaulted to 4\/4/i.test(w))).toBe(true);
+  });
 });

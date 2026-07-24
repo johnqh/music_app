@@ -148,10 +148,17 @@ type MeasureState = {
   ratio: number; // SCORE_PPQ / source divisions
   timeSignature: TimeSignature;
   keySignature: KeySignature;
+  /**
+   * `null` until the first `<clef>` is seen, after which it's locked: the
+   * domain model's `Track.clef` is a single track-wide value (`Measure` has
+   * no per-measure clef), so a mid-part clef *change* can't be represented
+   * at all — the first clef wins and any later, differing clef is dropped
+   * with a warning (see `applyAttributes`), never silently overwriting it.
+   */
   clef: Clef | null;
 };
 
-function applyAttributes(attrs: Element, state: MeasureState, warnings: WarningCollector): void {
+function applyAttributes(attrs: Element, state: MeasureState, measureNumber: number, warnings: WarningCollector): void {
   const divisions = numberOf(attrs, 'divisions');
   if (divisions !== null && divisions > 0) {
     state.ratio = SCORE_PPQ / divisions;
@@ -175,7 +182,9 @@ function applyAttributes(attrs: Element, state: MeasureState, warnings: WarningC
     const beatsEls = directChildren(timeEl, 'beats');
     const beatTypeEls = directChildren(timeEl, 'beat-type');
     if (beatsEls.length === 0 || beatTypeEls.length === 0) {
-      warnings.add('A senza-misura or otherwise unsupported <time> element was defaulted to 4/4.');
+      warnings.add(
+        `A senza-misura or otherwise unsupported <time> element at measure ${measureNumber} did not change the time signature; the previous value was kept (4/4 if none had been set yet).`,
+      );
     } else {
       if (beatsEls.length > 1) {
         warnings.add('A complex (multi-pair) time signature was simplified to its first beats/beat-type pair.');
@@ -190,7 +199,17 @@ function applyAttributes(attrs: Element, state: MeasureState, warnings: WarningC
 
   const clefEl = directChild(attrs, 'clef');
   if (clefEl) {
-    state.clef = parseClef(clefEl, warnings);
+    const clef = parseClef(clefEl, warnings);
+    if (state.clef === null) {
+      // First clef seen for this part locks the track's clef: the domain
+      // model (`Track.clef`) has no per-measure clef, so only one clef per
+      // track can be represented at all (see `MeasureState.clef`'s doc).
+      state.clef = clef;
+    } else if (clef !== state.clef) {
+      warnings.add(
+        `A clef change to ${clef} at measure ${measureNumber} was dropped (the domain model supports only one clef per track); the track kept its first clef, ${state.clef}.`,
+      );
+    }
   }
 }
 
@@ -470,7 +489,7 @@ function parseMeasure(
   for (const child of Array.from(measureEl.children)) {
     switch (child.tagName) {
       case 'attributes':
-        applyAttributes(child, state, warnings);
+        applyAttributes(child, state, index + 1, warnings);
         break;
 
       case 'direction': {
