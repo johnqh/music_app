@@ -1,0 +1,253 @@
+/**
+ * Instruction-keyword-driven seeded transforms behind
+ * `MockGenerationProvider.regenerateRegion` (spec §11, §12): turns a
+ * selected `ScoreFragment` into one candidate fragment per call, styled by
+ * keywords found in the regeneration instruction — dramatic (wider range +
+ * higher velocity + octave doublings), simplify (longer durations, fewer
+ * notes), syncopate (offbeat duration reassignment), darker/minor (mode
+ * transform), higher/lower (octave transposition), preserve-melody (keep
+ * the first track's content, vary the rest), and a default rhythmic/
+ * melodic variation otherwise.
+ */
+import { midiToPitch, pitchToMidi } from '@/domain/pitch/pitch';
+import { transposeDiatonicOctave } from '@/domain/pitch/transpose';
+import type { KeySignature, Measure, MusicalEvent, Pitch } from '@/domain/score/types';
+import { isNoteEvent } from '@/domain/score/types';
+import type { ScoreFragment } from '@/domain/score/fragment';
+import { clampPitchToMidiRange, keyTonicPitchClass, snapPitchToScale } from '@/services/generation/music-theory';
+import type { ScaleType } from '@/services/generation/music-theory';
+import type { SeededRng } from '@/services/generation/prng';
+import type { Step } from '@/services/generation/patterns/shared';
+import { buildMeasureFromSteps } from '@/services/generation/patterns/shared';
+import type { RegenerationConstraints } from '@/services/generation/types';
+
+export type TransformKind =
+  | 'dramatic'
+  | 'simplify'
+  | 'syncopate'
+  | 'minor'
+  | 'higher'
+  | 'lower'
+  | 'preserveMelody'
+  | 'default';
+
+/** Maps an instruction's keywords to a transform kind (first match wins; spec §12's preset instructions covered by "dramatic"/"upbeat" -> dramatic, "simplify" -> simplify, etc.). */
+export function pickTransformKind(instruction: string): TransformKind {
+  const s = instruction.toLowerCase();
+  if (s.includes('dramatic') || s.includes('energetic') || s.includes('upbeat')) return 'dramatic';
+  if (s.includes('simpl')) return 'simplify';
+  if (s.includes('syncopat')) return 'syncopate';
+  if (s.includes('dark') || s.includes('minor')) return 'minor';
+  if (s.includes('higher')) return 'higher';
+  if (s.includes('lower')) return 'lower';
+  if (s.includes('preserv') && s.includes('melody')) return 'preserveMelody';
+  return 'default';
+}
+
+function clampVelocity(v: number): number {
+  return Math.max(0, Math.min(127, v));
+}
+
+/** Wider range + higher velocity + occasional octave doublings on single-note steps. */
+function dramaticTransform(steps: Step[], rng: SeededRng): Step[] {
+  return steps.map((step) => {
+    if (step.pitches.length === 0) return step;
+    const velocity = clampVelocity((step.velocity ?? 80) + 25);
+    const pitches =
+      step.pitches.length === 1 && rng.next() < 0.35
+        ? [step.pitches[0], transposeDiatonicOctave(step.pitches[0], 1)]
+        : step.pitches;
+    return { ...step, pitches, velocity };
+  });
+}
+
+/** Merges adjacent step pairs into single longer-duration steps (keeping the first step's pitch content), halving note count. */
+function simplifyTransform(steps: Step[]): Step[] {
+  const result: Step[] = [];
+  for (let i = 0; i < steps.length; i += 2) {
+    const a = steps[i];
+    const b = steps[i + 1];
+    result.push(b ? { pitches: a.pitches, durationTicks: a.durationTicks + b.durationTicks, velocity: a.velocity } : a);
+  }
+  return result;
+}
+
+/** Cyclically reassigns each step's pitch content to the *next* step's original duration — same multiset of durations (so the measure still fills exactly), offbeat feel. */
+function syncopateTransform(steps: Step[]): Step[] {
+  if (steps.length < 2) return steps;
+  const durations = steps.map((s) => s.durationTicks);
+  const rotated = [...durations.slice(1), durations[0]];
+  return steps.map((step, i) => ({ ...step, durationTicks: rotated[i] }));
+}
+
+/** Darkens major-third/sixth/seventh intervals above the key's tonic by a semitone (major -> minor color), respelled in the parallel minor. */
+function minorModeTransform(steps: Step[], key: KeySignature): Step[] {
+  const tonic = keyTonicPitchClass(key);
+  const minorKey: KeySignature = { fifths: key.fifths, mode: 'minor' };
+  const darken = (p: Pitch): Pitch => {
+    const midi = pitchToMidi(p);
+    const interval = (((midi - tonic) % 12) + 12) % 12;
+    const lowered = interval === 4 || interval === 9 || interval === 11; // major 3rd, 6th, 7th
+    return midiToPitch(lowered ? midi - 1 : midi, minorKey);
+  };
+  return steps.map((step) => ({ ...step, pitches: step.pitches.map(darken) }));
+}
+
+function higherTransform(steps: Step[]): Step[] {
+  return steps.map((step) => ({ ...step, pitches: step.pitches.map((p) => transposeDiatonicOctave(p, 1)) }));
+}
+
+function lowerTransform(steps: Step[]): Step[] {
+  return steps.map((step) => ({ ...step, pitches: step.pitches.map((p) => transposeDiatonicOctave(p, -1)) }));
+}
+
+/** Small seeded nudges to pitch (snapped back to the key's scale) and velocity — generic rhythmic/melodic variation. */
+function defaultVariationTransform(steps: Step[], rng: SeededRng, key: KeySignature): Step[] {
+  const scaleType: ScaleType = key.mode === 'major' ? 'major' : 'naturalMinor';
+  return steps.map((step) => ({
+    ...step,
+    pitches: step.pitches.map((p) => {
+      const shift = rng.pick([-1, 0, 0, 0, 1]);
+      return shift === 0 ? p : snapPitchToScale(pitchToMidi(p) + shift, key, scaleType);
+    }),
+    velocity: step.velocity === undefined ? step.velocity : clampVelocity(step.velocity + rng.pick([-5, 0, 5])),
+  }));
+}
+
+function applyStyleTransform(steps: Step[], kind: TransformKind, rng: SeededRng, key: KeySignature): Step[] {
+  switch (kind) {
+    case 'dramatic':
+      return dramaticTransform(steps, rng);
+    case 'simplify':
+      return simplifyTransform(steps);
+    case 'syncopate':
+      return syncopateTransform(steps);
+    case 'minor':
+      return minorModeTransform(steps, key);
+    case 'higher':
+      return higherTransform(steps);
+    case 'lower':
+      return lowerTransform(steps);
+    case 'preserveMelody':
+      // Handled at the fragment level (transformFragment): the "melody" track's steps pass through unchanged.
+      return steps;
+    default:
+      return defaultVariationTransform(steps, rng, key);
+  }
+}
+
+/** Applies `constraints.allowedPitchRangeByTrack[trackId]` and `constraints.maximumPolyphony`, when given, to a set of steps. */
+function applyConstraints(steps: Step[], trackId: string, constraints: RegenerationConstraints): Step[] {
+  const range = constraints.allowedPitchRangeByTrack?.[trackId];
+  const maxPolyphony = constraints.maximumPolyphony;
+  return steps.map((step) => {
+    let pitches = range ? step.pitches.map((p) => clampPitchToMidiRange(p, range)) : step.pitches;
+    if (maxPolyphony !== undefined && pitches.length > maxPolyphony) {
+      pitches = pitches.slice(0, maxPolyphony);
+    }
+    return { ...step, pitches };
+  });
+}
+
+/**
+ * Regroups a measure's events into `Step`s: consecutive gaps become rests,
+ * and events sharing a start tick become one chord step. Simultaneous
+ * events with differing durations (unusual, but not disallowed by the
+ * data model) collapse to their longest duration — an acceptable
+ * simplification for a mock transform's input reconstruction.
+ */
+function eventsToSteps(events: MusicalEvent[], measureStart: number, measureEnd: number): Step[] {
+  const sorted = [...events].sort((a, b) => a.startTick - b.startTick);
+  const steps: Step[] = [];
+  let cursor = measureStart;
+  let i = 0;
+
+  while (i < sorted.length) {
+    const startTick = sorted[i].startTick;
+    if (startTick > cursor) {
+      steps.push({ pitches: [], durationTicks: startTick - cursor });
+      cursor = startTick;
+    }
+    const group: MusicalEvent[] = [];
+    while (i < sorted.length && sorted[i].startTick === cursor) {
+      group.push(sorted[i]);
+      i += 1;
+    }
+    const durationTicks = Math.max(...group.map((e) => e.durationTicks));
+    const notes = group.filter(isNoteEvent);
+    steps.push({ pitches: notes.map((n) => n.pitch), durationTicks, velocity: notes[0]?.velocity });
+    cursor += durationTicks;
+  }
+
+  if (cursor < measureEnd) {
+    steps.push({ pitches: [], durationTicks: measureEnd - cursor });
+  }
+  return steps;
+}
+
+/** Transforms one measure's voices in place (positions/signatures preserved; only voice content changes). */
+function transformMeasure(
+  measure: Measure,
+  trackId: string,
+  kind: TransformKind,
+  passthrough: boolean,
+  constraints: RegenerationConstraints,
+  rng: SeededRng,
+  key: KeySignature,
+): Measure {
+  const voices = measure.voices.map((voice) => {
+    const originalSteps = eventsToSteps(voice.events, measure.startTick, measure.startTick + measure.durationTicks);
+    const styled = passthrough ? originalSteps : applyStyleTransform(originalSteps, kind, rng, key);
+    const constrained = applyConstraints(styled, trackId, constraints);
+    return buildMeasureFromSteps(constrained, measure, trackId, rng).voices[0];
+  });
+
+  return { ...measure, id: rng.id('measure'), voices };
+}
+
+/**
+ * Builds one regeneration candidate `ScoreFragment` from `selectedFragment`
+ * by applying a keyword-picked transform to every measure/voice of every
+ * track (fresh ids throughout, via `rng`). `candidateIndex > 0` composes an
+ * extra `defaultVariationTransform` pass on top of the primary style so
+ * that multiple candidates for the *same* instruction still differ from
+ * each other (the primary style transforms — e.g. `higherTransform` — are
+ * otherwise pure functions of the input, so every candidate would
+ * otherwise be identical). `constraints.preserveMelody` (or a "preserve
+ * ... melody" instruction) keeps the first track's content unchanged and
+ * varies the rest.
+ */
+export function transformFragment(
+  selectedFragment: ScoreFragment,
+  instruction: string,
+  constraints: RegenerationConstraints,
+  rng: SeededRng,
+  candidateIndex: number,
+): ScoreFragment {
+  const kind = constraints.preserveMelody ? 'preserveMelody' : pickTransformKind(instruction);
+  const melodyTrackId = selectedFragment.tracks[0]?.trackId;
+  const key = firstKeySignature(selectedFragment) ?? { fifths: 0, mode: 'major' };
+
+  const tracks = selectedFragment.tracks.map((trackFragment) => {
+    const isMelodyTrack = kind === 'preserveMelody' && trackFragment.trackId === melodyTrackId;
+
+    const measures = trackFragment.measures.map((measure) => {
+      let transformed = transformMeasure(measure, trackFragment.trackId, kind, isMelodyTrack, constraints, rng, key);
+      if (candidateIndex > 0 && !isMelodyTrack) {
+        transformed = transformMeasure(transformed, trackFragment.trackId, 'default', false, constraints, rng, key);
+      }
+      return transformed;
+    });
+
+    return { trackId: trackFragment.trackId, measures };
+  });
+
+  return { range: selectedFragment.range, ppq: selectedFragment.ppq, tracks };
+}
+
+function firstKeySignature(fragment: ScoreFragment): KeySignature | undefined {
+  for (const track of fragment.tracks) {
+    if (track.measures.length > 0) return track.measures[0].keySignature;
+  }
+  return undefined;
+}

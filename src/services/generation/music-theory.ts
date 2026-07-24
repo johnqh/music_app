@@ -6,6 +6,7 @@
  */
 import type { KeySignature, Pitch } from '@/domain/score/types';
 import { midiToPitch, pitchToMidi } from '@/domain/pitch/pitch';
+import { transposeDiatonicOctave } from '@/domain/pitch/transpose';
 
 export type ScaleType = 'major' | 'naturalMinor' | 'harmonicMinor' | 'majorPentatonic' | 'minorPentatonic';
 
@@ -192,6 +193,29 @@ export function expandProgressionToMeasures(
 /** The lowest-pitched note of a (non-empty) chord. */
 export function lowestPitch(chord: Pitch[]): Pitch {
   return [...chord].sort((a, b) => pitchToMidi(a) - pitchToMidi(b))[0];
+}
+
+/** Max octave shifts `clampPitchToMidiRange` tries in each direction before giving up (bounds against a pathological/empty range). */
+const MAX_OCTAVE_SHIFTS = 10;
+
+/**
+ * Transposes `pitch` by whole octaves until its MIDI value falls within
+ * `range` (a no-op when `range` is omitted). Diatonic (octave-only)
+ * transposition preserves the pitch's letter-name spelling, unlike
+ * respelling via `midiToPitch`. Bounded to `MAX_OCTAVE_SHIFTS` octaves each
+ * direction so a range narrower than a semitone step of 12 can't spin
+ * forever; such a range simply returns the closest reachable pitch.
+ */
+export function clampPitchToMidiRange(pitch: Pitch, range?: { lowestMidi: number; highestMidi: number }): Pitch {
+  if (!range) return pitch;
+  let result = pitch;
+  for (let i = 0; i < MAX_OCTAVE_SHIFTS && pitchToMidi(result) < range.lowestMidi; i += 1) {
+    result = transposeDiatonicOctave(result, 1);
+  }
+  for (let i = 0; i < MAX_OCTAVE_SHIFTS && pitchToMidi(result) > range.highestMidi; i += 1) {
+    result = transposeDiatonicOctave(result, -1);
+  }
+  return result;
 }
 
 /** A two-chord authentic (V-I) cadence in `key` at `octave`; dominant7-to-tonic in major keys, minor-v-to-i in natural minor. */
