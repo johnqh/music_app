@@ -18,21 +18,18 @@
  * read-only. Start position is only editable for a single-note selection
  * (an absolute tick target has no well-defined multi-note meaning without
  * per-note deltas).
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 3): the MUI
+ * Tabs become plain `role="tablist"`/`role="tab"` buttons (`aria-selected`
+ * + a `role="tabpanel"` per tab), MUI Selects become native `<select>`s,
+ * MUI Sliders become native `<input type="range">`s with the same
+ * draft/commit split as `TrackPanel.tsx` (commit on pointerup/keyup, not
+ * every drag tick), and MUI Checkboxes become native
+ * `<input type="checkbox">`s (indeterminate set imperatively via ref, same
+ * as the DOM always required).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import Box from '@mui/material/Box';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Slider from '@mui/material/Slider';
-import Stack from '@mui/material/Stack';
-import Tab from '@mui/material/Tab';
-import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import type { Accidental, Articulation, Clef, KeySignature, NoteEvent, PitchStep, TimeSignature } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -90,7 +87,13 @@ const MIXED_VALUE = '__mixed__';
 
 type InspectorTab = 'note' | 'measure' | 'track';
 
-/** A `<Select>` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
+const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
+const TEXT_INPUT_CLASS =
+  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
+const SELECT_CLASS =
+  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
+
+/** A `<select>` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
 function MixedSelect<T extends string>({
   value,
   options,
@@ -106,31 +109,31 @@ function MixedSelect<T extends string>({
 }) {
   const selectValue = value === MIXED ? MIXED_VALUE : (value ?? '');
   return (
-    <Select
-      size="small"
+    <select
+      aria-label={ariaLabel}
       value={selectValue}
       disabled={disabled || value === null}
-      onChange={(e: SelectChangeEvent) => {
+      onChange={(e: ChangeEvent<HTMLSelectElement>) => {
         if (e.target.value === MIXED_VALUE) return;
         onChange(e.target.value as T);
       }}
-      inputProps={{ 'aria-label': ariaLabel }}
+      className={SELECT_CLASS}
     >
       {value === MIXED && (
-        <MenuItem value={MIXED_VALUE} disabled>
+        <option value={MIXED_VALUE} disabled>
           Mixed
-        </MenuItem>
+        </option>
       )}
       {options.map((opt) => (
-        <MenuItem key={opt.value} value={opt.value}>
+        <option key={opt.value} value={opt.value}>
           {opt.label}
-        </MenuItem>
+        </option>
       ))}
-    </Select>
+    </select>
   );
 }
 
-/** A numeric `<TextField>` showing an empty value + "Mixed" placeholder when `value` is `MIXED`. Commits on blur/Enter, not on every keystroke, so a partial/invalid draft never dispatches a command. */
+/** A numeric `<input>` showing an empty value + "Mixed" placeholder when `value` is `MIXED`. Commits on blur/Enter, not on every keystroke, so a partial/invalid draft never dispatches a command. */
 function MixedNumberField({
   label,
   value,
@@ -160,20 +163,60 @@ function MixedNumberField({
   };
 
   return (
-    <TextField
-      size="small"
-      type="number"
-      label={label}
-      value={draft}
-      placeholder={value === MIXED ? 'Mixed' : undefined}
-      disabled={disabled || value === null}
-      onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') commit();
-      }}
-      slotProps={{ htmlInput: { 'aria-label': label, min, max, step } }}
-    />
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{label}</span>
+      <input
+        type="number"
+        value={draft}
+        placeholder={value === MIXED ? 'Mixed' : undefined}
+        disabled={disabled || value === null}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+        }}
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        className={TEXT_INPUT_CLASS}
+      />
+    </label>
+  );
+}
+
+/** A checkbox showing an indeterminate visual state when `indeterminate` is true (mirrors MUI's `Checkbox indeterminate` for the "Mixed" tri-state fields) -- the DOM's `indeterminate` flag has no HTML attribute/JSX prop, so it's set imperatively via ref, same as any native checkbox needing it. */
+function MixedCheckbox({
+  label,
+  checked,
+  indeterminate,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <label className="flex items-center gap-2 text-sm text-theme-text-primary">
+      <input
+        ref={ref}
+        type="checkbox"
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-theme-border"
+      />
+      {label}
+    </label>
   );
 }
 
@@ -181,16 +224,12 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
 
-  if (!score) return <Typography variant="body2">No score loaded.</Typography>;
+  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
   const noteIds = selectedNoteIds(score, selection);
   const notes = noteIds.map((id) => findEvent(score, id)).filter((e): e is NoteEvent => e !== null && isNoteEvent(e));
 
   if (notes.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Select a note to inspect its properties.
-      </Typography>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">Select a note to inspect its properties.</p>;
   }
 
   const step = commonValue(notes.map((n) => n.pitch.step));
@@ -211,10 +250,10 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
   };
 
   return (
-    <Stack spacing={2} sx={{ p: 2 }}>
-      <Typography variant="subtitle2">{notes.length > 1 ? `${notes.length} notes selected` : 'Note'}</Typography>
+    <div className="flex flex-col gap-4 p-2">
+      <p className="text-sm font-semibold text-theme-text-primary">{notes.length > 1 ? `${notes.length} notes selected` : 'Note'}</p>
 
-      <Stack direction="row" spacing={1}>
+      <div className="flex gap-2">
         <MixedSelect
           value={step}
           ariaLabel="Pitch step"
@@ -228,7 +267,7 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField label="Octave" value={octave} onCommit={(v) => applyPitchPatch({ octave: v })} />
-      </Stack>
+      </div>
 
       <MixedNumberField
         label="Duration (ticks)"
@@ -263,7 +302,16 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
         onChange={(value) => dispatchArticulation(store, value === 'none' ? undefined : value)}
       />
 
-      <TextField size="small" label="Track" value={trackName === MIXED ? '' : (trackName ?? '')} placeholder={trackName === MIXED ? 'Mixed' : undefined} disabled slotProps={{ htmlInput: { 'aria-label': 'Track (read-only)' } }} />
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASS}>Track</span>
+        <input
+          value={trackName === MIXED ? '' : (trackName ?? '')}
+          placeholder={trackName === MIXED ? 'Mixed' : undefined}
+          disabled
+          aria-label="Track (read-only)"
+          className={TEXT_INPUT_CLASS}
+        />
+      </label>
 
       <MixedNumberField
         label="Voice"
@@ -277,33 +325,21 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
         onCommit={(v) => store.getState().dispatchCommand(changeVoiceCommand(noteIds, Math.max(0, Math.round(v))))}
       />
 
-      <Stack direction="row" spacing={2}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={tieStart === true}
-              indeterminate={tieStart === MIXED}
-              onChange={() => dispatchToggleTie(store, 'tieStart')}
-              slotProps={{ input: { 'aria-label': 'Tie start' } }}
-            />
-          }
+      <div className="flex gap-4">
+        <MixedCheckbox
           label="Tie start"
+          checked={tieStart === true}
+          indeterminate={tieStart === MIXED}
+          onChange={() => dispatchToggleTie(store, 'tieStart')}
         />
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={tieStop === true}
-              indeterminate={tieStop === MIXED}
-              onChange={() => dispatchToggleTie(store, 'tieStop')}
-              slotProps={{ input: { 'aria-label': 'Tie stop' } }}
-            />
-          }
+        <MixedCheckbox
           label="Tie stop"
+          checked={tieStop === true}
+          indeterminate={tieStop === MIXED}
+          onChange={() => dispatchToggleTie(store, 'tieStop')}
         />
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }
 
@@ -311,15 +347,11 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
 
-  if (!score) return <Typography variant="body2">No score loaded.</Typography>;
+  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
   const measures = selection.measureIds.map((id) => findMeasure(score, id)).filter((m) => m !== null);
 
   if (measures.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Select a measure to inspect its properties.
-      </Typography>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">Select a measure to inspect its properties.</p>;
   }
 
   const timeSig = commonValue(measures.map((m) => m.timeSignature));
@@ -334,12 +366,12 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
   };
 
   return (
-    <Stack spacing={2} sx={{ p: 2 }}>
-      <Typography variant="subtitle2">
+    <div className="flex flex-col gap-4 p-2">
+      <p className="text-sm font-semibold text-theme-text-primary">
         {measures.length > 1 ? `Measures ${Math.min(...indices)}–${Math.max(...indices)}` : `Measure ${indices[0]}`}
-      </Typography>
+      </p>
 
-      <Stack direction="row" spacing={1}>
+      <div className="flex gap-2">
         <MixedNumberField
           label="Time sig. numerator"
           value={timeSig === MIXED ? MIXED : timeSig?.numerator ?? null}
@@ -352,9 +384,9 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
           min={1}
           onCommit={(v) => applyTimeSignature({ numerator: timeSig !== MIXED ? (timeSig?.numerator ?? 4) : 4, denominator: Math.max(1, Math.round(v)) })}
         />
-      </Stack>
+      </div>
 
-      <Stack direction="row" spacing={1}>
+      <div className="flex gap-2">
         <MixedNumberField
           label="Key (fifths)"
           value={keySig === MIXED ? MIXED : keySig?.fifths ?? null}
@@ -371,12 +403,12 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
           ]}
           onChange={(value) => applyKeySignature({ fifths: keySig !== MIXED ? (keySig?.fifths ?? 0) : 0, mode: value as KeySignature['mode'] })}
         />
-      </Stack>
+      </div>
 
-      <Typography variant="caption" color="text.secondary">
+      <p className="text-xs text-theme-text-secondary">
         This selection also drives the Regenerate panel — use it to generate alternatives for these measures.
-      </Typography>
-    </Stack>
+      </p>
+    </div>
   );
 }
 
@@ -392,11 +424,11 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const pan = commonValue(tracks.map((t) => t.pan));
 
   // Local drag drafts (see TrackPanel.tsx's identical pattern/doc comment):
-  // MUI's Slider fires `onChange` on every pointer-move tick during a drag;
-  // dispatching a ScoreCommand per tick would flood undo history. The
-  // command is dispatched once, from `onChangeCommitted`, while these
-  // drafts keep the thumb tracking the drag live -- synced back to the
-  // selection's real (possibly "mixed") value on any external change.
+  // a native range input's onChange fires on every drag tick; dispatching
+  // a ScoreCommand per tick would flood undo history. The command is
+  // dispatched once, from onPointerUp/onKeyUp, while these drafts keep the
+  // thumb tracking the drag live -- synced back to the selection's real
+  // (possibly "mixed") value on any external change.
   const [volumeDraft, setVolumeDraft] = useState(volume === MIXED || volume === null ? 1 : volume);
   const [panDraft, setPanDraft] = useState(pan === MIXED || pan === null ? 0 : pan);
 
@@ -407,14 +439,10 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
     setPanDraft(pan === MIXED || pan === null ? 0 : pan);
   }, [pan]);
 
-  if (!score) return <Typography variant="body2">No score loaded.</Typography>;
+  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
 
   if (tracks.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        Select a track to inspect its properties.
-      </Typography>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">Select a track to inspect its properties.</p>;
   }
 
   const name = commonValue(tracks.map((t) => t.name));
@@ -430,26 +458,30 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   };
 
   return (
-    <Stack spacing={2} sx={{ p: 2 }}>
-      <Typography variant="subtitle2">{tracks.length > 1 ? `${tracks.length} tracks selected` : 'Track'}</Typography>
+    <div className="flex flex-col gap-4 p-2">
+      <p className="text-sm font-semibold text-theme-text-primary">{tracks.length > 1 ? `${tracks.length} tracks selected` : 'Track'}</p>
 
-      <TextField
-        size="small"
-        label="Name"
-        value={name === MIXED ? '' : name ?? ''}
-        placeholder={name === MIXED ? 'Mixed' : undefined}
-        onChange={(e) => patchAll({ name: e.target.value })}
-        slotProps={{ htmlInput: { 'aria-label': 'Track name' } }}
-      />
-      <TextField
-        size="small"
-        label="Instrument"
-        value={instrumentName === MIXED ? '' : instrumentName ?? ''}
-        placeholder={instrumentName === MIXED ? 'Mixed' : undefined}
-        onChange={(e) => patchAll({ instrumentName: e.target.value })}
-        slotProps={{ htmlInput: { 'aria-label': 'Instrument' } }}
-      />
-      <Stack direction="row" spacing={1}>
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASS}>Name</span>
+        <input
+          value={name === MIXED ? '' : name ?? ''}
+          placeholder={name === MIXED ? 'Mixed' : undefined}
+          onChange={(e) => patchAll({ name: e.target.value })}
+          aria-label="Track name"
+          className={TEXT_INPUT_CLASS}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASS}>Instrument</span>
+        <input
+          value={instrumentName === MIXED ? '' : instrumentName ?? ''}
+          placeholder={instrumentName === MIXED ? 'Mixed' : undefined}
+          onChange={(e) => patchAll({ instrumentName: e.target.value })}
+          aria-label="Instrument"
+          className={TEXT_INPUT_CLASS}
+        />
+      </label>
+      <div className="flex gap-2">
         <MixedNumberField
           label="MIDI program"
           value={midiProgram}
@@ -464,7 +496,7 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
           max={15}
           onCommit={(v) => patchAll({ midiChannel: Math.max(0, Math.min(15, Math.round(v))) })}
         />
-      </Stack>
+      </div>
 
       <MixedSelect
         value={clef}
@@ -475,64 +507,52 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
         }}
       />
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Typography variant="caption" sx={{ minWidth: 40 }}>
-          Volume
-        </Typography>
-        <Slider
-          size="small"
+      <div className="flex items-center gap-2">
+        <span className="min-w-[40px] text-xs text-theme-text-secondary">Volume</span>
+        <input
+          type="range"
           min={0}
           max={1}
           step={0.01}
           value={volumeDraft}
           aria-label="Track volume"
-          onChange={(_e, v) => setVolumeDraft(Array.isArray(v) ? v[0] : v)}
-          onChangeCommitted={(_e, v) => patchAll({ volume: Array.isArray(v) ? v[0] : v })}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setVolumeDraft(Number(e.target.value))}
+          onPointerUp={(e) => patchAll({ volume: Number(e.currentTarget.value) })}
+          onKeyUp={(e) => patchAll({ volume: Number(e.currentTarget.value) })}
+          className="flex-1"
         />
-      </Stack>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Typography variant="caption" sx={{ minWidth: 40 }}>
-          Pan
-        </Typography>
-        <Slider
-          size="small"
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="min-w-[40px] text-xs text-theme-text-secondary">Pan</span>
+        <input
+          type="range"
           min={-1}
           max={1}
           step={0.01}
           value={panDraft}
           aria-label="Track pan"
-          onChange={(_e, v) => setPanDraft(Array.isArray(v) ? v[0] : v)}
-          onChangeCommitted={(_e, v) => patchAll({ pan: Array.isArray(v) ? v[0] : v })}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setPanDraft(Number(e.target.value))}
+          onPointerUp={(e) => patchAll({ pan: Number(e.currentTarget.value) })}
+          onKeyUp={(e) => patchAll({ pan: Number(e.currentTarget.value) })}
+          className="flex-1"
         />
-      </Stack>
+      </div>
 
-      <Stack direction="row" spacing={2}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={muted === true}
-              indeterminate={muted === MIXED}
-              onChange={(e) => patchAll({ muted: e.target.checked })}
-              slotProps={{ input: { 'aria-label': 'Muted' } }}
-            />
-          }
+      <div className="flex gap-4">
+        <MixedCheckbox
           label="Muted"
+          checked={muted === true}
+          indeterminate={muted === MIXED}
+          onChange={(checked) => patchAll({ muted: checked })}
         />
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={solo === true}
-              indeterminate={solo === MIXED}
-              onChange={(e) => patchAll({ solo: e.target.checked })}
-              slotProps={{ input: { 'aria-label': 'Solo' } }}
-            />
-          }
+        <MixedCheckbox
           label="Solo"
+          checked={solo === true}
+          indeterminate={solo === MIXED}
+          onChange={(checked) => patchAll({ solo: checked })}
         />
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }
 
@@ -543,6 +563,15 @@ function defaultTabFor(selection: { eventIds: string[]; measureIds: string[]; tr
   if (selection.trackIds.length > 0) return 'track';
   return 'note';
 }
+
+const TABS: Array<{ value: InspectorTab; label: string }> = [
+  { value: 'note', label: 'Note' },
+  { value: 'measure', label: 'Measure' },
+  { value: 'track', label: 'Track' },
+];
+
+const TAB_BUTTON_CLASS =
+  'border-b-2 border-transparent px-3 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-hover-bg aria-selected:border-primary aria-selected:text-theme-text-primary';
 
 export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
   const selection = store((s) => s.selection);
@@ -557,15 +586,36 @@ export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
   }, [selection.eventIds, selection.measureIds, selection.trackIds]);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto' }} aria-label="Inspector panel">
-      <Tabs value={tab} onChange={(_e, value: InspectorTab) => setTab(value)} aria-label="Inspector tabs">
-        <Tab value="note" label="Note" />
-        <Tab value="measure" label="Measure" />
-        <Tab value="track" label="Track" />
-      </Tabs>
-      {tab === 'note' && <NoteTab store={store} />}
-      {tab === 'measure' && <MeasureTab store={store} />}
-      {tab === 'track' && <TrackTab store={store} />}
-    </Box>
+    <div className="flex h-full flex-col overflow-auto" aria-label="Inspector panel">
+      <div role="tablist" aria-label="Inspector tabs" className="flex border-b border-theme-border">
+        {TABS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            id={`inspector-tab-${t.value}`}
+            aria-selected={tab === t.value}
+            aria-controls={`inspector-tabpanel-${t.value}`}
+            onClick={() => setTab(t.value)}
+            className={TAB_BUTTON_CLASS}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {TABS.map((t) => (
+        <div
+          key={t.value}
+          role="tabpanel"
+          id={`inspector-tabpanel-${t.value}`}
+          aria-labelledby={`inspector-tab-${t.value}`}
+          hidden={tab !== t.value}
+        >
+          {tab === t.value && t.value === 'note' && <NoteTab store={store} />}
+          {tab === t.value && t.value === 'measure' && <MeasureTab store={store} />}
+          {tab === t.value && t.value === 'track' && <TrackTab store={store} />}
+        </div>
+      ))}
+    </div>
   );
 }

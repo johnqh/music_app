@@ -130,8 +130,10 @@ describe('TrackPanel', () => {
     render(<TrackPanel store={store} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByLabelText('Clef select: Treble'));
-    await user.click(await screen.findByRole('option', { name: 'alto' }));
+    // Re-skinned onto a native <select> (T12 batch 3): the MUI listbox
+    // open/click choreography becomes a plain testing-library selectOptions
+    // call against the combobox.
+    await user.selectOptions(screen.getByLabelText('Clef select: Treble'), 'alto');
 
     expect(store.getState().score!.tracks[0].clef).toBe('alto');
   });

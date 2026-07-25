@@ -96,18 +96,23 @@ test.describe('spec §39 acceptance scenario', () => {
     await clickNoteGroup(page, groups[0]);
     await expect(page.getByText('1 note(s) selected')).toBeVisible();
 
+    // Re-skinned onto a native <select> (T12 batch 3): the MUI listbox
+    // open/click choreography becomes a plain Playwright `selectOption`,
+    // and reading/asserting the selection goes through `inputValue`/
+    // `toHaveValue` (a native select's `textContent` concatenates every
+    // option, not just the selected one, so it can no longer stand in for
+    // "what's currently selected").
     const pitchStepSelect = page.getByRole('combobox', { name: 'Pitch step' });
-    const originalStepText = await pitchStepSelect.textContent();
-    const nextStep = originalStepText === 'C' ? 'D' : 'C';
-    await pitchStepSelect.click();
-    await page.getByRole('option', { name: nextStep, exact: true }).click();
-    await expect(pitchStepSelect).toHaveText(nextStep);
+    const originalStep = await pitchStepSelect.inputValue();
+    const nextStep = originalStep === 'C' ? 'D' : 'C';
+    await pitchStepSelect.selectOption(nextStep);
+    await expect(pitchStepSelect).toHaveValue(nextStep);
 
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(pitchStepSelect).toHaveText(originalStepText ?? '');
+    await expect(pitchStepSelect).toHaveValue(originalStep ?? '');
 
     await page.getByRole('button', { name: 'Redo' }).click();
-    await expect(pitchStepSelect).toHaveText(nextStep);
+    await expect(pitchStepSelect).toHaveValue(nextStep);
 
     // 16-19. Open the piano roll; the same notes appear; drag one; notation updates.
     await page.getByRole('button', { name: 'Piano roll view' }).click();
