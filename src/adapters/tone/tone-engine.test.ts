@@ -496,6 +496,41 @@ describe('TonePlaybackEngine: transport lifecycle', () => {
     // ready for the next play() without another loadScore():
     expect(mock.state.scheduledEvents.length).toBeGreaterThan(0);
   });
+
+  it('regression: a note that fires after pause()/resume plays on the rebuilt instrument, not the disposed one', async () => {
+    const engine = new TonePlaybackEngine();
+    await engine.loadScore(twinkleScore());
+    await engine.play();
+
+    const stalePolySynth = asInstrumentInstance(mock.state.constructedNodes.find((n) => n.type === 'PolySynth')!);
+    engine.pause();
+    // pause() must reschedule (not just rebuild channels), or every remaining
+    // note-on callback still closes over the disposed pre-pause instrument.
+    const freshPolySynths = mock.state.constructedNodes.filter((n) => n.type === 'PolySynth');
+    expect(freshPolySynths.length).toBeGreaterThan(1);
+
+    const [onId] = noteEventIds();
+    mock.fire(onId, 0);
+
+    expect(stalePolySynth.triggerAttackRelease).not.toHaveBeenCalled();
+    expect(asInstrumentInstance(freshPolySynths.at(-1)!).triggerAttackRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('regression: a note that fires after seek() plays on the rebuilt instrument, not the disposed one', async () => {
+    const engine = new TonePlaybackEngine();
+    await engine.loadScore(twinkleScore());
+
+    const stalePolySynth = asInstrumentInstance(mock.state.constructedNodes.find((n) => n.type === 'PolySynth')!);
+    engine.seek(0);
+    const freshPolySynths = mock.state.constructedNodes.filter((n) => n.type === 'PolySynth');
+    expect(freshPolySynths.length).toBeGreaterThan(1);
+
+    const [onId] = noteEventIds();
+    mock.fire(onId, 0);
+
+    expect(stalePolySynth.triggerAttackRelease).not.toHaveBeenCalled();
+    expect(asInstrumentInstance(freshPolySynths.at(-1)!).triggerAttackRelease).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('TonePlaybackEngine: loop', () => {

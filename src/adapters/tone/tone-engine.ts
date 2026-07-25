@@ -126,7 +126,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
   pause(): void {
     const transport = Tone.getTransport();
     transport.pause();
-    this.rebuildChannels(false); // silence anything currently sounding; scheduled events are untouched so resume continues correctly
+    this.silenceAndReschedule(); // see silenceAndReschedule's doc: rebuildChannels alone would leave already-scheduled note-on callbacks pointing at disposed instruments
     this.observer?.onStateChange('paused');
   }
 
@@ -135,8 +135,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
     transport.stop();
     transport.seconds = 0;
     this.activeNoteIds.clear();
-    this.rebuildChannels(false);
-    this.scheduleAll(); // stop cancels everything via scheduleAll's own transport.cancel(0); reschedule immediately so the engine is ready for the next play() with no further loadScore() needed
+    this.silenceAndReschedule(); // ready for the next play() with no further loadScore() needed
     this.observer?.onActiveNotes([]);
     this.observer?.onPositionTick(0);
     this.observer?.onStateChange('stopped');
@@ -144,7 +143,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
 
   seek(tick: number): void {
     if (!this.score) return;
-    this.rebuildChannels(false); // silence anything currently sounding before jumping
+    this.silenceAndReschedule(); // silence anything currently sounding before jumping
     Tone.getTransport().seconds = this.scheduledSeconds(tick);
     this.observer?.onPositionTick(tick);
   }
@@ -156,8 +155,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
     this.tempoMultiplier = multiplier;
     if (!this.score) return;
 
-    this.rebuildChannels(false);
-    this.scheduleAll();
+    this.silenceAndReschedule();
     transport.seconds = this.scheduledSeconds(currentTick);
     if (wasPlaying && (transport.state as string) !== 'started') {
       transport.start();
@@ -255,6 +253,26 @@ export class TonePlaybackEngine implements PlaybackEngine {
   private currentPositionTick(): number {
     const transport = Tone.getTransport();
     return Math.max(0, Math.round(this.tempoMap.secondsToTicks(transport.seconds * this.tempoMultiplier)));
+  }
+
+  /**
+   * Silences everything currently sounding and re-establishes the note/
+   * metronome/position-ticker/loop schedule. `rebuildChannels` alone is
+   * not enough: it disposes and *replaces* every `TrackChannel` (a fresh
+   * `Map`), but every not-yet-fired `transport.schedule` callback already
+   * created by an earlier `scheduleAll()` closed over the *old*
+   * `TrackChannel` object (captured by reference at scheduling time) —
+   * left alone, those callbacks would go on calling `triggerAttackRelease`
+   * on a now-disposed instrument when their time comes, producing no
+   * sound at all for every note after this point. Re-running
+   * `scheduleAll()` immediately after `rebuildChannels` closes over the
+   * *new* channels instead. This is safe to do at any transport state
+   * (including while paused) because every scheduled time is an absolute
+   * score-relative second, not relative to "now".
+   */
+  private silenceAndReschedule(): void {
+    this.rebuildChannels(false);
+    this.scheduleAll();
   }
 
   /**
