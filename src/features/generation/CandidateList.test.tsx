@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { CandidateList } from '@/features/generation/CandidateList';
 import type { GenerationStoreApi } from '@/features/generation/preview';
@@ -18,13 +17,11 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 
 import { playbackController } from '@sudobility/music_lib';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStoreWithCandidates(): GenerationStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-candidatelist-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   return store;
 }
 
@@ -48,7 +45,6 @@ afterEach(async () => {
   // stray call into the next test. Calling `cleanup()` here first makes the
   // ordering (unmount, *then* clear mocks) deterministic.
   cleanup();
-  await db?.delete();
   vi.clearAllMocks();
 });
 

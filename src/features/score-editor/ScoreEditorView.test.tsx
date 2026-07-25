@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { stressScore, twinkleScore } from '@sudobility/music_lib';
 import { computeLayout } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
@@ -24,20 +23,17 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-score-editor-view-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
 }
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  await db?.delete();
 });
 
 function noteGroup(container: HTMLElement, noteId: string): Element {
@@ -77,7 +73,7 @@ function fakePreviewFragment(score: Score): ScoreFragment {
 
 describe('ScoreEditorView', () => {
   it('renders without a score loaded (empty state)', () => {
-    const store = createAppStore({ db: new ScoreSmithDb('scoresmith-test-score-editor-view-empty') });
+    const store = createAppStore({ context: testStoreContext() });
     expect(() => render(<ScoreEditorView store={store} />)).not.toThrow();
   });
 
@@ -340,8 +336,7 @@ describe('ScoreEditorView', () => {
 
     function makeBigStore(): EditorStoreApi {
       dbCounter += 1;
-      db = new ScoreSmithDb(`scoresmith-test-score-editor-view-virtualization-${dbCounter}`);
-      const store = createAppStore({ db });
+      const store = createAppStore({ context: testStoreContext() });
       store.getState().setScore(stressScore(1, BIG_MEASURE_COUNT)); // wraps into many systems at the default render width
       return store;
     }

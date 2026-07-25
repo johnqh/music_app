@@ -50,8 +50,9 @@
  */
 import { expect, type Page } from '@playwright/test';
 
-/** Passed as `?seed=` (spec §31: deterministic mock-provider output for the same request + seed). Every spec in this suite uses the same seed so re-runs are reproducible. */
-export const SEED = '42';
+// Determinism now comes from music_api's AI_TEST_MODE FixtureTransport
+// (identical requests -> identical responses); the old mock-provider
+// `?seed=` mechanism died with the Phase-2 move to server-side AI.
 
 type PitchLike = { step: string; accidental: number; octave: number };
 
@@ -60,6 +61,7 @@ type NoteEventLike = {
   pitch: PitchLike;
   startTick: number;
   durationTicks: number;
+  velocity: number;
   trackId: string;
 };
 
@@ -83,9 +85,9 @@ export type GenerationOptions = {
   tempo?: number;
 };
 
-/** Navigates to the dashboard with the shared deterministic seed. */
-export async function gotoDashboard(page: Page, seed: string = SEED): Promise<void> {
-  await page.goto(`/?seed=${seed}`);
+/** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
+export async function gotoDashboard(page: Page): Promise<void> {
+  await page.goto('/');
   await expect(page.getByRole('heading', { name: 'ScoreSmith' })).toBeVisible();
 }
 
@@ -167,6 +169,7 @@ export async function readScoreSummary(page: Page): Promise<ScoreSummary | null>
                 pitch: event.pitch as PitchLike,
                 startTick: event.startTick as number,
                 durationTicks: event.durationTicks as number,
+                velocity: event.velocity as number,
                 trackId: event.trackId as string,
               });
             }

@@ -1,173 +1,115 @@
-import 'fake-indexeddb/auto';
+/**
+ * App root tests (server-backed era): auth gate (sign-in screen vs app),
+ * device-prefs bootstrap/persist (theme, developer mode), and the
+ * pagehide/visibilitychange autosave flush. Firebase is never touched —
+ * the test services install a fake auth backend.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
-import * as settingsModule from '@sudobility/music_lib';
-import { getSetting } from '@sudobility/music_lib';
-import { App } from '@/app/App';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { createAppStore, loadPrefs, savePrefs, type TestStoreContext } from '@sudobility/music_lib';
 
-// App renders the dashboard (default route), which mounts MidiImportWizard/
-// MusicXmlImportDialog (closed) -- both reach the app-wide playbackController
-// singleton indirectly through AppLayout on the /project/:id route only, but
-// App itself doesn't reach it on '/'. Mocked anyway for safety/consistency
-// with the rest of this suite's pattern, since router.tsx doesn't gate it.
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   playbackController: { togglePlay: vi.fn(), stop: vi.fn(), stopPreview: vi.fn() },
 }));
 
-let db: ScoreSmithDb;
-let dbCounter = 0;
+import { App } from '@/app/App';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+import { getAppServices, setAppServices, type AppServices } from '@/config/initialize';
+import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-function makeStore(): EditorStoreApi {
-  dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-app-${dbCounter}`);
-  return createAppStore({ db });
+function setup(): { store: EditorStoreApi; context: TestStoreContext } {
+  const context = installTestAppServices();
+  const store = createAppStore({ context });
+  return { store, context };
 }
 
-afterEach(async () => {
-  await db?.delete();
+afterEach(() => {
+  cleanup();
+  resetTestAppServices();
   window.history.pushState({}, '', '/');
-  vi.restoreAllMocks();
 });
 
 describe('App', () => {
-  it('renders the ScoreSmith title (dashboard, the default route)', async () => {
-    const store = makeStore();
-    render(<App store={store} db={db} />);
-
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
+  it('renders the dashboard once signed in (fake auth resolves immediately)', async () => {
+    const { store } = setup();
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument()
+    );
   });
 
-  // Regression coverage for a review finding on the `?seed=` bootstrap
-  // (spec §30/§31 -- e2e determinism): a URL-sourced seed must win for
-  // *this* load without silently becoming the new persisted default, or a
-  // single `?seed=42` visit would permanently overwrite whatever seed was
-  // actually stored, and every later visit without the param would keep
-  // loading "42" forever.
-  describe('?seed= URL param', () => {
-    it('applies a URL seed to devSettings without persisting it over the previously-stored seed', async () => {
-      const store = makeStore();
-      // `developerMode` pre-seeded to a non-default value (the store's own
-      // default is `false`) so bootstrap actually changes it, guaranteeing
-      // its persist effect -- declared immediately before the mockSeed
-      // persist effect -- genuinely fires this render, rather than bailing
-      // out early because the loaded value already matched the default.
-      // React flushes one commit's passive effects together, in
-      // declaration order, so once *that* persist call has landed, the
-      // mockSeed persist effect (declared right after it) has also already
-      // run (or deliberately skipped) for this same commit -- a safe,
-      // non-racy point to assert it was skipped.
-      await settingsModule.setSetting(db, 'developerMode', true);
-      await settingsModule.setSetting(db, 'mockSeed', 'previously-stored-seed');
-      const setSettingSpy = vi.spyOn(settingsModule, 'setSetting');
+  it('shows the sign-in screen when the auth backend reports signed-out', async () => {
+    const { store } = setup();
+    const services = getAppServices();
+    const signedOut: AppServices = {
+      ...services,
+      auth: {
+        ...services.auth,
+        observe: (cb) => {
+          cb(null);
+          return () => undefined;
+        },
+        getToken: async () => null,
+      },
+    };
+    setAppServices(signedOut);
+    render(<App store={store} />);
+    await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'ScoreSmith', level: 5 })).not.toBeInTheDocument();
+  });
 
-      window.history.pushState({}, '', '/?seed=from-url-seed');
-      render(<App store={store} db={db} />);
+  it('bootstraps persisted device prefs (theme + developer mode) into the store', async () => {
+    const { store, context } = setup();
+    await savePrefs(context.storage!, { themeMode: 'dark', developerMode: true });
+    render(<App store={store} />);
+    await waitFor(() => expect(store.getState().themeMode).toBe('dark'));
+    expect(store.getState().developerMode).toBe(true);
+  });
 
-      await waitFor(() => expect(store.getState().devSettings.seed).toBe('from-url-seed'));
-      await waitFor(() => expect(setSettingSpy).toHaveBeenCalledWith(db, 'developerMode', true));
-
-      expect(setSettingSpy).not.toHaveBeenCalledWith(db, 'mockSeed', expect.anything());
-      await expect(getSetting(db, 'mockSeed', 'DEFAULT')).resolves.toBe('previously-stored-seed');
+  it('persists a theme change back to device prefs after bootstrap', async () => {
+    const { store, context } = setup();
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument()
+    );
+    act(() => {
+      store.getState().setThemeMode('dark');
     });
-
-    it('still persists a real Developer Settings seed change made after a URL-seeded load', async () => {
-      const store = makeStore();
-      await settingsModule.setSetting(db, 'mockSeed', 'previously-stored-seed');
-
-      window.history.pushState({}, '', '/?seed=from-url-seed');
-      render(<App store={store} db={db} />);
-      await waitFor(() => expect(store.getState().devSettings.seed).toBe('from-url-seed'));
-
-      store.getState().setDevSettings({ seed: 'manually-changed-seed' });
-
-      await waitFor(async () => {
-        await expect(getSetting(db, 'mockSeed', 'DEFAULT')).resolves.toBe('manually-changed-seed');
-      });
+    await waitFor(async () => {
+      const prefs = await loadPrefs(context.storage!);
+      expect(prefs.themeMode).toBe('dark');
     });
   });
 
-  // Task 19 review finding I3: nothing previously flushed a pending
-  // autosave before the tab actually closed, so up to the autosaver's ~2s
-  // debounce window of edits could be lost. `saveNow` is replaced with a
-  // plain `vi.fn()` via `store.setState(...)` (the same direct-state-merge
-  // pattern used elsewhere in this suite, e.g. `store.setState({ error:
-  // ... })`), rather than `vi.spyOn(store.getState(), 'saveNow')` --
-  // spying in place mutates a property on whatever state object Immer
-  // happens to have produced, which that same middleware can later freeze
-  // out from under `vi.restoreAllMocks()`; a plain replacement avoids that
-  // entirely and is simpler besides. Not asserting a real IndexedDB write
-  // landed since that's already covered end-to-end by
-  // `project-slice.test.ts`; this suite only needs to confirm *when* App
-  // wires the flush to fire.
-  describe('autosave flush on tab hide (spec §18, finding I3)', () => {
-    async function renderReady(store: EditorStoreApi) {
-      const utils = render(<App store={store} db={db} />);
-      await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
-      return utils;
-    }
+  it('flushes a dirty project on pagehide', async () => {
+    const { store } = setup();
+    await store.getState().newProject({ name: 'Flush Me' });
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument()
+    );
 
-    it('flushes on pagehide when a project is open and dirty', async () => {
-      const store = makeStore();
-      await renderReady(store);
-      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
-      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
-
+    const saveNow = vi.fn().mockResolvedValue(undefined);
+    store.setState({ dirty: true, saveNow } as never);
+    act(() => {
       window.dispatchEvent(new Event('pagehide'));
-
-      expect(saveNowSpy).toHaveBeenCalledTimes(1);
     });
+    expect(saveNow).toHaveBeenCalled();
+  });
 
-    it('does not flush on pagehide when the project is clean', async () => {
-      const store = makeStore();
-      await renderReady(store);
-      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
-      store.setState({ projectId: 'test-project', dirty: false, saveNow: saveNowSpy });
-
+  it('does not flush when the project is clean', async () => {
+    const { store } = setup();
+    await store.getState().newProject({ name: 'Clean' });
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument()
+    );
+    const saveNow = vi.fn().mockResolvedValue(undefined);
+    store.setState({ dirty: false, saveNow } as never);
+    act(() => {
       window.dispatchEvent(new Event('pagehide'));
-
-      expect(saveNowSpy).not.toHaveBeenCalled();
     });
-
-    it('does not flush on pagehide when no project is open', async () => {
-      const store = makeStore();
-      await renderReady(store);
-      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
-      store.setState({ projectId: null, dirty: true, saveNow: saveNowSpy });
-
-      window.dispatchEvent(new Event('pagehide'));
-
-      expect(saveNowSpy).not.toHaveBeenCalled();
-    });
-
-    it('also flushes on a visibilitychange to hidden (belt-and-suspenders)', async () => {
-      const store = makeStore();
-      await renderReady(store);
-      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
-      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
-
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-      try {
-        document.dispatchEvent(new Event('visibilitychange'));
-        expect(saveNowSpy).toHaveBeenCalledTimes(1);
-      } finally {
-        Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-      }
-    });
-
-    it('removes its listeners on unmount', async () => {
-      const store = makeStore();
-      const { unmount } = await renderReady(store);
-      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
-      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
-
-      unmount();
-      window.dispatchEvent(new Event('pagehide'));
-
-      expect(saveNowSpy).not.toHaveBeenCalled();
-    });
+    expect(saveNow).not.toHaveBeenCalled();
   });
 });

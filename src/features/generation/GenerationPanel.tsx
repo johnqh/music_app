@@ -1,26 +1,21 @@
 /**
  * Whole-score generation panel (spec §11, §21, §32): prompt + preset-prompt
  * menu, style/mood/complexity, an instrumentation checklist, measures/
- * tempo/key/time-signature, a seed field, and a Generate button with
+ * tempo/key/time-signature, and a Generate button with
  * progress + cancel. Shown by the app shell (Task 16) when
  * `generation-slice.mode === 'generate'` (an empty selection); its sibling,
  * `RegenerationPanel`, takes over once a region is selected.
  *
  * Two fields spec §21's prose lists alongside these ("candidate count",
- * "seed") don't map onto `generate()`'s actual parameter shape
- * (`GenerateScoreRequest` has no `candidateCount` — whole-score generation
- * always adopts exactly one committed score, see `generation-slice.ts`'s
- * `generate()` — and no `seed`, which instead lives in developer settings,
- * spec §33/`ui-slice.ts`'s `devSettings.seed`). This panel therefore:
- *  - omits candidate count entirely (there is nothing for it to control;
- *    `RegenerationPanel` is where a real `candidateCount` request field
- *    lives), and
- *  - wires "seed" to `devSettings.seed`/`setDevSettings` rather than to
- *    `GenerateScoreRequest`, exactly like a (not-yet-built) developer
- *    settings dialog would.
+ * "seed") no longer apply: whole-score generation adopts exactly one
+ * committed score (`GenerateScoreRequest` has no candidateCount; the
+ * RegenerationPanel is where a real candidateCount lives), and the seed
+ * concept died with the deterministic mock provider — real AI generation
+ * (music_api/OpenAI) is not seedable. Both are documented as known
+ * limitations in docs/architecture.md.
  */
 import { useState } from 'react';
-import type { ChangeEvent } from 'react';
+
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -119,7 +114,6 @@ function toRequestTrack(option: (typeof INSTRUMENT_OPTIONS)[number]): GenerateSc
 export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const pending = store((s) => s.pending);
   const error = store((s) => s.error);
-  const seed = store((s) => s.devSettings.seed);
 
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
@@ -150,10 +144,6 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const handlePresetSelect = (text: string): void => {
     setPrompt(text);
     setPresetAnchor(null);
-  };
-
-  const handleSeedChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    store.getState().setDevSettings({ seed: event.target.value });
   };
 
   const handleGenerate = (): void => {
@@ -333,14 +323,6 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
           ))}
         </Select>
       </Stack>
-
-      <TextField
-        size="small"
-        label="Generation seed"
-        value={seed}
-        onChange={handleSeedChange}
-        slotProps={{ htmlInput: { 'aria-label': 'Generation seed' } }}
-      />
 
       {pending && <LinearProgress aria-label="Generating" />}
 

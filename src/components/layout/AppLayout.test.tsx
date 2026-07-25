@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
@@ -36,25 +35,22 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { AppLayout } from '@/components/layout/AppLayout';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 async function makeStoreWithProject(score: Score = twinkleScore()): Promise<EditorStoreApi> {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-applayout-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   await store.getState().newProject({ name: 'My Song', score });
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 describe('AppLayout', () => {
   it('renders the project title and a save-state chip', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
 
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('My Song');
     expect(screen.getByLabelText(/Save state:/)).toBeInTheDocument();
@@ -62,7 +58,7 @@ describe('AppLayout', () => {
 
   it('editing the project title dispatches renameProject', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Edit project title'));
@@ -76,7 +72,7 @@ describe('AppLayout', () => {
 
   it('Undo is disabled with no history and enabled (with the command label as its tooltip) after an edit', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
 
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
@@ -89,7 +85,7 @@ describe('AppLayout', () => {
 
   it('the status bar shows a selection summary that updates with the selection', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
 
     expect(screen.getByText('No selection')).toBeInTheDocument();
 
@@ -125,7 +121,7 @@ describe('AppLayout', () => {
     store.getState().setScore(invalidScore, { resetHistory: false });
     expect(store.getState().validationIssues.length).toBeGreaterThan(0);
 
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     const issuesButton = screen.getByRole('button', { name: 'Validation issues' });
@@ -142,7 +138,7 @@ describe('AppLayout', () => {
   it('"Back to dashboard" calls onNavigate("/")', async () => {
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();
-    render(<AppLayout store={store} db={db} onNavigate={onNavigate} />);
+    render(<AppLayout store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Back to dashboard'));
@@ -152,7 +148,7 @@ describe('AppLayout', () => {
 
   it('toggling the track panel hides and re-shows it', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} db={db} />);
+    render(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     expect(screen.getByLabelText('Track list')).toBeInTheDocument();

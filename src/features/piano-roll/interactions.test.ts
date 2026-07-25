@@ -1,8 +1,7 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -21,19 +20,16 @@ import {
 } from '@/features/piano-roll/interactions';
 import { QuantizeService } from '@sudobility/music_lib';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(score = twinkleScore()): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-piano-roll-interactions-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(score);
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 describe('commitMove', () => {

@@ -1,10 +1,7 @@
-import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
-import { createProject } from '@sudobility/music_lib';
-import { createEmptyScore } from '@sudobility/music_lib';
+import { createAppStore, createEmptyScore, type TestStoreContext } from '@sudobility/music_lib';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
@@ -14,37 +11,38 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 
 import { AppRouter } from '@/app/router';
 
-let db: ScoreSmithDb;
-let dbCounter = 0;
+let context: TestStoreContext;
 
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-router-${dbCounter}`);
-  return createAppStore({ db });
+  context = installTestAppServices();
+  return createAppStore({ context });
 }
 
 beforeEach(() => {
   window.history.pushState({}, '', '/');
 });
 
-afterEach(async () => {
-  await db?.delete();
+afterEach(() => {
+  resetTestAppServices();
 });
 
 describe('AppRouter', () => {
   it('renders the dashboard at "/"', async () => {
     const store = makeStore();
-    render(<AppRouter store={store} db={db} />);
+    render(<AppRouter store={store} />);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
   });
 
   it('opens the matching project (into the shared store) at "/project/:id"', async () => {
     const store = makeStore();
-    const record = await createProject(db, { name: 'Router Test Project', score: createEmptyScore({ title: 'Router Test Project' }) });
+    const record = await context.fakeClient.createProject(
+      { name: 'Router Test Project', score: createEmptyScore({ title: 'Router Test Project' }) },
+      'test-token'
+    );
     window.history.pushState({}, '', `/project/${record.id}`);
 
-    render(<AppRouter store={store} db={db} />);
+    render(<AppRouter store={store} />);
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
@@ -54,7 +52,7 @@ describe('AppRouter', () => {
     const store = makeStore();
     window.history.pushState({}, '', '/nope');
 
-    render(<AppRouter store={store} db={db} />);
+    render(<AppRouter store={store} />);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
     expect(window.location.pathname).toBe('/');
@@ -64,7 +62,7 @@ describe('AppRouter', () => {
     const store = makeStore();
     window.history.pushState({}, '', '/project/does-not-exist');
 
-    render(<AppRouter store={store} db={db} />);
+    render(<AppRouter store={store} />);
 
     await waitFor(() => expect(window.location.pathname).toBe('/'));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());

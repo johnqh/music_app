@@ -17,23 +17,20 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from '
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { reportError } from '@sudobility/music_lib';
-import { db as appDb, useAppStore } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import type { ScoreSmithDb } from '@sudobility/music_lib';
 
 export type AppRouterProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /** Defaults to the app-wide singleton's own db; tests inject the same `fake-indexeddb`-backed db the test's store was built with. */
-  db?: ScoreSmithDb;
 };
 
-function DashboardRoute({ store, db }: { store: EditorStoreApi; db: ScoreSmithDb }) {
+function DashboardRoute({ store }: { store: EditorStoreApi }) {
   const navigate = useNavigate();
-  return <DashboardPage store={store} db={db} onNavigate={navigate} />;
+  return <DashboardPage store={store} onNavigate={navigate} />;
 }
 
-function ProjectRoute({ store, db }: { store: EditorStoreApi; db: ScoreSmithDb }) {
+function ProjectRoute({ store }: { store: EditorStoreApi }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   // Guards against re-opening the same project on every render (openProject
@@ -57,15 +54,15 @@ function ProjectRoute({ store, db }: { store: EditorStoreApi; db: ScoreSmithDb }
       });
   }, [id, store, navigate]);
 
-  return <AppLayout store={store} db={db} onNavigate={navigate} />;
+  return <AppLayout store={store} onNavigate={navigate} />;
 }
 
-export function AppRouter({ store = useAppStore, db = appDb }: AppRouterProps) {
+export function AppRouter({ store = useAppStore }: AppRouterProps) {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DashboardRoute store={store} db={db} />} />
-        <Route path="/project/:id" element={<ProjectRoute store={store} db={db} />} />
+        <Route path="/" element={<DashboardRoute store={store} />} />
+        <Route path="/project/:id" element={<ProjectRoute store={store} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

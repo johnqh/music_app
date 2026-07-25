@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
@@ -6,7 +7,7 @@ import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 function makeStore(): EditorStoreApi {
-  return createAppStore();
+  return createAppStore({ context: testStoreContext() });
 }
 
 afterEach(() => {

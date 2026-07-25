@@ -1,6 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/app/App';
+import { initializeApp } from '@/config/initialize';
+
+initializeApp();
 
 const container = document.getElementById('root');
 

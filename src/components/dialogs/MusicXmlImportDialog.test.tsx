@@ -1,26 +1,22 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { exportMusicXml } from '@sudobility/music_lib';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-musicxmlwizard-${dbCounter}`);
-  return createAppStore({ db });
+  return createAppStore({ context: testStoreContext() });
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 function fixtureFile(name = 'fixture.musicxml'): File {

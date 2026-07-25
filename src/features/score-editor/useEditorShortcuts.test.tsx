@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -20,19 +19,16 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   playbackController: { togglePlay: vi.fn() },
 }));
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-shortcuts-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 function Harness({ store, controller }: { store: EditorStoreApi; controller?: PlaybackToggle }) {

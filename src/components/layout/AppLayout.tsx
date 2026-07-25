@@ -34,11 +34,9 @@ import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobilit
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
-import { db as appDb } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import type { ScoreSmithDb } from '@sudobility/music_lib';
-import { exportProjectJson, importProjectJson } from '@sudobility/music_lib';
+import { parseScore } from '@sudobility/music_types';
 import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
@@ -59,8 +57,6 @@ import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsD
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /** Defaults to the app-wide singleton's own db; tests inject the same `fake-indexeddb`-backed db the test's store was built with. */
-  db?: ScoreSmithDb;
   /** Called after "Back to dashboard" is clicked, and after importing Project JSON opens a different project. Defaults to a no-op (tests/host apps that don't need navigation can omit it); `router.tsx` wires this to `useNavigate()`. */
   onNavigate?: (path: string) => void;
 };
@@ -74,7 +70,7 @@ const SAVE_STATE_COLOR: Record<string, 'success' | 'info' | 'warning'> = {
   unsaved: 'warning',
 };
 
-export function AppLayout({ store = useAppStore, db = appDb, onNavigate }: AppLayoutProps) {
+export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const projectName = store((s) => s.projectName);
   const saveState = store((s) => s.saveState);
   const canUndo = store((s) => s.canUndo);
@@ -129,9 +125,13 @@ export function AppLayout({ store = useAppStore, db = appDb, onNavigate }: AppLa
     setConfirmingImportJson(null);
     if (!json) return;
     try {
-      const record = await importProjectJson(db, json);
-      await store.getState().openProject(record.id);
-      onNavigate?.(`/project/${record.id}`);
+      const parsed = json as { name?: unknown; score?: unknown };
+      const importedScore = parseScore(parsed.score);
+      const name =
+        typeof parsed.name === 'string' && parsed.name ? parsed.name : importedScore.metadata.title;
+      await store.getState().newProject({ name, score: importedScore });
+      const newId = store.getState().projectId;
+      if (newId) onNavigate?.(`/project/${newId}`);
     } catch (err) {
       reportError(err, { context: 'Project JSON import failed', store });
     }
@@ -163,8 +163,14 @@ export function AppLayout({ store = useAppStore, db = appDb, onNavigate }: AppLa
     const projectId = store.getState().projectId;
     if (!projectId) return;
     try {
-      const blob = await exportProjectJson(db, projectId);
-      downloadBlob(`${projectName || 'project'}.json`, blob);
+      const state = store.getState();
+      if (!state.score) return;
+      const payload = JSON.stringify(
+        { name: state.projectName, schemaVersion: 1, score: state.score },
+        null,
+        2
+      );
+      downloadBlob(`${projectName || 'project'}.json`, new Blob([payload], { type: 'application/json' }));
     } catch (err) {
       reportError(err, { context: 'Project JSON export failed', store });
     }
@@ -462,7 +468,6 @@ export function AppLayout({ store = useAppStore, db = appDb, onNavigate }: AppLa
           open={dialogs.devSettings === true}
           onClose={() => store.getState().closeDialog('devSettings')}
           store={store}
-          db={db}
         />
       )}
 

@@ -1,7 +1,6 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { stressScore, twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
@@ -31,19 +30,16 @@ import { transformCommand } from '@sudobility/music_lib';
 import { QuantizeService } from '@sudobility/music_lib';
 import type { QuantizeOptions } from '@sudobility/music_lib';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore() {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-editing-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 describe('resolveInsertTarget', () => {
@@ -92,7 +88,7 @@ describe('insertNoteAtSelection', () => {
   });
 
   it('is a no-op with no score loaded', () => {
-    const store = createAppStore({ db: new ScoreSmithDb('scoresmith-test-editing-noscore') });
+    const store = createAppStore({ context: testStoreContext() });
     expect(() => insertNoteAtSelection(store, { step: 'C', accidental: 0, octave: 4 })).not.toThrow();
     expect(store.getState().score).toBeNull();
   });
@@ -319,8 +315,7 @@ describe('quantizeSelection', () => {
 
   it('routes a selection touching >2000 notes through the given QuantizeService (spec §29) and produces the same result as the inline path', async () => {
     dbCounter += 1;
-    const bigDb = new ScoreSmithDb(`scoresmith-test-editing-big-${dbCounter}`);
-    const store = createAppStore({ db: bigDb });
+    const store = createAppStore({ context: testStoreContext() });
     // 1 track x 600 measures x 4 notes/measure = 2400 notes, well over the
     // 2000-note worker-routing threshold, spread across 600 per-measure
     // voices (stressScore's convention) so no single voice is huge — the
@@ -344,7 +339,6 @@ describe('quantizeSelection', () => {
     expect(store.getState().canUndo).toBe(true);
     expect(allNotes(store.getState().score!).every((n) => n.startTick % (big.ppq / 4) === 0)).toBe(true);
 
-    await bigDb.delete();
   });
 });
 

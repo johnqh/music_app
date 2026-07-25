@@ -1,8 +1,9 @@
 /**
  * Developer settings dialog (spec §33), reachable only when
- * `ui-slice.developerMode` is on: mock-provider seed, per-overlay debug
- * toggles, reset local database, generate a stress-test score, and export
- * a diagnostic JSON dump.
+ * `ui-slice.developerMode` is on: per-overlay debug toggles, clearing
+ * locally-stored device preferences, generating a stress-test score, and
+ * exporting a diagnostic JSON dump. (The mock-seed control and local
+ * project database died with the Phase-2 move to server-side AI/storage.)
  */
 import { useState } from 'react';
 import Alert from '@mui/material/Alert';
@@ -14,12 +15,10 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
 import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
-import type { ScoreSmithDb } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -32,7 +31,6 @@ export type DeveloperSettingsDialogProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
   /** The database "reset local database" clears. Required (not defaulted): the store alone has no `ScoreSmithDb` handle (see `project-slice.ts`'s doc comment). */
-  db: ScoreSmithDb;
   /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
   benchmarkSizes?: BenchmarkSize[];
 };
@@ -54,7 +52,6 @@ export function DeveloperSettingsDialog({
   open,
   onClose,
   store = useAppStore,
-  db,
   benchmarkSizes,
 }: DeveloperSettingsDialogProps) {
   const devSettings = store((s) => s.devSettings);
@@ -66,8 +63,7 @@ export function DeveloperSettingsDialog({
   const handleResetDatabase = async (): Promise<void> => {
     setConfirmingReset(false);
     try {
-      await db.projects.clear();
-      await db.settings.clear();
+      window.localStorage.removeItem('scoresmith.prefs.v1');
       setResetDone(true);
     } catch (error) {
       reportError(error, { context: 'Failed to reset the local database', store });
@@ -129,14 +125,6 @@ export function DeveloperSettingsDialog({
       <DialogTitle id="dev-settings-title">Developer settings</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
-          <TextField
-            size="small"
-            label="Mock-provider seed"
-            value={devSettings.seed}
-            onChange={(e) => store.getState().setDevSettings({ seed: e.target.value })}
-            slotProps={{ htmlInput: { 'aria-label': 'Mock-provider seed' } }}
-          />
-
           <Stack>
             <FormControlLabel
               control={

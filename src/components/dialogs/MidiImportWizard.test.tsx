@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { chordScore, twinkleScore } from '@sudobility/music_lib';
 import { exportMidi } from '@sudobility/music_lib';
 import { analyzeMidi } from '@sudobility/music_lib';
@@ -11,17 +10,14 @@ import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-midiwizard-${dbCounter}`);
-  return createAppStore({ db });
+  return createAppStore({ context: testStoreContext() });
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 /** A real Standard MIDI File, round-tripped from a fixture score via the Task 7 exporter -- the same pattern `analyze.test.ts` uses. */

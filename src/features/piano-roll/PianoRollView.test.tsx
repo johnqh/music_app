@@ -1,10 +1,9 @@
-import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { useLayoutEffect } from 'react';
 import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { stressScore, twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -21,19 +20,16 @@ import {
 import { PianoRollView } from '@/features/piano-roll/PianoRollView';
 import { __getNoteLayerRenderCountForTests } from '@/features/piano-roll/render-counters';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-piano-roll-view-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 function noteRect(container: HTMLElement, id: string): HTMLElement {
@@ -69,7 +65,7 @@ function FirstCommitProbe({ onFirstCommit }: { onFirstCommit: () => void }) {
 
 describe('PianoRollView', () => {
   it('renders without a score loaded (empty state)', () => {
-    const store = createAppStore({ db: new ScoreSmithDb('scoresmith-test-piano-roll-view-empty') });
+    const store = createAppStore({ context: testStoreContext() });
     expect(() => render(<PianoRollView store={store} />)).not.toThrow();
   });
 
@@ -381,8 +377,7 @@ describe('PianoRollView', () => {
 
     function makeBigStore(): EditorStoreApi {
       dbCounter += 1;
-      db = new ScoreSmithDb(`scoresmith-test-piano-roll-view-virtualization-${dbCounter}`);
-      const store = createAppStore({ db });
+      const store = createAppStore({ context: testStoreContext() });
       store.getState().setScore(stressScore(1, 100)); // wide enough (100 measures) for real horizontal scroll range
       return store;
     }

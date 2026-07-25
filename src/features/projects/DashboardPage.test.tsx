@@ -1,55 +1,59 @@
-import 'fake-indexeddb/auto';
+/**
+ * DashboardPage against the in-memory FakeMusicClient (server-backed era):
+ * templates section, project listing/search, create/open/duplicate/delete
+ * flows, navigation callbacks. App services are installed via the shared
+ * test wiring so the component's getAppServices() reads resolve to fakes.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
-import { createProject, listProjects } from '@sudobility/music_lib';
-import { createEmptyScore } from '@sudobility/music_lib';
-import { SAMPLE_DEFINITIONS } from '@sudobility/music_lib';
+import {
+  createAppStore,
+  createEmptyScore,
+  projectTemplates,
+  type TestStoreContext,
+} from '@sudobility/music_lib';
 import { DashboardPage } from '@/features/projects/DashboardPage';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
-let dbCounter = 0;
-
-function makeStore(): EditorStoreApi {
-  dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-dashboard-${dbCounter}`);
-  return createAppStore({ db });
+function setup(): { store: EditorStoreApi; context: TestStoreContext } {
+  const context = installTestAppServices();
+  const store = createAppStore({ context });
+  return { store, context };
 }
 
-afterEach(async () => {
-  await db?.delete();
+afterEach(() => {
+  cleanup();
+  resetTestAppServices();
 });
 
 describe('DashboardPage', () => {
-  it('installs the sample projects on first load and lists them', async () => {
-    const store = makeStore();
-    render(<DashboardPage store={store} db={db} />);
-
-    await waitFor(() => expect(screen.getByText(SAMPLE_DEFINITIONS[0].name)).toBeInTheDocument());
-    for (const sample of SAMPLE_DEFINITIONS) {
-      expect(screen.getByText(sample.name)).toBeInTheDocument();
+  it('shows the three project templates', () => {
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+    for (const template of projectTemplates) {
+      expect(
+        screen.getByRole('button', { name: `New from template: ${template.name}` })
+      ).toBeInTheDocument();
     }
   });
 
-  it('lists an existing project alongside the samples', async () => {
-    const store = makeStore();
-    await createProject(db, { name: 'My Existing Song', score: createEmptyScore({ title: 'My Existing Song' }) });
-
-    render(<DashboardPage store={store} db={db} />);
-
+  it("lists the signed-in user's server-side projects", async () => {
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'My Existing Song', score: createEmptyScore({ title: 'My Existing Song' }) },
+      'test-token'
+    );
+    render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('My Existing Song')).toBeInTheDocument());
   });
 
-  it('New Project creates a project, persists it, and navigates to it', async () => {
-    const store = makeStore();
+  it('New Project creates a project on the server and navigates to it', async () => {
+    const { store, context } = setup();
     const onNavigate = vi.fn();
-    render(<DashboardPage store={store} db={db} onNavigate={onNavigate} />);
+    render(<DashboardPage store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
-
-    await waitFor(() => expect(screen.getByText(SAMPLE_DEFINITIONS[0].name)).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: 'New project' }));
     const nameField = screen.getByLabelText('New project name');
@@ -60,58 +64,76 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(onNavigate).toHaveBeenCalled());
     expect(onNavigate.mock.calls[0][0]).toMatch(/^\/project\//);
     expect(store.getState().projectName).toBe('Brand New Song');
-
-    const rows = await listProjects(db);
+    const rows = await context.fakeClient.listProjects('test-token');
     expect(rows.some((r) => r.name === 'Brand New Song')).toBe(true);
   });
 
-  it('search filters the project grid by name', async () => {
-    const store = makeStore();
-    await createProject(db, { name: 'Alpha Song', score: createEmptyScore({ title: 'Alpha' }) });
-    await createProject(db, { name: 'Beta Song', score: createEmptyScore({ title: 'Beta' }) });
-    render(<DashboardPage store={store} db={db} />);
+  it('"New from template" creates a project seeded with the template score', async () => {
+    const { store } = setup();
+    const onNavigate = vi.fn();
+    render(<DashboardPage store={store} onNavigate={onNavigate} />);
+    const user = userEvent.setup();
 
+    await user.click(
+      screen.getByRole('button', { name: `New from template: ${projectTemplates[0].name}` })
+    );
+    await waitFor(() => expect(onNavigate).toHaveBeenCalled());
+    expect(store.getState().projectName).toBe(projectTemplates[0].name);
+    expect(store.getState().score?.metadata.title).toBe(projectTemplates[0].name);
+  });
+
+  it('search filters the project grid by name', async () => {
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'Alpha Song', score: createEmptyScore({ title: 'A' }) },
+      't'
+    );
+    await context.fakeClient.createProject(
+      { name: 'Beta Tune', score: createEmptyScore({ title: 'B' }) },
+      't'
+    );
+    render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('Alpha Song')).toBeInTheDocument());
 
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Search projects'), 'Alpha');
-
+    await user.type(screen.getByLabelText('Search projects'), 'alpha');
     expect(screen.getByText('Alpha Song')).toBeInTheDocument();
-    expect(screen.queryByText('Beta Song')).not.toBeInTheDocument();
+    expect(screen.queryByText('Beta Tune')).not.toBeInTheDocument();
   });
 
   it('clicking a project card opens it and navigates to /project/:id', async () => {
-    const store = makeStore();
-    const record = await createProject(db, { name: 'Open Me', score: createEmptyScore({ title: 'Open Me' }) });
+    const { store, context } = setup();
+    const record = await context.fakeClient.createProject(
+      { name: 'Openable', score: createEmptyScore({ title: 'Openable' }) },
+      't'
+    );
     const onNavigate = vi.fn();
-    render(<DashboardPage store={store} db={db} onNavigate={onNavigate} />);
+    render(<DashboardPage store={store} onNavigate={onNavigate} />);
+    await waitFor(() => expect(screen.getByText('Openable')).toBeInTheDocument());
+
     const user = userEvent.setup();
-
-    await waitFor(() => expect(screen.getByText('Open Me')).toBeInTheDocument());
-    await user.click(screen.getByLabelText('Open project: Open Me'));
-
+    await user.click(screen.getByRole('button', { name: 'Open project: Openable' }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(`/project/${record.id}`));
     expect(store.getState().projectId).toBe(record.id);
   });
 
   it('Duplicate copies a project; Delete (after confirming) removes it', async () => {
-    const store = makeStore();
-    const record = await createProject(db, { name: 'Copy Source', score: createEmptyScore({ title: 'Copy Source' }) });
-    render(<DashboardPage store={store} db={db} />);
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'Original', score: createEmptyScore({ title: 'Original' }) },
+      't'
+    );
+    render(<DashboardPage store={store} />);
+    await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
     const user = userEvent.setup();
 
-    await waitFor(() => expect(screen.getByText('Copy Source')).toBeInTheDocument());
-    await user.click(screen.getByLabelText('Duplicate project: Copy Source'));
+    await user.click(screen.getByRole('button', { name: 'Duplicate project: Original' }));
+    await waitFor(() => expect(screen.getByText('Original (copy)')).toBeInTheDocument());
 
-    await waitFor(() => expect(screen.getByText('Copy Source (Copy)')).toBeInTheDocument());
-
-    await user.click(screen.getByLabelText('Delete project: Copy Source (Copy)'));
-    const dialog = screen.getByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
-
-    await waitFor(() => expect(screen.queryByText('Copy Source (Copy)')).not.toBeInTheDocument());
-    const remaining = await listProjects(db);
-    expect(remaining.some((r) => r.name === 'Copy Source (Copy)')).toBe(false);
-    expect(remaining.some((r) => r.id === record.id)).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Delete project: Original (copy)' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByText('Original (copy)')).not.toBeInTheDocument());
+    const rows = await context.fakeClient.listProjects('t');
+    expect(rows.map((r) => r.name)).toEqual(['Original']);
   });
 });

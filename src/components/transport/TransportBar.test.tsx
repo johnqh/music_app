@@ -1,9 +1,8 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
 
@@ -30,19 +29,16 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { playbackController } from '@sudobility/music_lib';
 import { TransportBar } from '@/components/transport/TransportBar';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(withScore = true): PlaybackStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-transportbar-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   if (withScore) store.getState().setScore(twinkleScore());
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
   vi.clearAllMocks();
 });
 

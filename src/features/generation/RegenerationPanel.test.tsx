@@ -1,15 +1,31 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
-import { resetProvider, setProvider } from '@sudobility/music_lib';
+import type { MusicGenerationProvider } from '@sudobility/music_types';
+import { FakeGenerationProvider } from '@sudobility/music_lib';
+
+// Late-binding provider shim (replaces the deleted registry): the store's
+// context gets a delegator so tests can swap providers after creation.
+let injectedProvider: MusicGenerationProvider | undefined;
+function setProvider(p: MusicGenerationProvider): void {
+  injectedProvider = p;
+}
+function resetProvider(): void {
+  injectedProvider = undefined;
+}
+const defaultFakeProvider = new FakeGenerationProvider();
+const delegatingProvider: MusicGenerationProvider = {
+  id: 'delegator',
+  name: 'Delegator',
+  generateScore: (req, signal) => (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
+  regenerateRegion: (req, signal) => (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
+};
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import type {
-  MusicGenerationProvider,
   RegenerateRegionRequest,
   RegenerateRegionResult,
 } from '@sudobility/music_types';
@@ -23,13 +39,11 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   },
 }));
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): GenerationStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-regenerationpanel-${dbCounter}`);
-  return createAppStore({ db });
+  return createAppStore({ context: testStoreContext({ provider: delegatingProvider }) });
 }
 
 /** A provider whose `regenerateRegion` call stays pending until resolved by hand (mirrors GenerationPanel.test.tsx's `ControllableProvider`, plumbed for regenerate instead of generate). */
@@ -56,7 +70,6 @@ afterEach(async () => {
   // stopPreview() call (from unmounting a CandidateList this panel renders)
   // into the next test.
   cleanup();
-  await db?.delete();
   vi.clearAllMocks();
   resetProvider();
 });

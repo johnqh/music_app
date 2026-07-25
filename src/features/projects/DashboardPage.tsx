@@ -1,15 +1,14 @@
 /**
- * Project dashboard (spec §19): a searchable/sortable project grid (sample
- * projects -- installed on first run -- shown in their own section ahead
- * of the user's own projects), New Project, MIDI/MusicXML/Project-JSON
- * import, and duplicate/delete (delete confirmed).
+ * Project dashboard (spec §19), server-backed: a searchable/sortable grid
+ * of the signed-in user's projects (from music_api via MusicClient), a
+ * Templates section ("New from template" starter scores — replacing the
+ * old locally-installed sample projects), New Project, MIDI/MusicXML/
+ * Project-JSON import, and duplicate/delete (delete confirmed).
  *
  * Opening or creating a project loads it into the shared app-wide store
- * (`store.getState().openProject`/`newProject`) and then calls
- * `onNavigate` -- `router.tsx` wires this to `useNavigate()` so the editor
- * route (`AppLayout`) finds a project already open when it mounts.
+ * (`openProject`/`newProject`) and then calls `onNavigate`.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -26,29 +25,23 @@ import TextField from '@mui/material/TextField';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import type { ProjectRecord, ScoreSmithDb } from '@sudobility/music_lib';
-import { deleteProject, duplicateProject, listProjects } from '@sudobility/music_lib';
-import { SAMPLE_DEFINITIONS, installSampleProjects } from '@sudobility/music_lib';
-import { importProjectJson } from '@sudobility/music_lib';
-import { reportError } from '@sudobility/music_lib';
-import { db as appDb, useAppStore } from '@sudobility/music_lib';
+import type { ProjectSummary } from '@sudobility/music_types';
+import { parseScore } from '@sudobility/music_types';
+import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { getAppServices } from '@/config/initialize';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 
 export type DashboardPageProps = {
-  /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
+  /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
   store?: EditorStoreApi;
-  /** Defaults to the app-wide singleton's own db; tests inject the same `fake-indexeddb`-backed db the test's store was built with. */
-  db?: ScoreSmithDb;
   /** Called with `/project/:id` after opening/creating/importing a project. Defaults to a no-op; `router.tsx` wires this to `useNavigate()`. */
   onNavigate?: (path: string) => void;
 };
 
 type SortBy = 'name' | 'updatedAt';
-
-const SAMPLE_NAMES = new Set(SAMPLE_DEFINITIONS.map((s) => s.name));
 
 function formatDate(iso: string): string {
   try {
@@ -58,47 +51,41 @@ function formatDate(iso: string): string {
   }
 }
 
-export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: DashboardPageProps) {
-  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+/** Reads the MusicClient + a token getter out of the app services (the store context owns the same client). */
+async function clientAndToken() {
+  const { musicClient } = getAppServices();
+  const token = await getAppServices().auth.getToken();
+  if (!token) throw new Error('You must be signed in.');
+  return { client: musicClient, token };
+}
+
+export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('updatedAt');
   const [creatingName, setCreatingName] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<ProjectRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
 
-  const refresh = async (): Promise<void> => {
+  const refresh = useCallback(async (): Promise<void> => {
     try {
-      const rows = await listProjects(db, { sortBy });
+      const { client, token } = await clientAndToken();
+      const rows = await client.listProjects(token, { sort: sortBy });
       setProjects(rows);
     } catch (err) {
       reportError(err, { context: 'Failed to load projects', store });
     } finally {
       setLoaded(true);
     }
-  };
+  }, [sortBy, store]);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        await installSampleProjects(db);
-      } catch (err) {
-        reportError(err, { context: 'Failed to install sample projects', store });
-      }
-      await refresh();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db]);
-
-  useEffect(() => {
-    if (loaded) void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy]);
+    void refresh();
+  }, [refresh]);
 
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
-  const samples = filtered.filter((p) => SAMPLE_NAMES.has(p.name));
-  const others = filtered.filter((p) => !SAMPLE_NAMES.has(p.name));
 
   const openProject = async (id: string): Promise<void> => {
     try {
@@ -122,9 +109,23 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
     }
   };
 
-  const handleDuplicate = async (project: ProjectRecord): Promise<void> => {
+  const handleCreateFromTemplate = async (templateId: string): Promise<void> => {
+    const template = projectTemplates.find((t) => t.id === templateId);
+    if (!template) return;
     try {
-      await duplicateProject(db, project.id);
+      await store.getState().newProject({ name: template.name, score: template.build() });
+      const id = store.getState().projectId;
+      if (id) onNavigate?.(`/project/${id}`);
+    } catch (err) {
+      reportError(err, { context: 'Failed to create project from template', store });
+    }
+  };
+
+  const handleDuplicate = async (project: ProjectSummary): Promise<void> => {
+    try {
+      const { client, token } = await clientAndToken();
+      const full = await client.getProject(project.id, token);
+      await client.createProject({ name: `${full.name} (copy)`, score: full.score }, token);
       await refresh();
     } catch (err) {
       reportError(err, { context: 'Failed to duplicate project', store });
@@ -136,7 +137,8 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
     setPendingDelete(null);
     if (!project) return;
     try {
-      await deleteProject(db, project.id);
+      const { client, token } = await clientAndToken();
+      await client.deleteProject(project.id, token);
       await refresh();
     } catch (err) {
       reportError(err, { context: 'Failed to delete project', store });
@@ -149,7 +151,11 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
     if (!file) return;
     try {
       const text = await file.text();
-      const record = await importProjectJson(db, JSON.parse(text));
+      const parsed = JSON.parse(text) as { name?: unknown; score?: unknown };
+      const score = parseScore(parsed.score);
+      const name = typeof parsed.name === 'string' && parsed.name ? parsed.name : score.metadata.title;
+      const { client, token } = await clientAndToken();
+      const record = await client.createProject({ name, score }, token);
       await refresh();
       await openProject(record.id);
     } catch (err) {
@@ -157,7 +163,7 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
     }
   };
 
-  const renderCard = (project: ProjectRecord) => (
+  const renderCard = (project: ProjectSummary) => (
     <Grid key={project.id} size={{ xs: 12, sm: 6, md: 4 }}>
       <Card variant="outlined">
         <CardActionArea onClick={() => void openProject(project.id)} aria-label={`Open project: ${project.name}`}>
@@ -165,9 +171,6 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
             <Typography variant="subtitle1">{project.name}</Typography>
             <Typography variant="caption" color="text.secondary">
               Updated {formatDate(project.updatedAt)}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" component="div">
-              {project.score.tracks.length} track(s)
             </Typography>
           </CardContent>
         </CardActionArea>
@@ -248,30 +251,44 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
         </Tooltip>
       </Toolbar>
 
+      <Box sx={{ mt: 2 }} aria-label="Templates">
+        <Typography variant="overline" color="text.secondary">
+          Templates
+        </Typography>
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          {projectTemplates.map((template) => (
+            <Grid key={template.id} size={{ xs: 12, sm: 6, md: 4 }}>
+              <Card variant="outlined">
+                <CardActionArea
+                  onClick={() => void handleCreateFromTemplate(template.id)}
+                  aria-label={`New from template: ${template.name}`}
+                >
+                  <CardContent>
+                    <Typography variant="subtitle1">{template.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {template.description}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
       {loaded && filtered.length === 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mt: 4 }}>
           No projects yet. Create one, or import a MIDI/MusicXML/project file to get started.
         </Typography>
       )}
 
-      {samples.length > 0 && (
-        <Box sx={{ mt: 2 }} aria-label="Sample projects">
-          <Typography variant="overline" color="text.secondary">
-            Sample projects
-          </Typography>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            {samples.map(renderCard)}
-          </Grid>
-        </Box>
-      )}
-
-      {others.length > 0 && (
+      {filtered.length > 0 && (
         <Box sx={{ mt: 3 }} aria-label="Your projects">
           <Typography variant="overline" color="text.secondary">
             Your projects
           </Typography>
           <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            {others.map(renderCard)}
+            {filtered.map(renderCard)}
           </Grid>
         </Box>
       )}
@@ -290,9 +307,9 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
         onClose={() => setMidiImportOpen(false)}
         store={store}
         forceNewProject
-        onImportedNewProject={(id) => {
+        onImportedNewProject={(projectId) => {
           setMidiImportOpen(false);
-          onNavigate?.(`/project/${id}`);
+          onNavigate?.(`/project/${projectId}`);
         }}
       />
       <MusicXmlImportDialog
@@ -300,9 +317,9 @@ export function DashboardPage({ store = useAppStore, db = appDb, onNavigate }: D
         onClose={() => setMusicXmlImportOpen(false)}
         store={store}
         forceNewProject
-        onImportedNewProject={(id) => {
+        onImportedNewProject={(projectId) => {
           setMusicXmlImportOpen(false);
-          onNavigate?.(`/project/${id}`);
+          onNavigate?.(`/project/${projectId}`);
         }}
       />
     </Box>

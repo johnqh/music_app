@@ -1,30 +1,43 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
-import { resetProvider, setProvider } from '@sudobility/music_lib';
+import type { MusicGenerationProvider } from '@sudobility/music_types';
+import { FakeGenerationProvider } from '@sudobility/music_lib';
+
+// Late-binding provider shim (replaces the deleted registry): the store's
+// context gets a delegator so tests can swap providers after creation.
+let injectedProvider: MusicGenerationProvider | undefined;
+function setProvider(p: MusicGenerationProvider): void {
+  injectedProvider = p;
+}
+function resetProvider(): void {
+  injectedProvider = undefined;
+}
+const defaultFakeProvider = new FakeGenerationProvider();
+const delegatingProvider: MusicGenerationProvider = {
+  id: 'delegator',
+  name: 'Delegator',
+  generateScore: (req, signal) => (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
+  regenerateRegion: (req, signal) => (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
+};
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import type {
   GenerateScoreRequest,
   GenerateScoreResult,
-  MusicGenerationProvider,
   RegenerateRegionResult,
 } from '@sudobility/music_types';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): GenerationStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-generationpanel-${dbCounter}`);
-  return createAppStore({ db });
+  return createAppStore({ context: testStoreContext({ provider: delegatingProvider }) });
 }
 
 afterEach(async () => {
-  await db?.delete();
   resetProvider();
 });
 
@@ -145,20 +158,6 @@ describe('GenerationPanel', () => {
     renderPanel(store);
 
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-  });
-
-  it('the seed field reads from and writes to devSettings.seed', async () => {
-    const store = makeStore();
-    renderPanel(store);
-    const user = userEvent.setup();
-
-    const seedField = screen.getByRole('textbox', { name: 'Generation seed' });
-    expect(seedField).toHaveValue(store.getState().devSettings.seed);
-
-    await user.clear(seedField);
-    await user.type(seedField, 'my-seed');
-
-    expect(store.getState().devSettings.seed).toBe('my-seed');
   });
 
   it('every interactive control has an accessible name', () => {

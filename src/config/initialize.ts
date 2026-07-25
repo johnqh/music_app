@@ -1,0 +1,216 @@
+/**
+ * App bootstrap (composition root): builds the NetworkClient implementation,
+ * the MusicClient gateway, Firebase auth (or the e2e auth shim), the
+ * device-prefs storage, and initializes the app-wide store with its
+ * StoreContext. Call `initializeApp()` exactly once (main.tsx) before
+ * rendering.
+ *
+ * The app is the ONLY layer allowed to construct these: music_client/
+ * music_lib receive them injected (NetworkClient DI rule).
+ */
+import { initializeApp as initializeFirebaseApp, type FirebaseApp } from 'firebase/app';
+import {
+  GoogleAuthProvider,
+  browserLocalPersistence,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type Auth,
+  type User,
+} from 'firebase/auth';
+import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
+import { MusicClient } from '@sudobility/music_client';
+import { initializeAppStore, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
+
+// ---------------------------------------------------------------------------
+// Network
+// ---------------------------------------------------------------------------
+
+/** Fetch-backed implementation of @sudobility/types' NetworkClient. */
+class FetchNetworkClient implements NetworkClient {
+  async request<T = unknown>(
+    url: string,
+    options?: NetworkRequestOptions | null
+  ): Promise<NetworkResponse<T>> {
+    const response = await fetch(url, {
+      method: options?.method ?? 'GET',
+      headers: options?.headers ?? undefined,
+      body: (options?.body as BodyInit | undefined) ?? undefined,
+      signal: options?.signal ?? undefined,
+    });
+    let data: T | undefined;
+    try {
+      data = (await response.json()) as T;
+    } catch {
+      data = undefined;
+    }
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+      data,
+      success: response.ok,
+    } as NetworkResponse<T>;
+  }
+
+  get<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+    return this.request<T>(url, { ...options, method: 'GET' });
+  }
+
+  post<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+    return this.request<T>(url, { ...options, method: 'POST', body: JSON.stringify(body) });
+  }
+
+  put<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+    return this.request<T>(url, { ...options, method: 'PUT', body: JSON.stringify(body) });
+  }
+
+  delete<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+    return this.request<T>(url, { ...options, method: 'DELETE' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth (Firebase, or the e2e shim)
+// ---------------------------------------------------------------------------
+
+export type AuthUser = { uid: string; email: string | null; displayName: string | null };
+export type AuthObserver = (user: AuthUser | null) => void;
+
+type AuthBackend = {
+  observe(cb: AuthObserver): () => void;
+  getToken(): Promise<string | null>;
+  signInEmail(email: string, password: string): Promise<void>;
+  signUpEmail(email: string, password: string): Promise<void>;
+  signInGoogle(): Promise<void>;
+  signOut(): Promise<void>;
+};
+
+const isE2e = import.meta.env.VITE_E2E === '1';
+
+function firebaseBackend(): AuthBackend {
+  const app: FirebaseApp = initializeFirebaseApp({
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  });
+  const auth: Auth = getAuth(app);
+  void setPersistence(auth, browserLocalPersistence);
+
+  const toAuthUser = (user: User | null): AuthUser | null =>
+    user ? { uid: user.uid, email: user.email, displayName: user.displayName } : null;
+
+  return {
+    observe: (cb) => onAuthStateChanged(auth, (user) => cb(toAuthUser(user))),
+    getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
+    signInEmail: async (email, password) => {
+      await signInWithEmailAndPassword(auth, email, password);
+    },
+    signUpEmail: async (email, password) => {
+      await createUserWithEmailAndPassword(auth, email, password);
+    },
+    signInGoogle: async () => {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    },
+    signOut: () => signOut(auth),
+  };
+}
+
+/**
+ * e2e auth shim (VITE_E2E=1, dev server only): "signed in" as a fixed test
+ * user whose bearer token is music_api's TEST_AUTH_BYPASS_TOKEN. Lets
+ * Playwright drive the full authenticated flow without Firebase.
+ */
+function e2eBackend(): AuthBackend {
+  const token = import.meta.env.VITE_E2E_TOKEN ?? 'e2e-token';
+  const user: AuthUser = { uid: 'test-user', email: 'e2e@test.local', displayName: 'E2E User' };
+  let signedIn = true;
+  let observer: AuthObserver | null = null;
+  return {
+    observe: (cb) => {
+      observer = cb;
+      cb(signedIn ? user : null);
+      return () => {
+        observer = null;
+      };
+    },
+    getToken: async () => (signedIn ? token : null),
+    signInEmail: async () => {
+      signedIn = true;
+      observer?.(user);
+    },
+    signUpEmail: async () => {
+      signedIn = true;
+      observer?.(user);
+    },
+    signInGoogle: async () => {
+      signedIn = true;
+      observer?.(user);
+    },
+    signOut: async () => {
+      signedIn = false;
+      observer?.(null);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Composition root
+// ---------------------------------------------------------------------------
+
+export type AppServices = {
+  networkClient: NetworkClient;
+  musicClient: MusicClient;
+  baseUrl: string;
+  auth: AuthBackend;
+  prefsStorage: PrefsStorage;
+};
+
+let services: AppServices | null = null;
+
+export function initializeApp(): AppServices {
+  if (services) return services;
+
+  const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8022';
+  const networkClient = new FetchNetworkClient();
+  const musicClient = new MusicClient(networkClient, baseUrl);
+  const auth = isE2e ? e2eBackend() : firebaseBackend();
+  const prefsStorage: PrefsStorage = {
+    getItem: (key) => window.localStorage.getItem(key),
+    setItem: (key, value) => {
+      window.localStorage.setItem(key, value);
+    },
+  };
+
+  const context: StoreContext = {
+    client: musicClient,
+    getToken: () => auth.getToken(),
+    storage: prefsStorage,
+  };
+  initializeAppStore(context);
+
+  services = { networkClient, musicClient, baseUrl, auth, prefsStorage };
+  return services;
+}
+
+export function getAppServices(): AppServices {
+  if (!services) throw new Error('initializeApp() has not been called');
+  return services;
+}
+
+/** Test hook: inject prebuilt services (and reset with null). */
+export function setAppServices(next: AppServices | null): void {
+  services = next;
+}

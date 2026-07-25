@@ -1,27 +1,23 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { PianoRollToolbar } from '@/features/piano-roll/PianoRollToolbar';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(score = twinkleScore()): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-piano-roll-toolbar-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(score);
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 function renderToolbar(store: EditorStoreApi, overrides: Partial<React.ComponentProps<typeof PianoRollToolbar>> = {}) {
@@ -45,7 +41,7 @@ function renderToolbar(store: EditorStoreApi, overrides: Partial<React.Component
 
 describe('PianoRollToolbar', () => {
   it('renders without a score loaded', () => {
-    const store = createAppStore({ db: new ScoreSmithDb('scoresmith-test-piano-roll-toolbar-empty') });
+    const store = createAppStore({ context: testStoreContext() });
     expect(() => renderToolbar(store)).not.toThrow();
   });
 

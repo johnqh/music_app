@@ -1,27 +1,23 @@
-import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
+import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { ScoreSmithDb } from '@sudobility/music_lib';
 import { twoTrackScore } from '@sudobility/music_lib';
 import { dragSlider } from '@/test/drag-slider';
 import { TrackPanel } from '@/components/layout/TrackPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let db: ScoreSmithDb;
 let dbCounter = 0;
 
 function makeStore(): EditorStoreApi {
   dbCounter += 1;
-  db = new ScoreSmithDb(`scoresmith-test-trackpanel-${dbCounter}`);
-  const store = createAppStore({ db });
+  const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twoTrackScore());
   return store;
 }
 
 afterEach(async () => {
-  await db?.delete();
 });
 
 describe('TrackPanel', () => {
