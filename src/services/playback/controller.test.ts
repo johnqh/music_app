@@ -350,6 +350,39 @@ describe('PlaybackController: play/pause/stop', () => {
     expect(toast?.message).toContain('no audio device');
   });
 
+  it('togglePlay after a preview ends on its own (without an explicit stopPreview()) resumes the COMMITTED score, not the stale preview (Task 19 review fold-in a)', async () => {
+    const store = makeStore();
+    const committed = twinkleScore();
+    store.getState().setScore(committed);
+    const engine = createFakeEngine();
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+
+    await controller.playPreview(twoTrackScore(), 0);
+    vi.mocked(engine.loadScore).mockClear();
+    vi.mocked(engine.play).mockClear();
+
+    // The preview finishes on its own -- nothing calls stopPreview(), so
+    // `previewing` stays (incorrectly, absent this guard) true; the engine
+    // itself reports 'stopped' the way a real preview reaching its end
+    // would.
+    observerOf(engine).onStateChange('stopped');
+
+    controller.togglePlay();
+    await flushAsync();
+
+    expect(engine.loadScore).toHaveBeenCalledWith(committed);
+    expect(engine.play).toHaveBeenCalledTimes(1);
+    expect(engine.play).toHaveBeenCalledWith(0);
+
+    // The committed-score subscription is live again -- confirms
+    // `previewing` was actually cleared by the guard, not left stuck.
+    vi.mocked(engine.loadScore).mockClear();
+    store.getState().dispatchCommand(addMeasureCommand());
+    await flushAsync();
+    expect(engine.loadScore).toHaveBeenCalledTimes(1);
+  });
+
   it('stop() delegates to the engine', () => {
     const store = makeStore();
     const engine = createFakeEngine();

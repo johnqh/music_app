@@ -206,6 +206,22 @@ export class PlaybackController {
   togglePlay(): void {
     const { state, score } = this.store.getState();
     if (!score) return;
+    if (this.previewing) {
+      // Stale-preview replay guard (Task 19 review fold-in a): `previewing`
+      // is only ever cleared by an explicit `stopPreview()` call, never
+      // automatically when a preview simply finishes playing on its own --
+      // so without this, pressing the main transport's Play button right
+      // after a preview ends would resume whatever the engine still has
+      // loaded (the candidate), not the committed score. Queue the resume
+      // through the same `pendingResume` -> `handleScoreChange` path
+      // `stopPreview()`'s own resync already drives, so the actual
+      // `engine.play()` call happens only once the committed score has
+      // genuinely finished (re)loading, rather than racing ahead of it by
+      // calling `engine.play()` directly here.
+      this.pendingResume = { tick: this.store.getState().positionTick };
+      this.stopPreview();
+      return;
+    }
     this.pendingResume = null; // an explicit user play/pause action takes over from any queued auto-resume
     if (state === 'playing') {
       this.engine.pause();
