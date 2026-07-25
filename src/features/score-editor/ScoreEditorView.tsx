@@ -74,11 +74,13 @@ const VIRTUALIZATION_OVERSCAN_PX = 400;
 
 /**
  * VexFlow render colors (spec §7), one set per resolved light/dark color
- * scheme -- matching MUI's own default `text.primary`/`success.main`/
- * `warning.main` palette values for each mode (`theme.ts`'s `createAppTheme`
- * only overrides `primary`/`secondary`, so these two objects are what MUI's
- * `ThemeProvider` was actually resolving `useTheme()` to before this file's
- * T12 batch 6 Tailwind pass). VexFlow draws straight to SVG attributes, not
+ * scheme -- matching MUI's own former default `text.primary`/`success.main`/
+ * `warning.main` palette values for each mode (the pre-T13 `theme.ts`'s
+ * `createAppTheme` only overrode `primary`/`secondary`, so these two objects
+ * are what MUI's `ThemeProvider` was actually resolving `useTheme()` to
+ * before this file's T12 batch 6 Tailwind pass; kept as literals post-T13
+ * MUI removal since VexFlow still needs real color strings, not CSS
+ * variables). VexFlow draws straight to SVG attributes, not
  * CSS, so this deliberately stays literal color strings rather than reading
  * the app's `--color-*`/`--primary` custom properties (which jsdom's test
  * environment doesn't process CSS for anyway, and no test asserts an exact

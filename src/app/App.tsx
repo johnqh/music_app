@@ -7,13 +7,11 @@
  * Server-backed era: projects live in music_api; only device prefs (theme,
  * developer mode, view settings) persist locally via PrefsStorage.
  */
-import { Component, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useRef, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import CssBaseline from '@mui/material/CssBaseline';
-import { ThemeProvider } from '@mui/material/styles';
 import { Spinner } from '@sudobility/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { type ColorSchemeMode, createAppTheme, resolveColorScheme } from '@/app/theme';
+import { applyDocumentTheme, type ColorSchemeMode, resolveColorScheme } from '@/app/theme';
 import { AppRouter } from '@/app/router';
 import { AuthProvider, useAuth } from '@/app/AuthContext';
 import { SignInScreen } from '@/app/SignInScreen';
@@ -82,8 +80,21 @@ export function App({ store = useAppStore }: AppProps) {
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
 
-  const theme = useMemo(() => createAppTheme(resolveColorScheme(themeMode)), [themeMode]);
   const [queryClient] = useState(() => new QueryClient());
+
+  // Applies the resolved color scheme to the document (Tailwind `dark`
+  // class). When themeMode is 'system', also re-resolves and re-applies on
+  // every OS/browser scheme change so the app follows it live, without
+  // requiring a reload or a store update.
+  useEffect(() => {
+    applyDocumentTheme(resolveColorScheme(themeMode));
+    if (themeMode !== 'system') return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (): void => applyDocumentTheme(resolveColorScheme(themeMode));
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, [themeMode]);
 
   // Guards the persist effect against writing this render's still-default
   // values over stored prefs before the bootstrap load resolves.
@@ -139,16 +150,13 @@ export function App({ store = useAppStore }: AppProps) {
   }, [themeMode, developerMode]);
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <AuthGate store={store} />
-          </AuthProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate store={store} />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

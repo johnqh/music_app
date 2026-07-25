@@ -1,0 +1,42 @@
+# Parity checklist (T13)
+
+This checklist verifies that ScoreSmith's feature set survived the MUI → Tailwind re-skin (T12) and the five-repo split (T9–T12) with no functional regressions. Each row names the feature and the specific test(s) (unit/component/e2e) that exercise it end to end. All tests below pass as of this checklist (`bun run test`: 313/313; `bun run test:e2e`: 10/10).
+
+| Feature | VERIFIED-BY |
+| --- | --- |
+| Notation editing (click/shift-click select, insert, delete, duration/pitch edit, undo) | `src/features/score-editor/ScoreEditorView.test.tsx` ("clicking a note selects it", "shift-clicking a second note adds it to the selection", "Delete removes the selected note end-to-end", "ArrowUp transposes the selected note up a semitone end-to-end", "the toolbar duration control dispatches a duration change"); `src/features/score-editor/editing.test.ts`; `src/features/score-editor/useEditorShortcuts.test.tsx`; e2e `e2e/select-edit-undo.spec.ts` ("selects a note, changes its pitch, and undoes/redoes the change") |
+| Piano roll incl. velocity lane + drag | `src/features/piano-roll/PianoRollView.test.tsx` ("dragging a note horizontally and vertically dispatches a single moveNotesCommand on pointer-up", "dragging a note velocity-lane bar dispatches changeVelocityCommand", "dragging the right edge of a note resizes it via resizeNotesCommand", "dragging a note into the voice-lane strip dispatches changeVoiceCommand"); `src/features/piano-roll/geometry.test.ts`; `src/features/piano-roll/interactions.test.ts`; e2e `e2e/view-switch-piano-roll.spec.ts` ("switches to the piano roll, drags a note, and the notation view reflects the change") |
+| Playback/transport incl. loop + metronome | `src/components/transport/TransportBar.test.tsx` (`describe('TransportBar: transport buttons')`, `describe('TransportBar: loop and metronome toggles')` — "loop toggle calls playbackController.toggleLoop()", "loop toggle reflects loopRange presence", "metronome toggle calls playbackController.setMetronome()"); e2e `e2e/project-generate-play.spec.ts` ("creates a new project, generates a composition, and plays it"); e2e `e2e/acceptance.spec.ts` |
+| Undo/redo | `src/features/score-editor/useEditorShortcuts.test.tsx` ("Ctrl/Cmd+Z undoes and Ctrl/Cmd+Shift+Z redoes"); `src/components/layout/AppLayout.test.tsx` ("Undo is disabled with no history and enabled (with the command label as its tooltip) after an edit"); e2e `e2e/select-edit-undo.spec.ts` |
+| Validation issues popover | `src/components/layout/AppLayout.test.tsx` ("issues popover: shows the current validation issue count and clicking an issue navigates (sets the selection) and closes the popover") |
+| MIDI import wizard + export | `src/components/dialogs/MidiImportWizard.test.tsx` (per-track summary, new-project import, replace-existing-project confirmation, preview note count/text, track exclusion, failed-import error toast, accessible-name smoke test); e2e `e2e/midi-roundtrip.spec.ts` ("exports a MIDI file and re-imports it into a new project with substantially equivalent notes") |
+| MusicXML import/export | `src/components/dialogs/MusicXmlImportDialog.test.tsx` (summary, new/replace project import, `forceNewProject`, failed-import error toast, accessible-name smoke test); e2e `e2e/musicxml-export.spec.ts` ("exports a well-formed MusicXML file for the current score") |
+| Generation + regeneration preview/accept | `src/features/generation/GenerationPanel.test.tsx` (prompt/instrument gating, preset prompts, committed-score result, progress/cancel, error display, accessible-name smoke test); `src/features/generation/RegenerationPanel.test.tsx` (selection validity gating, candidate-count/preservation constraints, cancel); `src/features/generation/CandidateList.test.tsx` (card rendering, select/A-B-compare, "Play in context", Accept as a single undoable command, Reject all, Retry); e2e `e2e/regeneration.spec.ts` ("selects a measure via a real click on its rendered stave", "generates alternatives for measures 3-4, previews them, and accepts one"); e2e `e2e/project-generate-play.spec.ts` |
+| Project CRUD + autosave + reload | `src/features/projects/DashboardPage.test.tsx` (list, New Project, "New from template", search filter, open, Duplicate/Delete); `src/app/App.test.tsx` ("flushes a dirty project on pagehide", "does not flush when the project is clean", device-prefs bootstrap/persist); e2e `e2e/persistence.spec.ts` ("saves a project and reopens it with the score intact") |
+| Templates | `src/features/projects/DashboardPage.test.tsx` ("shows the three project templates", "'New from template' creates a project seeded with the template score") |
+| Settings/theme | `src/app/App.test.tsx` ("bootstraps persisted device prefs (theme + developer mode) into the store", "persists a theme change back to device prefs after bootstrap"); `src/app/theme.test.ts` (`resolveColorScheme`/`getSystemColorScheme`, `applyDocumentTheme` dark-class toggling); `src/components/dialogs/DeveloperSettingsDialog.test.tsx` |
+| Shortcut help | `src/components/dialogs/ShortcutHelpDialog.test.tsx` ("lists the spec §7 shortcut table when open", "close button calls onClose", "every interactive control has an accessible name") |
+| Sign-in gate | `src/app/App.test.tsx` ("renders the home page once signed in (fake auth resolves immediately)", "shows the sign-in screen when the auth backend reports signed-out") |
+
+## A11y smoke coverage
+
+Every dialog/panel with meaningful interactive surface carries its own `describe('accessibility (spec §27)')` (or equivalently named) "every interactive control has an accessible name" test, run as part of the normal `bun run test` suite (not a separate pass):
+
+- `src/features/piano-roll/PianoRollToolbar.test.tsx`
+- `src/components/dialogs/MidiImportWizard.test.tsx`
+- `src/components/dialogs/MusicXmlImportDialog.test.tsx`
+- `src/components/dialogs/ShortcutHelpDialog.test.tsx`
+- `src/components/dialogs/DeveloperSettingsDialog.test.tsx`
+- `src/features/generation/GenerationPanel.test.tsx`
+- `src/features/generation/RegenerationPanel.test.tsx`
+- `src/features/generation/CandidateList.test.tsx`
+
+All of the above passed unchanged after the MUI removal (T13) — no accessible-name regressions were found, so no fixes were required.
+
+## MUI removal verification
+
+- `grep -rn "@mui\|@emotion" src e2e` — no matches.
+- `@mui/material`, `@mui/icons-material`, `@emotion/react`, `@emotion/styled` removed from `package.json`; `bun install` run clean.
+- `grep -ri "mui" dist/assets/*.js` — no matches after `bun run build`.
+- `bun run verify` (typecheck + lint + test + build) green.
+- `bun run test:e2e` — 10/10 specs pass.

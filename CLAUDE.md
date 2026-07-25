@@ -1,0 +1,47 @@
+# music_app (ScoreSmith)
+
+The ScoreSmith web app: routing, pages, and UI only. One of five repos in the ScoreSmith family — see [Related Projects](#related-projects). All business logic (score model, commands, rendering/audio adapters, Zustand store) lives in `@sudobility/music_lib`; all networking goes through `@sudobility/music_client`; the backend (OpenAI proxy + project persistence) is the sibling `music_api` repo. See [docs/architecture.md](docs/architecture.md) for the full five-repo picture and request flows.
+
+## Tech Stack
+
+- React 19, TypeScript (strict), Vite, React Router
+- **Tailwind CSS** (`@sudobility/design`'s preset, `darkMode: 'class'`) — **no MUI/Emotion** (removed in T13; see Gotchas)
+- `@sudobility/components` / `@sudobility/building_blocks` / `@sudobility/auth-components` for shared UI primitives (buttons, dialogs, spinners, sign-in forms)
+- Zustand app store, VexFlow rendering, Tone.js playback — all via `@sudobility/music_lib`, never imported directly here
+- `@tanstack/react-query` for server-state (dashboard project list) via `@sudobility/music_client`'s hooks
+- Firebase Auth (real backend) / an in-process e2e shim (`VITE_E2E=1`)
+- Bun for scripts; Vitest + Testing Library + jsdom for unit/component tests; Playwright for e2e
+
+## Commands
+
+- `bun install` — install dependencies
+- `bun run dev` — Vite dev server, port 5173
+- `bun run verify` — typecheck + lint + test + build (run before any push)
+- `bun run test` / `bun run test:watch` — Vitest (313 component/unit tests as of T13)
+- `bun run test:e2e` — Playwright (`e2e/*.spec.ts`, 10 specs); boots `music_api` from `../music_api` (`AI_TEST_MODE=1`, no real OpenAI) and the dev server (`VITE_E2E=1`) itself — needs a local Postgres `music_test` DB and `../music_api`'s deps already installed. Kill anything on 5173/8023 first (`reuseExistingServer` will otherwise silently attach to whatever's already there).
+- `bun run build` — `tsc -b && vite build`
+
+## Structure
+
+- `src/app/` — `App.tsx` (composition root: auth gate, React Query provider, router, error boundary, theme application), `theme.ts` (`resolveColorScheme`/`applyDocumentTheme`/`prefersReducedMotion` — no MUI theme object anymore), `router.tsx`, `AuthContext.tsx`, `SignInScreen.tsx`
+- `src/config/initialize.ts` — the composition root's actual construction: `FetchNetworkClient` (the one `fetch()` call site in the app), `MusicClient`, Firebase/e2e `AuthBackend`, `PrefsStorage`, and `music_lib`'s `StoreContext` — see [docs/architecture.md](docs/architecture.md#the-store-context-injection-pattern)
+- `src/components/` — `layout/` (AppLayout, TrackPanel, Toasts), `transport/` (TransportBar), `inspector/`, `dialogs/` (MidiImportWizard, MusicXmlImportDialog, ShortcutHelpDialog, DeveloperSettingsDialog), `shell/`
+- `src/features/` — `score-editor/` (ScoreEditorView, EditorToolbar, useEditorShortcuts, hit-test), `piano-roll/` (PianoRollView, PianoRollToolbar, geometry, interactions), `generation/` (GenerationPanel, RegenerationPanel, CandidateList, preview), `projects/` (DashboardPage)
+- `src/stubs/` — stand-ins for `@sudobility/building_blocks`' optional peer deps this app doesn't install (`subscription-components`, `devops-components`, `subscription_lib`), aliased in `vite.config.ts`. This is the sudobility "stubs system" pattern — see that package's own CLAUDE.md; every stub module is a no-op/empty-state implementation, never partially wired.
+- `src/test/` — `app-services.ts` (`installTestAppServices`/`resetTestAppServices`: wires `music_lib`'s `testStoreContext()` fakes into `getAppServices()` so components under test never hit real Firebase/network), `setup.ts`
+- `e2e/` — Playwright specs + `helpers.ts` + `global-setup.ts` (truncates the `music_test` DB)
+- `docs/` — `architecture.md` (five-repo architecture, request flows, store-context pattern), `parity-checklist.md` (feature → test mapping), `spec.md` (product spec)
+
+## Gotchas
+
+- **No MUI/Emotion anywhere** (T13) — dark mode is a Tailwind `dark` class on `<html>`, toggled by `applyDocumentTheme()` from an effect in `App.tsx` that also listens for OS `prefers-color-scheme` changes when `themeMode === 'system'`. `ScoreEditorView`'s VexFlow render-theme colors are still literal hex strings (`LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`) — VexFlow draws straight to SVG attributes, not CSS, so this is deliberate, not a leftover.
+- `VITE_E2E=1` swaps Firebase Auth for a fixed-identity in-process shim (`e2eBackend()` in `config/initialize.ts`) — never enable it outside Playwright/dev.
+- No business logic belongs in this repo. If you're about to write score math, a new command, an adapter, or a store slice, it almost certainly belongs in `music_lib` instead.
+- `vite.config.ts` excludes `@sudobility/music_lib` from dev-mode dep pre-bundling (esbuild's prebundler doesn't handle the lib's `new Worker(new URL(...))` calls) — don't "fix" that exclusion without checking the MIDI-import/quantize workers still resolve in dev.
+
+## Related Projects
+
+- `music_types` — shared types/schemas (`@sudobility/music_types`)
+- `music_client` — typed network client + React Query hooks (`@sudobility/music_client`)
+- `music_lib` — domain model, commands, adapters, Zustand store (`@sudobility/music_lib`)
+- `music_api` — backend: Hono + Drizzle + PostgreSQL, OpenAI proxy, Firebase auth (private, not published)

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAppTheme, getSystemColorScheme, prefersReducedMotion, resolveColorScheme } from '@/app/theme';
+import { applyDocumentTheme, getSystemColorScheme, prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  document.documentElement.classList.remove('dark');
 });
 
 describe('getSystemColorScheme / resolveColorScheme', () => {
@@ -52,31 +53,27 @@ describe('prefersReducedMotion (spec §27)', () => {
   });
 });
 
-describe('createAppTheme (spec §27 reduced-motion)', () => {
-  it('keeps MUI default (non-zero) transition durations when reduced motion is not preferred', () => {
-    const theme = createAppTheme('light');
-    expect(theme.transitions.duration.standard).toBeGreaterThan(0);
+// Post-T13 (MUI removal): there is no more MUI `Theme` object to assert
+// palette/transition values against. `createAppTheme` is gone; the only
+// thing left for the app shell to "apply" is the Tailwind `dark` class on
+// `<html>` (`darkMode: 'class'`, see `tailwind.config.js` and the `.dark`
+// variable block in `src/index.css`), so these tests assert that DOM
+// side effect directly instead of a theme-object shape.
+describe('applyDocumentTheme', () => {
+  it('adds the "dark" class to <html> for the dark scheme', () => {
+    applyDocumentTheme('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
-  it('zeroes every transition duration and disables transitions.create() when the user prefers reduced motion', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn().mockReturnValue({ matches: true } as MediaQueryList),
-    );
-    const theme = createAppTheme('light');
-
-    expect(theme.transitions.duration.standard).toBe(0);
-    expect(theme.transitions.duration.enteringScreen).toBe(0);
-    expect(theme.transitions.duration.leavingScreen).toBe(0);
-    expect(theme.transitions.create('opacity')).toBe('none');
+  it('removes the "dark" class from <html> for the light scheme', () => {
+    document.documentElement.classList.add('dark');
+    applyDocumentTheme('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
-  it('still applies the requested palette mode when reduced motion is preferred', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn().mockReturnValue({ matches: true } as MediaQueryList),
-    );
-    const theme = createAppTheme('dark');
-    expect(theme.palette.mode).toBe('dark');
+  it('is idempotent when applied repeatedly with the same scheme', () => {
+    applyDocumentTheme('dark');
+    applyDocumentTheme('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 });
