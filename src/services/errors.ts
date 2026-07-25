@@ -99,7 +99,6 @@ export function reportError(err: unknown, options: ReportErrorOptions = {}): voi
   });
 
   if (isDev()) {
-    // eslint-disable-next-line no-console
     console.debug('[ScoreSmith error]', options.context ?? '(no context)', err);
   }
 }
