@@ -7,15 +7,15 @@
  *
  * Pure DOM adapter: no store/React imports (spec §3, §37).
  */
-import { Beam, Formatter, Renderer as VexRenderer, Stave, StaveConnector, StaveTie, Voice } from 'vexflow';
+import { Accidental, Beam, Formatter, Renderer as VexRenderer, Stave, StaveConnector, StaveTie, Voice } from 'vexflow';
 import type { StaveNote } from 'vexflow';
 import type { KeySignature, Measure, Score, TimeSignature, Track } from '@/domain/score/types';
-import { buildVoiceContent, keySignatureToVexSpec } from '@/adapters/vexflow/convert';
+import { buildVoiceContent, keySignatureToVexSpec, pitchToVexKey } from '@/adapters/vexflow/convert';
 import type { NoteMeta } from '@/adapters/vexflow/convert';
 import { buildEventMaps, buildMeasureMap } from '@/adapters/vexflow/id-map';
-import { computeLayout } from '@/adapters/vexflow/layout';
+import { computeLayout, resolveZoom } from '@/adapters/vexflow/layout';
 import type { MeasureLayout } from '@/adapters/vexflow/layout';
-import type { RenderOptions, RenderResult, RenderTheme, ScoreChangeSet, ScoreRenderer } from '@/adapters/vexflow/types';
+import type { RenderOptions, RenderResult, ScoreChangeSet, ScoreRenderer } from '@/adapters/vexflow/types';
 
 function sameTimeSignature(a: TimeSignature, b: TimeSignature): boolean {
   return a.numerator === b.numerator && a.denominator === b.denominator;
@@ -26,7 +26,7 @@ function sameKeySignature(a: KeySignature, b: KeySignature): boolean {
 }
 
 /** A single note/rest "channel" (spec §25 voice-ordinal convention, mirrored from `domain/score/ties.ts`) accumulated across a track's measures, for cross-measure/cross-decomposition tie detection. */
-type Channel = Array<{ note: StaveNote; meta: NoteMeta }>;
+export type Channel = Array<{ note: StaveNote; meta: NoteMeta }>;
 
 /** Builds one measure's `Stave`, its VexFlow `Voice`s, and its beams; records notes into `channels` for tie building. */
 function buildMeasureContent(
@@ -77,19 +77,55 @@ function buildMeasureContent(
     allMetas.push(...metas);
   });
 
+  // Accidental *glyphs* are decided here, once per measure, across every
+  // voice on this stave — never unconditionally per note (see convert.ts):
+  // VexFlow's own key-signature-and-context-aware logic decides whether a
+  // sharp/flat/natural is actually needed (e.g. no redundant accidental on
+  // an in-key F# in G major), reading each note's spelling straight out of
+  // the `keys` string `convert.ts` already built.
+  if (voices.length > 0) {
+    Accidental.applyAccidentals(voices, keySignatureToVexSpec(measure.keySignature));
+  }
+
   return { stave, voices, beams };
 }
 
-/** Ties every adjacent (tieStart, tieStop) pair in a voice-ordinal channel — covers both cross-barline ties and same-measure duration-decomposition ties uniformly. */
-function buildTies(channel: Channel): StaveTie[] {
+/**
+ * Ties every adjacent pair of notes in a voice-ordinal channel whose keys
+ * actually match by pitch — covers both cross-barline ties and same-measure
+ * duration-decomposition ties with one mechanism. Matches by pitch, never
+ * by array index/adjacency (a chord where only one of several members ties
+ * forward must produce exactly one `StaveTie`, on the correct key indices
+ * on each side — see `KeyTie`'s doc in convert.ts and
+ * `domain/score/ties.ts`'s `findForwardPartner`/`findBackwardPartner`,
+ * which requires the same tick/pitch/tie-flag matching for the same
+ * reason: a same-tick note sharing a channel by coincidence must not be
+ * spliced in).
+ */
+export function buildTies(channel: Channel): StaveTie[] {
   const ties: StaveTie[] = [];
   for (let i = 0; i < channel.length - 1; i += 1) {
     const a = channel[i];
     const b = channel[i + 1];
-    if (!a.meta.tieStart || !b.meta.tieStop) continue;
-    const keyCount = Math.min(a.note.getKeys().length, b.note.getKeys().length);
-    const indices = Array.from({ length: keyCount }, (_, idx) => idx);
-    ties.push(new StaveTie({ first_note: a.note, last_note: b.note, first_indices: indices, last_indices: indices }));
+    if (a.meta.isRest || b.meta.isRest || !a.meta.tieStart || !b.meta.tieStop) continue;
+
+    const firstIndices: number[] = [];
+    const lastIndices: number[] = [];
+    const usedB = new Set<number>();
+    a.meta.keyTies.forEach((aKey, aIndex) => {
+      if (!aKey.tieStart) return;
+      const aSpelling = pitchToVexKey(aKey.pitch);
+      const bIndex = b.meta.keyTies.findIndex(
+        (bKey, idx) => !usedB.has(idx) && bKey.tieStop && pitchToVexKey(bKey.pitch) === aSpelling,
+      );
+      if (bIndex === -1) return;
+      usedB.add(bIndex);
+      firstIndices.push(aIndex);
+      lastIndices.push(bIndex);
+    });
+
+    if (firstIndices.length === 0) continue;
+    ties.push(new StaveTie({ first_note: a.note, last_note: b.note, first_indices: firstIndices, last_indices: lastIndices }));
   }
   return ties;
 }
@@ -107,14 +143,25 @@ export class VexFlowScoreRenderer implements ScoreRenderer {
     // render()/update() calls would stack up duplicate <svg> elements.
     container.replaceChildren();
 
+    const zoom = resolveZoom(options.zoom);
     const plan = computeLayout(score, options);
+    // `plan.totalWidth`/`totalHeight` are LOGICAL (unscaled) units — see
+    // layout.ts. The <svg>'s own width/height attributes must be the final
+    // on-screen size, so those are the zoom-scaled values; `ctx.scale`
+    // below (a viewBox scale) then maps the logical coordinate space every
+    // draw call below uses onto that on-screen size, so glyphs/text scale
+    // uniformly with spacing instead of staying a fixed size while only the
+    // layout stretches.
+    const scaledWidth = Math.max(1, Math.ceil(plan.totalWidth * zoom));
+    const scaledHeight = Math.max(1, Math.ceil(plan.totalHeight * zoom));
     // VexFlow's typings require HTMLDivElement specifically (legacy DOM
     // props like `align`); our contract takes the broader HTMLElement
     // (spec §26), and VexFlow only actually requires a plain container to
     // append an <svg> into, so the cast is safe.
     const vexRenderer = new VexRenderer(container as HTMLDivElement, VexRenderer.Backends.SVG);
-    vexRenderer.resize(Math.max(1, Math.ceil(plan.totalWidth)), Math.max(1, Math.ceil(plan.totalHeight)));
+    vexRenderer.resize(scaledWidth, scaledHeight);
     const ctx = vexRenderer.getContext();
+    ctx.scale(zoom, zoom);
 
     const allMetas: NoteMeta[] = [];
     const allMeasureIds: string[] = [];
@@ -191,10 +238,20 @@ export class VexFlowScoreRenderer implements ScoreRenderer {
       });
     }
 
-    const { idToElement, idToBBox } = buildEventMaps(container, allMetas);
-    const measureIdToBBox = buildMeasureMap(container, allMeasureIds);
+    // Paint the whole drawn notation with the theme's foreground color.
+    // VexFlow draws in black by default (each shape's own `fill`/`stroke`
+    // presentation attribute — see `paintDescendants`'s doc), which would
+    // stay black-on-dark under a dark theme if left alone. Every element
+    // `applyHighlights` later un-highlights is reset back to this same
+    // foreground (not removed/cleared), so notation never reverts to
+    // VexFlow's default black.
+    const svgRoot = container.querySelector('svg');
+    if (svgRoot) paintDescendants(svgRoot, options.theme.foreground);
 
-    return { idToElement, idToBBox, measureIdToBBox, height: plan.totalHeight };
+    const { idToElement, idToBBox } = buildEventMaps(container, allMetas, zoom);
+    const measureIdToBBox = buildMeasureMap(container, allMeasureIds, zoom);
+
+    return { idToElement, idToBBox, measureIdToBBox, height: scaledHeight, theme: options.theme };
   }
 
   update(score: Score, _changes: ScoreChangeSet, container: HTMLElement, _previous: RenderResult): RenderResult {
@@ -224,17 +281,40 @@ const HIGHLIGHT_CLASSES = ['selected', 'playing', 'preview'] as const;
 const PAINTED_DESCENDANTS_SELECTOR = 'path, rect, ellipse, circle, polygon, polyline, line, text';
 
 /**
- * Sets inline `fill` on `element` and every shape descendant (or clears it
- * when `color` is `null`). VexFlow's drawn shapes already carry their own
- * `fill` presentation attribute (lowest CSS priority); an inherited `fill`
- * set only on the ancestor group would never win over that, so we paint
- * each shape directly instead of relying on CSS inheritance.
+ * Recolors `root` and every shape descendant to `color`, in two parts:
+ *
+ * 1. **Ambient**: sets inline `style.fill`/`style.stroke` on `root` itself.
+ *    VexFlow's SVG backend skips writing a `fill`/`stroke` attribute on a
+ *    shape when it would just duplicate the value already applied to its
+ *    enclosing group, relying on ordinary SVG inheritance instead
+ *    (`SVGContext.applyAttributes` diffs against `groupAttributes`) — so
+ *    most glyph paths (e.g. a notehead) carry *no* `fill` attribute of
+ *    their own at all, and would never be touched by an attribute-presence
+ *    check. Setting `root`'s inline style gives every such descendant a
+ *    color to inherit. This is also what makes per-element highlighting
+ *    work: painting a single note's `<g class="vf-stavenote">` ambiently
+ *    recolors its notehead via the same inheritance path.
+ *
+ * 2. **Override**: every descendant that has its *own* explicit `fill`/
+ *    `stroke` presentation attribute breaks that inheritance chain and
+ *    must be repainted directly (inline `style` always wins over the same
+ *    element's presentation attribute, regardless of value) — e.g. a
+ *    ledger line explicitly stroked `"#444"`. Never touch a property the
+ *    shape explicitly declared `"none"` (VexFlow always declares whichever
+ *    of `fill`/`stroke` a given shape doesn't use as `"none"` on itself —
+ *    see `SVGContext.fill`/`.stroke`): doing so would turn a glyph's
+ *    `stroke="none"` into a visible outline, or fill in an open tie/slur
+ *    curve's implicit closing segment.
  */
-function paintDescendants(element: SVGElement, color: string | null): void {
-  const targets: SVGElement[] = [element, ...Array.from(element.querySelectorAll<SVGElement>(PAINTED_DESCENDANTS_SELECTOR))];
-  for (const target of targets) {
-    if (color === null) target.style.removeProperty('fill');
-    else target.style.fill = color;
+function paintDescendants(root: SVGElement, color: string): void {
+  root.style.fill = color;
+  root.style.stroke = color;
+
+  for (const target of root.querySelectorAll<SVGElement>(PAINTED_DESCENDANTS_SELECTOR)) {
+    const fillAttr = target.getAttribute('fill');
+    if (fillAttr !== null && fillAttr !== 'none') target.style.fill = color;
+    const strokeAttr = target.getAttribute('stroke');
+    if (strokeAttr !== null && strokeAttr !== 'none') target.style.stroke = color;
   }
 }
 
@@ -246,20 +326,23 @@ function paint(result: RenderResult, id: string, cls: string, color: string): vo
 }
 
 /**
- * Sets/clears `.selected` / `.playing` / `.preview` classes and fill colors
- * (from `theme`) on the elements in `result.idToElement` named by
- * `highlights`. Every previously-painted element is reset first, so calling
- * this again with a smaller/different set correctly un-highlights whatever
- * fell out. When an id appears in more than one set, `playing` wins over
- * `selected`, which wins over `preview` (applied in that order, last wins).
+ * Sets/clears `.selected` / `.playing` / `.preview` classes and fill/stroke
+ * colors (from `result.theme`) on the elements in `result.idToElement`
+ * named by `highlights`. Every previously-painted element is reset first —
+ * back to `result.theme.foreground` (the color the base notation was drawn
+ * with, not VexFlow's default black/removed-property) — so calling this
+ * again with a smaller/different set correctly un-highlights whatever fell
+ * out without ever reverting to an untheme color. When an id appears in
+ * more than one set, `playing` wins over `selected`, which wins over
+ * `preview` (applied in that order, last wins).
  */
-export function applyHighlights(result: RenderResult, highlights: HighlightSets, theme: RenderTheme): void {
+export function applyHighlights(result: RenderResult, highlights: HighlightSets): void {
   for (const element of result.idToElement.values()) {
     for (const cls of HIGHLIGHT_CLASSES) element.classList.remove(cls);
-    paintDescendants(element, null);
+    paintDescendants(element, result.theme.foreground);
   }
 
-  for (const id of highlights.previewIds) paint(result, id, 'preview', theme.preview);
-  for (const id of highlights.selectedIds) paint(result, id, 'selected', theme.selection);
-  for (const id of highlights.playingIds) paint(result, id, 'playing', theme.playback);
+  for (const id of highlights.previewIds) paint(result, id, 'preview', result.theme.preview);
+  for (const id of highlights.selectedIds) paint(result, id, 'selected', result.theme.selection);
+  for (const id of highlights.playingIds) paint(result, id, 'playing', result.theme.playback);
 }

@@ -1,14 +1,40 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyHighlights, VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
+import { Accidental, StaveNote, Voice } from 'vexflow';
+import { applyHighlights, buildTies, VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
+import type { Channel } from '@/adapters/vexflow/renderer';
+import { buildVoiceContent, keySignatureToVexSpec } from '@/adapters/vexflow/convert';
+import type { NoteMeta } from '@/adapters/vexflow/convert';
 import type { RenderOptions, RenderTheme } from '@/adapters/vexflow/types';
+import type { KeySignature, NoteEvent, Pitch } from '@/domain/score/types';
 import { allNotes } from '@/domain/score/queries';
+import { ticksFor } from '@/domain/time/ticks';
 import { chordScore, twinkleScore, twoTrackScore } from '@/test/fixtures';
 
-const theme: RenderTheme = { foreground: '#111', selection: '#06f', playback: '#f60', preview: '#999' };
+// rgb(...) form (not hex): jsdom's CSSOM normalizes any color assigned to
+// `.style.fill`/`.style.stroke` to this form when read back, so tests that
+// compare against `theme.*` directly need the constant already in that form.
+const theme: RenderTheme = {
+  foreground: 'rgb(17, 17, 17)',
+  selection: 'rgb(0, 102, 255)',
+  playback: 'rgb(255, 102, 0)',
+  preview: 'rgb(153, 153, 153)',
+};
 
 function options(overrides: Partial<RenderOptions> = {}): RenderOptions {
   return { zoom: 1, layoutMode: 'page', width: 900, theme, ...overrides };
 }
+
+// NOTE on the two tests below: `paintDescendants` (renderer.ts) recolors
+// most glyph paths (e.g. a notehead) purely via SVG *inheritance* — it sets
+// `style.fill`/`style.stroke` on the note's own `<g>` group (the value
+// returned in `idToElement`), which cascades down to child paths that carry
+// no `fill`/`stroke` attribute of their own (VexFlow's SVG backend omits an
+// attribute that would just duplicate its enclosing group's value). jsdom
+// does not implement CSS inheritance computation (`getComputedStyle` on an
+// SVG child won't reflect an ancestor's inline style), so these tests
+// assert on the *group* element's own inline style — the actual mechanism —
+// rather than trying to read a (jsdom-unsupported) computed/inherited value
+// off a child shape.
 
 let container: HTMLDivElement;
 let renderer: VexFlowScoreRenderer;
@@ -138,7 +164,8 @@ describe('VexFlowScoreRenderer.update', () => {
   it('throws if called before render()', () => {
     const score = twinkleScore();
     const fresh = new VexFlowScoreRenderer();
-    expect(() => fresh.update(score, 'all', container, { idToElement: new Map(), idToBBox: new Map(), measureIdToBBox: new Map(), height: 0 })).toThrow();
+    const emptyResult = { idToElement: new Map(), idToBBox: new Map(), measureIdToBBox: new Map(), height: 0, theme };
+    expect(() => fresh.update(score, 'all', container, emptyResult)).toThrow();
   });
 });
 
@@ -158,12 +185,12 @@ describe('applyHighlights', () => {
     const result = renderer.render(score, container, options());
     const [a, b, c] = allNotes(score);
 
-    applyHighlights(result, { selectedIds: [a.id], playingIds: [b.id], previewIds: [c.id] }, theme);
+    applyHighlights(result, { selectedIds: [a.id], playingIds: [b.id], previewIds: [c.id] });
     expect(result.idToElement.get(a.id)?.classList.contains('selected')).toBe(true);
     expect(result.idToElement.get(b.id)?.classList.contains('playing')).toBe(true);
     expect(result.idToElement.get(c.id)?.classList.contains('preview')).toBe(true);
 
-    applyHighlights(result, { selectedIds: [], playingIds: [], previewIds: [] }, theme);
+    applyHighlights(result, { selectedIds: [], playingIds: [], previewIds: [] });
     expect(result.idToElement.get(a.id)?.classList.contains('selected')).toBe(false);
     expect(result.idToElement.get(b.id)?.classList.contains('playing')).toBe(false);
     expect(result.idToElement.get(c.id)?.classList.contains('preview')).toBe(false);
@@ -172,8 +199,218 @@ describe('applyHighlights', () => {
   it('ignores unknown ids without throwing', () => {
     const score = twinkleScore();
     const result = renderer.render(score, container, options());
-    expect(() =>
-      applyHighlights(result, { selectedIds: ['nope'], playingIds: [], previewIds: [] }, theme),
-    ).not.toThrow();
+    expect(() => applyHighlights(result, { selectedIds: ['nope'], playingIds: [], previewIds: [] })).not.toThrow();
+  });
+
+  it('paints highlighted notes with theme colors and restores the base foreground on un-highlight (finding 2)', () => {
+    const score = twinkleScore();
+    const result = renderer.render(score, container, options());
+    const [a] = allNotes(score);
+    const element = result.idToElement.get(a.id);
+    expect(element).toBeDefined();
+
+    applyHighlights(result, { selectedIds: [a.id], playingIds: [], previewIds: [] });
+    expect(element?.style.fill).toBe(theme.selection);
+    expect(element?.style.stroke).toBe(theme.selection);
+
+    applyHighlights(result, { selectedIds: [], playingIds: [], previewIds: [] });
+    expect(element?.style.fill).toBe(theme.foreground);
+    expect(element?.style.stroke).toBe(theme.foreground);
+  });
+
+  it("carries the render's theme on the result for applyHighlights to use", () => {
+    const score = twinkleScore();
+    const result = renderer.render(score, container, options());
+    expect(result.theme).toBe(theme);
+  });
+});
+
+describe('base notation theming (finding 2)', () => {
+  it('paints the whole render with the theme foreground, not VexFlow default black', () => {
+    // render() sets the ambient fill/stroke on the <svg> root itself, which
+    // every glyph without its own fill/stroke attribute inherits (see
+    // paintDescendants's doc) — this is the directly-observable effect in
+    // jsdom (which doesn't compute real CSS inheritance for descendants).
+    const score = twinkleScore();
+    renderer.render(score, container, options());
+    const svg = container.querySelector('svg');
+    expect(svg?.style.fill).toBe(theme.foreground);
+    expect(svg?.style.stroke).toBe(theme.foreground);
+  });
+
+  it('overrides an explicitly-colored descendant (e.g. a ledger line) directly, not just via inheritance', () => {
+    // Twinkle's melody dips below the staff (e.g. a low C), which draws a
+    // ledger line — a path VexFlow explicitly strokes with its own color
+    // attribute (breaking inheritance from the <svg> root), so it must be
+    // repainted directly rather than relying on the ambient fill/stroke.
+    const score = twinkleScore();
+    const result = renderer.render(score, container, options());
+    const [a] = allNotes(score);
+    const element = result.idToElement.get(a.id)!;
+    const explicitlyStroked = Array.from(element.querySelectorAll<SVGElement>('path')).find((el) => {
+      const strokeAttr = el.getAttribute('stroke');
+      return strokeAttr !== null && strokeAttr !== 'none';
+    });
+    expect(explicitlyStroked).toBeDefined();
+    expect(explicitlyStroked?.style.stroke).toBe(theme.foreground);
+  });
+});
+
+describe('zoom (finding 4)', () => {
+  it('scales the reported height roughly proportionally with zoom, holding layout (system count) fixed', () => {
+    // Continuous mode keeps every measure in one system regardless of zoom
+    // (layout.ts divides the *page-mode* width budget by zoom; continuous
+    // mode ignores width entirely), so the only source of height
+    // difference between these two renders is the zoom scale itself, not a
+    // different number of systems.
+    const score = twinkleScore();
+    const atZoom1 = new VexFlowScoreRenderer();
+    const c1 = document.createElement('div');
+    document.body.appendChild(c1);
+    const r1 = atZoom1.render(score, c1, options({ zoom: 1, layoutMode: 'continuous' }));
+
+    const atZoom2 = new VexFlowScoreRenderer();
+    const c2 = document.createElement('div');
+    document.body.appendChild(c2);
+    const r2 = atZoom2.render(score, c2, options({ zoom: 2, layoutMode: 'continuous' }));
+
+    expect(r2.height).toBeGreaterThan(r1.height * 1.8);
+    expect(r2.height).toBeLessThan(r1.height * 2.2);
+
+    atZoom1.dispose();
+    atZoom2.dispose();
+    c1.remove();
+    c2.remove();
+  });
+
+  it('applies an SVG viewBox scale (context.scale) rather than only stretching layout spacing', () => {
+    const score = twinkleScore();
+    renderer.render(score, container, options({ zoom: 2 }));
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('viewBox')).toBeTruthy();
+    const [, , vbWidth] = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number);
+    const svgWidth = Number(svg?.getAttribute('width'));
+    // viewBox width (logical) should be roughly half the <svg> width (screen
+    // pixels) at zoom 2 — i.e. the viewBox, not per-metric multiplication,
+    // is what's carrying the zoom factor.
+    expect(vbWidth).toBeGreaterThan(0);
+    expect(svgWidth / vbWidth).toBeGreaterThan(1.8);
+    expect(svgWidth / vbWidth).toBeLessThan(2.2);
+  });
+});
+
+function pitch(step: Pitch['step'], accidental: Pitch['accidental'], octave: number): Pitch {
+  return { step, accidental, octave };
+}
+
+/** A single-note (non-chord) channel entry, built the same way renderer.ts does. */
+function channelEntryFor(events: NoteEvent[]): { note: StaveNote; meta: NoteMeta } {
+  const { notes, metas } = buildVoiceContent(events, 480);
+  return { note: notes[0], meta: metas[0] };
+}
+
+describe('buildTies (finding 1: pitch-matched chord ties, not array adjacency)', () => {
+  it('ties only the one chord member that actually ties forward, on the correct key indices', () => {
+    const quarter = ticksFor('quarter', 480);
+    // Measure 1 chord: C4 (ties forward), E4 (does not), G4 (does not).
+    const chordA = channelEntryFor([
+      { id: 'a-c', pitch: pitch('C', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't', tieStart: true },
+      { id: 'a-e', pitch: pitch('E', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+      { id: 'a-g', pitch: pitch('G', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ]);
+    // Measure 2 chord: C4 (receives the tie), F4, A4 — different pitches
+    // than measure 1's E4/G4, and NOT flagged tieStop, so array-index
+    // matching (old behavior) would have wrongly tied E4->F4 and G4->A4
+    // too, on top of getting C4 right only by coincidence of index 0.
+    const chordB = channelEntryFor([
+      { id: 'b-c', pitch: pitch('C', 0, 4), startTick: quarter, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't', tieStop: true },
+      { id: 'b-f', pitch: pitch('F', 0, 4), startTick: quarter, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+      { id: 'b-a', pitch: pitch('A', 0, 4), startTick: quarter, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ]);
+    const channel: Channel = [chordA, chordB];
+
+    const ties = buildTies(channel);
+    expect(ties).toHaveLength(1);
+    const { first_indices, last_indices } = ties[0].getNotes();
+    expect(first_indices).toEqual([0]); // C4 is index 0 in chordA's keys
+    expect(last_indices).toEqual([0]); // C4 is index 0 in chordB's keys too (coincidentally), but chosen by pitch match
+  });
+
+  it('produces no tie when the flagged pitches do not actually match between the two notes', () => {
+    const quarter = ticksFor('quarter', 480);
+    const a = channelEntryFor([
+      { id: 'a', pitch: pitch('C', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't', tieStart: true },
+    ]);
+    // tieStop is set, but the pitch is different (D4 vs C4) — e.g. corrupt
+    // data, or two coincidentally-adjacent unrelated notes; must not tie.
+    const b = channelEntryFor([
+      { id: 'b', pitch: pitch('D', 0, 4), startTick: quarter, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't', tieStop: true },
+    ]);
+    const ties = buildTies([a, b]);
+    expect(ties).toHaveLength(0);
+  });
+
+  it('ties every matching member of an all-tied chord (all pitches identical)', () => {
+    const half = ticksFor('half', 480);
+    const a = channelEntryFor([
+      { id: 'a-c', pitch: pitch('C', 0, 4), startTick: 0, durationTicks: half, velocity: 80, voiceId: 'v', trackId: 't', tieStart: true },
+      { id: 'a-e', pitch: pitch('E', 0, 4), startTick: 0, durationTicks: half, velocity: 80, voiceId: 'v', trackId: 't', tieStart: true },
+    ]);
+    const b = channelEntryFor([
+      { id: 'b-c', pitch: pitch('C', 0, 4), startTick: half, durationTicks: half, velocity: 80, voiceId: 'v', trackId: 't', tieStop: true },
+      { id: 'b-e', pitch: pitch('E', 0, 4), startTick: half, durationTicks: half, velocity: 80, voiceId: 'v', trackId: 't', tieStop: true },
+    ]);
+    const ties = buildTies([a, b]);
+    expect(ties).toHaveLength(1);
+    const { first_indices, last_indices } = ties[0].getNotes();
+    expect(first_indices).toEqual([0, 1]);
+    expect(last_indices).toEqual([0, 1]);
+  });
+});
+
+describe('key-signature-aware accidentals (finding 3)', () => {
+  /** Mirrors exactly what renderer.ts's buildMeasureContent does: build notes, then let VexFlow decide accidental glyphs from the key signature. */
+  function accidentalCategoriesFor(events: NoteEvent[], keySignature: KeySignature): string[][] {
+    const { notes } = buildVoiceContent(events, 480);
+    const voice = new Voice({ num_beats: 4, beat_value: 4 }).setMode(Voice.Mode.SOFT);
+    voice.addTickables(notes);
+    Accidental.applyAccidentals([voice], keySignatureToVexSpec(keySignature));
+    return notes.map((n) => n.getModifiers().filter((m) => m.getCategory() === 'Accidental').map(() => 'Accidental'));
+  }
+
+  const quarter = ticksFor('quarter', 480);
+  const gMajor: KeySignature = { fifths: 1, mode: 'major' };
+  const cMajor: KeySignature = { fifths: 0, mode: 'major' };
+
+  it('draws no accidental for an F# in G major (implied by the key signature)', () => {
+    const events: NoteEvent[] = [
+      { id: 'n', pitch: pitch('F', 1, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ];
+    const [categories] = accidentalCategoriesFor(events, gMajor);
+    expect(categories).toEqual([]);
+  });
+
+  it('draws a natural sign for an F-natural in G major (contradicts the key signature)', () => {
+    const events: NoteEvent[] = [
+      { id: 'n', pitch: pitch('F', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ];
+    const [categories] = accidentalCategoriesFor(events, gMajor);
+    expect(categories).toEqual(['Accidental']);
+  });
+
+  it('draws an accidental for a chromatic note in C major', () => {
+    const events: NoteEvent[] = [
+      { id: 'n', pitch: pitch('C', 1, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ];
+    const [categories] = accidentalCategoriesFor(events, cMajor);
+    expect(categories).toEqual(['Accidental']);
+  });
+
+  it('draws no accidental for an in-key natural note in C major', () => {
+    const events: NoteEvent[] = [
+      { id: 'n', pitch: pitch('D', 0, 4), startTick: 0, durationTicks: quarter, velocity: 80, voiceId: 'v', trackId: 't' },
+    ];
+    const [categories] = accidentalCategoriesFor(events, cMajor);
+    expect(categories).toEqual([]);
   });
 });

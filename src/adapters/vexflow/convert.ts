@@ -1,12 +1,17 @@
 /**
  * Domain -> VexFlow conversion helpers (spec §7, §26): pitch/duration/key
- * spelling, chord grouping, and building `StaveNote`s (with accidentals,
- * dots, articulations, rest handling) for one voice's worth of events.
+ * spelling, chord grouping, and building `StaveNote`s (with dots,
+ * articulations, rest handling, and per-key tie metadata) for one voice's
+ * worth of events. Accidental *glyphs* are deliberately NOT decided here —
+ * see the comment above the `Articulation`/`Dot` modifier block in
+ * `buildVoiceContent` — `renderer.ts` derives them per measure via
+ * VexFlow's own `Accidental.applyAccidentals`, which is key-signature- and
+ * context-aware.
  *
  * Pure-ish: builds VexFlow objects but never touches the DOM, a `Stave`'s
  * position, or a rendering context. No store/React imports (spec §3, §37).
  */
-import { Accidental, Articulation, Dot, StaveNote } from 'vexflow';
+import { Articulation, Dot, StaveNote } from 'vexflow';
 import type {
   Accidental as DomainAccidental,
   Articulation as DomainArticulation,
@@ -126,15 +131,30 @@ export function groupSimultaneous(events: MusicalEvent[]): MusicalEvent[][] {
   return groups;
 }
 
+/**
+ * Per-key tie state, parallel to a chord `StaveNote`'s `keys`/`getKeys()`
+ * array (index-for-index — both are built from the same `group` in
+ * `buildVoiceContent`). Ties must be matched between two adjacent notes by
+ * *pitch*, never by array index/adjacency alone: a chord where only one of
+ * several members ties into the next chord must produce exactly one
+ * `StaveTie`, on the matching key indices on each side — see
+ * `domain/score/ties.ts`'s `findForwardPartner`/`findBackwardPartner`,
+ * which documents the same requirement for the domain-level tie chain.
+ */
+export type KeyTie = { pitch: Pitch; tieStart: boolean; tieStop: boolean };
+
 /** One produced `StaveNote` (possibly a chord, possibly one segment of a tie-decomposed event) and the metadata needed to build id maps and cross-note ties. */
 export type NoteMeta = {
   /** The id set via `note.setAttribute('id', vexId)`; the drawn SVG group's id is `vf-${vexId}`. */
   vexId: string;
   /** Domain event ids this VexFlow note represents (>1 for a chord). */
   eventIds: string[];
+  /** `true` if any key ties out of/into this note — a cheap pre-filter; the actual tie must still be resolved per-key via `keyTies` (see its doc). */
   tieStart: boolean;
   tieStop: boolean;
   isRest: boolean;
+  /** Per-key tie state, parallel to the `StaveNote`'s keys. Empty for rests. */
+  keyTies: KeyTie[];
 };
 
 export type VoiceContent = { notes: StaveNote[]; metas: NoteMeta[] };
@@ -179,12 +199,17 @@ export function buildVoiceContent(events: MusicalEvent[], ppq: number): VoiceCon
         Dot.buildAndAttach([staveNote], { all: true });
       }
 
+      // Accidental glyphs are NOT added here: `keys` already embeds each
+      // note's absolute spelling (e.g. "f#/4"), and `renderer.ts` calls
+      // VexFlow's `Accidental.applyAccidentals(voices, keySpec)` once per
+      // measure, which decides — in light of the measure's key signature
+      // and any earlier accidental on the same pitch/octave in the measure
+      // — whether a sharp/flat/natural glyph is actually needed. Adding a
+      // modifier unconditionally here would draw a redundant accidental on
+      // every in-key altered note (e.g. every F# in G major).
       if (!isRest) {
         group.forEach((event, keyIndex) => {
           const noteEvent = event as NoteEvent;
-          if (noteEvent.pitch.accidental !== 0) {
-            staveNote.addModifier(new Accidental(ACCIDENTAL_SUFFIX[noteEvent.pitch.accidental]), keyIndex);
-          }
           if (noteEvent.articulation) {
             staveNote.addModifier(new Articulation(ARTICULATION_CODE[noteEvent.articulation]), keyIndex);
           }
@@ -198,10 +223,23 @@ export function buildVoiceContent(events: MusicalEvent[], ppq: number): VoiceCon
       const vexId = isFirstSegment ? first.id : `${first.id}::seg${segmentIndex}`;
       staveNote.setAttribute('id', vexId);
 
-      const domainTieStart = !isRest && group.some((e) => isNoteEvent(e) && e.tieStart);
-      const domainTieStop = !isRest && group.some((e) => isNoteEvent(e) && e.tieStop);
-      const tieStart = !isRest && (!isLastSegment || domainTieStart);
-      const tieStop = !isRest && (!isFirstSegment || domainTieStop);
+      // Every segment of a decomposed (non-standard-duration) note repeats
+      // the same chord keys, so per-key ties there are unconditional
+      // (`!isLastSegment` / `!isFirstSegment`) — only the *last* segment's
+      // outgoing tie and the *first* segment's incoming tie depend on the
+      // underlying domain event's own tieStart/tieStop.
+      const keyTies: KeyTie[] = isRest
+        ? []
+        : group.map((event) => {
+            const noteEvent = event as NoteEvent;
+            return {
+              pitch: noteEvent.pitch,
+              tieStart: !isLastSegment || Boolean(noteEvent.tieStart),
+              tieStop: !isFirstSegment || Boolean(noteEvent.tieStop),
+            };
+          });
+      const tieStart = keyTies.some((k) => k.tieStart);
+      const tieStop = keyTies.some((k) => k.tieStop);
 
       notes.push(staveNote);
       metas.push({
@@ -210,6 +248,7 @@ export function buildVoiceContent(events: MusicalEvent[], ppq: number): VoiceCon
         tieStart,
         tieStop,
         isRest,
+        keyTies,
       });
     });
   }

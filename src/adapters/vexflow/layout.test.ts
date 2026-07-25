@@ -68,13 +68,34 @@ describe('computeLayout', () => {
     expect(plan.tracks.map((t) => t.id)).toEqual([bass.id, treble.id]);
   });
 
-  it('scales measure width with zoom', () => {
+  it('keeps measure widths in fixed logical units, independent of zoom', () => {
+    // Zoom is applied once, uniformly, as an SVG viewBox scale in
+    // renderer.ts (finding: applying zoom to individual layout metrics
+    // instead left glyphs a fixed size while only spacing grew/shrank).
+    // Layout itself must therefore be zoom-invariant in logical units, at a
+    // screen width generous enough that neither zoom level changes system
+    // packing (so isFirstInSystem/header-width status can't confound the
+    // comparison).
     const score = chordScore();
-    const small = computeLayout(score, options({ zoom: 0.5 }));
-    const large = computeLayout(score, options({ zoom: 2 }));
-    const smallWidth = small.trackLayouts[0].measures[1].box.width;
-    const largeWidth = large.trackLayouts[0].measures[1].box.width;
-    expect(largeWidth).toBeGreaterThan(smallWidth);
+    const generousWidth = 5000;
+    const small = computeLayout(score, options({ zoom: 0.5, width: generousWidth }));
+    const large = computeLayout(score, options({ zoom: 2, width: generousWidth }));
+    expect(small.systems).toHaveLength(1);
+    expect(large.systems).toHaveLength(1);
+    // The measure box itself is zoom-invariant in logical units. (totalWidth
+    // is deliberately NOT compared here: it's floored at `options.width /
+    // zoom` so the page fills the given screen width, which legitimately
+    // differs in logical units between zoom levels — see computeLayout.)
+    expect(large.trackLayouts[0].measures[1].box.width).toBe(small.trackLayouts[0].measures[1].box.width);
+    expect(large.trackLayouts[0].measures[0].box.width).toBe(small.trackLayouts[0].measures[0].box.width);
+  });
+
+  it('divides the available screen width by zoom for page-mode wrapping, so a higher zoom fits fewer measures per system', () => {
+    const score = twinkleScore(); // 8 measures
+    const screenWidth = 900;
+    const zoomedOut = computeLayout(score, options({ zoom: 0.5, width: screenWidth }));
+    const zoomedIn = computeLayout(score, options({ zoom: 2, width: screenWidth }));
+    expect(zoomedOut.systems[0].measureIndices.length).toBeGreaterThan(zoomedIn.systems[0].measureIndices.length);
   });
 
   it('produces a positive total width and height', () => {

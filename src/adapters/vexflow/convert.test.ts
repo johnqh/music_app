@@ -171,7 +171,7 @@ describe('buildVoiceContent', () => {
     expect(metas[1].tieStop).toBe(true);
   });
 
-  it('attaches accidental and articulation modifiers', () => {
+  it('attaches an articulation modifier but no accidental modifier (key-signature-aware accidentals are decided by renderer.ts)', () => {
     const events: NoteEvent[] = [
       note({
         id: 'sharp',
@@ -183,7 +183,34 @@ describe('buildVoiceContent', () => {
     ];
     const { notes } = buildVoiceContent(events, PPQ);
     const modifierCategories = notes[0].getModifiers().map((m) => m.getCategory());
-    expect(modifierCategories).toContain('Accidental');
+    expect(modifierCategories).not.toContain('Accidental');
     expect(modifierCategories).toContain('Articulation');
+    // The accidental is still spelled into the key string, which is what
+    // `Accidental.applyAccidentals` (called in renderer.ts) reads.
+    expect(notes[0].getKeys()).toEqual(['f#/4']);
+  });
+
+  it('builds per-key tie metadata parallel to a chord, keyed by pitch', () => {
+    const half = ticksFor('half', PPQ);
+    const events: NoteEvent[] = [
+      note({ id: 'c1', startTick: 0, durationTicks: half, pitch: pitch('C', 0, 4), tieStart: true }),
+      note({ id: 'c2', startTick: 0, durationTicks: half, pitch: pitch('E', 0, 4) }),
+      note({ id: 'c3', startTick: 0, durationTicks: half, pitch: pitch('G', 0, 4), tieStart: true }),
+    ];
+    const { metas } = buildVoiceContent(events, PPQ);
+    expect(metas[0].keyTies).toEqual([
+      { pitch: pitch('C', 0, 4), tieStart: true, tieStop: false },
+      { pitch: pitch('E', 0, 4), tieStart: false, tieStop: false },
+      { pitch: pitch('G', 0, 4), tieStart: true, tieStop: false },
+    ]);
+    // Whole-note flags are an OR over the per-key state (a cheap pre-filter only).
+    expect(metas[0].tieStart).toBe(true);
+    expect(metas[0].tieStop).toBe(false);
+  });
+
+  it('rests have no key ties', () => {
+    const events: RestEvent[] = [rest({ id: 'r1', startTick: 0, durationTicks: ticksFor('quarter', PPQ) })];
+    const { metas } = buildVoiceContent(events, PPQ);
+    expect(metas[0].keyTies).toEqual([]);
   });
 });

@@ -45,6 +45,14 @@ export type RenderResult = {
   measureIdToBBox: Map<string, BBox>;
   /** Total rendered height in pixels; combine with `options.width` (page) or the natural content width (continuous) for the viewport. */
   height: number;
+  /**
+   * The theme this result was rendered with — carried through so
+   * `applyHighlights` (and any caller wanting to restore an element to its
+   * unhighlighted appearance) always has the correct colors without having
+   * to separately track which theme produced this result. Additive to the
+   * brief's four core fields, not a replacement for any of them.
+   */
+  theme: RenderTheme;
 };
 
 /**

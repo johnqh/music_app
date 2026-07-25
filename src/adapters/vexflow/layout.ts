@@ -1,13 +1,23 @@
 /**
  * System layout (spec §7, §26): decides which measures share a system
- * ("row") and the pixel box (x, y, width, height) each track's stave
- * occupies for every measure, for both "page" (wraps to `options.width`)
- * and "continuous" (everything in one system) layout modes.
+ * ("row") and the box (x, y, width, height) each track's stave occupies
+ * for every measure, for both "page" (wraps to `options.width`) and
+ * "continuous" (everything in one system) layout modes.
  *
  * Heuristic by design (per spec §26, layout need only be "practical", not
- * exact): measure width is a fixed target scaled by zoom, not derived from
- * actual note density/glyph widths. Good enough for MVP rendering; a denser
- * formatter could replace this later without touching the renderer's shape.
+ * exact): measure width is a fixed target, not derived from actual note
+ * density/glyph widths. Good enough for MVP rendering; a denser formatter
+ * could replace this later without touching the renderer's shape.
+ *
+ * Units are LOGICAL (design-time) pixels, independent of `options.zoom`.
+ * Zoom is applied once, uniformly, as an SVG viewBox scale in `renderer.ts`
+ * (`context.scale(zoom, zoom)`) so glyphs/text scale along with spacing
+ * instead of staying a fixed size while only the layout stretches. The one
+ * place zoom enters this module is dividing the *available* screen width by
+ * zoom to get the logical width budget for page-mode wrapping (a more
+ * zoomed-in view fits fewer logical pixels in the same screen width).
+ * Callers needing final on-screen coordinates (e.g. `RenderResult` bboxes)
+ * must multiply this module's output by `zoom` themselves.
  */
 import type { Score, Track } from '@/domain/score/types';
 import type { RenderOptions } from '@/adapters/vexflow/types';
@@ -38,12 +48,13 @@ export type LayoutPlan = {
   tracks: Track[];
   trackLayouts: TrackLayout[];
   systems: SystemLayout[];
+  /** Logical (unscaled) units — multiply by zoom for the final on-screen SVG canvas size. */
   totalWidth: number;
+  /** Logical (unscaled) units — multiply by zoom for the final on-screen SVG canvas size. */
   totalHeight: number;
 };
 
 const BASE_MEASURE_WIDTH = 200;
-const MIN_MEASURE_WIDTH = 90;
 /** Extra width reserved on a system's first measure for clef + key signature + time signature. */
 const SYSTEM_HEADER_WIDTH = 90;
 const STAVE_HEIGHT = 100;
@@ -51,6 +62,11 @@ const TRACK_GAP = 20;
 const SYSTEM_GAP = 40;
 const LEFT_MARGIN = 10;
 const TOP_MARGIN = 10;
+
+/** Guards against a zero/negative/non-finite zoom breaking division or `context.scale`. */
+export function resolveZoom(zoom: number): number {
+  return zoom > 0 ? zoom : 1;
+}
 
 /** Tracks to render, in `options.trackIds` order when given (unknown ids are dropped); else score order. */
 function selectTracks(score: Score, options: RenderOptions): Track[] {
@@ -83,33 +99,39 @@ function groupIntoSystems(measureCount: number, measureWidth: (index: number) =>
 
 /**
  * Computes per-track, per-measure stave boxes and per-system outer bounds
- * (for brace/connector drawing). Assumes all selected tracks share the same
- * measure count; a track with fewer measures than the score's max simply
- * has no box for the missing trailing measures (defensive, not expected in
- * practice — spec §4 keeps tracks aligned to the same measure grid).
+ * (for brace/connector drawing), all in LOGICAL (unscaled) units — see the
+ * module doc. Assumes all selected tracks share the same measure count; a
+ * track with fewer measures than the score's max simply has no box for the
+ * missing trailing measures (defensive, not expected in practice — spec §4
+ * keeps tracks aligned to the same measure grid).
  */
 export function computeLayout(score: Score, options: RenderOptions): LayoutPlan {
-  const zoom = options.zoom > 0 ? options.zoom : 1;
+  const zoom = resolveZoom(options.zoom);
   const tracks = selectTracks(score, options);
   const measureCount = tracks.reduce((max, t) => Math.max(max, t.measures.length), 0);
 
-  const measureWidth = Math.max(MIN_MEASURE_WIDTH, BASE_MEASURE_WIDTH * zoom);
-  const headerWidth = SYSTEM_HEADER_WIDTH * zoom;
-  const staveHeight = STAVE_HEIGHT * zoom;
-  const trackGap = TRACK_GAP * zoom;
-  const systemGap = SYSTEM_GAP * zoom;
-  const leftMargin = LEFT_MARGIN * zoom;
-  const topMargin = TOP_MARGIN * zoom;
+  const measureWidth = BASE_MEASURE_WIDTH;
+  const headerWidth = SYSTEM_HEADER_WIDTH;
+  const staveHeight = STAVE_HEIGHT;
+  const trackGap = TRACK_GAP;
+  const systemGap = SYSTEM_GAP;
+  const leftMargin = LEFT_MARGIN;
+  const topMargin = TOP_MARGIN;
 
   const widthOf = (isFirstInSystem: boolean): number => measureWidth + (isFirstInSystem ? headerWidth : 0);
 
+  // `options.width` is a screen-pixel budget; convert to the equivalent
+  // logical-unit budget by dividing out zoom (a more zoomed-in view fits
+  // fewer logical pixels in the same screen width) before packing systems.
+  //
   // A measure's width can't depend on system membership until we know system
   // membership, so pack using each measure's "first-in-system" width as an
   // upper bound (every measure could end up first); this only ever
   // under-packs a system slightly versus a hypothetical perfect packer, never
-  // overflows `options.width`.
-  const availableWidth = options.layoutMode === 'continuous' ? Number.POSITIVE_INFINITY : Math.max(options.width, measureWidth + headerWidth);
-  const systemsOfIndices = groupIntoSystems(measureCount, () => widthOf(true), availableWidth - leftMargin);
+  // overflows the logical width budget.
+  const logicalAvailableWidth =
+    options.layoutMode === 'continuous' ? Number.POSITIVE_INFINITY : Math.max(options.width / zoom, measureWidth + headerWidth);
+  const systemsOfIndices = groupIntoSystems(measureCount, () => widthOf(true), logicalAvailableWidth - leftMargin);
 
   const rowHeight = (count: number): number => (count > 0 ? count * staveHeight + Math.max(0, count - 1) * trackGap : 0);
   const trackRowHeight = rowHeight(tracks.length);
@@ -146,7 +168,10 @@ export function computeLayout(score: Score, options: RenderOptions): LayoutPlan 
   });
 
   const totalHeight = systems.length > 0 ? systems[systems.length - 1].yBottom + topMargin : topMargin * 2;
-  const totalWidth = Math.max(maxSystemRight + leftMargin, options.layoutMode === 'page' ? options.width : 0);
+  // Both terms are logical units here: `maxSystemRight` is logical by
+  // construction, and `options.width` (a screen-pixel budget) is divided by
+  // zoom to match, same as `logicalAvailableWidth` above.
+  const totalWidth = Math.max(maxSystemRight + leftMargin, options.layoutMode === 'page' ? options.width / zoom : 0);
 
   return { tracks, trackLayouts, systems, totalWidth, totalHeight };
 }

@@ -29,13 +29,20 @@ function findGroup(container: HTMLElement, vexId: string): SVGElement | null {
  * `getBBox()` is SVG-only geometry; guarded because jsdom needs the stub in
  * `src/test/setup.ts` and some detached/zero-size elements can still throw
  * in real browsers (e.g. `display: none` ancestors).
+ *
+ * `getBBox()` reports coordinates in the element's own SVG user-coordinate
+ * system, i.e. the LOGICAL (unscaled) units everything was drawn in — it
+ * does not account for the `viewBox`-based `context.scale(zoom, zoom)`
+ * `renderer.ts` applies to the whole render. `zoom` is multiplied in here so
+ * every box this module returns is in final on-screen pixels, matching
+ * `RenderResult.height` (also final on-screen pixels).
  */
-function elementBBox(element: SVGElement): BBox {
+function elementBBox(element: SVGElement, zoom: number): BBox {
   const graphicsElement = element as unknown as { getBBox?: () => BBox };
   if (typeof graphicsElement.getBBox !== 'function') return ZERO_BBOX;
   try {
     const box = graphicsElement.getBBox();
-    return { x: box.x, y: box.y, width: box.width, height: box.height };
+    return { x: box.x * zoom, y: box.y * zoom, width: box.width * zoom, height: box.height * zoom };
   } catch {
     return ZERO_BBOX;
   }
@@ -48,10 +55,14 @@ function elementBBox(element: SVGElement): BBox {
  * all carry the same event id in `eventIds[0]`; the *first* segment drawn
  * wins (documented in `convert.ts`), so later segments are skipped once the
  * id is already present.
+ *
+ * `zoom` must be the same value passed to `context.scale` in `renderer.ts`,
+ * so the returned bboxes are in final on-screen pixels (see `elementBBox`).
  */
 export function buildEventMaps(
   container: HTMLElement,
   metas: NoteMeta[],
+  zoom: number,
 ): { idToElement: Map<string, SVGElement>; idToBBox: Map<string, BBox> } {
   const idToElement = new Map<string, SVGElement>();
   const idToBBox = new Map<string, BBox>();
@@ -59,7 +70,7 @@ export function buildEventMaps(
   for (const meta of metas) {
     const element = findGroup(container, meta.vexId);
     if (!element) continue;
-    const bbox = elementBBox(element);
+    const bbox = elementBBox(element, zoom);
     for (const eventId of meta.eventIds) {
       if (idToElement.has(eventId)) continue;
       idToElement.set(eventId, element);
@@ -70,13 +81,16 @@ export function buildEventMaps(
   return { idToElement, idToBBox };
 }
 
-/** Maps each measure id to its drawn stave's bounding box (a `Stave` tagged `stave.setAttribute('id', measureId)`). */
-export function buildMeasureMap(container: HTMLElement, measureIds: Iterable<string>): Map<string, BBox> {
+/**
+ * Maps each measure id to its drawn stave's bounding box (a `Stave` tagged
+ * `stave.setAttribute('id', measureId)`). `zoom` — see `buildEventMaps`.
+ */
+export function buildMeasureMap(container: HTMLElement, measureIds: Iterable<string>, zoom: number): Map<string, BBox> {
   const measureIdToBBox = new Map<string, BBox>();
   for (const measureId of measureIds) {
     const element = findGroup(container, measureId);
     if (!element) continue;
-    measureIdToBBox.set(measureId, elementBBox(element));
+    measureIdToBBox.set(measureId, elementBBox(element, zoom));
   }
   return measureIdToBBox;
 }
