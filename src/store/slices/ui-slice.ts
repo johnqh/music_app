@@ -17,6 +17,14 @@ export type DevSettings = {
   seed: string;
   showIds: boolean;
   showTicks: boolean;
+  /** Spec §33: "show measure boundaries". */
+  showMeasureBoundaries: boolean;
+  /** Spec §33: "show playback scheduling data". */
+  showPlaybackScheduling: boolean;
+  /** Spec §33: "enable generation diagnostics". */
+  enableDiagnostics: boolean;
+  /** Spec §33: "enable validation warnings" (warning-severity issues, in addition to errors). */
+  enableValidationWarnings: boolean;
 };
 
 export type ToastSeverity = 'info' | 'success' | 'warning' | 'error';
@@ -32,6 +40,10 @@ const DEFAULT_DEV_SETTINGS: DevSettings = {
   seed: DEFAULT_MOCK_SEED,
   showIds: false,
   showTicks: false,
+  showMeasureBoundaries: false,
+  showPlaybackScheduling: false,
+  enableDiagnostics: false,
+  enableValidationWarnings: true,
 };
 
 export type UiSlice = {
