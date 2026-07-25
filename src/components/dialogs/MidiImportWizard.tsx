@@ -57,6 +57,16 @@ export type MidiImportWizardProps = {
   midiService?: Pick<MidiService, 'analyze' | 'import'>;
   /** Called after a successful import that created a brand-new project (no project was open), with the new project's id -- e.g. the dashboard navigates to `/project/:id`. */
   onImportedNewProject?: (projectId: string) => void;
+  /**
+   * Always takes the "create a new project" path, even if `store` still has
+   * a `projectId` set from a previously-open project (e.g. the dashboard's
+   * import buttons: the shared app-wide store's last-open project lingers
+   * after navigating back to `/`, but the dashboard has no "current
+   * project" to confirm replacing). Defaults to `false` (the app bar's
+   * import menu, used from inside an already-open project, wants the
+   * normal confirm-then-replace behavior).
+   */
+  forceNewProject?: boolean;
 };
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
@@ -88,6 +98,7 @@ export function MidiImportWizard({
   store = useAppStore,
   midiService,
   onImportedNewProject,
+  forceNewProject = false,
 }: MidiImportWizardProps) {
   const service = useMemo(() => midiService ?? new MidiService(), [midiService]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -158,7 +169,7 @@ export function MidiImportWizard({
     setError(null);
     try {
       const result = await service.import(fileBuffer, options);
-      const hasProject = store.getState().projectId !== null;
+      const hasProject = !forceNewProject && store.getState().projectId !== null;
       if (hasProject) {
         store.getState().dispatchCommand(importScoreCommand(result.score));
         handleClose();
@@ -177,7 +188,7 @@ export function MidiImportWizard({
   };
 
   const handleImportClick = (): void => {
-    if (store.getState().projectId !== null) {
+    if (!forceNewProject && store.getState().projectId !== null) {
       setConfirmingReplace(true);
     } else {
       void commitImport();

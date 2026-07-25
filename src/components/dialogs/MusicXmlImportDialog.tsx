@@ -37,6 +37,8 @@ export type MusicXmlImportDialogProps = {
   musicXmlService?: Pick<MusicXmlService, 'import'>;
   /** Called after a successful import that created a brand-new project (no project was open), with the new project's id. */
   onImportedNewProject?: (projectId: string) => void;
+  /** Always takes the "create a new project" path, even if `store` still has a `projectId` set from a previously-open project (see `MidiImportWizard`'s identical prop for why). Defaults to `false`. */
+  forceNewProject?: boolean;
 };
 
 export function MusicXmlImportDialog({
@@ -45,6 +47,7 @@ export function MusicXmlImportDialog({
   store = useAppStore,
   musicXmlService,
   onImportedNewProject,
+  forceNewProject = false,
 }: MusicXmlImportDialogProps) {
   const service = musicXmlService ?? new MusicXmlService();
 
@@ -86,7 +89,7 @@ export function MusicXmlImportDialog({
 
   const commitImport = (): void => {
     if (!result) return;
-    const hasProject = store.getState().projectId !== null;
+    const hasProject = !forceNewProject && store.getState().projectId !== null;
     if (hasProject) {
       store.getState().dispatchCommand(importScoreCommand(result.score));
       handleClose();
