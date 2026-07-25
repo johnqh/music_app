@@ -107,7 +107,7 @@ export function MusicXmlImportDialog({
   };
 
   const handleImportClick = (): void => {
-    if (store.getState().projectId !== null) setConfirmingReplace(true);
+    if (!forceNewProject && store.getState().projectId !== null) setConfirmingReplace(true);
     else commitImport();
   };
 

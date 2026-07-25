@@ -11,7 +11,7 @@
  * edit. Routing through the score is also what makes mute/solo undoable
  * and persisted with the project, matching every other track property.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -54,6 +54,20 @@ function TrackRow({
   onDelete: () => void;
 }) {
   const [nameDraft, setNameDraft] = useState(track.name);
+  // Local drag drafts (spec §22-adjacent slider convention, also used by
+  // InspectorPanel's track sliders): MUI's Slider fires `onChange` on every
+  // pointer-move tick during a drag, not just at the end. Dispatching a
+  // ScoreCommand per tick would flood undo history (one drag = dozens of
+  // entries) and re-run validateScore/markDirty that often; the command is
+  // dispatched once, from `onChangeCommitted` (pointer-up/keyboard-commit),
+  // while these drafts keep the thumb tracking the drag live. Synced back to
+  // the track's real value on any external change (undo/redo, another
+  // client, the commit itself echoing back).
+  const [volumeDraft, setVolumeDraft] = useState(track.volume);
+  const [panDraft, setPanDraft] = useState(track.pan);
+
+  useEffect(() => setVolumeDraft(track.volume), [track.volume]);
+  useEffect(() => setPanDraft(track.pan), [track.pan]);
 
   const commitName = (): void => {
     if (nameDraft.trim() !== '' && nameDraft !== track.name) onPatch({ name: nameDraft.trim() });
@@ -146,9 +160,10 @@ function TrackRow({
           min={0}
           max={1}
           step={0.01}
-          value={track.volume}
+          value={volumeDraft}
           aria-label={`Volume: ${track.name}`}
-          onChange={(_e, v) => onPatch({ volume: Array.isArray(v) ? v[0] : v })}
+          onChange={(_e, v) => setVolumeDraft(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={(_e, v) => onPatch({ volume: Array.isArray(v) ? v[0] : v })}
         />
       </Stack>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
@@ -160,9 +175,10 @@ function TrackRow({
           min={-1}
           max={1}
           step={0.01}
-          value={track.pan}
+          value={panDraft}
           aria-label={`Pan: ${track.name}`}
-          onChange={(_e, v) => onPatch({ pan: Array.isArray(v) ? v[0] : v })}
+          onChange={(_e, v) => setPanDraft(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={(_e, v) => onPatch({ pan: Array.isArray(v) ? v[0] : v })}
         />
       </Stack>
     </Box>

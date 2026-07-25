@@ -72,7 +72,25 @@ export function createProjectSlice(
       return next;
     }
 
-    function adopt(record: ProjectRecord): void {
+    /**
+     * Flushes the *outgoing* project's autosaver (if any, and if it's
+     * actually carrying unsaved work — `flush()` is already a no-op
+     * otherwise) before `adopt` reassigns `currentRecord`/attaches a new
+     * autosaver for the incoming project. Must run — and complete — before
+     * anything below it changes `currentRecord`/`score`: `flush()`'s own
+     * `save` callback closes over this function's `currentRecord`/`get()`
+     * (not a value captured at attach time), so flushing *after* switching
+     * them would save the *new* project's score under a mix of old/new
+     * identity instead of persisting the old project's last edit — the
+     * exact bug this exists to prevent (spec §18 "autosave": switching
+     * projects must not silently drop a pending debounced write).
+     */
+    async function flushOutgoing(): Promise<void> {
+      if (autosaver) await autosaver.flush();
+    }
+
+    async function adopt(record: ProjectRecord): Promise<void> {
+      await flushOutgoing();
       currentRecord = record;
       attachAutosaver();
       set((state) => {
@@ -93,12 +111,12 @@ export function createProjectSlice(
       newProject: async (input) => {
         const score = input.score ?? createEmptyScore({ title: input.name });
         const record = await createProject(db, { name: input.name, score });
-        adopt(record);
+        await adopt(record);
       },
 
       openProject: async (id) => {
         const record = await loadProject(db, id);
-        adopt(record);
+        await adopt(record);
       },
 
       saveNow: async () => {

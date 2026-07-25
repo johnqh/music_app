@@ -384,8 +384,30 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
 
+  // Computed unconditionally (rather than after the "no score"/"no
+  // selection" early returns below) so the volume/pan drag-draft hooks
+  // just below can be called unconditionally too, per the rules of hooks.
+  const tracks = score ? selection.trackIds.map((id) => findTrack(score, id)).filter((t) => t !== null) : [];
+  const volume = commonValue(tracks.map((t) => t.volume));
+  const pan = commonValue(tracks.map((t) => t.pan));
+
+  // Local drag drafts (see TrackPanel.tsx's identical pattern/doc comment):
+  // MUI's Slider fires `onChange` on every pointer-move tick during a drag;
+  // dispatching a ScoreCommand per tick would flood undo history. The
+  // command is dispatched once, from `onChangeCommitted`, while these
+  // drafts keep the thumb tracking the drag live -- synced back to the
+  // selection's real (possibly "mixed") value on any external change.
+  const [volumeDraft, setVolumeDraft] = useState(volume === MIXED || volume === null ? 1 : volume);
+  const [panDraft, setPanDraft] = useState(pan === MIXED || pan === null ? 0 : pan);
+
+  useEffect(() => {
+    setVolumeDraft(volume === MIXED || volume === null ? 1 : volume);
+  }, [volume]);
+  useEffect(() => {
+    setPanDraft(pan === MIXED || pan === null ? 0 : pan);
+  }, [pan]);
+
   if (!score) return <Typography variant="body2">No score loaded.</Typography>;
-  const tracks = selection.trackIds.map((id) => findTrack(score, id)).filter((t) => t !== null);
 
   if (tracks.length === 0) {
     return (
@@ -400,8 +422,6 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const midiProgram = commonValue(tracks.map((t) => t.midiProgram));
   const midiChannel = commonValue(tracks.map((t) => t.midiChannel));
   const clef = commonValue(tracks.map((t) => t.clef));
-  const volume = commonValue(tracks.map((t) => t.volume));
-  const pan = commonValue(tracks.map((t) => t.pan));
   const muted = commonValue(tracks.map((t) => t.muted));
   const solo = commonValue(tracks.map((t) => t.solo));
 
@@ -464,9 +484,10 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
           min={0}
           max={1}
           step={0.01}
-          value={volume === MIXED || volume === null ? 1 : volume}
+          value={volumeDraft}
           aria-label="Track volume"
-          onChange={(_e, v) => patchAll({ volume: Array.isArray(v) ? v[0] : v })}
+          onChange={(_e, v) => setVolumeDraft(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={(_e, v) => patchAll({ volume: Array.isArray(v) ? v[0] : v })}
         />
       </Stack>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -478,9 +499,10 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
           min={-1}
           max={1}
           step={0.01}
-          value={pan === MIXED || pan === null ? 0 : pan}
+          value={panDraft}
           aria-label="Track pan"
-          onChange={(_e, v) => patchAll({ pan: Array.isArray(v) ? v[0] : v })}
+          onChange={(_e, v) => setPanDraft(Array.isArray(v) ? v[0] : v)}
+          onChangeCommitted={(_e, v) => patchAll({ pan: Array.isArray(v) ? v[0] : v })}
         />
       </Stack>
 

@@ -7,6 +7,7 @@ import { ScoreSmithDb } from '@/services/persistence/db';
 import { twinkleScore } from '@/test/fixtures';
 import { exportMusicXml } from '@/adapters/musicxml/export';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
+import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 let db: ScoreSmithDb;
@@ -77,5 +78,55 @@ describe('MusicXmlImportDialog', () => {
 
     expect(store.getState().score!.id).not.toBe(originalScoreId);
     expect(store.getState().canUndo).toBe(true);
+  });
+
+  it('forceNewProject always creates a new project directly, with no replace-confirmation, even if the store has a lingering projectId', async () => {
+    const store = makeStore();
+    // Simulates the dashboard's scenario (Task 16 review finding): the
+    // shared app-wide store still has a projectId from a previously-open
+    // project even though the dashboard itself has no "current project".
+    await store.getState().newProject({ name: 'Stale', score: twinkleScore() });
+    const staleScoreId = store.getState().score!.id;
+    const onImportedNewProject = vi.fn();
+
+    render(
+      <MusicXmlImportDialog open onClose={vi.fn()} store={store} forceNewProject onImportedNewProject={onImportedNewProject} />,
+    );
+    const user = userEvent.setup();
+
+    await chooseFile(user, fixtureFile());
+    await waitFor(() => expect(screen.getByText(/track\(s\)/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    // No confirmation dialog: proceeds straight to creating a new project.
+    expect(screen.queryByRole('dialog', { name: 'Replace current score' })).not.toBeInTheDocument();
+    await waitFor(() => expect(store.getState().score!.id).not.toBe(staleScoreId));
+    expect(onImportedNewProject).toHaveBeenCalledWith(store.getState().projectId);
+  });
+
+  it('a failed import (commit step) shows an error toast, not a silent failure', async () => {
+    const store = makeStore();
+    store.setState({ newProject: vi.fn().mockRejectedValue(new Error('disk full')) });
+
+    render(
+      <>
+        <MusicXmlImportDialog open onClose={vi.fn()} store={store} />
+        <Toasts store={store} />
+      </>,
+    );
+    const user = userEvent.setup();
+
+    await chooseFile(user, fixtureFile());
+    await waitFor(() => expect(screen.getByText(/track\(s\)/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    // Queried by text, not `getByRole('alert')`: the dialog is still open
+    // (nothing to close on failure), and MUI's Modal marks every other
+    // top-level element -- including the Toasts Snackbar, mounted as a
+    // sibling -- `aria-hidden` while it's open.
+    await waitFor(() => expect(screen.getByText('MusicXML import failed: disk full')).toBeInTheDocument());
+    expect(store.getState().projectId).toBeNull();
   });
 });

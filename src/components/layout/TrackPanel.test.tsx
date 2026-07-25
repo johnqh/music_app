@@ -1,10 +1,11 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
 import { twoTrackScore } from '@/test/fixtures';
+import { dragSlider } from '@/test/drag-slider';
 import { TrackPanel } from '@/components/layout/TrackPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -63,6 +64,43 @@ describe('TrackPanel', () => {
     await user.click(screen.getByLabelText('Solo: Bass'));
 
     expect(store.getState().score!.tracks[1].solo).toBe(true);
+  });
+
+  it('dragging the volume slider dispatches exactly one command, not one per drag tick (a single undo fully restores the original value)', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const originalVolume = store.getState().score!.tracks[0].volume;
+
+    const slider = screen.getByRole('slider', { name: 'Volume: Treble' });
+    dragSlider(slider, [10, 40, 70, 100, 150]);
+
+    await waitFor(() => expect(store.getState().score!.tracks[0].volume).not.toBe(originalVolume));
+    expect(store.getState().canUndo).toBe(true);
+
+    store.getState().undo();
+
+    expect(store.getState().score!.tracks[0].volume).toBe(originalVolume);
+    // If dragging had dispatched more than one command (one per tick, the
+    // reported bug), a single undo would only pop the last one, leaving
+    // canUndo true with earlier drag-tick commands still on the stack.
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('dragging the pan slider dispatches exactly one command, not one per drag tick', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const originalPan = store.getState().score!.tracks[0].pan;
+
+    const slider = screen.getByRole('slider', { name: 'Pan: Treble' });
+    dragSlider(slider, [10, 40, 70, 100, 150]);
+
+    await waitFor(() => expect(store.getState().score!.tracks[0].pan).not.toBe(originalPan));
+    expect(store.getState().canUndo).toBe(true);
+
+    store.getState().undo();
+
+    expect(store.getState().score!.tracks[0].pan).toBe(originalPan);
+    expect(store.getState().canUndo).toBe(false);
   });
 
   it('Add track appends a new track', async () => {

@@ -12,3 +12,20 @@ if (typeof SVGGraphicsElement !== 'undefined' && !SVGGraphicsElement.prototype.g
     configurable: true,
   });
 }
+
+// jsdom does not implement the Pointer Capture APIs, which MUI's <Slider>
+// (used throughout src/components/layout, src/components/inspector) calls
+// unconditionally while handling a pointerdown/pointerup drag (only
+// `setPointerCapture` itself is guarded, in application code, against
+// throwing -- `hasPointerCapture`/`releasePointerCapture` aren't, and would
+// otherwise throw "not a function" the moment a test simulates a real
+// pointer-drag interaction, e.g. src/test/drag-slider.ts).
+for (const method of ['hasPointerCapture', 'setPointerCapture', 'releasePointerCapture'] as const) {
+  if (typeof Element !== 'undefined' && !Element.prototype[method]) {
+    Object.defineProperty(Element.prototype, method, {
+      value: (): boolean => false,
+      writable: true,
+      configurable: true,
+    });
+  }
+}

@@ -73,6 +73,40 @@ describe('project-slice', () => {
     });
   });
 
+  describe('project switch flushes the outgoing project\'s pending autosave', () => {
+    it('openProject(B) while A is dirty flushes A\'s pending edit before switching (not lost to the debounce)', async () => {
+      const store = createAppStore({ db });
+      await store.getState().newProject({ name: 'Project A', score: twinkleScore() });
+      const idA = store.getState().projectId!;
+      store.getState().dispatchCommand(changeMetadataCommand({ title: 'A - edited' }));
+      expect(store.getState().dirty).toBe(true); // still within the debounce window, not yet autosaved
+
+      await store.getState().newProject({ name: 'Project B', score: twinkleScore() });
+      const idB = store.getState().projectId!;
+      expect(idB).not.toBe(idA);
+
+      const persistedA = await loadProject(db, idA);
+      expect(persistedA.score.metadata.title).toBe('A - edited');
+    });
+
+    it('openProject(B) (an existing project, not a newProject()) while A is dirty flushes A first too', async () => {
+      const store = createAppStore({ db });
+      await store.getState().newProject({ name: 'Project A', score: twinkleScore() });
+      const idA = store.getState().projectId!;
+      await store.getState().newProject({ name: 'Project D', score: twinkleScore() });
+      const idD = store.getState().projectId!;
+
+      await store.getState().openProject(idA);
+      store.getState().dispatchCommand(changeMetadataCommand({ title: 'A - edited again' }));
+      expect(store.getState().dirty).toBe(true);
+
+      await store.getState().openProject(idD);
+
+      const persistedA = await loadProject(db, idA);
+      expect(persistedA.score.metadata.title).toBe('A - edited again');
+    });
+  });
+
   describe('markDirty / autosave', () => {
     it('dispatchCommand marks the project dirty, and flushing the autosave persists the change', async () => {
       const store = createAppStore({ db });

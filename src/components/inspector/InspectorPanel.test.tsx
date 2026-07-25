@@ -1,12 +1,13 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
 import { twinkleScore, twoTrackScore } from '@/test/fixtures';
 import { allNotes } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
+import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -91,5 +92,45 @@ describe('InspectorPanel', () => {
     render(<InspectorPanel store={store} />);
 
     expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent('Mixed');
+  });
+
+  it('dragging the track-tab volume slider dispatches exactly one command, not one per drag tick', async () => {
+    const store = makeStore(twoTrackScore());
+    const track = store.getState().score!.tracks[0];
+    const originalVolume = track.volume;
+    store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [track.id] });
+    render(<InspectorPanel store={store} />);
+
+    const slider = screen.getByRole('slider', { name: 'Track volume' });
+    dragSlider(slider, [10, 40, 70, 100, 150]);
+
+    await waitFor(() => expect(store.getState().score!.tracks[0].volume).not.toBe(originalVolume));
+    expect(store.getState().canUndo).toBe(true);
+
+    store.getState().undo();
+
+    expect(store.getState().score!.tracks[0].volume).toBe(originalVolume);
+    // One undo fully restoring the original value proves exactly one
+    // command was dispatched for the whole drag, not one per tick.
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('dragging the track-tab pan slider dispatches exactly one command, not one per drag tick', async () => {
+    const store = makeStore(twoTrackScore());
+    const track = store.getState().score!.tracks[0];
+    const originalPan = track.pan;
+    store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [track.id] });
+    render(<InspectorPanel store={store} />);
+
+    const slider = screen.getByRole('slider', { name: 'Track pan' });
+    dragSlider(slider, [10, 40, 70, 100, 150]);
+
+    await waitFor(() => expect(store.getState().score!.tracks[0].pan).not.toBe(originalPan));
+    expect(store.getState().canUndo).toBe(true);
+
+    store.getState().undo();
+
+    expect(store.getState().score!.tracks[0].pan).toBe(originalPan);
+    expect(store.getState().canUndo).toBe(false);
   });
 });
