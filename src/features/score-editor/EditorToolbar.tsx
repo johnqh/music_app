@@ -8,22 +8,16 @@
  * `store.dispatchCommand` directly), and every interactive control carries
  * an explicit `aria-label` (spec §27: ARIA labels, don't rely on
  * icon/color alone).
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 2): MUI
+ * ToggleButton(Group)s become plain buttons with `aria-pressed`, the MUI
+ * Select becomes a native `<select>`, and the MUI Menu becomes a small
+ * `role="menu"`/`role="menuitem"` popover built from plain buttons — same
+ * roles/accessible names as before, so no test assertions changed.
  */
-import { useMemo, useState } from 'react';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Divider from '@mui/material/Divider';
-import IconButton from '@mui/material/IconButton';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import Toolbar from '@mui/material/Toolbar';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { Tooltip } from '@sudobility/components';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
@@ -97,6 +91,21 @@ function defaultInsertPitch(store: EditorStoreApi): Pitch {
   return { step: 'C', accidental: 0, octave: 4 };
 }
 
+const ICON_BUTTON_CLASS =
+  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const TOGGLE_BUTTON_CLASS =
+  'rounded-md px-2 py-1 text-sm font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+
+const TEXT_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+
+function VerticalDivider() {
+  return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
+}
+
 export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeChange }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
@@ -105,12 +114,21 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
   const hasScore = score !== null;
 
   const [quantizeGrid, setQuantizeGrid] = useState<DurationName>('sixteenth');
-  const [articulationAnchor, setArticulationAnchor] = useState<HTMLElement | null>(null);
+  const [articulationOpen, setArticulationOpen] = useState(false);
+  const articulationRef = useRef<HTMLDivElement | null>(null);
 
   const zoomLabel = useMemo(() => `${Math.round(zoom * 100)}%`, [zoom]);
 
-  const handleDurationChange = (_event: React.MouseEvent<HTMLElement>, value: DurationName | null): void => {
-    if (!value) return;
+  useEffect(() => {
+    if (!articulationOpen) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!articulationRef.current?.contains(event.target as Node)) setArticulationOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [articulationOpen]);
+
+  const handleDurationClick = (value: DurationName): void => {
     store.getState().setSnapGrid(value);
     changeDuration(store, value);
   };
@@ -121,7 +139,7 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
 
   const handleArticulationSelect = (articulation: Articulation | undefined): void => {
     changeArticulation(store, articulation);
-    setArticulationAnchor(null);
+    setArticulationOpen(false);
   };
 
   const handleInsertNote = (): void => {
@@ -132,7 +150,7 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
     insertRestAtSelection(store);
   };
 
-  const handleQuantizeGridChange = (event: SelectChangeEvent<DurationName>): void => {
+  const handleQuantizeGridChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     setQuantizeGrid(event.target.value as DurationName);
   };
 
@@ -149,167 +167,203 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
   const handleZoomOut = (): void => store.getState().setZoom(clampZoom(zoom / ZOOM_STEP));
 
   return (
-    <Toolbar
-      variant="dense"
+    <div
       role="toolbar"
       aria-label="Score editor toolbar"
-      sx={{ flexWrap: 'wrap', gap: 1, borderBottom: 1, borderColor: 'divider' }}
+      className="flex flex-wrap items-center gap-1 border-b border-theme-border px-2 py-1"
     >
-      <Stack direction="row" spacing={0.5} role="group" aria-label="Note duration" sx={{ alignItems: 'center' }}>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={snapGrid}
-          onChange={handleDurationChange}
-          aria-label="Note duration"
-        >
-          {DURATION_OPTIONS.map((option) => (
-            <ToggleButton key={option.value} value={option.value} aria-label={option.ariaLabel}>
+      <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
+        {DURATION_OPTIONS.map((option) => (
+          <Tooltip key={option.value} content={option.ariaLabel}>
+            <button
+              type="button"
+              aria-label={option.ariaLabel}
+              aria-pressed={snapGrid === option.value}
+              onClick={() => handleDurationClick(option.value)}
+              className={TOGGLE_BUTTON_CLASS}
+            >
               {option.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Stack>
-
-      <Divider orientation="vertical" flexItem />
-
-      <Stack direction="row" spacing={0.5} role="group" aria-label="Accidental" sx={{ alignItems: 'center' }}>
-        {ACCIDENTAL_OPTIONS.map((option) => (
-          <Tooltip key={option.value} title={option.ariaLabel}>
-            <span>
-              <IconButton
-                size="small"
-                aria-label={option.ariaLabel}
-                disabled={!hasScore}
-                onClick={() => handleAccidentalClick(option.value)}
-              >
-                {option.label}
-              </IconButton>
-            </span>
+            </button>
           </Tooltip>
         ))}
-      </Stack>
+      </div>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <Button
-        size="small"
-        aria-label="Articulation"
-        disabled={!hasScore}
-        onClick={(e) => setArticulationAnchor(e.currentTarget)}
-      >
-        Articulation
-      </Button>
-      <Menu
-        anchorEl={articulationAnchor}
-        open={articulationAnchor !== null}
-        onClose={() => setArticulationAnchor(null)}
-      >
-        {ARTICULATION_OPTIONS.map((option) => (
-          <MenuItem key={option.label} onClick={() => handleArticulationSelect(option.value)}>
-            {option.label}
-          </MenuItem>
+      <div role="group" aria-label="Accidental" className="flex items-center gap-0.5">
+        {ACCIDENTAL_OPTIONS.map((option) => (
+          <Tooltip key={option.value} content={option.ariaLabel}>
+            <button
+              type="button"
+              aria-label={option.ariaLabel}
+              disabled={!hasScore}
+              onClick={() => handleAccidentalClick(option.value)}
+              className={ICON_BUTTON_CLASS}
+            >
+              {option.label}
+            </button>
+          </Tooltip>
         ))}
-      </Menu>
+      </div>
 
-      <Tooltip title="Toggle tie">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Toggle tie"
-            disabled={!hasScore}
-            onClick={() => toggleTie(store, 'tieStart')}
+      <VerticalDivider />
+
+      <div ref={articulationRef} className="relative">
+        <button
+          type="button"
+          aria-label="Articulation"
+          aria-haspopup="menu"
+          aria-expanded={articulationOpen}
+          disabled={!hasScore}
+          onClick={() => setArticulationOpen((open) => !open)}
+          className={TEXT_BUTTON_CLASS}
+        >
+          Articulation
+        </button>
+        {articulationOpen ? (
+          <div
+            role="menu"
+            className="absolute left-0 top-full z-10 mt-1 min-w-[140px] rounded-md border border-theme-border bg-theme-bg-secondary py-1 shadow-lg"
           >
-            ⌣
-          </IconButton>
-        </span>
+            {ARTICULATION_OPTIONS.map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                role="menuitem"
+                onClick={() => handleArticulationSelect(option.value)}
+                className="block w-full px-3 py-1.5 text-left text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <Tooltip content="Toggle tie">
+        <button
+          type="button"
+          aria-label="Toggle tie"
+          disabled={!hasScore}
+          onClick={() => toggleTie(store, 'tieStart')}
+          className={ICON_BUTTON_CLASS}
+        >
+          ⌣
+        </button>
       </Tooltip>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <Button size="small" aria-label="Insert note" disabled={!hasScore} onClick={handleInsertNote}>
+      <button
+        type="button"
+        aria-label="Insert note"
+        disabled={!hasScore}
+        onClick={handleInsertNote}
+        className={TEXT_BUTTON_CLASS}
+      >
         Insert note
-      </Button>
-      <Button size="small" aria-label="Insert rest" disabled={!hasScore} onClick={handleInsertRest}>
+      </button>
+      <button
+        type="button"
+        aria-label="Insert rest"
+        disabled={!hasScore}
+        onClick={handleInsertRest}
+        className={TEXT_BUTTON_CLASS}
+      >
         Insert rest
-      </Button>
-      <Button size="small" aria-label="Select all" disabled={!hasScore} onClick={() => selectAll(store)}>
+      </button>
+      <button
+        type="button"
+        aria-label="Select all"
+        disabled={!hasScore}
+        onClick={() => selectAll(store)}
+        className={TEXT_BUTTON_CLASS}
+      >
         Select all
-      </Button>
+      </button>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <Select
-        size="small"
-        value={quantizeGrid}
-        onChange={handleQuantizeGridChange}
-        inputProps={{ 'aria-label': 'Quantize grid' }}
-      >
+      <select aria-label="Quantize grid" value={quantizeGrid} onChange={handleQuantizeGridChange} className={SELECT_CLASS}>
         {QUANTIZE_GRID_OPTIONS.map((option) => (
-          <MenuItem key={option} value={option}>
+          <option key={option} value={option}>
             {option}
-          </MenuItem>
+          </option>
         ))}
-      </Select>
-      <Button size="small" aria-label="Quantize" disabled={!hasScore} onClick={handleQuantize}>
+      </select>
+      <button
+        type="button"
+        aria-label="Quantize"
+        disabled={!hasScore}
+        onClick={handleQuantize}
+        className={TEXT_BUTTON_CLASS}
+      >
         Quantize
-      </Button>
+      </button>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        <Tooltip title="Zoom out">
-          <span>
-            <IconButton size="small" aria-label="Zoom out" onClick={handleZoomOut}>
-              −
-            </IconButton>
-          </span>
+      <div className="flex items-center gap-0.5">
+        <Tooltip content="Zoom out">
+          <button type="button" aria-label="Zoom out" onClick={handleZoomOut} className={ICON_BUTTON_CLASS}>
+            −
+          </button>
         </Tooltip>
-        <Typography variant="body2" aria-label="Current zoom level" sx={{ minWidth: 40, textAlign: 'center' }}>
+        <span aria-label="Current zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
           {zoomLabel}
-        </Typography>
-        <Tooltip title="Zoom in">
-          <span>
-            <IconButton size="small" aria-label="Zoom in" onClick={handleZoomIn}>
-              +
-            </IconButton>
-          </span>
+        </span>
+        <Tooltip content="Zoom in">
+          <button type="button" aria-label="Zoom in" onClick={handleZoomIn} className={ICON_BUTTON_CLASS}>
+            +
+          </button>
         </Tooltip>
-      </Stack>
+      </div>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={layoutMode}
-        onChange={(_e, value: LayoutMode | null) => value && onLayoutModeChange(value)}
-        aria-label="Layout mode"
-      >
-        <ToggleButton value="page" aria-label="Page layout">
+      <div role="group" aria-label="Layout mode" className="flex items-center gap-0.5">
+        <button
+          type="button"
+          aria-label="Page layout"
+          aria-pressed={layoutMode === 'page'}
+          onClick={() => onLayoutModeChange('page')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Page
-        </ToggleButton>
-        <ToggleButton value="continuous" aria-label="Continuous layout">
+        </button>
+        <button
+          type="button"
+          aria-label="Continuous layout"
+          aria-pressed={layoutMode === 'continuous'}
+          onClick={() => onLayoutModeChange('continuous')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Continuous
-        </ToggleButton>
-      </ToggleButtonGroup>
+        </button>
+      </div>
 
-      <Box sx={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={view}
-        onChange={(_e, value: 'notation' | 'piano-roll' | null) => value && store.getState().setView(value)}
-        aria-label="Editor view"
-      >
-        <ToggleButton value="notation" aria-label="Notation view">
+      <div role="group" aria-label="Editor view" className="flex items-center gap-0.5">
+        <button
+          type="button"
+          aria-label="Notation view"
+          aria-pressed={view === 'notation'}
+          onClick={() => store.getState().setView('notation')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Notation
-        </ToggleButton>
-        <ToggleButton value="piano-roll" aria-label="Piano roll view">
+        </button>
+        <button
+          type="button"
+          aria-label="Piano roll view"
+          aria-pressed={view === 'piano-roll'}
+          onClick={() => store.getState().setView('piano-roll')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Piano roll
-        </ToggleButton>
-      </ToggleButtonGroup>
-    </Toolbar>
+        </button>
+      </div>
+    </div>
   );
 }

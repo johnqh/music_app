@@ -12,21 +12,16 @@
  * score edit (spec §22 "tempo control", persisted with the score, unlike
  * the ephemeral playback-speed multiplier), so it goes through
  * `changeTempoCommand`/`dispatchCommand` like any other score mutation.
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 2): MUI
+ * ToggleButtons become plain buttons with `aria-pressed`, the MUI Select
+ * becomes a native `<select>`, and the MUI Slider becomes a native
+ * `<input type="range">` — all so testing-library's native-control queries
+ * (`selectOptions`, `fireEvent.change`) keep working unchanged.
  */
 import { useMemo, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import Box from '@mui/material/Box';
-import IconButton from '@mui/material/IconButton';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Slider from '@mui/material/Slider';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import ToggleButton from '@mui/material/ToggleButton';
-import Toolbar from '@mui/material/Toolbar';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { Tooltip } from '@sudobility/components';
 import { changeTempoCommand } from '@sudobility/music_lib';
 import { scoreEndTick } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -42,6 +37,12 @@ export type TransportBarProps = {
 
 /** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+const ICON_BUTTON_CLASS =
+  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const TOGGLE_BUTTON_CLASS =
+  'rounded-md px-2 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
 
 function formatMeasureBeat(mb: MeasureBeat | null): string {
   return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
@@ -91,12 +92,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     }
   };
 
-  const handleSpeedChange = (event: SelectChangeEvent<number>): void => {
+  const handleSpeedChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     playbackController.setTempoMultiplier(Number(event.target.value));
   };
 
-  const handleVolumeChange = (_event: Event, value: number | number[]): void => {
-    playbackController.setMasterVolume(Array.isArray(value) ? value[0] : value);
+  const handleVolumeChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    playbackController.setMasterVolume(Number(event.target.value));
   };
 
   const handleScrub = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -104,173 +105,160 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
   };
 
   return (
-    <Toolbar
-      variant="dense"
+    <div
       role="toolbar"
       aria-label="Playback transport"
-      sx={{ flexWrap: 'wrap', gap: 1, borderBottom: 1, borderColor: 'divider' }}
+      className="flex flex-wrap items-center gap-2 border-b border-theme-border px-2 py-1"
     >
-      <Tooltip title="Go to start">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Go to start"
-            disabled={!hasScore}
-            onClick={() => playbackController.goToStart()}
-          >
-            ◀◀
-          </IconButton>
-        </span>
+      <Tooltip content="Go to start">
+        <button
+          type="button"
+          aria-label="Go to start"
+          disabled={!hasScore}
+          onClick={() => playbackController.goToStart()}
+          className={ICON_BUTTON_CLASS}
+        >
+          ◀◀
+        </button>
       </Tooltip>
-      <Tooltip title="Previous measure">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Previous measure"
-            disabled={!hasScore}
-            onClick={() => playbackController.previousMeasure()}
-          >
-            ◀
-          </IconButton>
-        </span>
+      <Tooltip content="Previous measure">
+        <button
+          type="button"
+          aria-label="Previous measure"
+          disabled={!hasScore}
+          onClick={() => playbackController.previousMeasure()}
+          className={ICON_BUTTON_CLASS}
+        >
+          ◀
+        </button>
       </Tooltip>
-      <Tooltip title={playbackState === 'playing' ? 'Pause' : 'Play'}>
-        <span>
-          <IconButton
-            size="small"
-            aria-label={playbackState === 'playing' ? 'Pause' : 'Play'}
-            disabled={!hasScore}
-            onClick={() => playbackController.togglePlay()}
-          >
-            {playbackState === 'playing' ? '❚❚' : '▶'}
-          </IconButton>
-        </span>
+      <Tooltip content={playbackState === 'playing' ? 'Pause' : 'Play'}>
+        <button
+          type="button"
+          aria-label={playbackState === 'playing' ? 'Pause' : 'Play'}
+          disabled={!hasScore}
+          onClick={() => playbackController.togglePlay()}
+          className={ICON_BUTTON_CLASS}
+        >
+          {playbackState === 'playing' ? '❚❚' : '▶'}
+        </button>
       </Tooltip>
-      <Tooltip title="Stop">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Stop"
-            disabled={!hasScore}
-            onClick={() => {
-              // Stop both the main transport and any candidate preview
-              // (spec §13/§22): a preview and the main transport share
-              // playback-slice's `state`, so the global Stop button must
-              // cleanly resync the engine back to the committed score even
-              // if a `CandidateList` preview (not the main transport) is
-              // what's actually sounding. `stopPreview()` is a no-op when
-              // no preview is active.
-              playbackController.stop();
-              playbackController.stopPreview();
-            }}
-          >
-            ■
-          </IconButton>
-        </span>
+      <Tooltip content="Stop">
+        <button
+          type="button"
+          aria-label="Stop"
+          disabled={!hasScore}
+          onClick={() => {
+            // Stop both the main transport and any candidate preview
+            // (spec §13/§22): a preview and the main transport share
+            // playback-slice's `state`, so the global Stop button must
+            // cleanly resync the engine back to the committed score even
+            // if a `CandidateList` preview (not the main transport) is
+            // what's actually sounding. `stopPreview()` is a no-op when
+            // no preview is active.
+            playbackController.stop();
+            playbackController.stopPreview();
+          }}
+          className={ICON_BUTTON_CLASS}
+        >
+          ■
+        </button>
       </Tooltip>
-      <Tooltip title="Next measure">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Next measure"
-            disabled={!hasScore}
-            onClick={() => playbackController.nextMeasure()}
-          >
-            ▶
-          </IconButton>
-        </span>
+      <Tooltip content="Next measure">
+        <button
+          type="button"
+          aria-label="Next measure"
+          disabled={!hasScore}
+          onClick={() => playbackController.nextMeasure()}
+          className={ICON_BUTTON_CLASS}
+        >
+          ▶
+        </button>
       </Tooltip>
 
-      <Tooltip title="Toggle loop">
-        <span>
-          <ToggleButton
-            size="small"
-            value="loop"
-            selected={loopRange !== null}
-            aria-label="Toggle loop"
-            disabled={!hasScore}
-            onClick={() => playbackController.toggleLoop()}
-          >
-            Loop
-          </ToggleButton>
-        </span>
+      <Tooltip content="Toggle loop">
+        <button
+          type="button"
+          aria-label="Toggle loop"
+          aria-pressed={loopRange !== null}
+          disabled={!hasScore}
+          onClick={() => playbackController.toggleLoop()}
+          className={TOGGLE_BUTTON_CLASS}
+        >
+          Loop
+        </button>
       </Tooltip>
 
-      <Tooltip title="Toggle metronome">
-        <span>
-          <ToggleButton
-            size="small"
-            value="metronome"
-            selected={metronome}
-            aria-label="Toggle metronome"
-            disabled={!hasScore}
-            onClick={() => playbackController.setMetronome(!metronome)}
-          >
-            Metronome
-          </ToggleButton>
-        </span>
+      <Tooltip content="Toggle metronome">
+        <button
+          type="button"
+          aria-label="Toggle metronome"
+          aria-pressed={metronome}
+          disabled={!hasScore}
+          onClick={() => playbackController.setMetronome(!metronome)}
+          className={TOGGLE_BUTTON_CLASS}
+        >
+          Metronome
+        </button>
       </Tooltip>
 
-      <Typography variant="body2" aria-label="Current measure and beat" sx={{ minWidth: 40, textAlign: 'center' }}>
+      <span aria-label="Current measure and beat" className="min-w-[40px] text-center text-sm text-theme-text-primary">
         {formatMeasureBeat(measureBeat)}
-      </Typography>
+      </span>
 
       {editingTempo ? (
-        <TextField
-          size="small"
+        <input
           type="number"
+          aria-label="Tempo (BPM)"
           value={tempoDraft}
           autoFocus
           onChange={(event) => setTempoDraft(event.target.value)}
           onBlur={commitTempo}
           onKeyDown={handleTempoKeyDown}
-          slotProps={{ htmlInput: { 'aria-label': 'Tempo (BPM)' } }}
-          sx={{ width: 84 }}
+          className="w-[84px] rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary"
         />
       ) : (
-        <Tooltip title="Edit tempo">
-          <span>
-            <Typography
-              component="button"
-              type="button"
-              variant="body2"
-              aria-label="Tempo (BPM)"
-              disabled={!hasScore}
-              onClick={beginEditTempo}
-              sx={{
-                border: 'none',
-                background: 'none',
-                font: 'inherit',
-                color: 'inherit',
-                cursor: hasScore ? 'pointer' : 'default',
-                minWidth: 64,
-              }}
-            >
-              {currentBpm} BPM
-            </Typography>
-          </span>
+        <Tooltip content="Edit tempo">
+          <button
+            type="button"
+            aria-label="Tempo (BPM)"
+            disabled={!hasScore}
+            onClick={beginEditTempo}
+            className="min-w-[64px] rounded-md border-none bg-transparent px-1 py-1 text-sm text-theme-text-primary disabled:cursor-default enabled:cursor-pointer enabled:hover:bg-theme-hover-bg"
+          >
+            {currentBpm} BPM
+          </button>
         </Tooltip>
       )}
 
-      <Select
-        size="small"
+      <select
+        aria-label="Playback speed"
         value={tempoMultiplier}
         onChange={handleSpeedChange}
-        inputProps={{ 'aria-label': 'Playback speed' }}
+        className="rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary"
       >
         {SPEED_OPTIONS.map((speed) => (
-          <MenuItem key={speed} value={speed}>
+          <option key={speed} value={speed}>
             {speed}x
-          </MenuItem>
+          </option>
         ))}
-      </Select>
+      </select>
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', width: 120 }}>
-        <Typography variant="body2">Vol</Typography>
-        <Slider size="small" aria-label="Master volume" min={0} max={1} step={0.01} value={masterVolume} onChange={handleVolumeChange} />
-      </Stack>
+      <div className="flex w-[120px] items-center gap-2">
+        <span className="text-sm text-theme-text-primary">Vol</span>
+        <input
+          type="range"
+          aria-label="Master volume"
+          min={0}
+          max={1}
+          step={0.01}
+          value={masterVolume}
+          onChange={handleVolumeChange}
+          className="w-full"
+        />
+      </div>
 
-      <Box sx={{ flex: 1, minWidth: 120 }}>
+      <div className="min-w-[120px] flex-1">
         <input
           type="range"
           aria-label="Playback position"
@@ -279,9 +267,9 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           value={Math.min(positionTick, maxTick)}
           disabled={!hasScore}
           onChange={handleScrub}
-          style={{ width: '100%' }}
+          className="w-full"
         />
-      </Box>
-    </Toolbar>
+      </div>
+    </div>
   );
 }

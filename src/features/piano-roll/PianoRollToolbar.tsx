@@ -14,22 +14,17 @@
  * violate the "no view-local note state" rule. Every control that mutates
  * the score routes through `interactions.ts` (never `store.dispatchCommand`
  * directly), matching the score editor's `EditorToolbar`.
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 2): the MUI
+ * snap-grid Select becomes a native `<select>`; the MUI multi-select track
+ * filter (a combobox opening a checkbox listbox) becomes a hand-built
+ * `role="combobox"` trigger + `role="listbox"`/`role="option"` popover with
+ * a real checkbox in every option, keeping the same roles/accessible names
+ * the MUI version produced.
  */
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import Divider from '@mui/material/Divider';
-import IconButton from '@mui/material/IconButton';
-import ListItemText from '@mui/material/ListItemText';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import Toolbar from '@mui/material/Toolbar';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { Tooltip } from '@sudobility/components';
 import type { DurationName, UUID } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -59,6 +54,21 @@ function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
+const ICON_BUTTON_CLASS =
+  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const TOGGLE_BUTTON_CLASS =
+  'rounded-md px-2 py-1 text-sm font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+
+const TEXT_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+
+function VerticalDivider() {
+  return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
+}
+
 export function PianoRollToolbar({
   store = useAppStore,
   zoomH,
@@ -72,10 +82,22 @@ export function PianoRollToolbar({
   const snapGrid = store((s) => s.snapGrid);
   const view = store((s) => s.view);
   const hasScore = score !== null;
-  const trackIds = score?.tracks.map((t) => t.id) ?? [];
+  const trackIds = useMemo(() => score?.tracks.map((t) => t.id) ?? [], [score]);
   const selectedTrackIds = visibleTrackIds ?? new Set(trackIds);
 
-  const handleSnapChange = (event: SelectChangeEvent<DurationName>): void => {
+  const [trackFilterOpen, setTrackFilterOpen] = useState(false);
+  const trackFilterRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!trackFilterOpen) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!trackFilterRef.current?.contains(event.target as Node)) setTrackFilterOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [trackFilterOpen]);
+
+  const handleSnapChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     store.getState().setSnapGrid(event.target.value as DurationName);
   };
 
@@ -91,142 +113,172 @@ export function PianoRollToolbar({
 
   const handleLoopFromSelection = (): void => loopFromSelection(store);
 
-  const handleTrackFilterChange = (event: SelectChangeEvent<UUID[]>): void => {
-    const raw = event.target.value;
-    const next = typeof raw === 'string' ? raw.split(',') : raw;
-    onVisibleTrackIdsChange(next.length === trackIds.length ? null : new Set(next));
+  const toggleTrack = (trackId: UUID): void => {
+    const next = new Set(selectedTrackIds);
+    if (next.has(trackId)) next.delete(trackId);
+    else next.add(trackId);
+    onVisibleTrackIdsChange(next.size === trackIds.length ? null : next);
   };
 
+  const trackFilterLabel =
+    selectedTrackIds.size === trackIds.length ? 'All tracks' : `${selectedTrackIds.size} track(s)`;
+
   return (
-    <Toolbar
-      variant="dense"
+    <div
       role="toolbar"
       aria-label="Piano roll toolbar"
-      sx={{ flexWrap: 'wrap', gap: 1, borderBottom: 1, borderColor: 'divider' }}
+      className="flex flex-wrap items-center gap-1 border-b border-theme-border px-2 py-1"
     >
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        <Tooltip title="Zoom horizontal out">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Zoom horizontal out"
-              onClick={() => onZoomHChange(clampZoom(zoomH / ZOOM_STEP))}
-            >
-              ↔−
-            </IconButton>
-          </span>
+      <div className="flex items-center gap-0.5">
+        <Tooltip content="Zoom horizontal out">
+          <button
+            type="button"
+            aria-label="Zoom horizontal out"
+            onClick={() => onZoomHChange(clampZoom(zoomH / ZOOM_STEP))}
+            className={ICON_BUTTON_CLASS}
+          >
+            ↔−
+          </button>
         </Tooltip>
-        <Typography variant="body2" aria-label="Current horizontal zoom level" sx={{ minWidth: 40, textAlign: 'center' }}>
+        <span aria-label="Current horizontal zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
           {Math.round(zoomH * 100)}%
-        </Typography>
-        <Tooltip title="Zoom horizontal in">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Zoom horizontal in"
-              onClick={() => onZoomHChange(clampZoom(zoomH * ZOOM_STEP))}
-            >
-              ↔+
-            </IconButton>
-          </span>
+        </span>
+        <Tooltip content="Zoom horizontal in">
+          <button
+            type="button"
+            aria-label="Zoom horizontal in"
+            onClick={() => onZoomHChange(clampZoom(zoomH * ZOOM_STEP))}
+            className={ICON_BUTTON_CLASS}
+          >
+            ↔+
+          </button>
         </Tooltip>
-      </Stack>
+      </div>
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-        <Tooltip title="Zoom vertical out">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Zoom vertical out"
-              onClick={() => onZoomVChange(clampZoom(zoomV / ZOOM_STEP))}
-            >
-              ↕−
-            </IconButton>
-          </span>
+      <div className="flex items-center gap-0.5">
+        <Tooltip content="Zoom vertical out">
+          <button
+            type="button"
+            aria-label="Zoom vertical out"
+            onClick={() => onZoomVChange(clampZoom(zoomV / ZOOM_STEP))}
+            className={ICON_BUTTON_CLASS}
+          >
+            ↕−
+          </button>
         </Tooltip>
-        <Typography variant="body2" aria-label="Current vertical zoom level" sx={{ minWidth: 40, textAlign: 'center' }}>
+        <span aria-label="Current vertical zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
           {Math.round(zoomV * 100)}%
-        </Typography>
-        <Tooltip title="Zoom vertical in">
-          <span>
-            <IconButton
-              size="small"
-              aria-label="Zoom vertical in"
-              onClick={() => onZoomVChange(clampZoom(zoomV * ZOOM_STEP))}
-            >
-              ↕+
-            </IconButton>
-          </span>
+        </span>
+        <Tooltip content="Zoom vertical in">
+          <button
+            type="button"
+            aria-label="Zoom vertical in"
+            onClick={() => onZoomVChange(clampZoom(zoomV * ZOOM_STEP))}
+            className={ICON_BUTTON_CLASS}
+          >
+            ↕+
+          </button>
         </Tooltip>
-      </Stack>
+      </div>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <Select
-        size="small"
-        value={snapGrid}
-        onChange={handleSnapChange}
-        inputProps={{ 'aria-label': 'Snap grid' }}
-      >
+      <select aria-label="Snap grid" value={snapGrid} onChange={handleSnapChange} className={SELECT_CLASS}>
         {SNAP_OPTIONS.map((option) => (
-          <MenuItem key={option} value={option}>
+          <option key={option} value={option}>
             {option}
-          </MenuItem>
+          </option>
         ))}
-      </Select>
-      <Button size="small" aria-label="Quantize" disabled={!hasScore} onClick={handleQuantize}>
-        Quantize
-      </Button>
-
-      <Divider orientation="vertical" flexItem />
-
-      <Button size="small" aria-label="Loop selection" disabled={!hasScore} onClick={handleLoopFromSelection}>
-        Loop selection
-      </Button>
-
-      <Box sx={{ flex: 1 }} />
-
-      <Select
-        size="small"
-        multiple
-        displayEmpty
-        value={[...selectedTrackIds]}
-        onChange={handleTrackFilterChange}
-        renderValue={(selected) =>
-          selected.length === trackIds.length ? 'All tracks' : `${selected.length} track(s)`
-        }
-        inputProps={{ 'aria-label': 'Track filter' }}
+      </select>
+      <button
+        type="button"
+        aria-label="Quantize"
         disabled={!hasScore}
-        sx={{ minWidth: 140 }}
+        onClick={handleQuantize}
+        className={TEXT_BUTTON_CLASS}
       >
-        {(score?.tracks ?? []).map((track) => (
-          <MenuItem key={track.id} value={track.id}>
-            <Checkbox
-              size="small"
-              checked={selectedTrackIds.has(track.id)}
-              slotProps={{ input: { 'aria-label': `Show track: ${track.name}` } }}
-            />
-            <ListItemText primary={track.name} />
-          </MenuItem>
-        ))}
-      </Select>
+        Quantize
+      </button>
 
-      <Divider orientation="vertical" flexItem />
+      <VerticalDivider />
 
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={view}
-        onChange={(_e, value: 'notation' | 'piano-roll' | null) => value && store.getState().setView(value)}
-        aria-label="Editor view"
+      <button
+        type="button"
+        aria-label="Loop selection"
+        disabled={!hasScore}
+        onClick={handleLoopFromSelection}
+        className={TEXT_BUTTON_CLASS}
       >
-        <ToggleButton value="notation" aria-label="Notation view">
+        Loop selection
+      </button>
+
+      <div className="flex-1" />
+
+      <div ref={trackFilterRef} className="relative">
+        <button
+          type="button"
+          role="combobox"
+          aria-label="Track filter"
+          aria-haspopup="listbox"
+          aria-expanded={trackFilterOpen}
+          disabled={!hasScore}
+          onClick={() => setTrackFilterOpen((open) => !open)}
+          className={`${SELECT_CLASS} min-w-[140px] text-left disabled:cursor-not-allowed disabled:opacity-40`}
+        >
+          {trackFilterLabel}
+        </button>
+        {trackFilterOpen ? (
+          <div
+            role="listbox"
+            aria-label="Track filter"
+            aria-multiselectable="true"
+            className="absolute right-0 top-full z-10 mt-1 min-w-[180px] rounded-md border border-theme-border bg-theme-bg-secondary py-1 shadow-lg"
+          >
+            {(score?.tracks ?? []).map((track) => (
+              <div
+                key={track.id}
+                role="option"
+                aria-selected={selectedTrackIds.has(track.id)}
+                onClick={() => toggleTrack(track.id)}
+                className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={`Show track: ${track.name}`}
+                  checked={selectedTrackIds.has(track.id)}
+                  onChange={() => toggleTrack(track.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  className="h-4 w-4"
+                />
+                <span>{track.name}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <VerticalDivider />
+
+      <div role="group" aria-label="Editor view" className="flex items-center gap-0.5">
+        <button
+          type="button"
+          aria-label="Notation view"
+          aria-pressed={view === 'notation'}
+          onClick={() => store.getState().setView('notation')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Notation
-        </ToggleButton>
-        <ToggleButton value="piano-roll" aria-label="Piano roll view">
+        </button>
+        <button
+          type="button"
+          aria-label="Piano roll view"
+          aria-pressed={view === 'piano-roll'}
+          onClick={() => store.getState().setView('piano-roll')}
+          className={TOGGLE_BUTTON_CLASS}
+        >
           Piano roll
-        </ToggleButton>
-      </ToggleButtonGroup>
-    </Toolbar>
+        </button>
+      </div>
+    </div>
   );
 }

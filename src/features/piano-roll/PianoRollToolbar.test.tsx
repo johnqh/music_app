@@ -61,8 +61,10 @@ describe('PianoRollToolbar', () => {
     renderToolbar(store);
     const user = userEvent.setup();
 
-    await user.click(screen.getByLabelText('Snap grid'));
-    await user.click(await screen.findByRole('option', { name: 'eighth' }));
+    // Re-skinned onto a native <select> (T12 batch 2): the MUI listbox
+    // open/click choreography becomes a plain testing-library selectOptions
+    // call against the combobox.
+    await user.selectOptions(screen.getByLabelText('Snap grid'), 'eighth');
 
     expect(store.getState().snapGrid).toBe('eighth');
   });

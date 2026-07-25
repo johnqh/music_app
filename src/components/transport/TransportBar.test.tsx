@@ -200,9 +200,10 @@ describe('TransportBar: speed select', () => {
     renderBar(store);
     const user = userEvent.setup();
 
-    await user.click(screen.getByLabelText('Playback speed'));
-    const listbox = await screen.findByRole('listbox');
-    await user.click(within(listbox).getByText('2x'));
+    // Re-skinned onto a native <select> (T12 batch 2): the MUI listbox
+    // open/click choreography becomes a plain testing-library selectOptions
+    // call against the combobox.
+    await user.selectOptions(screen.getByLabelText('Playback speed'), '2');
 
     expect(playbackController.setTempoMultiplier).toHaveBeenCalledWith(2);
   });
