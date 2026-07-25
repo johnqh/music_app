@@ -186,13 +186,55 @@ describe('computeGridLines', () => {
   it('produces measure and beat lines for a 4/4 track', () => {
     const score = twinkleScore();
     const track = score.tracks[0];
-    const lines = computeGridLines(track, score.ppq, 1);
+    const lines = computeGridLines(track, score.ppq, 1, 'quarter');
 
     const measureLines = lines.filter((l) => l.kind === 'measure');
     const beatLines = lines.filter((l) => l.kind === 'beat');
     expect(measureLines.length).toBe(track.measures.length);
     expect(beatLines.length).toBeGreaterThan(0);
     expect(measureLines[0].x).toBe(0);
+  });
+
+  it('produces subdivision lines at every snapGrid-duration tick that is not already a beat/measure line', () => {
+    const score = twinkleScore();
+    const track = score.tracks[0];
+    // eighth note @ ppq 480 = 240 ticks; the first measure (4/4, 1920
+    // ticks) has beats at 0/480/960/1440, so eighth-grid subdivisions land
+    // at 240/720/1200/1680 within that measure (the 0/480/960/1440 ticks
+    // are already measure/beat lines, and must NOT also appear as
+    // subdivision lines — see the dedup test below).
+    const lines = computeGridLines(track, score.ppq, 1, 'eighth');
+    const subdivisionTicksInFirstMeasure = lines
+      .filter((l) => l.kind === 'subdivision' && l.tick < 1920)
+      .map((l) => l.tick)
+      .sort((a, b) => a - b);
+
+    expect(subdivisionTicksInFirstMeasure).toEqual([240, 720, 1200, 1680]);
+  });
+
+  it('dedupes subdivision ticks that coincide with a beat/measure line to the stronger tier', () => {
+    const score = twinkleScore();
+    const track = score.tracks[0];
+    // A quarter-note grid coincides exactly with every beat tick in 4/4 —
+    // no tick should appear as both 'beat' and 'subdivision'.
+    const lines = computeGridLines(track, score.ppq, 1, 'quarter');
+    const beatTicks = new Set(lines.filter((l) => l.kind === 'beat').map((l) => l.tick));
+    const subdivisionTicks = lines.filter((l) => l.kind === 'subdivision').map((l) => l.tick);
+
+    expect(subdivisionTicks.every((t) => !beatTicks.has(t))).toBe(true);
+    expect(subdivisionTicks.length).toBe(0); // quarter grid == beat grid in 4/4: nothing left over
+  });
+
+  it('produces a different line set when snapGrid changes', () => {
+    const score = twinkleScore();
+    const track = score.tracks[0];
+    const eighthLines = computeGridLines(track, score.ppq, 1, 'eighth');
+    const sixteenthLines = computeGridLines(track, score.ppq, 1, 'sixteenth');
+
+    const eighthSubdivisionCount = eighthLines.filter((l) => l.kind === 'subdivision').length;
+    const sixteenthSubdivisionCount = sixteenthLines.filter((l) => l.kind === 'subdivision').length;
+
+    expect(sixteenthSubdivisionCount).toBeGreaterThan(eighthSubdivisionCount);
   });
 });
 

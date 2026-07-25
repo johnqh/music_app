@@ -8,23 +8,32 @@
  *
  * Rendered as absolutely-positioned divs inside one scrollable container
  * (no canvas, per the brief): a sticky left keyboard column, a note grid
- * with measure/beat lines, a playback cursor, loop-region shading,
- * preview-fragment notes, a below-the-grid "voice lane" strip (see
- * `interactions.ts`'s `commitVoiceChange` doc comment for why dropping a
- * note there reassigns its voice rather than its track), and a velocity
- * lane at the bottom with one draggable bar per note.
+ * with measure/beat/subdivision lines, a playback cursor, loop-region
+ * shading, preview-fragment notes, a below-the-grid "voice lane" strip
+ * (see `interactions.ts`'s `commitVoiceChange` doc comment for why
+ * dropping a note there reassigns its voice rather than its track), and a
+ * velocity lane at the bottom with one draggable bar per note.
  *
  * Pointer interactions follow the score editor's click/shift-click/
  * drag-box precedent (Task 12's `ScoreEditorView`): one pointerdown/move/up
  * cycle on the grid container, hit-tested via `geometry.ts`, distinguishes
  * a plain click (select) from a real drag (move/resize/box-select) by a
- * pixel threshold, and commits at most one command on pointerup. Unlike
- * the VexFlow-rendered notation view, note positions here come straight
- * from `geometry.ts`'s own tick/pitch math (not a real SVG layout engine),
- * so — as documented in `geometry.ts` — these interactions are exercised
+ * pixel threshold, and commits at most one command on pointerup. A
+ * `pointercancel`/`lostpointercapture` (touch takeover, alt-tab, etc.)
+ * resets the in-flight drag without dispatching anything — see
+ * `handlePointerCancel`/`handleVelocityPointerCancel`. Unlike the
+ * VexFlow-rendered notation view, note positions here come straight from
+ * `geometry.ts`'s own tick/pitch math (not a real SVG layout engine), so —
+ * as documented in `geometry.ts` — these interactions are exercised
  * end-to-end in jsdom with real coordinates, no mocked bboxes needed.
+ *
+ * The playback cursor is isolated into its own `PlaybackCursor`
+ * subcomponent, which alone subscribes to `positionTick`: this view's own
+ * top level does not, so a playback frame (positionTick changing many
+ * times a second) re-renders only the cursor line, not the note/grid
+ * layers (`NoteLayer`/`GridLinesLayer`, both `React.memo`'d besides).
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -32,7 +41,6 @@ import { useTheme } from '@mui/material/styles';
 import { findEvent } from '@/domain/score/queries';
 import { isNoteEvent } from '@/domain/score/types';
 import type { UUID } from '@/domain/score/types';
-import { pitchToMidi } from '@/domain/pitch/pitch';
 import { ticksFor } from '@/domain/time/ticks';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -60,7 +68,7 @@ import {
   xToTick,
   yToMidi,
 } from '@/features/piano-roll/geometry';
-import type { NoteRect, Point } from '@/features/piano-roll/geometry';
+import type { GridLine, NoteRect, Point } from '@/features/piano-roll/geometry';
 import {
   addNoteAtCell,
   commitMove,
@@ -71,6 +79,7 @@ import {
   resolveActiveTrackId,
 } from '@/features/piano-roll/interactions';
 import { PianoRollToolbar } from '@/features/piano-roll/PianoRollToolbar';
+import { recordNoteLayerRender } from '@/features/piano-roll/render-counters';
 
 export type PianoRollViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -81,7 +90,7 @@ const CONTAINER_MIN_HEIGHT = 400;
 /** Pixels of pointer movement before a pointerdown-drag counts as a real drag rather than a plain click. */
 const DRAG_THRESHOLD = 3;
 
-type NoteOrigin = { startTick: number; durationTicks: number; midi: number };
+type NoteOrigin = { startTick: number; durationTicks: number };
 
 type DragState =
   | { mode: 'select'; start: Point; moved: boolean; additive: boolean }
@@ -95,14 +104,85 @@ type DragState =
       origins: Map<UUID, NoteOrigin>;
     };
 
+// ---- isolated playback cursor ------------------------------------------------------------
+
+type PlaybackCursorProps = { store: EditorStoreApi; ppq: number; zoomH: number; height: number };
+
+/** The only part of the piano roll that subscribes to `positionTick` — kept as its own component precisely so a playback frame doesn't re-render `PianoRollView`'s note/grid layers (see the module doc comment above). */
+function PlaybackCursor({ store, ppq, zoomH, height }: PlaybackCursorProps) {
+  const positionTick = store((s) => s.positionTick);
+  const x = tickToX(positionTick, ppq, zoomH);
+  return (
+    <Box
+      data-testid="piano-roll-cursor"
+      style={{ position: 'absolute', left: x, top: 0, width: 2, height }}
+      sx={{ bgcolor: 'success.main', pointerEvents: 'none' }}
+    />
+  );
+}
+
+// ---- isolated, memoized grid-line and note layers ------------------------------------------
+
+type GridLinesLayerProps = { lines: GridLine[]; height: number };
+
+const GRID_LINE_OPACITY: Record<GridLine['kind'], number> = { measure: 0.8, beat: 0.35, subdivision: 0.15 };
+
+const GridLinesLayer = memo(function GridLinesLayer({ lines, height }: GridLinesLayerProps) {
+  return (
+    <>
+      {lines.map((line) => (
+        <Box
+          key={`${line.kind}-${line.tick}`}
+          style={{ position: 'absolute', left: line.x, top: 0, width: line.kind === 'measure' ? 2 : 1, height }}
+          sx={{ bgcolor: 'divider', opacity: GRID_LINE_OPACITY[line.kind] }}
+        />
+      ))}
+    </>
+  );
+});
+
+type NoteLayerProps = { noteRects: NoteRect[]; selectedIds: ReadonlySet<UUID>; selectionColor: string };
+
+const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionColor }: NoteLayerProps) {
+  recordNoteLayerRender();
+  return (
+    <>
+      {noteRects.map((r) => {
+        const selected = selectedIds.has(r.id);
+        const velocityFraction = Math.max(0, Math.min(127, r.velocity)) / 127;
+        return (
+          <Box
+            key={r.id}
+            data-testid={`pr-note-${r.id}`}
+            style={{ position: 'absolute', left: r.x, top: r.y, width: r.width, height: r.height }}
+            sx={{
+              bgcolor: trackColor(r.trackIndex),
+              opacity: 0.35 + 0.65 * velocityFraction,
+              border: selected ? `2px solid ${selectionColor}` : '1px solid rgba(0,0,0,0.35)',
+              boxSizing: 'border-box',
+              cursor: 'grab',
+            }}
+          >
+            {/* inner velocity bar */}
+            <Box
+              style={{ position: 'absolute', bottom: 0, left: 0, width: `${velocityFraction * 100}%` }}
+              sx={{ height: 2, bgcolor: 'rgba(255,255,255,0.85)', pointerEvents: 'none' }}
+            />
+          </Box>
+        );
+      })}
+    </>
+  );
+});
+
 export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const muiTheme = useTheme();
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
-  const positionTick = store((s) => s.positionTick);
   const loopRange = store((s) => s.loopRange);
   const previewFragment = store((s) => s.previewFragment);
+  const snapGrid = store((s) => s.snapGrid);
 
   const [zoomH, setZoomH] = useState(1);
   const [zoomV, setZoomV] = useState(1);
@@ -128,8 +208,8 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   );
 
   const gridLines = useMemo(
-    () => (referenceTrack ? computeGridLines(referenceTrack, ppq, zoomH) : []),
-    [referenceTrack, ppq, zoomH],
+    () => (referenceTrack ? computeGridLines(referenceTrack, ppq, zoomH, snapGrid) : []),
+    [referenceTrack, ppq, zoomH, snapGrid],
   );
   const gridWidth = referenceTrack ? trackWidthPx(referenceTrack, ppq, zoomH) : 0;
 
@@ -140,7 +220,6 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const totalHeight = totalCanvasHeight(zoomV, voiceCount);
   const keyboardRows = useMemo(() => computeKeyboardRows(zoomV), [zoomV]);
 
-  const cursorX = tickToX(positionTick, ppq, zoomH);
   const loopRect = useMemo(() => {
     if (!loopRange) return null;
     const x = tickToX(loopRange.startTick, ppq, zoomH);
@@ -153,6 +232,11 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     if (!el) return null;
     const rect = el.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }, []);
+
+  const resetDrag = useCallback(() => {
+    dragStateRef.current = null;
+    setDragBox(null);
   }, []);
 
   // ---- note select / move / resize / voice-lane drop -----------------------------------
@@ -176,7 +260,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
           for (const id of ids) {
             const ev = findEvent(currentScore, id);
             if (ev && isNoteEvent(ev)) {
-              origins.set(id, { startTick: ev.startTick, durationTicks: ev.durationTicks, midi: pitchToMidi(ev.pitch) });
+              origins.set(id, { startTick: ev.startTick, durationTicks: ev.durationTicks });
             }
           }
         }
@@ -230,8 +314,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
           if (drag.additive) store.getState().toggleEvent(drag.noteId);
           else store.getState().setSelection({ eventIds: [drag.noteId], measureIds: [], trackIds: [] });
         }
-        dragStateRef.current = null;
-        setDragBox(null);
+        resetDrag();
         return;
       }
 
@@ -269,10 +352,26 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         }
       }
 
-      dragStateRef.current = null;
-      setDragBox(null);
+      resetDrag();
     },
-    [store, noteRectsById, pointFromEvent, kbHeight, voiceStripHeight, ppq, zoomH, zoomV],
+    [store, noteRectsById, pointFromEvent, resetDrag, kbHeight, voiceStripHeight, ppq, zoomH, zoomV],
+  );
+
+  /**
+   * `pointercancel` (touch takeover, alt-tab, browser-initiated capture
+   * loss, etc.) aborts the in-flight drag without dispatching anything —
+   * unlike `handlePointerUp`, which always commits a real drag. Also
+   * wired to `onLostPointerCapture` (fires whenever this element loses
+   * pointer capture for any reason) as a second line of defense, so a
+   * capture loss that doesn't also deliver a `pointercancel` event still
+   * can't leave `dragStateRef`/the drag-box overlay stuck.
+   */
+  const handlePointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      gridRef.current?.releasePointerCapture?.(event.pointerId);
+      resetDrag();
+    },
+    [resetDrag],
   );
 
   // ---- double-click empty cell: add note ------------------------------------------------
@@ -313,6 +412,12 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     },
     [pointFromEvent, velocityTop, store],
   );
+
+  /** Mirrors `handlePointerCancel`: releases capture only, never commits a velocity change. */
+  const handleVelocityPointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    (event.currentTarget as Element).releasePointerCapture?.(event.pointerId);
+  }, []);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -379,16 +484,12 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handlePointerCancel}
             onDoubleClick={handleDoubleClick}
           >
             {/* grid lines */}
-            {gridLines.map((line) => (
-              <Box
-                key={`${line.kind}-${line.tick}`}
-                style={{ position: 'absolute', left: line.x, top: 0, width: line.kind === 'measure' ? 2 : 1, height: kbHeight }}
-                sx={{ bgcolor: 'divider', opacity: line.kind === 'measure' ? 0.8 : 0.35 }}
-              />
-            ))}
+            <GridLinesLayer lines={gridLines} height={kbHeight} />
 
             {/* loop-region shading */}
             {loopRect && (
@@ -415,38 +516,11 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
               />
             ))}
 
-            {/* playback cursor */}
-            <Box
-              data-testid="piano-roll-cursor"
-              style={{ position: 'absolute', left: cursorX, top: 0, width: 2, height: kbHeight }}
-              sx={{ bgcolor: 'success.main', pointerEvents: 'none' }}
-            />
+            {/* playback cursor (isolated: only this subscribes to positionTick) */}
+            <PlaybackCursor store={store} ppq={ppq} zoomH={zoomH} height={kbHeight} />
 
             {/* notes */}
-            {noteRects.map((r) => {
-              const selected = selectedIds.has(r.id);
-              const velocityFraction = Math.max(0, Math.min(127, r.velocity)) / 127;
-              return (
-                <Box
-                  key={r.id}
-                  data-testid={`pr-note-${r.id}`}
-                  style={{ position: 'absolute', left: r.x, top: r.y, width: r.width, height: r.height }}
-                  sx={{
-                    bgcolor: trackColor(r.trackIndex),
-                    opacity: 0.35 + 0.65 * velocityFraction,
-                    border: selected ? `2px solid ${muiTheme.palette.primary.main}` : '1px solid rgba(0,0,0,0.35)',
-                    boxSizing: 'border-box',
-                    cursor: 'grab',
-                  }}
-                >
-                  {/* inner velocity bar */}
-                  <Box
-                    style={{ position: 'absolute', bottom: 0, left: 0, width: `${velocityFraction * 100}%` }}
-                    sx={{ height: 2, bgcolor: 'rgba(255,255,255,0.85)', pointerEvents: 'none' }}
-                  />
-                </Box>
-              );
-            })}
+            <NoteLayer noteRects={noteRects} selectedIds={selectedIds} selectionColor={muiTheme.palette.primary.main} />
 
             {/* voice-lane strip */}
             <Box
@@ -482,6 +556,8 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
                     data-testid={`pr-velocity-${r.id}`}
                     onPointerDown={handleVelocityPointerDown}
                     onPointerUp={(e) => handleVelocityPointerUp(e, r.id)}
+                    onPointerCancel={handleVelocityPointerCancel}
+                    onLostPointerCapture={handleVelocityPointerCancel}
                     style={{ position: 'absolute', left: r.x, top: 0, width: Math.max(6, Math.min(10, r.width)), height: VELOCITY_LANE_HEIGHT }}
                     sx={{ cursor: 'ns-resize', touchAction: 'none' }}
                   >

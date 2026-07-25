@@ -14,10 +14,10 @@
 import type { BBox } from '@/adapters/vexflow/types';
 import type { Point } from '@/features/score-editor/hit-test';
 import { boxFromPoints, bboxesIntersect, eventIdAtPoint, eventIdsInBox, pointInBBox } from '@/features/score-editor/hit-test';
-import type { NoteEvent, Score, Track, UUID } from '@/domain/score/types';
+import type { DurationName, NoteEvent, Score, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { pitchToMidi, midiToPitch, pitchToString } from '@/domain/pitch/pitch';
-import { beatBoundaries, measureDurationTicks } from '@/domain/time/ticks';
+import { beatBoundaries, measureDurationTicks, ticksFor } from '@/domain/time/ticks';
 import type { ScoreFragment } from '@/domain/score/fragment';
 
 export { boxFromPoints, pointInBBox, bboxesIntersect, eventIdAtPoint, eventIdsInBox };
@@ -195,19 +195,43 @@ export function computeNoteRects(score: Score, options: ComputeNoteRectsOptions)
 
 // ---- grid lines -------------------------------------------------------------------
 
-export type GridLine = { tick: number; x: number; kind: 'measure' | 'beat' };
+export type GridLine = { tick: number; x: number; kind: 'measure' | 'beat' | 'subdivision' };
 
-/** Measure and beat grid lines (in px, via `tickToX`) for one track's measures. */
-export function computeGridLines(track: Track, ppq: number, zoomH: number): GridLine[] {
+/**
+ * Measure, beat, and subdivision grid lines (in px, via `tickToX`) for one
+ * track's measures — the subdivision tier is generated from `snapGrid`
+ * (the store's current snap duration, via `ticksFor`), so the grid stays
+ * visually in sync with whatever the piano-roll toolbar's snap selector is
+ * set to (spec §8: measure/beat/subdivision lines). A subdivision tick
+ * that coincides with a measure or beat tick is skipped — every tick
+ * appears at most once, at its strongest tier (measure > beat >
+ * subdivision), never duplicated across kinds.
+ */
+export function computeGridLines(track: Track, ppq: number, zoomH: number, snapGrid: DurationName): GridLine[] {
   const lines: GridLine[] = [];
+  const subdivisionTicks = ticksFor(snapGrid, ppq);
+
   for (const measure of track.measures) {
+    const beatOffsets = new Set(beatBoundaries(measure.timeSignature, ppq));
     lines.push({ tick: measure.startTick, x: tickToX(measure.startTick, ppq, zoomH), kind: 'measure' });
-    for (const offset of beatBoundaries(measure.timeSignature, ppq)) {
+
+    for (const offset of beatOffsets) {
       if (offset === 0) continue; // already covered by the measure line
       const tick = measure.startTick + offset;
       lines.push({ tick, x: tickToX(tick, ppq, zoomH), kind: 'beat' });
     }
+
+    if (subdivisionTicks > 0) {
+      for (let i = 1; ; i += 1) {
+        const offset = Math.round(subdivisionTicks * i);
+        if (offset >= measure.durationTicks) break;
+        if (beatOffsets.has(offset)) continue; // dedupe: already a beat line, keep the stronger tier
+        const tick = measure.startTick + offset;
+        lines.push({ tick, x: tickToX(tick, ppq, zoomH), kind: 'subdivision' });
+      }
+    }
   }
+
   return lines;
 }
 

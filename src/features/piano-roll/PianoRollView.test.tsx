@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { render, fireEvent } from '@testing-library/react';
+import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScoreSmithDb } from '@/services/persistence/db';
@@ -16,6 +16,7 @@ import {
   voiceLaneStripHeight,
 } from '@/features/piano-roll/geometry';
 import { PianoRollView } from '@/features/piano-roll/PianoRollView';
+import { __getNoteLayerRenderCountForTests } from '@/features/piano-roll/render-counters';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;
@@ -239,5 +240,76 @@ describe('PianoRollView', () => {
     const { container } = render(<PianoRollView store={store} />);
     expect(container.querySelector('[data-testid="piano-roll-keyboard"]')).not.toBeNull();
     expect(container.textContent).toContain('C4');
+  });
+
+  describe('pointercancel handling', () => {
+    it('a pointercancel mid note-drag resets state without dispatching a command, and the next drag starts fresh', () => {
+      const store = makeStore();
+      const { container, getByTestId, queryByTestId } = render(<PianoRollView store={store} />);
+      const [first] = allNotes(store.getState().score!) as NoteEvent[];
+      const grid = getByTestId('piano-roll-grid');
+      const before = store.getState().score;
+
+      fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 20 });
+      fireEvent.pointerMove(grid, { clientX: 65, clientY: 665, pointerId: 20 });
+      fireEvent.pointerCancel(grid, { pointerId: 20 });
+
+      expect(store.getState().score).toBe(before);
+      expect(queryByTestId('piano-roll-drag-box')).toBeNull();
+
+      // The cancel must not leave any stale drag state behind: a fresh
+      // plain click now behaves like an ordinary (non-dragging) click.
+      fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 21 });
+      fireEvent.pointerUp(noteRect(container, first.id), { clientX: 5, clientY: 679, pointerId: 21 });
+      expect(store.getState().selection.eventIds).toEqual([first.id]);
+      expect(store.getState().score).toBe(before);
+    });
+
+    it('a pointercancel mid box-select resets the overlay without changing the selection', () => {
+      const store = makeStore();
+      const { getByTestId, queryByTestId } = render(<PianoRollView store={store} />);
+      const grid = getByTestId('piano-roll-grid');
+      const before = store.getState().selection;
+
+      fireEvent.pointerDown(grid, { clientX: 500, clientY: 500, button: 0, pointerId: 22 });
+      fireEvent.pointerMove(grid, { clientX: 600, clientY: 600, pointerId: 22 });
+      expect(getByTestId('piano-roll-drag-box')).toBeInTheDocument();
+
+      fireEvent.pointerCancel(grid, { pointerId: 22 });
+
+      expect(queryByTestId('piano-roll-drag-box')).toBeNull();
+      expect(store.getState().selection).toEqual(before);
+    });
+
+    it('a pointercancel on a velocity-lane bar does not commit a velocity change', () => {
+      const store = makeStore();
+      const { getByTestId } = render(<PianoRollView store={store} />);
+      const [first] = allNotes(store.getState().score!) as NoteEvent[];
+      const bar = getByTestId(`pr-velocity-${first.id}`);
+      const before = store.getState().score;
+
+      fireEvent.pointerDown(bar, { clientX: 0, clientY: 700, button: 0, pointerId: 23 });
+      fireEvent.pointerCancel(bar, { pointerId: 23 });
+
+      expect(store.getState().score).toBe(before);
+    });
+  });
+
+  describe('playback-cursor isolation', () => {
+    it('positionTick updates re-render only the cursor, not the note layer', () => {
+      const store = makeStore();
+      const { getByTestId } = render(<PianoRollView store={store} />);
+      const renderCountBefore = __getNoteLayerRenderCountForTests();
+
+      act(() => store.getState().setPositionTick(480));
+      act(() => store.getState().setPositionTick(960));
+
+      // The note layer's own render count is unchanged...
+      expect(__getNoteLayerRenderCountForTests()).toBe(renderCountBefore);
+      // ...while the cursor itself genuinely did move, proving this isn't
+      // just "nothing re-rendered at all".
+      const cursor = getByTestId('piano-roll-cursor');
+      expect(cursor.style.left).toBe(`${tickToX(960, store.getState().score!.ppq, 1)}px`);
+    });
   });
 });
