@@ -4,24 +4,23 @@
  * Playwright's runner) -- every type here is a small, local, "just enough
  * to read from `page.evaluate`" duck-type of the real domain/store shapes.
  *
- * Two testing techniques recur throughout the specs built on this file:
+ * Three testing techniques recur throughout the specs built on this file:
  *
  * 1. **The `__SCORESMITH_STORE__` window hook** (wired in `src/app/App.tsx`,
- *    gated behind `import.meta.env.DEV` -- true for the `npm run dev`
- *    server this suite's `webServer` boots -- or an explicit `?e2e=1`).
- *    Real audio playback needs a user gesture and produces no observable
- *    DOM signal in headless Chromium (Tone.js), so playback assertions
- *    read `state`/`positionTick` off the store instead of listening for
- *    sound. Precise multi-measure selection (e.g. "measures 3 and 4", for
- *    the regeneration flow) is also done through the hook
- *    (`selectMeasuresByIndex`) rather than pixel-perfect clicking on
- *    VexFlow's rendered SVG: clicking a measure's blank stave background
- *    in a real, laid-out browser is exactly what `selectMeasure` (`src/
- *    features/score-editor/editing.ts`) already wraps as a single store
- *    call, so driving that same call directly is a faithful, far less
- *    flaky stand-in for a real click whose target pixel depends on
- *    engraving details (systems-per-row, accidental widths, beaming) this
- *    suite has no reason to hard-code.
+ *    gated behind `import.meta.env.DEV` only -- true for the `npm run dev`
+ *    server this suite's `webServer` boots; there is no query-param
+ *    opt-in, so it never ships in a production build). Real audio
+ *    playback needs a user gesture and produces no observable DOM signal
+ *    in headless Chromium (Tone.js), so playback assertions read
+ *    `state`/`positionTick` off the store instead of listening for sound.
+ *    The *workflow* tests (e.g. `regeneration.spec.ts`'s main test) also
+ *    select "measures 3 and 4" through the hook (`selectMeasuresByIndex`)
+ *    rather than pixel-perfect clicking on VexFlow's rendered SVG: driving
+ *    the same `selectMeasures` call a real click ends up making is a
+ *    faithful, far less flaky stand-in when the point of the test is the
+ *    regeneration workflow *after* selection, not the click gesture
+ *    itself. Technique 3, below, is the one place a real click on a
+ *    measure is exercised end to end.
  *
  * 2. **Real pointer interaction for piano-roll dragging** (`view-switch-
  *    piano-roll.spec.ts`): unlike jsdom (the unit/component test
@@ -34,6 +33,20 @@
  *    comment): VexFlow draws a note's stem/flag/beam as separate,
  *    overlapping elements, so a coordinate click at the notehead's own
  *    bounding-box center often actually hits one of those instead.
+ *
+ * 3. **A genuine real-coordinate click for measure selection**
+ *    (`findMeasureStaveClickPoint`, used once, in
+ *    `regeneration.spec.ts`'s "selects a measure via a real click" test):
+ *    unlike a note's stem/beam/flag (technique 2's problem), a measure's
+ *    stave is drawn as thin painted line strokes, not a filled hit region
+ *    covering the whole stave -- most points inside its bounding box hit
+ *    nothing at all. This probes a handful of candidate points along the
+ *    stave's own vertical middle (empirically, its middle line) via real
+ *    `elementFromPoint` hit-testing until one actually resolves to the
+ *    measure's own group, then hands that back for a real
+ *    `page.mouse.click` -- genuinely exercising `ScoreEditorView`'s click
+ *    handler end to end, without guessing at fixed pixel offsets that
+ *    would silently drift with engraving changes.
  */
 import { expect, type Page } from '@playwright/test';
 
@@ -131,7 +144,7 @@ async function requireStore(page: Page): Promise<void> {
   const hasHook = await page.evaluate(() => typeof (window as unknown as { __SCORESMITH_STORE__?: unknown }).__SCORESMITH_STORE__ !== 'undefined');
   if (!hasHook) {
     throw new Error(
-      '__SCORESMITH_STORE__ is not present on window -- the e2e test hook only wires up in dev mode (import.meta.env.DEV) or with ?e2e=1. Is Playwright\'s webServer really running `npm run dev`?',
+      '__SCORESMITH_STORE__ is not present on window -- the e2e test hook only wires up in dev mode (import.meta.env.DEV). Is Playwright\'s webServer really running `npm run dev`?',
     );
   }
 }
@@ -192,6 +205,65 @@ export async function selectMeasuresByIndex(page: Page, indices: number[]): Prom
     });
     store.getState().selectMeasures(ids);
   }, indices);
+}
+
+export type MeasureClickPoint = { x: number; y: number };
+
+/**
+ * Finds a real, on-screen point that lands on measure `measureIndex`'s own
+ * rendered stave (its `[id="vf-<measureId>"]` group), not a note glyph --
+ * for exercising `ScoreEditorView`'s real click-based measure-selection
+ * path (`target.closest('[id^="vf-"]')` resolving via `measureIdToBBox`)
+ * with a genuine `page.mouse.click`, rather than driving `selectMeasures`
+ * through the store hook the way `selectMeasuresByIndex` does.
+ *
+ * VexFlow's stave lines are thin painted strokes, not a filled
+ * measure-wide hit region, so not every point inside the stave's
+ * bounding box actually lands on painted stave geometry (confirmed by
+ * direct hit-test probing while building this helper: empty margins above/
+ * below the stave hit nothing at all, and a note's own glyph can locally
+ * cover the stave underneath it). This tries a handful of candidate
+ * points along the stave's own vertical middle -- empirically always the
+ * stave's own middle line -- at different horizontal fractions, and
+ * returns the first one real `document.elementFromPoint` hit-testing
+ * confirms actually resolves to the measure's own group (via the same
+ * `closest('[id^="vf-"]')` walk the app's own click handler does), not a
+ * note's. Throws if none of the candidates do (e.g. notes happen to sit
+ * under every candidate x for this particular generated score) rather
+ * than clicking blind and asserting on a false premise.
+ */
+export async function findMeasureStaveClickPoint(page: Page, measureIndex: number): Promise<MeasureClickPoint> {
+  await requireStore(page);
+  const measureId = await page.evaluate((index) => {
+    type Store = { getState: () => { score: ScoreLike | null } };
+    const store = (window as unknown as { __SCORESMITH_STORE__: Store }).__SCORESMITH_STORE__;
+    const measure = store.getState().score?.tracks[0]?.measures.find((m) => m.index === index);
+    if (!measure) throw new Error(`findMeasureStaveClickPoint: no measure at index ${index}`);
+    return measure.id;
+  }, measureIndex);
+
+  const targetId = `vf-${measureId}`;
+  const point = await page.evaluate((id) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const candidateFractionsX = [0.5, 0.85, 0.15, 0.7, 0.3];
+    for (const fracX of candidateFractionsX) {
+      const x = rect.x + rect.width * fracX;
+      const y = rect.y + rect.height * 0.5;
+      const hit = document.elementFromPoint(x, y);
+      const group = hit?.closest('[id^="vf-"]');
+      if (group && group.id === id) return { x, y };
+    }
+    return null;
+  }, targetId);
+
+  if (!point) {
+    throw new Error(
+      `findMeasureStaveClickPoint: no candidate point on measure index ${measureIndex} hit its stave (every candidate landed on a note, or nothing)`,
+    );
+  }
+  return point;
 }
 
 /** Reads `{ trackId, positionTick, playbackState }` off the store's `playback-slice`. */

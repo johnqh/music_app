@@ -75,18 +75,23 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
   // already on disk, in the window before the bootstrap load (just below)
   // resolves and applies the real persisted values.
   const settingsLoaded = useRef(false);
+  // Set for exactly one render when the bootstrap effect below applies a
+  // `?seed=` URL override, so the seed-persist effect can skip that one
+  // write -- see that effect's doc comment for why.
+  const skipNextSeedPersist = useRef(false);
 
   // e2e test hook (spec §30 Playwright coverage): exposes the live store
   // and its db on `window` so Playwright specs can read/drive state that
   // has no meaningful UI surface -- deterministic measure selection,
   // asserting store-level playback/generation state instead of real audio
   // (Tone.js needs a user gesture and produces no observable DOM signal in
-  // headless Chromium), etc. Gated behind `import.meta.env.DEV` (true for
-  // the `npm run dev` server Playwright's `webServer` boots) or an
-  // explicit `?e2e=1`, so a production build never ships it.
+  // headless Chromium), etc. Gated behind `import.meta.env.DEV` only (true
+  // for the `npm run dev` server Playwright's `webServer` boots) -- no
+  // query-param opt-in, so there is no code path that can expose this in a
+  // production build regardless of the URL a production build is served
+  // at.
   useEffect(() => {
-    const e2eRequested = new URLSearchParams(window.location.search).get('e2e') === '1';
-    if (!import.meta.env.DEV && !e2eRequested) return;
+    if (!import.meta.env.DEV) return;
     const globalWindow = window as unknown as { __SCORESMITH_STORE__?: EditorStoreApi; __SCORESMITH_DB__?: ScoreSmithDb };
     globalWindow.__SCORESMITH_STORE__ = store;
     globalWindow.__SCORESMITH_DB__ = appDb;
@@ -102,7 +107,6 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
       historyLimit: null,
     }).then((settings) => {
       if (cancelled) return;
-      settingsLoaded.current = true;
       store.getState().setThemeMode(settings.theme);
       store.getState().setDeveloperMode(settings.developerMode);
       // A `?seed=` URL query param (e2e/manual-testing convenience -- spec
@@ -110,8 +114,18 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
       // always wins over whatever seed was persisted, so a bookmarked/
       // scripted `?seed=42` URL reproduces the same generation output on
       // every load regardless of prior sessions' developer-settings seed.
+      // Critically, this override must NOT itself get written back to
+      // IndexedDB as though it were a real settings change -- otherwise a
+      // single `?seed=42` visit would silently overwrite whatever seed was
+      // actually stored, and every later visit *without* the param would
+      // keep loading "42" forever. `skipNextSeedPersist` tells the
+      // seed-persist effect below to skip exactly the one write this call
+      // triggers; `settingsLoaded` is only flipped on *after* it's set, so
+      // that effect can't race ahead of it on the same commit.
       const urlSeed = new URLSearchParams(window.location.search).get('seed');
+      if (urlSeed !== null) skipNextSeedPersist.current = true;
       store.getState().setDevSettings({ seed: urlSeed ?? settings.mockSeed });
+      settingsLoaded.current = true;
     });
     return () => {
       cancelled = true;
@@ -128,8 +142,19 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
   useEffect(() => {
     if (settingsLoaded.current) void setSetting(appDb, 'developerMode', developerMode);
   }, [appDb, developerMode]);
+  // Skips the one persist this effect would otherwise run for the
+  // bootstrap effect's own `?seed=` URL override (see its doc comment) --
+  // a URL-sourced seed is a per-visit override, never something that
+  // should get written back as the new persisted default. Any *later*
+  // seed change (a real Developer Settings edit) still persists normally,
+  // since the flag is consumed (reset to `false`) the first time it's read.
   useEffect(() => {
-    if (settingsLoaded.current) void setSetting(appDb, 'mockSeed', seed);
+    if (!settingsLoaded.current) return;
+    if (skipNextSeedPersist.current) {
+      skipNextSeedPersist.current = false;
+      return;
+    }
+    void setSetting(appDb, 'mockSeed', seed);
   }, [appDb, seed]);
 
   return (

@@ -7,6 +7,7 @@ import { expect, test } from '@playwright/test';
 import {
   collectPageErrors,
   createNewProject,
+  findMeasureStaveClickPoint,
   generateWholeScore,
   gotoDashboard,
   readCandidates,
@@ -15,6 +16,34 @@ import {
 } from './helpers';
 
 test.describe('region regeneration: preview and accept', () => {
+  // Spec §30 scenario 7's actual click gesture, exercised for real: the
+  // main regeneration-workflow test below drives measure selection through
+  // the `__SCORESMITH_STORE__` hook instead (see `helpers.ts`'s module
+  // doc for why -- real click coordinates depend on engraving details a
+  // workflow test has no reason to hard-code). This test instead asserts
+  // that a genuine `page.mouse.click` on a measure's own rendered stave
+  // (found via real hit-testing, not guessed pixels) selects it, so
+  // `ScoreEditorView`'s click-based measure hit-test path itself is
+  // covered by a real browser gesture at least once.
+  test('selects a measure via a real click on its rendered stave', async ({ page }) => {
+    const getErrors = collectPageErrors(page);
+
+    await gotoDashboard(page);
+    await createNewProject(page, 'Measure Click');
+    await generateWholeScore(page, {
+      prompt: 'Create a gentle eight-measure piano melody in C major',
+      measures: 8,
+    });
+
+    const point = await findMeasureStaveClickPoint(page, 2); // measure 3 (0-based index 2)
+    await page.mouse.click(point.x, point.y);
+
+    await expect(page.getByText('1 measure(s) selected')).toBeVisible();
+    await expect(page.locator('[aria-label="Regeneration panel"]')).toBeVisible();
+
+    expect(getErrors()).toEqual([]);
+  });
+
   test('generates alternatives for measures 3-4, previews them, and accepts one', async ({ page }) => {
     const getErrors = collectPageErrors(page);
 
