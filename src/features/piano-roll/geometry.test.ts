@@ -10,6 +10,7 @@ import {
   computeKeyboardRows,
   computeNoteRects,
   computePreviewNoteRects,
+  cullToViewport,
   isBlackKey,
   isNearRightEdge,
   keyboardHeightPx,
@@ -280,5 +281,30 @@ describe('keyboardHeightPx / voiceLaneStripHeight / totalCanvasHeight', () => {
     expect(totalCanvasHeight(zoomV, voiceCount)).toBe(
       keyboardHeightPx(zoomV) + voiceLaneStripHeight(voiceCount) + VELOCITY_LANE_HEIGHT,
     );
+  });
+});
+
+describe('cullToViewport (Task 17, spec §29 virtualization)', () => {
+  const rect = (id: string, x: number, y: number, width = 10, height = 10) => ({ id, x, y, width, height });
+
+  it('keeps only rects whose box intersects the viewport', () => {
+    const rects = [rect('inside', 5, 5), rect('outside', 1000, 1000)];
+    const viewport = { x: 0, y: 0, width: 100, height: 100 };
+    expect(cullToViewport(rects, viewport).map((r) => r.id)).toEqual(['inside']);
+  });
+
+  it('excludes a rect that merely touches the viewport edge (matches bboxesIntersect: overlap must be nonzero)', () => {
+    const rects = [rect('touching', 100, 0)]; // starts exactly where a 100-wide viewport ends
+    const viewport = { x: 0, y: 0, width: 100, height: 100 };
+    expect(cullToViewport(rects, viewport)).toEqual([]);
+  });
+
+  it('returns an empty array for an empty input', () => {
+    expect(cullToViewport([], { x: 0, y: 0, width: 100, height: 100 })).toEqual([]);
+  });
+
+  it('returns every rect for a viewport covering all of them', () => {
+    const rects = [rect('a', 0, 0), rect('b', 500, 500)];
+    expect(cullToViewport(rects, { x: 0, y: 0, width: 1000, height: 1000 })).toEqual(rects);
   });
 });

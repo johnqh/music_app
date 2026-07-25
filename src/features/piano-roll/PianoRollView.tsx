@@ -33,7 +33,7 @@
  * times a second) re-renders only the cursor line, not the note/grid
  * layers (`NoteLayer`/`GridLinesLayer`, both `React.memo`'d besides).
  */
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -54,6 +54,7 @@ import {
   computeKeyboardRows,
   computeNoteRects,
   computePreviewNoteRects,
+  cullToViewport,
   eventIdAtPoint,
   eventIdsInBox,
   isNearRightEdge,
@@ -89,6 +90,8 @@ export type PianoRollViewProps = {
 const CONTAINER_MIN_HEIGHT = 400;
 /** Pixels of pointer movement before a pointerdown-drag counts as a real drag rather than a plain click. */
 const DRAG_THRESHOLD = 3;
+/** Screen-pixel buffer added on every side of the measured scroll viewport before culling notes (spec §29 virtualization), so a small scroll doesn't flash a blank grid before the next render pass catches up. */
+const VIRTUALIZATION_OVERSCAN_PX = 200;
 
 type NoteOrigin = { startTick: number; durationTicks: number };
 
@@ -188,8 +191,15 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const [zoomV, setZoomV] = useState(1);
   const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
   const [dragBox, setDragBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  // Screen-pixel scroll viewport (grid-local coordinates, i.e. with the
+  // sticky keyboard column's width subtracted out) of the scrollable
+  // container, used to cull off-screen notes (spec §29). `null` means "not
+  // yet measured" (jsdom's `clientHeight` is always 0) — treated as
+  // "render everything" rather than an empty viewport; see `measureViewport`.
+  const [viewport, setViewport] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
 
   const ppq = score?.ppq ?? 480;
@@ -199,8 +209,42 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     () => (score ? computeNoteRects(score, { visibleTrackIds, zoomH, zoomV }) : []),
     [score, visibleTrackIds, zoomH, zoomV],
   );
+  // Hit-testing (`eventIdAtPoint`/`eventIdsInBox`/drag origins below) always
+  // uses the full, uncalled `noteRects` — culling (`visibleNoteRects`,
+  // below) only decides what's actually drawn, not what's interactable, so
+  // interaction behavior is identical regardless of scroll position.
   const noteRectsById = useMemo(() => new Map(noteRects.map((r) => [r.id, r])), [noteRects]);
+  const visibleNoteRects = useMemo(
+    () => (viewport ? cullToViewport(noteRects, viewport) : noteRects),
+    [noteRects, viewport],
+  );
   const selectedIds = useMemo(() => new Set(selection.eventIds), [selection.eventIds]);
+
+  /**
+   * Re-measures `scrollRef`'s scroll position/size into `viewport` (spec
+   * §29 virtualization), converting to grid-local coordinates by
+   * subtracting the sticky keyboard column's width and padding by
+   * `VIRTUALIZATION_OVERSCAN_PX` on every side. A `clientHeight <= 0`
+   * (jsdom, or a container not yet laid out) leaves `viewport` unchanged
+   * rather than recording a bogus zero-size range.
+   */
+  const measureViewport = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || el.clientHeight <= 0) return;
+    setViewport({
+      x: el.scrollLeft - KEYBOARD_WIDTH - VIRTUALIZATION_OVERSCAN_PX,
+      y: el.scrollTop - VIRTUALIZATION_OVERSCAN_PX,
+      width: el.clientWidth + VIRTUALIZATION_OVERSCAN_PX * 2,
+      height: el.clientHeight + VIRTUALIZATION_OVERSCAN_PX * 2,
+    });
+  }, []);
+
+  // Re-measure once whenever the score or zoom changes (e.g. a fresh score
+  // may reset scroll position); real usage also re-measures on every
+  // `onScroll` (wired below), which is when the viewport actually moves.
+  useEffect(() => {
+    measureViewport();
+  }, [measureViewport, score, zoomH, zoomV]);
 
   const previewRects = useMemo(
     () => computePreviewNoteRects(previewFragment, { zoomH, zoomV }),
@@ -431,9 +475,11 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         onVisibleTrackIdsChange={setVisibleTrackIds}
       />
       <Box
+        ref={scrollRef}
         role="region"
         aria-label="Piano roll"
         data-testid="piano-roll-scroll"
+        onScroll={measureViewport}
         sx={{ flex: 1, overflow: 'auto', minHeight: CONTAINER_MIN_HEIGHT, position: 'relative' }}
       >
         <Box sx={{ display: 'flex', width: KEYBOARD_WIDTH + gridWidth }}>
@@ -519,8 +565,8 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             {/* playback cursor (isolated: only this subscribes to positionTick) */}
             <PlaybackCursor store={store} ppq={ppq} zoomH={zoomH} height={kbHeight} />
 
-            {/* notes */}
-            <NoteLayer noteRects={noteRects} selectedIds={selectedIds} selectionColor={muiTheme.palette.primary.main} />
+            {/* notes (culled to the scroll viewport, spec §29) */}
+            <NoteLayer noteRects={visibleNoteRects} selectedIds={selectedIds} selectionColor={muiTheme.palette.primary.main} />
 
             {/* voice-lane strip */}
             <Box

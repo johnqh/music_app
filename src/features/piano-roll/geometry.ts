@@ -305,3 +305,18 @@ export function voiceLaneStripHeight(voiceCount: number): number {
 export function totalCanvasHeight(zoomV: number, voiceCount: number): number {
   return keyboardHeightPx(zoomV) + voiceLaneStripHeight(voiceCount) + VELOCITY_LANE_HEIGHT;
 }
+
+// ---- note culling (Task 17, spec §29 virtualization) ---------------------------------
+
+/**
+ * Every rect in `rects` whose box intersects `viewport` (reusing
+ * `bboxesIntersect`'s exact-overlap test — a rect merely touching the
+ * viewport's edge doesn't count, matching every other hit-test in this
+ * module). Used to skip rendering DOM nodes for notes scrolled out of view
+ * (spec §29 "virtualization for large track lists or long scores") — pure
+ * and geometry-only, so it works the same for `NoteRect`s (`computeNoteRects`)
+ * as for `PreviewNoteRect`s (`computePreviewNoteRects`).
+ */
+export function cullToViewport<T extends BBox>(rects: readonly T[], viewport: BBox): T[] {
+  return rects.filter((r) => bboxesIntersect(r, viewport));
+}

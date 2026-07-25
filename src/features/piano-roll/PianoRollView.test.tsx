@@ -4,15 +4,17 @@ import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
+import { stressScore, twinkleScore } from '@/test/fixtures';
 import { allNotes, findEvent } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
 import { extractFragment } from '@/domain/score/fragment';
 import {
   VELOCITY_LANE_HEIGHT,
+  computeNoteRects,
   keyboardHeightPx,
   midiToY,
   tickToX,
+  trackWidthPx,
   voiceLaneStripHeight,
 } from '@/features/piano-roll/geometry';
 import { PianoRollView } from '@/features/piano-roll/PianoRollView';
@@ -310,6 +312,103 @@ describe('PianoRollView', () => {
       // just "nothing re-rendered at all".
       const cursor = getByTestId('piano-roll-cursor');
       expect(cursor.style.left).toBe(`${tickToX(960, store.getState().score!.ppq, 1)}px`);
+    });
+  });
+
+  describe('virtualization (spec §29): culls notes outside the scroll viewport', () => {
+    // jsdom never lays anything out (`clientWidth`/`clientHeight` are
+    // always 0), which PianoRollView treats as "viewport not measurable
+    // yet" and renders every note (see `measureViewport`'s doc comment) —
+    // exactly what every other test in this file relies on. These tests
+    // stub the scroll geometry directly so a real (non-zero) measurement
+    // flows through `cullToViewport`.
+    function mockScrollGeometry(
+      scrollBox: HTMLElement,
+      clientWidth: number,
+      clientHeight: number,
+      scrollLeft: number,
+      scrollTop: number,
+    ): void {
+      Object.defineProperty(scrollBox, 'clientWidth', { value: clientWidth, configurable: true });
+      Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
+      Object.defineProperty(scrollBox, 'scrollLeft', { value: scrollLeft, configurable: true, writable: true });
+      Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
+    }
+
+    function makeBigStore(): EditorStoreApi {
+      dbCounter += 1;
+      db = new ScoreSmithDb(`scoresmith-test-piano-roll-view-virtualization-${dbCounter}`);
+      const store = createAppStore({ db });
+      store.getState().setScore(stressScore(1, 100)); // wide enough (100 measures) for real horizontal scroll range
+      return store;
+    }
+
+    function noteTestIds(container: HTMLElement): number {
+      return container.querySelectorAll('[data-testid^="pr-note-"]').length;
+    }
+
+    it('renders every note before the viewport has been measured', () => {
+      const store = makeBigStore();
+      const { container } = render(<PianoRollView store={store} />);
+      expect(noteTestIds(container)).toBe(allNotes(store.getState().score!).length);
+    });
+
+    it('renders only notes near the left of a narrow viewport, and flips to the right on scroll (velocity-lane bars are never culled)', () => {
+      const store = makeBigStore();
+      const score = store.getState().score!;
+      const notes = allNotes(score);
+      const firstNoteId = notes[0].id;
+      const lastNoteId = notes[notes.length - 1].id;
+      const totalWidth = trackWidthPx(score.tracks[0], score.ppq, 1);
+
+      const { container, getByTestId } = render(<PianoRollView store={store} />);
+      const scrollBox = getByTestId('piano-roll-scroll');
+
+      mockScrollGeometry(scrollBox, 400, 2000, 0, 0); // tall clientHeight: isolates the test to horizontal culling only
+      fireEvent.scroll(scrollBox);
+
+      expect(container.querySelector(`[data-testid="pr-note-${firstNoteId}"]`)).not.toBeNull();
+      expect(container.querySelector(`[data-testid="pr-note-${lastNoteId}"]`)).toBeNull();
+      expect(noteTestIds(container)).toBeLessThan(notes.length);
+      // Velocity-lane bars are a different vertical lane than the note
+      // grid, so they're deliberately never culled (see PianoRollView.tsx's
+      // doc comment) — every note still has one.
+      expect(container.querySelectorAll('[data-testid^="pr-velocity-"]').length).toBe(notes.length);
+
+      mockScrollGeometry(scrollBox, 400, 2000, Math.max(0, totalWidth - 400), 0);
+      fireEvent.scroll(scrollBox);
+
+      expect(container.querySelector(`[data-testid="pr-note-${lastNoteId}"]`)).not.toBeNull();
+      expect(container.querySelector(`[data-testid="pr-note-${firstNoteId}"]`)).toBeNull();
+    });
+
+    it('does not change which notes are interactable: a culled-from-the-DOM note can still be clicked and selected', () => {
+      const store = makeBigStore();
+      const score = store.getState().score!;
+      const notes = allNotes(score);
+      const lastNote = notes[notes.length - 1];
+      const lastRect = computeNoteRects(score, { visibleTrackIds: null, zoomH: 1, zoomV: 1 }).find(
+        (r) => r.id === lastNote.id,
+      )!;
+
+      const { container, getByTestId } = render(<PianoRollView store={store} />);
+      const scrollBox = getByTestId('piano-roll-scroll');
+      mockScrollGeometry(scrollBox, 400, 400, 0, 0); // scrolled to the left: the last note is culled from the DOM
+      fireEvent.scroll(scrollBox);
+      expect(container.querySelector(`[data-testid="pr-note-${lastNote.id}"]`)).toBeNull(); // confirms it's genuinely culled
+
+      // jsdom's getBoundingClientRect() is all-zero, so clientX/clientY on
+      // the grid container directly are the note's own grid-local
+      // coordinates — the exact mechanism PianoRollView's `pointFromEvent`
+      // relies on (see the other coordinate-based click tests above).
+      const grid = getByTestId('piano-roll-grid');
+      const x = lastRect.x + 1;
+      const y = lastRect.y + 1;
+
+      fireEvent.pointerDown(grid, { clientX: x, clientY: y, button: 0, pointerId: 99 });
+      fireEvent.pointerUp(grid, { clientX: x, clientY: y, pointerId: 99 });
+
+      expect(store.getState().selection.eventIds).toEqual([lastNote.id]);
     });
   });
 });
