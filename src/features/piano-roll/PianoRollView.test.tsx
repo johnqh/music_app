@@ -20,10 +20,7 @@ import {
 import { PianoRollView } from '@/features/piano-roll/PianoRollView';
 import { __getNoteLayerRenderCountForTests } from '@/features/piano-roll/render-counters';
 
-let dbCounter = 0;
-
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
@@ -376,7 +373,6 @@ describe('PianoRollView', () => {
     });
 
     function makeBigStore(): EditorStoreApi {
-      dbCounter += 1;
       const store = createAppStore({ context: testStoreContext() });
       store.getState().setScore(stressScore(1, 100)); // wide enough (100 measures) for real horizontal scroll range
       return store;

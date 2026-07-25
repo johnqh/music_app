@@ -29,10 +29,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { playbackController } from '@sudobility/music_lib';
 import { TransportBar } from '@/components/transport/TransportBar';
 
-let dbCounter = 0;
-
 function makeStore(withScore = true): PlaybackStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   if (withScore) store.getState().setScore(twinkleScore());
   return store;

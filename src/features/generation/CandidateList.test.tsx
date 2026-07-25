@@ -17,10 +17,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 
 import { playbackController } from '@sudobility/music_lib';
 
-let dbCounter = 0;
-
 function makeStoreWithCandidates(): GenerationStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   return store;
 }

@@ -9,10 +9,7 @@ import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog'
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
   return createAppStore({ context: testStoreContext() });
 }
 

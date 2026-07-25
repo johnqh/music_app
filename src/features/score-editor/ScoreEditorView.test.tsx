@@ -23,10 +23,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
@@ -335,7 +332,6 @@ describe('ScoreEditorView', () => {
     const BIG_MEASURE_COUNT = 80;
 
     function makeBigStore(): EditorStoreApi {
-      dbCounter += 1;
       const store = createAppStore({ context: testStoreContext() });
       store.getState().setScore(stressScore(1, BIG_MEASURE_COUNT)); // wraps into many systems at the default render width
       return store;

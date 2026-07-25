@@ -8,10 +8,7 @@ import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { PianoRollToolbar } from '@/features/piano-roll/PianoRollToolbar';
 
-let dbCounter = 0;
-
 function makeStore(score = twinkleScore()): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(score);
   return store;

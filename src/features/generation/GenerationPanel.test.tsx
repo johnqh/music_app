@@ -30,10 +30,7 @@ import type {
   RegenerateRegionResult,
 } from '@sudobility/music_types';
 
-let dbCounter = 0;
-
 function makeStore(): GenerationStoreApi {
-  dbCounter += 1;
   return createAppStore({ context: testStoreContext({ provider: delegatingProvider }) });
 }
 

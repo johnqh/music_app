@@ -35,10 +35,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { AppLayout } from '@/components/layout/AppLayout';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 async function makeStoreWithProject(score: Score = twinkleScore()): Promise<EditorStoreApi> {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   await store.getState().newProject({ name: 'My Song', score });
   return store;

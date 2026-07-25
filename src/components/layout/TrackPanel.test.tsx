@@ -8,10 +8,7 @@ import { dragSlider } from '@/test/drag-slider';
 import { TrackPanel } from '@/components/layout/TrackPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twoTrackScore());
   return store;

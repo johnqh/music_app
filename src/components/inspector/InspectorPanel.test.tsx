@@ -10,10 +10,7 @@ import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 function makeStore(score: ReturnType<typeof twinkleScore> = twinkleScore()): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(score);
   return store;

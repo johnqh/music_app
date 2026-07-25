@@ -9,10 +9,7 @@ import type { NoteEvent } from '@sudobility/music_types';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-let dbCounter = 0;
-
 function makeStore(withScore = true): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   if (withScore) store.getState().setScore(twinkleScore());
   return store;

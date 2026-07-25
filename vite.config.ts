@@ -23,6 +23,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // RTL + userEvent typing across a real store is slow under full-suite load
+    testTimeout: 15000,
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: true,

@@ -30,10 +30,7 @@ import { transformCommand } from '@sudobility/music_lib';
 import { QuantizeService } from '@sudobility/music_lib';
 import type { QuantizeOptions } from '@sudobility/music_lib';
 
-let dbCounter = 0;
-
 function makeStore() {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
@@ -314,7 +311,6 @@ describe('quantizeSelection', () => {
   });
 
   it('routes a selection touching >2000 notes through the given QuantizeService (spec §29) and produces the same result as the inline path', async () => {
-    dbCounter += 1;
     const store = createAppStore({ context: testStoreContext() });
     // 1 track x 600 measures x 4 notes/measure = 2400 notes, well over the
     // 2000-note worker-routing threshold, spread across 600 per-measure

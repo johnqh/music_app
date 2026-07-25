@@ -19,10 +19,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   playbackController: { togglePlay: vi.fn() },
 }));
 
-let dbCounter = 0;
-
 function makeStore(): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;

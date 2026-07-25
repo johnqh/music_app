@@ -20,10 +20,7 @@ import {
 } from '@/features/piano-roll/interactions';
 import { QuantizeService } from '@sudobility/music_lib';
 
-let dbCounter = 0;
-
 function makeStore(score = twinkleScore()): EditorStoreApi {
-  dbCounter += 1;
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(score);
   return store;
