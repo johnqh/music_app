@@ -17,11 +17,11 @@ import Typography from '@mui/material/Typography';
 import { ThemeProvider } from '@mui/material/styles';
 import { type ColorSchemeMode, createAppTheme, resolveColorScheme } from '@/app/theme';
 import { AppRouter } from '@/app/router';
-import { loadAllSettings, setSetting } from '@/services/persistence/settings';
-import { DEFAULT_MOCK_SEED } from '@/services/generation/registry';
-import { db, useAppStore } from '@/store/useAppStore';
+import { loadAllSettings, setSetting } from '@sudobility/music_lib';
+import { DEFAULT_MOCK_SEED } from '@sudobility/music_lib';
+import { db, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import type { ScoreSmithDb } from '@/services/persistence/db';
+import type { ScoreSmithDb } from '@sudobility/music_lib';
 
 type ErrorBoundaryProps = { children: ReactNode };
 type ErrorBoundaryState = { error: Error | null };

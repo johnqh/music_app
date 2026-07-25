@@ -2,11 +2,11 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { createProject, listProjects } from '@/services/persistence/projects';
-import { createEmptyScore } from '@/domain/score/factory';
-import { SAMPLE_DEFINITIONS } from '@/services/persistence/samples';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { createProject, listProjects } from '@sudobility/music_lib';
+import { createEmptyScore } from '@sudobility/music_lib';
+import { SAMPLE_DEFINITIONS } from '@sudobility/music_lib';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 

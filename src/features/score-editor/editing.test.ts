@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { stressScore, twinkleScore } from '@/test/fixtures';
-import { allNotes, findEvent } from '@/domain/score/queries';
-import { isNoteEvent } from '@/domain/score/types';
-import type { NoteEvent } from '@/domain/score/types';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { allNotes, findEvent } from '@sudobility/music_lib';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { NoteEvent } from '@sudobility/music_types';
 import {
   changeAccidental,
   changeArticulation,
@@ -27,9 +27,9 @@ import {
   transposeOctave,
   transposeSemitone,
 } from '@/features/score-editor/editing';
-import { transformCommand } from '@/domain/commands/snapshot';
-import { QuantizeService } from '@/services/quantization/quantize-service';
-import type { QuantizeOptions } from '@/domain/quantization/options';
+import { transformCommand } from '@sudobility/music_lib';
+import { QuantizeService } from '@sudobility/music_lib';
+import type { QuantizeOptions } from '@sudobility/music_lib';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;

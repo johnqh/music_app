@@ -2,9 +2,9 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { resetProvider, setProvider } from '@/services/generation/registry';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { resetProvider, setProvider } from '@sudobility/music_lib';
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import type {
@@ -12,7 +12,7 @@ import type {
   GenerateScoreResult,
   MusicGenerationProvider,
   RegenerateRegionResult,
-} from '@/services/generation/types';
+} from '@sudobility/music_types';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;

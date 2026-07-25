@@ -19,15 +19,15 @@
  * validation error that wasn't already present. Existing pre-edit errors
  * are not re-announced on every subsequent unrelated edit.
  */
-import type { createAppStore } from '@/store/useAppStore';
-import type { Accidental, Articulation, DurationName, NoteEvent, Pitch, Score, UUID } from '@/domain/score/types';
-import { isNoteEvent } from '@/domain/score/types';
-import type { MusicalEvent } from '@/domain/score/types';
-import type { ScoreSelection } from '@/domain/selection/types';
-import type { ScoreCommand } from '@/domain/commands/types';
-import type { ValidationIssue } from '@/domain/validation/issues';
-import { allNotes, findEvent, findTrack } from '@/domain/score/queries';
-import { ticksFor } from '@/domain/time/ticks';
+import type { createAppStore } from '@sudobility/music_lib';
+import type { Accidental, Articulation, DurationName, NoteEvent, Pitch, Score, UUID } from '@sudobility/music_types';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { MusicalEvent } from '@sudobility/music_types';
+import type { ScoreSelection } from '@sudobility/music_lib';
+import type { ScoreCommand } from '@sudobility/music_lib';
+import type { ValidationIssue } from '@sudobility/music_lib';
+import { allNotes, findEvent, findTrack } from '@sudobility/music_lib';
+import { ticksFor } from '@sudobility/music_lib';
 import {
   addNoteCommand,
   changeAccidentalCommand,
@@ -36,17 +36,17 @@ import {
   changeVelocityCommand,
   deleteEventsCommand,
   toggleTieCommand,
-} from '@/domain/commands/note-commands';
+} from '@sudobility/music_lib';
 import {
   applyQuantizedCommand,
   collectQuantizeTargets,
   pasteEventsCommand,
   quantizeCommand,
   transposeCommand,
-} from '@/domain/commands/edit-commands';
-import type { QuantizeOptions } from '@/domain/quantization/options';
-import { getQuantizeService } from '@/services/quantization/quantize-service';
-import type { QuantizeService } from '@/services/quantization/quantize-service';
+} from '@sudobility/music_lib';
+import type { QuantizeOptions } from '@sudobility/music_lib';
+import { getQuantizeService } from '@sudobility/music_lib';
+import type { QuantizeService } from '@sudobility/music_lib';
 
 /** The store shape every function in this module operates on: same type `useAppStore`/`createAppStore()` produce. */
 export type EditorStoreApi = ReturnType<typeof createAppStore>;

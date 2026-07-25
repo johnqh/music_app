@@ -26,10 +26,10 @@ import {
   xToTick,
   yToMidi,
 } from '@/features/piano-roll/geometry';
-import { twinkleScore, twoTrackScore } from '@/test/fixtures';
-import { allNotes } from '@/domain/score/queries';
-import { pitchToMidi } from '@/domain/pitch/pitch';
-import { extractFragment } from '@/domain/score/fragment';
+import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { allNotes } from '@sudobility/music_lib';
+import { pitchToMidi } from '@sudobility/music_lib';
+import { extractFragment } from '@sudobility/music_lib';
 
 describe('tickToX / xToTick', () => {
   it('is 0 at tick 0', () => {

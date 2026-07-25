@@ -13,23 +13,19 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "verify": "bun run typecheck && bun run lint && bun run test && bun run build"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
-    "@tonejs/midi": "^2.0.28",
-    "dexie": "^4.4.4",
-    "immer": "^11.1.15",
+    "@sudobility/music_lib": "^0.1.2",
+    "@sudobility/music_types": "^0.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.1",
-    "tone": "^15.1.22",
-    "vexflow": "^4.2.5",
-    "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

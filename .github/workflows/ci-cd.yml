@@ -1,0 +1,26 @@
+# CI workflow for music_app
+# Deployment is handled by Cloudflare Pages
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: write
+  id-token: write
+  deployments: write
+
+jobs:
+  ci:
+    uses: johnqh/workflows/.github/workflows/unified-cicd.yml@main
+    with:
+      skip-npm-publish: true
+    secrets: inherit

@@ -11,14 +11,14 @@
  * re-exported here for convenience so `PianoRollView`/`interactions.ts`
  * only need to import from one place.
  */
-import type { BBox } from '@/adapters/vexflow/types';
+import type { BBox } from '@sudobility/music_lib';
 import type { Point } from '@/features/score-editor/hit-test';
 import { boxFromPoints, bboxesIntersect, eventIdAtPoint, eventIdsInBox, pointInBBox } from '@/features/score-editor/hit-test';
-import type { DurationName, NoteEvent, Score, Track, UUID } from '@/domain/score/types';
-import { isNoteEvent } from '@/domain/score/types';
-import { pitchToMidi, midiToPitch, pitchToString } from '@/domain/pitch/pitch';
-import { beatBoundaries, measureDurationTicks, ticksFor } from '@/domain/time/ticks';
-import type { ScoreFragment } from '@/domain/score/fragment';
+import type { DurationName, NoteEvent, Score, Track, UUID } from '@sudobility/music_types';
+import { isNoteEvent } from '@sudobility/music_types';
+import { pitchToMidi, midiToPitch, pitchToString } from '@sudobility/music_lib';
+import { beatBoundaries, measureDurationTicks, ticksFor } from '@sudobility/music_lib';
+import type { ScoreFragment } from '@sudobility/music_lib';
 
 export { boxFromPoints, pointInBBox, bboxesIntersect, eventIdAtPoint, eventIdsInBox };
 export type { Point };

@@ -11,7 +11,7 @@
  * the DOM click-target-id-based path used for plain point clicks (which
  * works fine in jsdom since it only needs element identity, not geometry).
  */
-import type { BBox } from '@/adapters/vexflow/types';
+import type { BBox } from '@sudobility/music_lib';
 
 export type Point = { x: number; y: number };
 

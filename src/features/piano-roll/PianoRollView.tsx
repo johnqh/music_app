@@ -38,12 +38,12 @@ import type React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
-import { findEvent } from '@/domain/score/queries';
-import { isNoteEvent } from '@/domain/score/types';
-import type { UUID } from '@/domain/score/types';
-import { ticksFor } from '@/domain/time/ticks';
-import { selectionSummaryLabel } from '@/domain/selection/selection';
-import { useAppStore } from '@/store/useAppStore';
+import { findEvent } from '@sudobility/music_lib';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { UUID } from '@sudobility/music_types';
+import { ticksFor } from '@sudobility/music_lib';
+import { selectionSummaryLabel } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import {
   KEYBOARD_WIDTH,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
+import { createAppStore } from '@sudobility/music_lib';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 

@@ -9,7 +9,7 @@
 import Alert from '@mui/material/Alert';
 import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 export type ToastsProps = {

@@ -24,11 +24,11 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { findEvent } from '@/domain/score/queries';
-import { isNoteEvent } from '@/domain/score/types';
-import type { Accidental, Articulation, DurationName, Pitch } from '@/domain/score/types';
-import { ticksFor } from '@/domain/time/ticks';
-import { useAppStore } from '@/store/useAppStore';
+import { findEvent } from '@sudobility/music_lib';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
+import { ticksFor } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import {
   changeAccidental,

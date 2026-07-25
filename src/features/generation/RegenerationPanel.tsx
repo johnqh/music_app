@@ -28,12 +28,12 @@ import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { findTrack } from '@/domain/score/queries';
-import type { Score } from '@/domain/score/types';
-import type { ScoreRange } from '@/domain/selection/types';
-import { selectionIsRegenerable } from '@/domain/selection/selection';
-import { prepareRegenerationRequest } from '@/services/regeneration/controller';
-import { useAppStore } from '@/store/useAppStore';
+import { findTrack } from '@sudobility/music_lib';
+import type { Score } from '@sudobility/music_types';
+import type { ScoreRange } from '@sudobility/music_lib';
+import { selectionIsRegenerable } from '@sudobility/music_lib';
+import { prepareRegenerationRequest } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import { CandidateList } from '@/features/generation/CandidateList';
 

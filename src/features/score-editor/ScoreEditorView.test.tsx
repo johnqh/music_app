@@ -2,21 +2,22 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { stressScore, twinkleScore } from '@/test/fixtures';
-import { computeLayout } from '@/adapters/vexflow/layout';
-import { allNotes, findEvent } from '@/domain/score/queries';
-import type { NoteEvent, Score } from '@/domain/score/types';
-import { VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
-import { extractFragment } from '@/domain/score/fragment';
-import type { ScoreFragment } from '@/domain/score/fragment';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { computeLayout } from '@sudobility/music_lib';
+import { allNotes, findEvent } from '@sudobility/music_lib';
+import type { NoteEvent, Score } from '@sudobility/music_types';
+import { VexFlowScoreRenderer } from '@sudobility/music_lib';
+import { extractFragment } from '@sudobility/music_lib';
+import type { ScoreFragment } from '@sudobility/music_lib';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
 // singleton, which eagerly constructs a real Tone.js engine on import —
 // mocked out here since this suite never exercises the Space shortcut.
-vi.mock('@/services/playback/controller', () => ({
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   playbackController: { togglePlay: vi.fn() },
 }));
 

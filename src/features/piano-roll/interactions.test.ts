@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createAppStore } from '@/store/useAppStore';
+import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { stressScore, twinkleScore, twoTrackScore } from '@/test/fixtures';
-import { allNotes, findEvent } from '@/domain/score/queries';
-import type { NoteEvent } from '@/domain/score/types';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { allNotes, findEvent } from '@sudobility/music_lib';
+import type { NoteEvent } from '@sudobility/music_types';
 import {
   addNoteAtCell,
   commitDelete,
@@ -19,7 +19,7 @@ import {
   maxVoiceCount,
   resolveActiveTrackId,
 } from '@/features/piano-roll/interactions';
-import { QuantizeService } from '@/services/quantization/quantize-service';
+import { QuantizeService } from '@sudobility/music_lib';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;

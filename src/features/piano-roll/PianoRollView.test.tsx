@@ -2,13 +2,13 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLayoutEffect } from 'react';
 import { act, render, fireEvent } from '@testing-library/react';
-import { createAppStore } from '@/store/useAppStore';
+import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { stressScore, twinkleScore } from '@/test/fixtures';
-import { allNotes, findEvent } from '@/domain/score/queries';
-import type { NoteEvent } from '@/domain/score/types';
-import { extractFragment } from '@/domain/score/fragment';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { allNotes, findEvent } from '@sudobility/music_lib';
+import type { NoteEvent } from '@sudobility/music_types';
+import { extractFragment } from '@sudobility/music_lib';
 import {
   VELOCITY_LANE_HEIGHT,
   computeNoteRects,

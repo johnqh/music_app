@@ -19,12 +19,12 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { importScoreCommand } from '@/domain/commands/region-commands';
-import { allNotes } from '@/domain/score/queries';
-import { reportError } from '@/services/errors';
-import { MusicXmlService } from '@/services/import-export/musicxml-service';
-import type { MusicXmlImportResult } from '@/adapters/musicxml/import';
-import { useAppStore } from '@/store/useAppStore';
+import { importScoreCommand } from '@sudobility/music_lib';
+import { allNotes } from '@sudobility/music_lib';
+import { reportError } from '@sudobility/music_lib';
+import { MusicXmlService } from '@sudobility/music_lib';
+import type { MusicXmlImportResult } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 

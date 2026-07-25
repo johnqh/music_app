@@ -15,16 +15,16 @@ import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import { createEmptyScore } from '@/domain/score/factory';
-import type { Clef } from '@/domain/score/types';
-import { downloadBlob } from '@/services/import-export/download';
-import { reportError } from '@/services/errors';
-import type { ScoreSmithDb } from '@/services/persistence/db';
-import { useAppStore } from '@/store/useAppStore';
+import { createEmptyScore } from '@sudobility/music_lib';
+import type { Clef } from '@sudobility/music_types';
+import { downloadBlob } from '@sudobility/music_lib';
+import { reportError } from '@sudobility/music_lib';
+import type { ScoreSmithDb } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { runBenchmark, toBenchmarkTable } from '@/services/perf/benchmark';
-import type { BenchmarkReport, BenchmarkSize } from '@/services/perf/benchmark';
+import { runBenchmark, toBenchmarkTable } from '@sudobility/music_lib';
+import type { BenchmarkReport, BenchmarkSize } from '@sudobility/music_lib';
 
 export type DeveloperSettingsDialogProps = {
   open: boolean;

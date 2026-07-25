@@ -25,9 +25,9 @@ import Stack from '@mui/material/Stack';
 import ToggleButton from '@mui/material/ToggleButton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import type { Clef, Track, UUID } from '@/domain/score/types';
-import { addTrackCommand, changeClefCommand, changeTrackPropsCommand, deleteTrackCommand } from '@/domain/commands/structure-commands';
-import { useAppStore } from '@/store/useAppStore';
+import type { Clef, Track, UUID } from '@sudobility/music_types';
+import { addTrackCommand, changeClefCommand, changeTrackPropsCommand, deleteTrackCommand } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 

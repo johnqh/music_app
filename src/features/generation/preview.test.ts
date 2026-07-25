@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyScore } from '@/domain/score/factory';
-import { extractFragment } from '@/domain/score/fragment';
+import { createEmptyScore } from '@sudobility/music_lib';
+import { extractFragment } from '@sudobility/music_lib';
 import { previewStartTick, scoreWithCandidate, summarizeFragment } from '@/features/generation/preview';
 
 describe('scoreWithCandidate', () => {

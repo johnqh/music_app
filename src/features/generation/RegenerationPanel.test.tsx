@@ -2,20 +2,21 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
-import { resetProvider, setProvider } from '@/services/generation/registry';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { twinkleScore } from '@sudobility/music_lib';
+import { resetProvider, setProvider } from '@sudobility/music_lib';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import type {
   MusicGenerationProvider,
   RegenerateRegionRequest,
   RegenerateRegionResult,
-} from '@/services/generation/types';
-import type { GenerateScoreResult } from '@/services/generation/types';
+} from '@sudobility/music_types';
+import type { GenerateScoreResult } from '@sudobility/music_types';
 
-vi.mock('@/services/playback/controller', () => ({
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   playbackController: {
     playPreview: vi.fn(),
     stopPreview: vi.fn(),

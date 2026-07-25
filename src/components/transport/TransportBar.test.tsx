@@ -2,12 +2,13 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
-import type { PlaybackStoreApi } from '@/services/playback/controller';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { twinkleScore } from '@sudobility/music_lib';
+import type { PlaybackStoreApi } from '@sudobility/music_lib';
 
-vi.mock('@/services/playback/controller', () => ({
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   playbackController: {
     togglePlay: vi.fn(),
     stop: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock('@/services/playback/controller', () => ({
   },
 }));
 
-import { playbackController } from '@/services/playback/controller';
+import { playbackController } from '@sudobility/music_lib';
 import { TransportBar } from '@/components/transport/TransportBar';
 
 let db: ScoreSmithDb;

@@ -28,8 +28,8 @@ import {
   transposeOctave,
   transposeSemitone,
 } from '@/features/score-editor/editing';
-import { playbackController } from '@/services/playback/controller';
-import type { PlaybackController } from '@/services/playback/controller';
+import { playbackController } from '@sudobility/music_lib';
+import type { PlaybackController } from '@sudobility/music_lib';
 
 /** The slice of `PlaybackController` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
 export type PlaybackToggle = Pick<PlaybackController, 'togglePlay'>;

@@ -2,18 +2,19 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
-import { allNotes } from '@/domain/score/queries';
-import type { NoteEvent, Score } from '@/domain/score/types';
-import { changeVelocityCommand } from '@/domain/commands/note-commands';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { twinkleScore } from '@sudobility/music_lib';
+import { allNotes } from '@sudobility/music_lib';
+import type { NoteEvent, Score } from '@sudobility/music_types';
+import { changeVelocityCommand } from '@sudobility/music_lib';
 
 // AppLayout renders ScoreEditorView (useEditorShortcuts -> playbackController)
 // and TransportBar, both of which reach the app-wide playbackController
 // singleton -- mocked per the Task 13/15 test pattern so this suite never
 // constructs a real Tone.js engine.
-vi.mock('@/services/playback/controller', () => ({
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   playbackController: {
     togglePlay: vi.fn(),
     stop: vi.fn(),

@@ -6,7 +6,7 @@ import {
   eventIdsInBox,
   pointInBBox,
 } from '@/features/score-editor/hit-test';
-import type { BBox } from '@/adapters/vexflow/types';
+import type { BBox } from '@sudobility/music_lib';
 
 const box: BBox = { x: 10, y: 10, width: 20, height: 10 };
 

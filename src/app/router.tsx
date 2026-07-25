@@ -16,10 +16,10 @@ import { useEffect, useRef } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/projects/DashboardPage';
-import { reportError } from '@/services/errors';
-import { db as appDb, useAppStore } from '@/store/useAppStore';
+import { reportError } from '@sudobility/music_lib';
+import { db as appDb, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import type { ScoreSmithDb } from '@/services/persistence/db';
+import type { ScoreSmithDb } from '@sudobility/music_lib';
 
 export type AppRouterProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */

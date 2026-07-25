@@ -2,11 +2,11 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@/store/useAppStore';
+import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore, twoTrackScore } from '@/test/fixtures';
-import { allNotes } from '@/domain/score/queries';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { allNotes } from '@sudobility/music_lib';
 import { PianoRollToolbar } from '@/features/piano-roll/PianoRollToolbar';
 
 let db: ScoreSmithDb;

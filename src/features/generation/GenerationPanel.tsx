@@ -35,9 +35,9 @@ import type { SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import type { Clef, KeySignature, TimeSignature } from '@/domain/score/types';
-import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@/services/generation/types';
-import { useAppStore } from '@/store/useAppStore';
+import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
+import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@sudobility/music_types';
+import { useAppStore } from '@sudobility/music_lib';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 
 export type GenerationPanelProps = {

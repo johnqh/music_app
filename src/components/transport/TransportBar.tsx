@@ -27,13 +27,13 @@ import ToggleButton from '@mui/material/ToggleButton';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { changeTempoCommand } from '@/domain/commands/structure-commands';
-import { scoreEndTick } from '@/domain/score/queries';
-import { playbackController } from '@/services/playback/controller';
-import type { PlaybackStoreApi } from '@/services/playback/controller';
-import { selectCurrentMeasureBeat } from '@/store/selectors';
-import type { MeasureBeat } from '@/store/selectors';
-import { useAppStore } from '@/store/useAppStore';
+import { changeTempoCommand } from '@sudobility/music_lib';
+import { scoreEndTick } from '@sudobility/music_lib';
+import { playbackController } from '@sudobility/music_lib';
+import type { PlaybackStoreApi } from '@sudobility/music_lib';
+import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
+import type { MeasureBeat } from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 
 export type TransportBarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */

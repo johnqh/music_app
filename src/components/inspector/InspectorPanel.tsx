@@ -33,9 +33,9 @@ import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import type { Accidental, Articulation, Clef, KeySignature, NoteEvent, PitchStep, TimeSignature } from '@/domain/score/types';
-import { isNoteEvent } from '@/domain/score/types';
-import { findEvent, findMeasure, findTrack } from '@/domain/score/queries';
+import type { Accidental, Articulation, Clef, KeySignature, NoteEvent, PitchStep, TimeSignature } from '@sudobility/music_types';
+import { isNoteEvent } from '@sudobility/music_types';
+import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import {
   changeAccidental as dispatchAccidental,
   changeArticulation as dispatchArticulation,
@@ -43,14 +43,14 @@ import {
   selectedNoteIds,
   toggleTie as dispatchToggleTie,
 } from '@/features/score-editor/editing';
-import { changePitchCommand, changeVoiceCommand, moveNotesCommand, resizeNotesCommand } from '@/domain/commands/note-commands';
+import { changePitchCommand, changeVoiceCommand, moveNotesCommand, resizeNotesCommand } from '@sudobility/music_lib';
 import {
   changeClefCommand,
   changeKeySignatureCommand,
   changeTimeSignatureCommand,
   changeTrackPropsCommand,
-} from '@/domain/commands/structure-commands';
-import { useAppStore } from '@/store/useAppStore';
+} from '@sudobility/music_lib';
+import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 export type InspectorPanelProps = {

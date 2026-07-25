@@ -24,11 +24,11 @@ import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
-import type { RegenerationCandidate } from '@/services/generation/types';
-import { playbackController } from '@/services/playback/controller';
+import type { RegenerationCandidate } from '@sudobility/music_types';
+import { playbackController } from '@sudobility/music_lib';
 import { scoreWithCandidate, summarizeFragment, previewStartTick } from '@/features/generation/preview';
 import type { GenerationStoreApi } from '@/features/generation/preview';
-import { useAppStore } from '@/store/useAppStore';
+import { useAppStore } from '@sudobility/music_lib';
 
 export type CandidateListProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */

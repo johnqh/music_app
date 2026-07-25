@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { createAppStore } from '@/store/useAppStore';
-import { ScoreSmithDb } from '@/services/persistence/db';
-import * as settingsModule from '@/services/persistence/settings';
-import { getSetting } from '@/services/persistence/settings';
+import { createAppStore } from '@sudobility/music_lib';
+import { ScoreSmithDb } from '@sudobility/music_lib';
+import * as settingsModule from '@sudobility/music_lib';
+import { getSetting } from '@sudobility/music_lib';
 import { App } from '@/app/App';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -13,7 +13,8 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 // singleton indirectly through AppLayout on the /project/:id route only, but
 // App itself doesn't reach it on '/'. Mocked anyway for safety/consistency
 // with the rest of this suite's pattern, since router.tsx doesn't gate it.
-vi.mock('@/services/playback/controller', () => ({
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   playbackController: { togglePlay: vi.fn(), stop: vi.fn(), stopPreview: vi.fn() },
 }));
 

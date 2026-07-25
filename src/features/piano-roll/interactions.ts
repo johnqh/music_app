@@ -11,12 +11,12 @@
  * toast behavior) — there is no piano-roll-local note state or a separate
  * mutation path.
  */
-import type { UUID, Measure, Score, Track } from '@/domain/score/types';
-import type { ScoreSelection } from '@/domain/selection/types';
-import { findEvent, findTrack } from '@/domain/score/queries';
-import { selectionToRange } from '@/domain/selection/selection';
-import { ticksFor } from '@/domain/time/ticks';
-import { midiToPitch } from '@/domain/pitch/pitch';
+import type { UUID, Measure, Score, Track } from '@sudobility/music_types';
+import type { ScoreSelection } from '@sudobility/music_lib';
+import { findEvent, findTrack } from '@sudobility/music_lib';
+import { selectionToRange } from '@sudobility/music_lib';
+import { ticksFor } from '@sudobility/music_lib';
+import { midiToPitch } from '@sudobility/music_lib';
 import {
   addNoteCommand,
   changeVelocityCommand,
@@ -24,12 +24,12 @@ import {
   deleteEventsCommand,
   moveNotesCommand,
   resizeNotesCommand,
-} from '@/domain/commands/note-commands';
-import type { MoveNotesParams } from '@/domain/commands/note-commands';
-import type { QuantizeOptions } from '@/domain/quantization/options';
+} from '@sudobility/music_lib';
+import type { MoveNotesParams } from '@sudobility/music_lib';
+import type { QuantizeOptions } from '@sudobility/music_lib';
 import { dispatchTracked, runQuantize } from '@/features/score-editor/editing';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import type { QuantizeService } from '@/services/quantization/quantize-service';
+import type { QuantizeService } from '@sudobility/music_lib';
 import { snapTick } from '@/features/piano-roll/geometry';
 
 export type { EditorStoreApi } from '@/features/score-editor/editing';

@@ -7,12 +7,12 @@
  * everything here is pure, so components can call it freely on every
  * render without worrying about touching the committed score.
  */
-import type { ScoreFragment } from '@/domain/score/fragment';
-import { replaceFragment } from '@/domain/score/fragment';
-import { isNoteEvent } from '@/domain/score/types';
-import type { Score } from '@/domain/score/types';
-import { midiToPitch, pitchToMidi, pitchToString } from '@/domain/pitch/pitch';
-import type { createAppStore } from '@/store/useAppStore';
+import type { ScoreFragment } from '@sudobility/music_lib';
+import { replaceFragment } from '@sudobility/music_lib';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { Score } from '@sudobility/music_types';
+import { midiToPitch, pitchToMidi, pitchToString } from '@sudobility/music_lib';
+import type { createAppStore } from '@sudobility/music_lib';
 
 /** The store shape every `features/generation/*` component operates on (same convention as `services/playback/controller.ts`'s `PlaybackStoreApi` / `features/score-editor/editing.ts`'s `EditorStoreApi`). */
 export type GenerationStoreApi = ReturnType<typeof createAppStore>;
