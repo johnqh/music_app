@@ -95,7 +95,15 @@ describe('TransportBar: transport buttons', () => {
     const store = makeStore(false);
     renderBar(store);
 
-    for (const name of ['Go to start', 'Previous measure', 'Play', 'Stop', 'Next measure']) {
+    for (const name of [
+      'Go to start',
+      'Previous measure',
+      'Play',
+      'Stop',
+      'Next measure',
+      'Toggle loop',
+      'Toggle metronome',
+    ]) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
   });

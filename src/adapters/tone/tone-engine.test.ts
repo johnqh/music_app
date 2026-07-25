@@ -64,16 +64,21 @@ const { mock, resetMockTone } = vi.hoisted(() => {
       cancel(after = 0): void {
         state.scheduledEvents = state.scheduledEvents.filter((e) => e.time < after);
       },
-      start(_time?: unknown, offset?: number): void {
+      // Wrapped in vi.fn (rather than plain methods) so tests can assert
+      // call counts directly (finding 1's play/stop race regression test
+      // needs to assert transport.start() was never called), not just the
+      // resulting `_state`. `function` (not an arrow) preserves `this`
+      // binding for `obj.start()`-style calls.
+      start: vi.fn(function (this: { _state: string; seconds: number }, _time?: unknown, offset?: number): void {
         this._state = 'started';
         if (typeof offset === 'number') this.seconds = offset;
-      },
-      stop(): void {
+      }),
+      stop: vi.fn(function (this: { _state: string }): void {
         this._state = 'stopped';
-      },
-      pause(): void {
+      }),
+      pause: vi.fn(function (this: { _state: string }): void {
         this._state = 'paused';
-      },
+      }),
     };
   }
 
@@ -189,6 +194,7 @@ vi.mock('tone', () => {
   };
 });
 
+import * as Tone from 'tone';
 import { TonePlaybackEngine } from '@/adapters/tone/tone-engine';
 import type { PlaybackObserver } from '@/services/playback/types';
 
@@ -460,6 +466,30 @@ describe('TonePlaybackEngine: transport lifecycle', () => {
     const engine = new TonePlaybackEngine();
     await engine.play();
     expect(mock.getTransport().state).toBe('stopped');
+  });
+
+  it('regression: stop() during the initial play() await wins the race (Tone.start() resolving late must not start the transport)', async () => {
+    const engine = new TonePlaybackEngine();
+    const observer = makeObserver();
+    engine.setObserver(observer);
+    await engine.loadScore(twinkleScore());
+
+    let resolveStart!: () => void;
+    vi.mocked(Tone.start).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStart = resolve;
+        }),
+    );
+
+    const playPromise = engine.play(); // suspends inside `await this.initialize()`, i.e. inside `await Tone.start()`
+    engine.stop(); // completes synchronously well before Tone.start() resolves
+    resolveStart();
+    await playPromise;
+
+    expect(mock.getTransport().start).not.toHaveBeenCalled();
+    expect(mock.getTransport().state).toBe('stopped');
+    expect(observer.states.at(-1)).toBe('stopped');
   });
 
   it('pause() pauses the transport, silences voices (instrument disposed+rebuilt), and notifies the observer', async () => {

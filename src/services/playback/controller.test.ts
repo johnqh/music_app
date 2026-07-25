@@ -46,6 +46,11 @@ function observerOf(engine: PlaybackEngine): PlaybackObserver {
   return call[0] as PlaybackObserver;
 }
 
+/** Drains every pending microtask (safer than a fixed number of `await Promise.resolve()` hops when multiple overlapping async chains are in flight). */
+async function flushAsync(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 let controller: PlaybackController | null = null;
 
 afterEach(() => {
@@ -125,6 +130,50 @@ describe('PlaybackController: construction and score subscription', () => {
     expect(engine.loadScore).toHaveBeenCalledTimes(1);
     expect(engine.stop).not.toHaveBeenCalled();
     expect(engine.play).not.toHaveBeenCalled();
+  });
+
+  it('a rejected loadScore for the initial (already-present) score pushes an error toast, not an unhandled rejection', async () => {
+    const store = makeStore();
+    store.getState().setScore(twinkleScore());
+    const engine = createFakeEngine();
+    vi.mocked(engine.loadScore).mockRejectedValueOnce(new Error('corrupt score'));
+
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+
+    const toast = store.getState().toasts.at(-1);
+    expect(toast?.severity).toBe('error');
+    expect(toast?.message).toContain('corrupt score');
+  });
+
+  it('two rapid score changes while playing produce exactly one resume, reflecting only the final score', async () => {
+    const store = makeStore();
+    store.getState().setScore(twinkleScore());
+    const engine = createFakeEngine();
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+    vi.mocked(engine.loadScore).mockClear();
+    vi.mocked(engine.stop).mockClear();
+    vi.mocked(engine.play).mockClear();
+
+    store.getState().setPlaybackState('playing');
+    store.getState().setPositionTick(480);
+
+    // Two score changes dispatched back-to-back, before either's loadScore() has resolved.
+    store.getState().dispatchCommand(addMeasureCommand());
+    const scoreA = store.getState().score;
+    store.getState().dispatchCommand(addMeasureCommand());
+    const scoreB = store.getState().score;
+
+    await flushAsync();
+
+    expect(engine.loadScore).toHaveBeenCalledTimes(2);
+    expect(engine.loadScore).toHaveBeenNthCalledWith(1, scoreA);
+    expect(engine.loadScore).toHaveBeenNthCalledWith(2, scoreB);
+    // Only the newest (scoreB) change is allowed to resume playback — the
+    // stale scoreA continuation aborts after noticing a newer generation.
+    expect(engine.play).toHaveBeenCalledTimes(1);
+    expect(engine.play).toHaveBeenCalledWith(480);
   });
 });
 

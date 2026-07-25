@@ -38,6 +38,20 @@ function measureAt(score: Score, tick: number) {
 
 export class PlaybackController {
   private readonly unsubscribe: () => void;
+  /**
+   * Bumped by every `handleScoreChange` call and by `dispose()`. Rapid
+   * successive score changes (e.g. two edits dispatched back-to-back) each
+   * start their own `handleScoreChange`, and since `engine.loadScore`/
+   * `engine.play` are async, an *older* call's continuation can still be
+   * in flight when a *newer* one starts. Each call captures its own
+   * generation and checks it again after `await engine.loadScore(...)`;
+   * a stale (superseded) call aborts before its final `engine.play(...)` —
+   * the load itself is left to complete (harmless: the next, newer call's
+   * `loadScore` immediately overwrites it), but only the newest call is
+   * allowed to resume playback, so a burst of edits produces exactly one
+   * `engine.play()` reflecting the final score, not one per edit.
+   */
+  private scoreChangeGeneration = 0;
 
   constructor(
     private readonly engine: PlaybackEngine,
@@ -50,7 +64,11 @@ export class PlaybackController {
     });
 
     let lastScore: Score | null = this.store.getState().score;
-    if (lastScore) void this.engine.loadScore(lastScore);
+    // Routed through the same guarded `handleScoreChange` path as every
+    // later change (try/catch -> error toast on a rejected loadScore),
+    // rather than a bare fire-and-forget `engine.loadScore(...)` — a
+    // corrupt initial score must not surface as an unhandled rejection.
+    if (lastScore) void this.handleScoreChange(lastScore);
 
     this.unsubscribe = this.store.subscribe((state) => {
       if (state.score !== lastScore) {
@@ -62,6 +80,7 @@ export class PlaybackController {
 
   /** Releases the store subscription and disposes the engine; only meaningful for a controller that isn't the app-wide singleton (e.g. tests). */
   dispose(): void {
+    this.scoreChangeGeneration++; // invalidate any handleScoreChange still in flight so it won't call engine.play() post-dispose
     this.unsubscribe();
     this.engine.dispose();
   }
@@ -175,14 +194,22 @@ export class PlaybackController {
    * rebuilt schedule reflects the edit cleanly rather than leaving stale
    * Transport events or stuck voices from the old score (spec §10:
    * "reschedule safely after edits").
+   *
+   * See `scoreChangeGeneration`'s doc for why this checks its own
+   * generation after `loadScore` resolves: a newer score change may have
+   * started (and captured a newer generation) while this one's `loadScore`
+   * was in flight, in which case resuming playback here would be resuming
+   * the *wrong* (stale) score right before the newer call's own resume.
    */
   private async handleScoreChange(score: Score): Promise<void> {
+    const generation = ++this.scoreChangeGeneration;
     const wasPlaying = this.store.getState().state === 'playing';
     const resumeTick = this.store.getState().positionTick;
 
     try {
       if (wasPlaying) this.engine.stop();
       await this.engine.loadScore(score);
+      if (generation !== this.scoreChangeGeneration) return; // superseded by a newer score change while loadScore was in flight
       if (wasPlaying) await this.engine.play(resumeTick);
     } catch (error) {
       this.reportError('Failed to load the score for playback', error);

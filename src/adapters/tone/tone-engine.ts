@@ -94,6 +94,18 @@ export class TonePlaybackEngine implements PlaybackEngine {
 
   private initialized = false;
   private visibilityHandler: (() => void) | null = null;
+  /**
+   * Bumped by every `stop()`/`pause()`/`dispose()` call, and captured by
+   * `play()` before its `await this.initialize()` (the first call's real
+   * async `Tone.start()` — an AudioContext resume that can take a
+   * noticeable moment). Without this, a `stop()` issued while that await is
+   * in flight would complete synchronously, and then `play()`'s
+   * continuation would go on to unconditionally call `transport.start()`
+   * once the await resolves — silently overriding the stop. `play()`
+   * re-checks the generation immediately after the await and aborts if it
+   * changed.
+   */
+  private generation = 0;
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -114,7 +126,9 @@ export class TonePlaybackEngine implements PlaybackEngine {
 
   async play(fromTick?: number): Promise<void> {
     if (!this.score) return;
+    const generation = this.generation;
     await this.initialize();
+    if (generation !== this.generation) return; // a stop()/pause()/dispose() happened while we awaited initialize(); it wins.
     const transport = Tone.getTransport();
     if (fromTick !== undefined) {
       transport.seconds = this.scheduledSeconds(fromTick);
@@ -124,6 +138,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
   }
 
   pause(): void {
+    this.generation++;
     const transport = Tone.getTransport();
     transport.pause();
     this.silenceAndReschedule(); // see silenceAndReschedule's doc: rebuildChannels alone would leave already-scheduled note-on callbacks pointing at disposed instruments
@@ -131,6 +146,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
   }
 
   stop(): void {
+    this.generation++;
     const transport = Tone.getTransport();
     transport.stop();
     transport.seconds = 0;
@@ -196,6 +212,7 @@ export class TonePlaybackEngine implements PlaybackEngine {
   }
 
   dispose(): void {
+    this.generation++;
     const transport = Tone.getTransport();
     transport.stop();
     transport.cancel(0);

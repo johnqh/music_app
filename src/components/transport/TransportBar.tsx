@@ -188,6 +188,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
             value="metronome"
             selected={metronome}
             aria-label="Toggle metronome"
+            disabled={!hasScore}
             onClick={() => playbackController.setMetronome(!metronome)}
           >
             Metronome
