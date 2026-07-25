@@ -28,6 +28,11 @@ import {
   transposeOctave,
   transposeSemitone,
 } from '@/features/score-editor/editing';
+import { playbackController } from '@/services/playback/controller';
+import type { PlaybackController } from '@/services/playback/controller';
+
+/** The slice of `PlaybackController` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
+export type PlaybackToggle = Pick<PlaybackController, 'togglePlay'>;
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -42,16 +47,20 @@ function isModified(event: KeyboardEvent): boolean {
   return event.metaKey || event.ctrlKey;
 }
 
-/** Attaches the spec §7 keyboard shortcut table to `window` for as long as the calling component is mounted. */
-export function useEditorShortcuts(store: EditorStoreApi): void {
+/**
+ * Attaches the spec §7 keyboard shortcut table to `window` for as long as
+ * the calling component is mounted. `controller` defaults to the app-wide
+ * `playbackController` singleton (DI-safe wiring: tests inject a fake so
+ * importing this hook never eagerly constructs a real Tone.js engine).
+ */
+export function useEditorShortcuts(store: EditorStoreApi, controller: PlaybackToggle = playbackController): void {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
       if (isEditableTarget(event.target)) return;
 
       if (event.key === ' ' || event.code === 'Space') {
         event.preventDefault();
-        const state = store.getState();
-        state.setPlaybackState(state.state === 'playing' ? 'paused' : 'playing');
+        controller.togglePlay();
         return;
       }
 
@@ -119,5 +128,5 @@ export function useEditorShortcuts(store: EditorStoreApi): void {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [store]);
+  }, [store, controller]);
 }

@@ -11,6 +11,7 @@ vi.mock('@/services/playback/controller', () => ({
   playbackController: {
     togglePlay: vi.fn(),
     stop: vi.fn(),
+    stopPreview: vi.fn(),
     seek: vi.fn(),
     seekToMeasure: vi.fn(),
     goToStart: vi.fn(),
@@ -67,7 +68,7 @@ describe('TransportBar: transport buttons', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
   });
 
-  it('stop button calls playbackController.stop()', async () => {
+  it('stop button calls playbackController.stop() and stopPreview() (so a candidate preview is cleaned up too)', async () => {
     const store = makeStore();
     renderBar(store);
     const user = userEvent.setup();
@@ -75,6 +76,7 @@ describe('TransportBar: transport buttons', () => {
     await user.click(screen.getByRole('button', { name: 'Stop' }));
 
     expect(playbackController.stop).toHaveBeenCalledTimes(1);
+    expect(playbackController.stopPreview).toHaveBeenCalledTimes(1);
   });
 
   it('go to start / previous / next measure buttons delegate to the controller', async () => {

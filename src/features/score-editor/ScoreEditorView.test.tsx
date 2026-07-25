@@ -8,6 +8,15 @@ import { twinkleScore } from '@/test/fixtures';
 import { allNotes, findEvent } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
 import { VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
+
+// ScoreEditorView wires useEditorShortcuts(store) with no explicit
+// controller, so it falls back to the app-wide `playbackController`
+// singleton, which eagerly constructs a real Tone.js engine on import —
+// mocked out here since this suite never exercises the Space shortcut.
+vi.mock('@/services/playback/controller', () => ({
+  playbackController: { togglePlay: vi.fn() },
+}));
+
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 

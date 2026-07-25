@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
@@ -9,6 +9,15 @@ import { allNotes, findEvent } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { PlaybackToggle } from '@/features/score-editor/useEditorShortcuts';
+
+// useEditorShortcuts defaults its `controller` param to the app-wide
+// `playbackController` singleton, which eagerly constructs a real Tone.js
+// engine on import — every test below instead passes its own fake
+// `PlaybackToggle`, so this module is never imported for real here.
+vi.mock('@/services/playback/controller', () => ({
+  playbackController: { togglePlay: vi.fn() },
+}));
 
 let db: ScoreSmithDb;
 let dbCounter = 0;
@@ -25,8 +34,8 @@ afterEach(async () => {
   await db?.delete();
 });
 
-function Harness({ store }: { store: EditorStoreApi }) {
-  useEditorShortcuts(store);
+function Harness({ store, controller }: { store: EditorStoreApi; controller?: PlaybackToggle }) {
+  useEditorShortcuts(store, controller);
   return (
     <div>
       <input aria-label="text field" />
@@ -35,16 +44,16 @@ function Harness({ store }: { store: EditorStoreApi }) {
 }
 
 describe('useEditorShortcuts', () => {
-  it('Space toggles playback state between playing and paused', async () => {
+  it('Space calls the playback controller\'s togglePlay() (real play/pause is the controller\'s job, not a store toggle)', async () => {
     const store = makeStore();
-    render(<Harness store={store} />);
+    const controller: PlaybackToggle = { togglePlay: vi.fn() };
+    render(<Harness store={store} controller={controller} />);
     const user = userEvent.setup();
 
-    expect(store.getState().state).toBe('stopped');
     await user.keyboard(' ');
-    expect(store.getState().state).toBe('playing');
+    expect(controller.togglePlay).toHaveBeenCalledTimes(1);
     await user.keyboard(' ');
-    expect(store.getState().state).toBe('paused');
+    expect(controller.togglePlay).toHaveBeenCalledTimes(2);
   });
 
   it('Escape clears the selection', async () => {
