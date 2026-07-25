@@ -21,14 +21,40 @@ afterEach(async () => {
   await db?.delete();
 });
 
-/** A fully-spied `PlaybackEngine` fake — no Tone.js/real engine involved; the engine's own behavior is tested in `tone-engine.test.ts`. This suite only exercises the controller's orchestration. */
+/**
+ * A fully-spied `PlaybackEngine` fake — no Tone.js/real engine involved; the
+ * engine's own behavior is tested in `tone-engine.test.ts`. This suite only
+ * exercises the controller's orchestration.
+ *
+ * `play()`/`pause()`/`stop()` fire the same observer callbacks the real
+ * `TonePlaybackEngine` fires synchronously (`stop()`:
+ * onActiveNotes([])/onPositionTick(0)/onStateChange('stopped'); `play()`:
+ * onStateChange('playing'); `pause()`: onStateChange('paused')) — this
+ * matters: an earlier version of this fake left `stop()`/`play()` as bare
+ * no-ops, which meant a test could not catch a controller bug where
+ * `handleScoreChange` re-read `store.getState().state`/`positionTick`
+ * *after* calling `engine.stop()` and got fooled by the store having
+ * already been flipped back to stopped/0 by that very call (see
+ * `controller.ts`'s `pendingResume` doc). Individual tests can still
+ * override any of these via `vi.mocked(engine.stop).mockImplementation(...)`
+ * when they want to assert call order/args instead.
+ */
 function createFakeEngine(): PlaybackEngine {
+  let observer: PlaybackObserver | null = null;
   return {
     initialize: vi.fn(async () => {}),
     loadScore: vi.fn(async () => {}),
-    play: vi.fn(async () => {}),
-    pause: vi.fn(),
-    stop: vi.fn(),
+    play: vi.fn(async () => {
+      observer?.onStateChange('playing');
+    }),
+    pause: vi.fn(() => {
+      observer?.onStateChange('paused');
+    }),
+    stop: vi.fn(() => {
+      observer?.onActiveNotes([]);
+      observer?.onPositionTick(0);
+      observer?.onStateChange('stopped');
+    }),
     seek: vi.fn(),
     setTempoMultiplier: vi.fn(),
     setLoop: vi.fn(),
@@ -36,7 +62,9 @@ function createFakeEngine(): PlaybackEngine {
     setTrackSolo: vi.fn(),
     setMetronome: vi.fn(),
     setMasterVolume: vi.fn(),
-    setObserver: vi.fn(),
+    setObserver: vi.fn((obs: PlaybackObserver | null) => {
+      observer = obs;
+    }),
     dispose: vi.fn(),
   };
 }
@@ -146,7 +174,7 @@ describe('PlaybackController: construction and score subscription', () => {
     expect(toast?.message).toContain('corrupt score');
   });
 
-  it('two rapid score changes while playing produce exactly one resume, reflecting only the final score', async () => {
+  it('two rapid score changes while playing produce exactly one resume, at the pre-stop position, reflecting only the final score', async () => {
     const store = makeStore();
     store.getState().setScore(twinkleScore());
     const engine = createFakeEngine();
@@ -159,7 +187,14 @@ describe('PlaybackController: construction and score subscription', () => {
     store.getState().setPlaybackState('playing');
     store.getState().setPositionTick(480);
 
-    // Two score changes dispatched back-to-back, before either's loadScore() has resolved.
+    // Two score changes dispatched back-to-back, before either's loadScore()
+    // has resolved. The fake engine's stop() (see createFakeEngine's doc)
+    // synchronously fires onStateChange('stopped')/onPositionTick(0) just
+    // like the real engine — so by the time the second change's
+    // handleScoreChange runs, the store already reads state:'stopped'/
+    // positionTick:0 because of the *first* change's stop() call. The
+    // controller must not be fooled by that into thinking there is nothing
+    // left to resume, and must not resume at the now-0 position either.
     store.getState().dispatchCommand(addMeasureCommand());
     const scoreA = store.getState().score;
     store.getState().dispatchCommand(addMeasureCommand());
@@ -171,7 +206,8 @@ describe('PlaybackController: construction and score subscription', () => {
     expect(engine.loadScore).toHaveBeenNthCalledWith(1, scoreA);
     expect(engine.loadScore).toHaveBeenNthCalledWith(2, scoreB);
     // Only the newest (scoreB) change is allowed to resume playback — the
-    // stale scoreA continuation aborts after noticing a newer generation.
+    // stale scoreA continuation aborts after noticing a newer generation —
+    // and it resumes at 480 (captured before the first stop()), not 0.
     expect(engine.play).toHaveBeenCalledTimes(1);
     expect(engine.play).toHaveBeenCalledWith(480);
   });
@@ -210,9 +246,18 @@ describe('PlaybackController: play/pause/stop', () => {
   it('togglePlay calls engine.pause() when playing', () => {
     const store = makeStore();
     store.getState().setScore(twinkleScore());
-    store.getState().setPlaybackState('playing');
     const engine = createFakeEngine();
     controller = createPlaybackController(engine, store);
+    // Set *after* construction, not before: the constructor's own eager
+    // load for an already-present score now (correctly, matching the real
+    // engine) treats state:'playing' as "was playing" and synchronously
+    // stops+reloads — which would immediately flip state back to
+    // 'stopped' via the fake's realistic stop() before this test ever
+    // gets to call togglePlay(). Setting it afterward isolates what this
+    // test actually means to exercise: togglePlay()'s own playing->pause
+    // branch, not the constructor's reload behavior (covered separately
+    // above).
+    store.getState().setPlaybackState('playing');
 
     controller.togglePlay();
 

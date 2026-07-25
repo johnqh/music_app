@@ -52,6 +52,18 @@ export class PlaybackController {
    * `engine.play()` reflecting the final score, not one per edit.
    */
   private scoreChangeGeneration = 0;
+  /**
+   * Set while a burst of one or more overlapping `handleScoreChange` calls
+   * owes a resume once the *last* of them finishes loading. Captured
+   * explicitly rather than re-derived from `store.getState().state`/
+   * `positionTick` after the fact: the real engine's `stop()` synchronously
+   * fires `onStateChange('stopped')`/`onPositionTick(0)` through this
+   * controller's own observer wiring, so a second `handleScoreChange` call
+   * arriving right after the first one's `engine.stop()` would otherwise
+   * see `state: 'stopped'`/`positionTick: 0` and wrongly conclude nothing
+   * needs to resume (see `handleScoreChange`'s doc for the full story).
+   */
+  private pendingResume: { tick: number } | null = null;
 
   constructor(
     private readonly engine: PlaybackEngine,
@@ -81,6 +93,7 @@ export class PlaybackController {
   /** Releases the store subscription and disposes the engine; only meaningful for a controller that isn't the app-wide singleton (e.g. tests). */
   dispose(): void {
     this.scoreChangeGeneration++; // invalidate any handleScoreChange still in flight so it won't call engine.play() post-dispose
+    this.pendingResume = null;
     this.unsubscribe();
     this.engine.dispose();
   }
@@ -195,22 +208,38 @@ export class PlaybackController {
    * Transport events or stuck voices from the old score (spec §10:
    * "reschedule safely after edits").
    *
-   * See `scoreChangeGeneration`'s doc for why this checks its own
-   * generation after `loadScore` resolves: a newer score change may have
-   * started (and captured a newer generation) while this one's `loadScore`
-   * was in flight, in which case resuming playback here would be resuming
-   * the *wrong* (stale) score right before the newer call's own resume.
+   * Resume intent is captured into `pendingResume` up front, *before*
+   * `engine.stop()` runs, and only consumed (cleared + turned into
+   * `engine.play(tick)`) by whichever call is still current once its
+   * `loadScore` resolves — never re-derived from the store afterward. Two
+   * things would otherwise go wrong for a burst of rapid score changes: (1)
+   * the real engine's `stop()` synchronously flips the store's `state`/
+   * `positionTick` back to `'stopped'`/`0` via the observer wiring, so a
+   * second call reading the store *after* the first call's `stop()` would
+   * wrongly conclude nothing was playing and silently drop the resume
+   * entirely; (2) `scoreChangeGeneration`'s own doc explains why a stale
+   * call must not act on an old score — but the resume it was carrying
+   * still needs to reach the call that *does* end up current, which is
+   * exactly what leaving `pendingResume` set (rather than clearing it) on
+   * an aborted/superseded call accomplishes.
    */
   private async handleScoreChange(score: Score): Promise<void> {
     const generation = ++this.scoreChangeGeneration;
-    const wasPlaying = this.store.getState().state === 'playing';
-    const resumeTick = this.store.getState().positionTick;
+
+    const shouldResume = this.pendingResume !== null || this.store.getState().state === 'playing';
+    if (shouldResume && !this.pendingResume) {
+      this.pendingResume = { tick: this.store.getState().positionTick };
+    }
 
     try {
-      if (wasPlaying) this.engine.stop();
+      if (shouldResume) this.engine.stop();
       await this.engine.loadScore(score);
-      if (generation !== this.scoreChangeGeneration) return; // superseded by a newer score change while loadScore was in flight
-      if (wasPlaying) await this.engine.play(resumeTick);
+      if (generation !== this.scoreChangeGeneration) return; // superseded by a newer score change; that newer call (not this one) owns consuming pendingResume
+      if (this.pendingResume) {
+        const { tick } = this.pendingResume;
+        this.pendingResume = null;
+        await this.engine.play(tick);
+      }
     } catch (error) {
       this.reportError('Failed to load the score for playback', error);
     }
