@@ -7,24 +7,17 @@
  *
  * Opening or creating a project loads it into the shared app-wide store
  * (`openProject`/`newProject`) and then calls `onNavigate`.
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 5): the MUI
+ * Toolbar/Card/CardActionArea/Grid become a plain flex toolbar and a
+ * Tailwind `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3` card grid, MUI
+ * Select becomes a native `<select>`, and the import buttons' MUI Tooltips
+ * become `@sudobility/components`' Tooltip — same roles/labels/accessible
+ * names as before, so no test assertions changed.
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardActionArea from '@mui/material/CardActionArea';
-import CardActions from '@mui/material/CardActions';
-import CardContent from '@mui/material/CardContent';
-import Grid from '@mui/material/Grid';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import Toolbar from '@mui/material/Toolbar';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { Tooltip } from '@sudobility/components';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
 import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
@@ -58,6 +51,17 @@ async function clientAndToken() {
   if (!token) throw new Error('You must be signed in.');
   return { client: musicClient, token };
 }
+
+const TOOLBAR_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-50';
+
+const PRIMARY_BUTTON_CLASS =
+  'rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+
+const TEXT_INPUT_CLASS =
+  'rounded-md border border-theme-border bg-theme-bg-primary px-3 py-1.5 text-sm text-theme-text-primary';
+
+const CARD_CLASS = 'flex flex-col overflow-hidden rounded-md border border-theme-border bg-theme-bg-secondary';
 
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -164,133 +168,148 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   const renderCard = (project: ProjectSummary) => (
-    <Grid key={project.id} size={{ xs: 12, sm: 6, md: 4 }}>
-      <Card variant="outlined">
-        <CardActionArea onClick={() => void openProject(project.id)} aria-label={`Open project: ${project.name}`}>
-          <CardContent>
-            <Typography variant="subtitle1">{project.name}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              Updated {formatDate(project.updatedAt)}
-            </Typography>
-          </CardContent>
-        </CardActionArea>
-        <CardActions>
-          <Button size="small" aria-label={`Duplicate project: ${project.name}`} onClick={() => void handleDuplicate(project)}>
-            Duplicate
-          </Button>
-          <Button size="small" color="error" aria-label={`Delete project: ${project.name}`} onClick={() => setPendingDelete(project)}>
-            Delete
-          </Button>
-        </CardActions>
-      </Card>
-    </Grid>
+    <div key={project.id} className={CARD_CLASS}>
+      <button
+        type="button"
+        aria-label={`Open project: ${project.name}`}
+        onClick={() => void openProject(project.id)}
+        className="flex flex-1 flex-col gap-1 p-4 text-left hover:bg-theme-hover-bg"
+      >
+        <span className="text-sm font-medium text-theme-text-primary">{project.name}</span>
+        <span className="text-xs text-theme-text-secondary">Updated {formatDate(project.updatedAt)}</span>
+      </button>
+      <div className="flex gap-1 border-t border-theme-border p-2">
+        <button
+          type="button"
+          aria-label={`Duplicate project: ${project.name}`}
+          onClick={() => void handleDuplicate(project)}
+          className="rounded-md px-3 py-1 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+        >
+          Duplicate
+        </button>
+        <button
+          type="button"
+          aria-label={`Delete project: ${project.name}`}
+          onClick={() => setPendingDelete(project)}
+          className="rounded-md px-3 py-1 text-sm text-red-600 hover:bg-red-600/10"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
   );
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Toolbar disableGutters sx={{ flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h5" sx={{ flex: 1 }}>
-          ScoreSmith
-        </Typography>
+    <div className="p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">ScoreSmith</h1>
 
-        <TextField
-          size="small"
-          label="Search projects"
+        <input
+          type="text"
+          aria-label="Search projects"
+          placeholder="Search projects"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          slotProps={{ htmlInput: { 'aria-label': 'Search projects' } }}
+          className={TEXT_INPUT_CLASS}
         />
-        <Select
-          size="small"
+
+        <select
+          aria-label="Sort projects"
           value={sortBy}
-          onChange={(e: SelectChangeEvent) => setSortBy(e.target.value as SortBy)}
-          inputProps={{ 'aria-label': 'Sort projects' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as SortBy)}
+          className={TOOLBAR_BUTTON_CLASS}
         >
-          <MenuItem value="updatedAt">Last modified</MenuItem>
-          <MenuItem value="name">Name</MenuItem>
-        </Select>
+          <option value="updatedAt">Last modified</option>
+          <option value="name">Name</option>
+        </select>
 
         {creatingName !== null ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <TextField
-              size="small"
+          <div className="flex items-center gap-1">
+            <input
               autoFocus
+              type="text"
+              aria-label="New project name"
               value={creatingName}
               onChange={(e) => setCreatingName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleCreate();
                 else if (e.key === 'Escape') setCreatingName(null);
               }}
-              slotProps={{ htmlInput: { 'aria-label': 'New project name' } }}
+              className={TEXT_INPUT_CLASS}
             />
-            <Button variant="contained" size="small" aria-label="Create" onClick={() => void handleCreate()}>
+            <button type="button" aria-label="Create" onClick={() => void handleCreate()} className={PRIMARY_BUTTON_CLASS}>
               Create
-            </Button>
-          </Stack>
+            </button>
+          </div>
         ) : (
-          <Button variant="contained" aria-label="New project" onClick={() => setCreatingName('Untitled Project')}>
+          <button
+            type="button"
+            aria-label="New project"
+            onClick={() => setCreatingName('Untitled Project')}
+            className={PRIMARY_BUTTON_CLASS}
+          >
             New Project
-          </Button>
+          </button>
         )}
 
-        <Tooltip title="Import MIDI">
-          <Button aria-label="Import MIDI" onClick={() => setMidiImportOpen(true)}>
+        <Tooltip content="Import MIDI">
+          <button type="button" aria-label="Import MIDI" onClick={() => setMidiImportOpen(true)} className={TOOLBAR_BUTTON_CLASS}>
             Import MIDI
-          </Button>
+          </button>
         </Tooltip>
-        <Tooltip title="Import MusicXML">
-          <Button aria-label="Import MusicXML" onClick={() => setMusicXmlImportOpen(true)}>
+        <Tooltip content="Import MusicXML">
+          <button
+            type="button"
+            aria-label="Import MusicXML"
+            onClick={() => setMusicXmlImportOpen(true)}
+            className={TOOLBAR_BUTTON_CLASS}
+          >
             Import MusicXML
-          </Button>
+          </button>
         </Tooltip>
-        <Tooltip title="Import project JSON">
-          <Button component="label" aria-label="Import project JSON">
+        <Tooltip content="Import project JSON">
+          <label role="button" tabIndex={0} aria-label="Import project JSON" className={`cursor-pointer ${TOOLBAR_BUTTON_CLASS}`}>
             Import Project JSON
-            <input type="file" accept="application/json" hidden aria-label="Project JSON file input" onChange={(e) => void handleImportJsonFile(e)} />
-          </Button>
+            <input
+              type="file"
+              accept="application/json"
+              className="sr-only"
+              aria-label="Project JSON file input"
+              onChange={(e) => void handleImportJsonFile(e)}
+            />
+          </label>
         </Tooltip>
-      </Toolbar>
+      </div>
 
-      <Box sx={{ mt: 2 }} aria-label="Templates">
-        <Typography variant="overline" color="text.secondary">
-          Templates
-        </Typography>
-        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+      <div className="mt-6" aria-label="Templates">
+        <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">Templates</p>
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {projectTemplates.map((template) => (
-            <Grid key={template.id} size={{ xs: 12, sm: 6, md: 4 }}>
-              <Card variant="outlined">
-                <CardActionArea
-                  onClick={() => void handleCreateFromTemplate(template.id)}
-                  aria-label={`New from template: ${template.name}`}
-                >
-                  <CardContent>
-                    <Typography variant="subtitle1">{template.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {template.description}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Grid>
+            <button
+              key={template.id}
+              type="button"
+              aria-label={`New from template: ${template.name}`}
+              onClick={() => void handleCreateFromTemplate(template.id)}
+              className="flex flex-col gap-1 rounded-md border border-theme-border bg-theme-bg-secondary p-4 text-left hover:bg-theme-hover-bg"
+            >
+              <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
+              <span className="text-xs text-theme-text-secondary">{template.description}</span>
+            </button>
           ))}
-        </Grid>
-      </Box>
+        </div>
+      </div>
 
       {loaded && filtered.length === 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 4 }}>
+        <p className="mt-8 text-sm text-theme-text-secondary">
           No projects yet. Create one, or import a MIDI/MusicXML/project file to get started.
-        </Typography>
+        </p>
       )}
 
       {filtered.length > 0 && (
-        <Box sx={{ mt: 3 }} aria-label="Your projects">
-          <Typography variant="overline" color="text.secondary">
-            Your projects
-          </Typography>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            {filtered.map(renderCard)}
-          </Grid>
-        </Box>
+        <div className="mt-6" aria-label="Your projects">
+          <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">Your projects</p>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">{filtered.map(renderCard)}</div>
+        </div>
       )}
 
       <ConfirmDialog
@@ -322,6 +341,6 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           onNavigate?.(`/project/${projectId}`);
         }}
       />
-    </Box>
+    </div>
   );
 }

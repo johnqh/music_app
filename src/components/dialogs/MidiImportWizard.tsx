@@ -13,29 +13,19 @@
  * existing work to lose); when a project is already open (the app bar's
  * import menu), replacing its score is a destructive edit and is
  * confirmed first, then dispatched via `importScoreCommand`.
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 5): the MUI
+ * Dialog becomes `@sudobility/components`' Dialog with an inner
+ * `role="dialog"` + labelled heading (same pattern as `ConfirmDialog`/
+ * `MusicXmlImportDialog`), the MUI Table becomes a plain `<table>` (same
+ * "MIDI track summary" accessible name via `aria-label`), MUI Selects
+ * become native `<select>`s, and MUI Checkboxes become native
+ * `<input type="checkbox">`s — same roles/labels/accessible names as
+ * before, so no test assertions changed.
  */
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
+import { Dialog } from '@sudobility/components';
 import type { MidiSummary } from '@sudobility/music_lib';
 import { defaultMidiImportOptions } from '@sudobility/music_lib';
 import type { MidiImportOptions } from '@sudobility/music_lib';
@@ -91,6 +81,20 @@ function firstNotesPreview(notes: NoteEvent[], limit = 12): string {
 async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return file.arrayBuffer();
 }
+
+const TEXT_BUTTON_CLASS = 'rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg';
+
+const PRIMARY_BUTTON_CLASS =
+  'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+
+const SECONDARY_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-50';
+
+const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary';
+
+const TEXT_INPUT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary';
+
+const CHECKBOX_LABEL_CLASS = 'flex items-center gap-2 text-sm text-theme-text-primary';
 
 export function MidiImportWizard({
   open,
@@ -212,200 +216,247 @@ export function MidiImportWizard({
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} aria-labelledby="midi-import-title" maxWidth="md" fullWidth>
-        <DialogTitle id="midi-import-title">Import MIDI</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2}>
-            <Button component="label" variant="outlined" aria-label="Choose MIDI file">
+      <Dialog isOpen={open} onClose={handleClose} size="lg" showCloseButton={false}>
+        <div role="dialog" aria-labelledby="midi-import-title" className="flex max-h-[85vh] flex-col p-6">
+          <h2 id="midi-import-title" className="text-lg font-semibold text-theme-text-primary">
+            Import MIDI
+          </h2>
+
+          <div className="mt-4 flex flex-col gap-3 overflow-y-auto">
+            <label
+              role="button"
+              tabIndex={0}
+              aria-label="Choose MIDI file"
+              className="cursor-pointer self-start rounded-md border border-theme-border px-3 py-2 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+            >
               {fileName ?? 'Choose MIDI file...'}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".mid,.midi,audio/midi"
-                hidden
+                className="sr-only"
                 aria-label="MIDI file input"
                 onChange={(e) => void handleFileChange(e)}
               />
-            </Button>
+            </label>
 
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && (
+              <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             {summary && options && (
               <>
-                <Alert severity="warning">
+                <div role="status" className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700">
                   MIDI stores performance timing, not complete notation semantics -- imported notation is an
                   approximation. Review the settings below and preview before importing.
-                </Alert>
+                </div>
 
-                <Typography variant="subtitle2">
+                <p className="text-sm font-medium text-theme-text-primary">
                   {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s, {summary.ppq} PPQ
-                </Typography>
+                </p>
 
-                <Table size="small" aria-label="MIDI track summary">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Include</TableCell>
-                      <TableCell>Track</TableCell>
-                      <TableCell>Channel</TableCell>
-                      <TableCell>Program</TableCell>
-                      <TableCell>Notes</TableCell>
-                      <TableCell>Clef</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {summary.tracks.map((track) => {
-                      const selection = options.trackSelections.find((s) => s.sourceIndex === track.index);
-                      if (!selection) return null;
-                      return (
-                        <TableRow key={track.index}>
-                          <TableCell>
-                            <Checkbox
-                              size="small"
-                              checked={selection.include}
-                              onChange={(e) => patchTrackSelection(track.index, { include: e.target.checked })}
-                              slotProps={{ input: { 'aria-label': `Include track: ${track.name}` } }}
-                            />
-                          </TableCell>
-                          <TableCell>{track.name}</TableCell>
-                          <TableCell>{track.channel}</TableCell>
-                          <TableCell>{track.program}</TableCell>
-                          <TableCell>{track.noteCount}</TableCell>
-                          <TableCell>
-                            <Select
-                              size="small"
-                              value={selection.clef}
-                              onChange={(e: SelectChangeEvent) => patchTrackSelection(track.index, { clef: e.target.value as Clef })}
-                              inputProps={{ 'aria-label': `Clef: ${track.name}` }}
-                            >
-                              {CLEF_OPTIONS.map((clef) => (
-                                <MenuItem key={clef} value={clef}>
-                                  {clef}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="overflow-x-auto rounded-md border border-theme-border">
+                  <table aria-label="MIDI track summary" className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-theme-border text-theme-text-secondary">
+                        <th className="px-2 py-1.5 font-medium">Include</th>
+                        <th className="px-2 py-1.5 font-medium">Track</th>
+                        <th className="px-2 py-1.5 font-medium">Channel</th>
+                        <th className="px-2 py-1.5 font-medium">Program</th>
+                        <th className="px-2 py-1.5 font-medium">Notes</th>
+                        <th className="px-2 py-1.5 font-medium">Clef</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.tracks.map((track) => {
+                        const selection = options.trackSelections.find((s) => s.sourceIndex === track.index);
+                        if (!selection) return null;
+                        return (
+                          <tr key={track.index} className="border-b border-theme-border text-theme-text-primary last:border-b-0">
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="checkbox"
+                                aria-label={`Include track: ${track.name}`}
+                                checked={selection.include}
+                                onChange={(e) => patchTrackSelection(track.index, { include: e.target.checked })}
+                                className="h-4 w-4 rounded border-theme-border"
+                              />
+                            </td>
+                            <td className="px-2 py-1.5">{track.name}</td>
+                            <td className="px-2 py-1.5">{track.channel}</td>
+                            <td className="px-2 py-1.5">{track.program}</td>
+                            <td className="px-2 py-1.5">{track.noteCount}</td>
+                            <td className="px-2 py-1.5">
+                              <select
+                                aria-label={`Clef: ${track.name}`}
+                                value={selection.clef}
+                                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                                  patchTrackSelection(track.index, { clef: e.target.value as Clef })
+                                }
+                                className={SELECT_CLASS}
+                              >
+                                {CLEF_OPTIONS.map((clef) => (
+                                  <option key={clef} value={clef}>
+                                    {clef}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-                <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 2 }}>
-                  <Select
-                    size="small"
-                    value={options.quantizeGrid ?? 'none'}
-                    onChange={(e: SelectChangeEvent) =>
-                      patchOptions({ quantizeGrid: e.target.value === 'none' ? null : (e.target.value as DurationName) })
-                    }
-                    inputProps={{ 'aria-label': 'Quantize grid' }}
-                  >
-                    {QUANTIZE_GRID_OPTIONS.map((opt) => (
-                      <MenuItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={options.tripletDetection}
-                        onChange={(e) => patchOptions({ tripletDetection: e.target.checked })}
-                        slotProps={{ input: { 'aria-label': 'Triplet detection' } }}
-                      />
-                    }
-                    label="Triplet detection"
-                  />
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Min. note duration (ticks)"
-                    value={options.minDurationTicks}
-                    onChange={(e) => patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })}
-                    slotProps={{ htmlInput: { 'aria-label': 'Minimum note duration (ticks)', min: 0 } }}
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={options.mergeNearDuplicates}
-                        onChange={(e) => patchOptions({ mergeNearDuplicates: e.target.checked })}
-                        slotProps={{ input: { 'aria-label': 'Merge near-duplicate notes' } }}
-                      />
-                    }
-                    label="Merge near-duplicates"
-                  />
-                  <Select
-                    size="small"
-                    value={options.sustainPedal}
-                    onChange={(e: SelectChangeEvent) => patchOptions({ sustainPedal: e.target.value as 'extend' | 'ignore' })}
-                    inputProps={{ 'aria-label': 'Sustain pedal handling' }}
-                  >
-                    <MenuItem value="extend">Extend notes through sustain</MenuItem>
-                    <MenuItem value="ignore">Ignore sustain pedal</MenuItem>
-                  </Select>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={options.pianoStaffSplit}
-                        onChange={(e) => patchOptions({ pianoStaffSplit: e.target.checked })}
-                        slotProps={{ input: { 'aria-label': 'Piano staff split' } }}
-                      />
-                    }
-                    label="Piano staff split"
-                  />
-                  {options.pianoStaffSplit && (
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Split point (MIDI note)"
-                      value={options.splitPointMidi}
-                      onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
-                      slotProps={{ htmlInput: { 'aria-label': 'Split point (MIDI note number)', min: 0, max: 127 } }}
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-theme-text-secondary">Quantize grid</span>
+                    <select
+                      aria-label="Quantize grid"
+                      value={options.quantizeGrid ?? 'none'}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                        patchOptions({ quantizeGrid: e.target.value === 'none' ? null : (e.target.value as DurationName) })
+                      }
+                      className={SELECT_CLASS}
+                    >
+                      {QUANTIZE_GRID_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className={CHECKBOX_LABEL_CLASS}>
+                    <input
+                      type="checkbox"
+                      aria-label="Triplet detection"
+                      checked={options.tripletDetection}
+                      onChange={(e) => patchOptions({ tripletDetection: e.target.checked })}
+                      className="h-4 w-4 rounded border-theme-border"
                     />
-                  )}
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={options.detectKey}
-                        onChange={(e) => patchOptions({ detectKey: e.target.checked })}
-                        slotProps={{ input: { 'aria-label': 'Detect key' } }}
-                      />
-                    }
-                    label="Detect key"
-                  />
-                </Stack>
+                    Triplet detection
+                  </label>
 
-                <Button size="small" aria-label="Preview import" disabled={busy} onClick={() => void handlePreview()}>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-theme-text-secondary">Min. note duration (ticks)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      aria-label="Minimum note duration (ticks)"
+                      value={options.minDurationTicks}
+                      onChange={(e) => patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })}
+                      className={TEXT_INPUT_CLASS}
+                    />
+                  </label>
+
+                  <label className={CHECKBOX_LABEL_CLASS}>
+                    <input
+                      type="checkbox"
+                      aria-label="Merge near-duplicate notes"
+                      checked={options.mergeNearDuplicates}
+                      onChange={(e) => patchOptions({ mergeNearDuplicates: e.target.checked })}
+                      className="h-4 w-4 rounded border-theme-border"
+                    />
+                    Merge near-duplicates
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-theme-text-secondary">Sustain pedal handling</span>
+                    <select
+                      aria-label="Sustain pedal handling"
+                      value={options.sustainPedal}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                        patchOptions({ sustainPedal: e.target.value as 'extend' | 'ignore' })
+                      }
+                      className={SELECT_CLASS}
+                    >
+                      <option value="extend">Extend notes through sustain</option>
+                      <option value="ignore">Ignore sustain pedal</option>
+                    </select>
+                  </label>
+
+                  <label className={CHECKBOX_LABEL_CLASS}>
+                    <input
+                      type="checkbox"
+                      aria-label="Piano staff split"
+                      checked={options.pianoStaffSplit}
+                      onChange={(e) => patchOptions({ pianoStaffSplit: e.target.checked })}
+                      className="h-4 w-4 rounded border-theme-border"
+                    />
+                    Piano staff split
+                  </label>
+
+                  {options.pianoStaffSplit && (
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs text-theme-text-secondary">Split point (MIDI note)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={127}
+                        aria-label="Split point (MIDI note number)"
+                        value={options.splitPointMidi}
+                        onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
+                        className={TEXT_INPUT_CLASS}
+                      />
+                    </label>
+                  )}
+
+                  <label className={CHECKBOX_LABEL_CLASS}>
+                    <input
+                      type="checkbox"
+                      aria-label="Detect key"
+                      checked={options.detectKey}
+                      onChange={(e) => patchOptions({ detectKey: e.target.checked })}
+                      className="h-4 w-4 rounded border-theme-border"
+                    />
+                    Detect key
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Preview import"
+                  disabled={busy}
+                  onClick={() => void handlePreview()}
+                  className={`self-start ${SECONDARY_BUTTON_CLASS}`}
+                >
                   Preview
-                </Button>
+                </button>
 
                 {preview && (
-                  <Box>
-                    <Typography variant="body2">{preview.noteCount} notes after import.</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                      {preview.text}
-                    </Typography>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm text-theme-text-primary">{preview.noteCount} notes after import.</p>
+                    <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
                     {preview.warnings.map((w) => (
-                      <Alert key={w} severity="warning" sx={{ mt: 1 }}>
+                      <div key={w} role="status" className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700">
                         {w}
-                      </Alert>
+                      </div>
                     ))}
-                  </Box>
+                  </div>
                 )}
               </>
             )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button
-            variant="contained"
-            aria-label="Import"
-            disabled={!summary || !options || busy}
-            onClick={handleImportClick}
-          >
-            Import
-          </Button>
-        </DialogActions>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button type="button" onClick={handleClose} className={TEXT_BUTTON_CLASS}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              aria-label="Import"
+              disabled={!summary || !options || busy}
+              onClick={handleImportClick}
+              className={PRIMARY_BUTTON_CLASS}
+            >
+              Import
+            </button>
+          </div>
+        </div>
       </Dialog>
 
       <ConfirmDialog
