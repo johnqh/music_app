@@ -12,7 +12,7 @@
  * `router.tsx` for how a project id gets opened before this mounts.
  */
 import { useState } from 'react';
-import type { ChangeEvent, MouseEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
@@ -32,6 +32,7 @@ import Typography from '@mui/material/Typography';
 import { exportMidi, safeFilename as midiSafeFilename } from '@/adapters/midi/export';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@/adapters/musicxml/export';
 import { findEvent, findMeasure, findTrack } from '@/domain/score/queries';
+import { selectionSummaryLabel } from '@/domain/selection/selection';
 import type { ValidationIssue } from '@/domain/validation/issues';
 import { db as appDb } from '@/store/useAppStore';
 import { useAppStore } from '@/store/useAppStore';
@@ -65,13 +66,6 @@ export type AppLayoutProps = {
 };
 
 const SIDE_PANEL_WIDTH = 280;
-
-function selectionSummaryLabel(selection: { eventIds: string[]; measureIds: string[]; trackIds: string[] }): string {
-  if (selection.eventIds.length > 0) return `${selection.eventIds.length} note(s) selected`;
-  if (selection.measureIds.length > 0) return `${selection.measureIds.length} measure(s) selected`;
-  if (selection.trackIds.length > 0) return `${selection.trackIds.length} track(s) selected`;
-  return 'No selection';
-}
 
 const SAVE_STATE_LABEL: Record<string, string> = { saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved' };
 const SAVE_STATE_COLOR: Record<string, 'success' | 'info' | 'warning'> = {
@@ -419,8 +413,20 @@ export function AppLayout({ store = useAppStore, db = appDb, onNavigate }: AppLa
               <Box
                 key={`${issue.code}-${issue.objectId ?? issue.measureId ?? issue.trackId ?? i}`}
                 role="listitem"
+                tabIndex={0}
                 onClick={() => navigateToIssue(issue)}
-                sx={{ p: 0.5, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigateToIssue(issue);
+                  }
+                }}
+                sx={{
+                  p: 0.5,
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
+                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+                }}
               >
                 <Chip size="small" label={issue.severity} color={issue.severity === 'error' ? 'error' : 'warning'} sx={{ mr: 1 }} />
                 <Typography variant="body2" component="span">

@@ -102,13 +102,17 @@ describe('PianoRollToolbar', () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Track filter'));
-    expect(await screen.findByRole('option', { name: 'Treble' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Bass' })).toBeInTheDocument();
+    // Substring match: the option's computed accessible name now includes
+    // its checkbox's own `aria-label` ("Show track: Treble") ahead of the
+    // visible "Treble" text, per the accname "name from content"
+    // algorithm — see the checkbox's own doc comment.
+    expect(await screen.findByRole('option', { name: /Treble/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Bass/ })).toBeInTheDocument();
 
     // All tracks start implicitly selected (visibleTrackIds === null); with
     // both already checked, clicking "Treble" deselects it, leaving Bass as
     // the sole remaining checked track.
-    await user.click(screen.getByRole('option', { name: 'Treble' }));
+    await user.click(screen.getByRole('option', { name: /Treble/ }));
 
     const bassId = store.getState().score!.tracks[1].id;
     expect(onVisibleTrackIdsChange).toHaveBeenCalledWith(new Set([bassId]));

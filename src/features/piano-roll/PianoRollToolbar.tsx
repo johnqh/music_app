@@ -193,7 +193,11 @@ export function PianoRollToolbar({
       >
         {(score?.tracks ?? []).map((track) => (
           <MenuItem key={track.id} value={track.id}>
-            <Checkbox size="small" checked={selectedTrackIds.has(track.id)} />
+            <Checkbox
+              size="small"
+              checked={selectedTrackIds.has(track.id)}
+              slotProps={{ input: { 'aria-label': `Show track: ${track.name}` } }}
+            />
             <ListItemText primary={track.name} />
           </MenuItem>
         ))}

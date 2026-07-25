@@ -42,6 +42,7 @@ import { findEvent } from '@/domain/score/queries';
 import { isNoteEvent } from '@/domain/score/types';
 import type { UUID } from '@/domain/score/types';
 import { ticksFor } from '@/domain/time/ticks';
+import { selectionSummaryLabel } from '@/domain/selection/selection';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import {
@@ -524,8 +525,9 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
           <Box
             ref={gridRef}
             data-testid="piano-roll-grid"
-            role="group"
-            aria-label="Piano roll grid"
+            role="application"
+            aria-label={`Piano roll grid. ${selectionSummaryLabel(selection)}.`}
+            tabIndex={0}
             style={{ position: 'relative', width: gridWidth, height: totalHeight, flexShrink: 0 }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -533,6 +535,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             onPointerCancel={handlePointerCancel}
             onLostPointerCapture={handlePointerCancel}
             onDoubleClick={handleDoubleClick}
+            sx={{ '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}
           >
             {/* grid lines */}
             <GridLinesLayer lines={gridLines} height={kbHeight} />

@@ -12,7 +12,7 @@
  * and persisted with the project, matching every other track property.
  */
 import { useEffect, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent } from 'react';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
@@ -78,13 +78,25 @@ function TrackRow({
     <Box
       role="listitem"
       aria-label={`Track: ${track.name}`}
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+        // Guard against the nested track-name `InputBase`: keydown bubbles,
+        // so without this, pressing Space/Enter while typing a track name
+        // would also re-trigger row selection.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       sx={{
         p: 1,
         borderBottom: 1,
         borderColor: 'divider',
         bgcolor: selected ? 'action.selected' : undefined,
         cursor: 'pointer',
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>

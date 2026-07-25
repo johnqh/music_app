@@ -24,6 +24,7 @@ import type { BBox, RenderResult, RenderTheme } from '@/adapters/vexflow/types';
 import { boxForMeasureIndex, computeLayout, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
 import type { ScoreFragment } from '@/domain/score/fragment';
 import type { Score } from '@/domain/score/types';
+import { selectionSummaryLabel } from '@/domain/selection/selection';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
@@ -354,13 +355,18 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         <Box
           ref={containerRef}
           data-testid="score-editor-canvas"
-          role="region"
-          aria-label="Score notation"
+          role="application"
+          aria-label={`Score notation. ${selectionSummaryLabel(selection)}.`}
+          tabIndex={0}
           onClick={handleClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          sx={{ width: '100%', height: '100%' }}
+          sx={{
+            width: '100%',
+            height: '100%',
+            '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+          }}
         />
         {dragBox && (
           <Box

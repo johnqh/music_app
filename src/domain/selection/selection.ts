@@ -116,3 +116,19 @@ export function selectionIsRegenerable(score: Score, sel: ScoreSelection): boole
   if (range.endTick > scoreEndTick(score)) return false;
   return range.trackIds.every((id) => findTrack(score, id) !== null);
 }
+
+/**
+ * A short, human-readable summary of what's selected (e.g. "3 note(s)
+ * selected"), checked in the same priority order `selectionToRange`
+ * resolves tick anchors in (events, then measures, then bare tracks).
+ * Spec §27: screen-reader text summarizing the current selection, shared
+ * between `AppLayout`'s status bar and the score-editor/piano-roll
+ * containers' own SR-only summaries (`ScoreEditorView`/`PianoRollView`) so
+ * all three always agree on the same wording.
+ */
+export function selectionSummaryLabel(sel: ScoreSelection): string {
+  if (sel.eventIds.length > 0) return `${sel.eventIds.length} note(s) selected`;
+  if (sel.measureIds.length > 0) return `${sel.measureIds.length} measure(s) selected`;
+  if (sel.trackIds.length > 0) return `${sel.trackIds.length} track(s) selected`;
+  return 'No selection';
+}
