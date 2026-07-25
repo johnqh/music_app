@@ -7,8 +7,10 @@ import { ScoreSmithDb } from '@/services/persistence/db';
 import { stressScore, twinkleScore } from '@/test/fixtures';
 import { computeLayout } from '@/adapters/vexflow/layout';
 import { allNotes, findEvent } from '@/domain/score/queries';
-import type { NoteEvent } from '@/domain/score/types';
+import type { NoteEvent, Score } from '@/domain/score/types';
 import { VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
+import { extractFragment } from '@/domain/score/fragment';
+import type { ScoreFragment } from '@/domain/score/fragment';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
@@ -41,6 +43,35 @@ function noteGroup(container: HTMLElement, noteId: string): Element {
   const el = container.querySelector(`[id="vf-${noteId}"]`);
   if (!el) throw new Error(`No rendered element for note ${noteId}`);
   return el;
+}
+
+/**
+ * A regeneration-candidate-shaped `ScoreFragment` for the first measure of
+ * `score`'s first track, with every id (measure/voice/event) rewritten to a
+ * fresh value — mirroring what `mock-transforms.ts`'s seeded `rng.id(...)`
+ * actually does to a real candidate (C1 regression coverage: a candidate's
+ * ids never coincide with the committed score's).
+ */
+function fakePreviewFragment(score: Score): ScoreFragment {
+  const track = score.tracks[0];
+  const measure = track.measures[0];
+  const range = { startTick: measure.startTick, endTick: measure.startTick + measure.durationTicks, trackIds: [track.id] };
+  const fragment = extractFragment(score, range);
+  return {
+    ...fragment,
+    tracks: fragment.tracks.map((t) => ({
+      ...t,
+      measures: t.measures.map((m) => ({
+        ...m,
+        id: `${m.id}-preview`,
+        voices: m.voices.map((v) => ({
+          ...v,
+          id: `${v.id}-preview`,
+          events: v.events.map((e) => ({ ...e, id: `${e.id}-preview` })),
+        })),
+      })),
+    })),
+  };
 }
 
 describe('ScoreEditorView', () => {
@@ -161,6 +192,53 @@ describe('ScoreEditorView', () => {
     store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
 
     expect(renderSpy.mock.calls.length).toBe(callsAfterMount);
+  });
+
+  describe('candidate preview rendering (spec §13 — Task 19 review finding C1)', () => {
+    it('draws the spliced-in candidate fragment and highlights it with the preview theme; A/B toggle back to null re-renders the committed score', () => {
+      const store = makeStore();
+      const score = store.getState().score!;
+      const fragment = fakePreviewFragment(score);
+      const originalEventId = score.tracks[0].measures[0].voices[0].events[0].id;
+      const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
+
+      const { container } = render(<ScoreEditorView store={store} />);
+      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).not.toBeNull();
+
+      act(() => store.getState().setPreviewFragment(fragment));
+
+      // The renderer received a score containing the fragment's own ids...
+      const previewEl = container.querySelector(`[id="vf-${previewEventId}"]`);
+      expect(previewEl).not.toBeNull();
+      // ...and applyHighlights painted that very element with the preview
+      // class (i.e. previewIds and the rendered RenderResult's ids
+      // actually intersect — the bug this regression covers is that they
+      // never did).
+      expect(previewEl!.classList.contains('preview')).toBe(true);
+      // The measure's original (committed) content is no longer drawn
+      // while previewing -- it was spliced out, not just overlaid.
+      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).toBeNull();
+
+      // A/B toggle back to "original" (spec §13): clearing the overlay
+      // re-renders the committed score.
+      act(() => store.getState().setPreviewFragment(null));
+      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).not.toBeNull();
+      expect(container.querySelector(`[id="vf-${previewEventId}"]`)).toBeNull();
+    });
+
+    it('ignores a click on a previewed (candidate-only) note instead of dispatching a selection change', () => {
+      const store = makeStore();
+      const score = store.getState().score!;
+      const fragment = fakePreviewFragment(score);
+      const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
+
+      const { container } = render(<ScoreEditorView store={store} />);
+      act(() => store.getState().setPreviewFragment(fragment));
+
+      fireEvent.click(noteGroup(container, previewEventId));
+
+      expect(store.getState().selection).toEqual({ eventIds: [], measureIds: [], trackIds: [] });
+    });
   });
 
   describe('drag-box selection', () => {

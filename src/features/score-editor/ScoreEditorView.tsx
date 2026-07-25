@@ -14,6 +14,15 @@
  * genuinely needs geometry (`idToBBox` intersection, `hit-test.ts`), which
  * jsdom cannot lay out — that logic is exercised via `hit-test.test.ts`'s
  * pure-math tests and this component wires it straightforwardly.
+ *
+ * Candidate preview (spec §13): while `generation-slice.previewFragment` is
+ * set, the component draws `scoreWithCandidate(score, previewFragment)`
+ * (`features/generation/preview.ts`) instead of the bare committed score —
+ * see `displayScore`'s doc comment for why this is required, not just an
+ * optimization. Clicking the canvas while previewing is a no-op (see
+ * `handleClick`/`handlePointerUp`): the ids on screen may belong to the
+ * spliced-in candidate rather than the committed score, so a click there
+ * must never be allowed to drive a selection/edit.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
@@ -27,6 +36,7 @@ import type { ScoreFragment } from '@/domain/score/fragment';
 import type { Score } from '@/domain/score/types';
 import { selectionSummaryLabel } from '@/domain/selection/selection';
 import { prefersReducedMotion } from '@/app/theme';
+import { scoreWithCandidate } from '@/features/generation/preview';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
@@ -149,19 +159,41 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const previewIds = useMemo(() => previewEventIds(previewFragment), [previewFragment]);
 
   /**
+   * The score actually drawn: the committed score, or — while a
+   * regeneration candidate is being previewed (spec §13) — the committed
+   * score with the candidate's fragment spliced in via
+   * `features/generation/preview.ts`'s `scoreWithCandidate`. Splicing is
+   * required, not optional: a fragment's event/measure ids are always
+   * freshly generated (`mock-transforms.ts`'s `rng.id(...)`), so they exist
+   * only inside *this* spliced score's `RenderResult` — rendering the
+   * committed score and merely asking `applyHighlights` to color
+   * `previewIds` (the old, broken behavior — Task 19 review C1) can never
+   * find a matching element, since none of those ids appear anywhere in
+   * the committed score to begin with. Memoized on exactly `score`/
+   * `previewFragment` so switching which candidate is active (or clearing
+   * the preview) doesn't rebuild this on every unrelated render (e.g. a
+   * selection-only change elsewhere).
+   */
+  const displayScore = useMemo(() => {
+    if (!score || !previewFragment) return score;
+    return scoreWithCandidate(score, previewFragment);
+  }, [score, previewFragment]);
+
+  /**
    * The current score's system/measure geometry (spec §26), memoized on
    * exactly the inputs that actually change it — deliberately *not* the
    * scroll viewport, so scrolling never recomputes layout (Task 17 review
    * finding: a naive `computeLayout` call inside the viewport-dependent
    * memo re-ran on every scroll frame). Both `measureViewport` (culling)
    * and the playback scroll-into-view effect read this same memoized plan,
-   * instead of each computing their own.
+   * instead of each computing their own. Built from `displayScore` (not
+   * `score`) so a preview's spliced-in measures get real geometry too.
    */
   const layoutPlan = useMemo(() => {
-    if (!score) return null;
+    if (!displayScore) return null;
     const width = containerRef.current?.clientWidth || DEFAULT_WIDTH;
-    return computeLayout(score, { zoom, layoutMode, width, theme: renderTheme });
-  }, [score, zoom, layoutMode, renderTheme]);
+    return computeLayout(displayScore, { zoom, layoutMode, width, theme: renderTheme });
+  }, [displayScore, zoom, layoutMode, renderTheme]);
 
   /** Which measures of `plan` intersect the scrollable ancestor's current scroll position (grid-local/logical units, padded by `VIRTUALIZATION_OVERSCAN_PX`), or `undefined` if the container isn't measurable right now (`clientHeight <= 0` — jsdom, or not yet laid out). Pure w.r.t. its arguments; reads live DOM geometry off `scrollBoxRef`, not React state, so it's safe to call synchronously from either an effect or a callback without worrying about state staleness. */
   const measureVisibleIndices = useCallback(
@@ -267,7 +299,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   // Full render: only on score/zoom/layoutMode/theme/visible-window changes.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !score) return;
+    if (!container || !displayScore) return;
 
     // See `measuredForPlanRef`'s doc comment: if `layoutPlan` changed since
     // the last measurement (mount, or a score/zoom/layoutMode/theme
@@ -283,7 +315,11 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     }
 
     const width = container.clientWidth || DEFAULT_WIDTH;
-    const result = rendererRef.current!.render(score, container, {
+    // `displayScore` (committed score, or committed+candidate while
+    // previewing) is what's actually drawn, so the preview fragment's ids
+    // land in this `RenderResult` and `previewIds` below has something to
+    // highlight (spec §13 — see `displayScore`'s doc comment).
+    const result = rendererRef.current!.render(displayScore, container, {
       zoom,
       layoutMode,
       width,
@@ -296,7 +332,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     // the effect below re-paints highlights on their own change without
     // triggering this full re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [score, zoom, layoutMode, renderTheme, layoutPlan, measureVisibleIndices, visibleMeasureIndices]);
+  }, [displayScore, zoom, layoutMode, renderTheme, layoutPlan, measureVisibleIndices, visibleMeasureIndices]);
 
   // Highlight-only repaint: selection/playback/preview changes never re-render.
   useEffect(() => {
@@ -373,6 +409,16 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       const result = resultRef.current;
       if (!result) return;
 
+      // While a regeneration candidate is being previewed (spec §13),
+      // `displayScore` (and so this click's `result`) is the committed
+      // score with the candidate spliced in — clicking anywhere in the
+      // canvas must not dispatch a selection/edit against ids that may not
+      // even exist in the committed score (the fragment's own fresh ids
+      // never do). Simplest safe rule: ignore canvas clicks entirely while
+      // previewing; accepting/rejecting/switching candidates is done from
+      // the generation panel, not by clicking the notation.
+      if (previewFragment) return;
+
       if (result.idToElement.has(rawId)) {
         const state = store.getState();
         if (event.shiftKey) state.toggleEvent(rawId);
@@ -381,7 +427,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         selectMeasure(store, rawId);
       }
     },
-    [store],
+    [store, previewFragment],
   );
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
@@ -431,21 +477,26 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
       if (drag.moved) {
         suppressNextClickRef.current = true;
-        const point = pointFromEvent(event) ?? drag.start;
-        const box = boxFromPoints(drag.start, point);
-        const result = resultRef.current;
-        if (result) {
-          const hitIds = eventIdsInBox(result.idToBBox, box);
-          const state = store.getState();
-          const nextIds = drag.additive ? Array.from(new Set([...state.selection.eventIds, ...hitIds])) : hitIds;
-          state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
+        // Same preview guard as `handleClick`: a drag-box selection while
+        // previewing would otherwise select against the spliced-in
+        // candidate's ids rather than the committed score's.
+        if (!previewFragment) {
+          const point = pointFromEvent(event) ?? drag.start;
+          const box = boxFromPoints(drag.start, point);
+          const result = resultRef.current;
+          if (result) {
+            const hitIds = eventIdsInBox(result.idToBBox, box);
+            const state = store.getState();
+            const nextIds = drag.additive ? Array.from(new Set([...state.selection.eventIds, ...hitIds])) : hitIds;
+            state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
+          }
         }
       }
 
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [pointFromEvent, store],
+    [pointFromEvent, store, previewFragment],
   );
 
   return (
