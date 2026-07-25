@@ -86,6 +86,29 @@ export class PlaybackController {
    */
   private pendingResume: { tick: number } | null = null;
 
+  /**
+   * True while a non-destructive candidate preview (spec §13, §37.9 —
+   * `playPreview`/`stopPreview`, below) is driving the engine instead of
+   * the committed score. While true, the committed-score subscription
+   * (constructor, below) suspends itself rather than reloading the
+   * engine out from under the preview: `generation-slice`'s preview
+   * machinery never writes to the committed `score` field, so this flag
+   * is cheap insurance, and it documents the invariant that nothing in
+   * this controller should treat a preview's temporarily-loaded score as
+   * "the" score. `stopPreview()` clears it and explicitly reloads
+   * whatever the committed score currently is, resyncing the engine.
+   */
+  private previewing = false;
+  /**
+   * Bumped by every `playPreview()`/`stopPreview()` call (mirrors
+   * `scoreChangeGeneration`'s role for `handleScoreChange`): guards
+   * against a stale `playPreview()` call's `await engine.loadScore(...)`
+   * resolving after a *newer* `playPreview`/`stopPreview` call has already
+   * moved the engine on to something else (e.g. rapidly switching which
+   * regeneration candidate is being previewed).
+   */
+  private previewGeneration = 0;
+
   constructor(
     private readonly engine: PlaybackEngine,
     private readonly store: PlaybackStoreApi,
@@ -106,6 +129,7 @@ export class PlaybackController {
     this.unsubscribe = this.store.subscribe((state) => {
       if (state.score !== lastScore) {
         lastScore = state.score;
+        if (this.previewing) return; // a candidate preview owns the engine right now; stopPreview() resyncs to the committed score
         if (lastScore) void this.handleScoreChange(lastScore);
       }
     });
@@ -114,9 +138,53 @@ export class PlaybackController {
   /** Releases the store subscription and disposes the engine; only meaningful for a controller that isn't the app-wide singleton (e.g. tests). */
   dispose(): void {
     this.scoreChangeGeneration++; // invalidate any handleScoreChange still in flight so it won't call engine.play() post-dispose
+    this.previewGeneration++; // invalidate any playPreview() still in flight
     this.pendingResume = null;
+    this.previewing = false;
     this.unsubscribe();
     this.engine.dispose();
+  }
+
+  // ---- candidate preview (spec §13, §37.9) ---------------------------------
+
+  /**
+   * Plays `previewScore` starting at `fromTick`, without touching the
+   * committed score or committed-score subscription (spec §13: "candidate
+   * playback in musical context"). `previewScore` is expected to be built
+   * with `features/generation/preview.ts`'s `scoreWithCandidate` — a
+   * candidate spliced into the current committed score, purely for this
+   * call; it is never written to `score-slice`. Any playback already in
+   * progress (preview or otherwise) is stopped first. Call `stopPreview()`
+   * to return to the committed score.
+   *
+   * Preview playback and the main transport are mutually exclusive by
+   * convention, not by locking: `CandidateList`'s Play-in-context/Stop
+   * buttons are the only intended callers, and it calls `stopPreview()` on
+   * unmount/candidate-switch so a preview never outlives its panel.
+   */
+  async playPreview(previewScore: Score, fromTick = 0): Promise<void> {
+    const generation = ++this.previewGeneration;
+    this.previewing = true;
+    this.pendingResume = null;
+    this.engine.stop();
+    try {
+      await this.engine.loadScore(previewScore);
+      if (generation !== this.previewGeneration) return; // superseded by a newer playPreview()/stopPreview()
+      await this.engine.play(fromTick);
+    } catch (error) {
+      if (generation === this.previewGeneration) this.previewing = false;
+      this.reportError('Preview playback failed to start', error);
+    }
+  }
+
+  /** Stops an in-progress candidate preview and reloads the committed score back into the engine. A no-op if no preview is active. */
+  stopPreview(): void {
+    this.previewGeneration++; // invalidate any playPreview() still in flight
+    if (!this.previewing) return;
+    this.previewing = false;
+    this.engine.stop();
+    const score = this.store.getState().score;
+    if (score) void this.handleScoreChange(score);
   }
 
   // ---- transport ---------------------------------------------------------
