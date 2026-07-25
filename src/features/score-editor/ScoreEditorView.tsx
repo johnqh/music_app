@@ -30,6 +30,7 @@ import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
 import { boxFromPoints, eventIdsInBox } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
+import { selectMeasure } from '@/features/score-editor/editing';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -67,6 +68,16 @@ function currentMeasureId(score: Score, positionTick: number): string | null {
   return measure.id;
 }
 
+/** Spec §27 (reduced-motion support): `true` when the user's OS/browser prefers reduced motion. Guarded for jsdom/SSR, where `matchMedia` doesn't exist. */
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
   const muiTheme = useTheme();
@@ -89,6 +100,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const dragStateRef = useRef<{ start: Point; moved: boolean; additive: boolean } | null>(null);
   const suppressNextClickRef = useRef(false);
   const lastScrolledMeasureRef = useRef<string | null>(null);
+  const lastScrolledScoreRef = useRef<Score | null>(null);
 
   const renderTheme: RenderTheme = useMemo(
     () => ({
@@ -124,10 +136,29 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   }, [selection, activeNoteIds, previewIds]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
+  //
+  // `lastScrolledMeasureRef` is reset whenever playback isn't actively
+  // `'playing'` (and whenever `score` itself changes, e.g. a fresh
+  // generation/import/undo swaps the score object) rather than only being
+  // written on a successful scroll. Without the reset, stopping playback,
+  // scrolling away manually, and restarting on the *same* measure would
+  // silently no-op forever (the ref would already equal that measure's id
+  // from the earlier playback run) and the active measure would never
+  // re-enter view.
   useEffect(() => {
+    if (score !== lastScrolledScoreRef.current) {
+      lastScrolledScoreRef.current = score;
+      lastScrolledMeasureRef.current = null;
+    }
+
+    if (playbackState !== 'playing') {
+      lastScrolledMeasureRef.current = null;
+      return;
+    }
+
     const result = resultRef.current;
     const container = containerRef.current;
-    if (!result || !container || !score || playbackState !== 'playing') return;
+    if (!result || !container || !score) return;
     const measureId = currentMeasureId(score, positionTick);
     if (!measureId || measureId === lastScrolledMeasureRef.current) return;
     const bbox = result.measureIdToBBox.get(measureId);
@@ -137,7 +168,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       container.scrollTo({
         left: Math.max(0, bbox.x - SCROLL_MARGIN),
         top: Math.max(0, bbox.y - SCROLL_MARGIN),
-        behavior: 'smooth',
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
       });
     }
   }, [score, positionTick, playbackState]);
@@ -162,12 +193,12 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       const result = resultRef.current;
       if (!result) return;
 
-      const state = store.getState();
       if (result.idToElement.has(rawId)) {
+        const state = store.getState();
         if (event.shiftKey) state.toggleEvent(rawId);
         else state.setSelection({ eventIds: [rawId], measureIds: [], trackIds: [] });
       } else if (result.measureIdToBBox.has(rawId)) {
-        state.selectMeasures([rawId]);
+        selectMeasure(store, rawId);
       }
     },
     [store],

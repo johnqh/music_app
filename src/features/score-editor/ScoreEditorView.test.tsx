@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
@@ -214,6 +214,64 @@ describe('ScoreEditorView', () => {
       fireEvent.pointerUp(canvas, { clientX: 200, clientY: 200, pointerId: 2 });
 
       expect(store.getState().selection.eventIds).toEqual([note.id]);
+    });
+  });
+
+  describe('scroll-into-view during playback', () => {
+    // jsdom doesn't implement Element.prototype.scrollTo (see
+    // ScoreEditorView.tsx's `typeof container.scrollTo === 'function'`
+    // guard), so these tests install their own mock on the rendered canvas
+    // element directly, after the initial render has populated a real
+    // `measureIdToBBox` for the fixture's measures.
+    function mockScrollTo(canvas: HTMLElement): ReturnType<typeof vi.fn> {
+      const scrollToSpy = vi.fn();
+      Object.assign(canvas, { scrollTo: scrollToSpy });
+      return scrollToSpy;
+    }
+
+    it('re-fires the scroll on the same measure after a stop/restart (regression: lastScrolledMeasureRef must reset on stop)', () => {
+      const store = makeStore();
+      const { getByTestId } = render(<ScoreEditorView store={store} />);
+      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
+
+      // positionTick stays at its default (0) throughout -> always the same
+      // first measure, so any second scroll call can only be explained by
+      // the reset, not by a genuinely different measureId.
+      act(() => store.getState().setPlaybackState('playing'));
+      expect(scrollToSpy).toHaveBeenCalledTimes(1);
+
+      act(() => store.getState().setPlaybackState('stopped'));
+      expect(scrollToSpy).toHaveBeenCalledTimes(1); // stopping alone must not itself scroll
+
+      act(() => store.getState().setPlaybackState('playing'));
+      expect(scrollToSpy).toHaveBeenCalledTimes(2); // same measure, but must re-fire after the stop
+    });
+
+    it('does not re-fire while positionTick moves within the same measure during one playback run', () => {
+      const store = makeStore();
+      const { getByTestId } = render(<ScoreEditorView store={store} />);
+      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
+
+      act(() => store.getState().setPlaybackState('playing'));
+      expect(scrollToSpy).toHaveBeenCalledTimes(1);
+
+      // A small tick advance that's still within the same (first) measure.
+      act(() => store.getState().setPositionTick(10));
+      expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses instant ("auto") scroll behavior when the user prefers reduced motion', () => {
+      const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
+      vi.stubGlobal('matchMedia', matchMediaSpy);
+
+      const store = makeStore();
+      const { getByTestId } = render(<ScoreEditorView store={store} />);
+      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
+
+      act(() => store.getState().setPlaybackState('playing'));
+
+      expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
+      vi.unstubAllGlobals();
     });
   });
 });
