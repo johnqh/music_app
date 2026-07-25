@@ -7,7 +7,8 @@
 import type { Measure, Pitch, Score, Track, Voice } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { pitchToMidi } from '@/domain/pitch/pitch';
-import { tieChainFor } from '@/domain/score/ties';
+import { voiceChannel } from '@/domain/score/ties';
+import type { ChannelCandidate } from '@/domain/score/ties';
 import { ISSUE_CODES } from '@/domain/validation/issues';
 import type { ValidationIssue } from '@/domain/validation/issues';
 
@@ -456,45 +457,110 @@ function checkVoice(track: Track, measure: Measure, voice: Voice): ValidationIss
 
 // ---- Ties (whole-score, since a tie may cross a measure boundary) ---------
 
+/** The most voices any single measure of `track` has (so every voice-ordinal channel is covered). */
+function trackVoiceCount(track: Track): number {
+  return track.measures.reduce((max, measure) => Math.max(max, measure.voices.length), 0);
+}
+
+/**
+ * The first candidate in `index.get(tick)` (if any) that isn't `excludeId`
+ * itself, carries `requireFlag`, and shares `pitch` — the same (tick,
+ * pitch, tie-flag) matching `domain/score/ties.ts`'s `findForwardPartner`/
+ * `findBackwardPartner` use, just against a prebuilt index instead of a
+ * fresh linear scan.
+ */
+function findIndexedPartner(
+  index: Map<number, ChannelCandidate[]>,
+  tick: number,
+  excludeId: string,
+  pitch: Pitch,
+  requireFlag: (candidate: ChannelCandidate) => boolean,
+): ChannelCandidate | undefined {
+  const candidates = index.get(tick);
+  if (!candidates) return undefined;
+  return candidates.find((c) => c.event.id !== excludeId && requireFlag(c) && samePitch(c.event.pitch, pitch));
+}
+
 /**
  * A tieStart note must have a matching tieStop note at the next position
  * (same track/voice-channel, immediately following tick, same pitch) —
  * warning otherwise. Symmetrically, a tieStop note must have a matching
- * tieStart note immediately preceding it. Reuses `tieChainFor` (already
- * hardened against cross-voice contamination at barlines, per the Task 3
- * review) rather than re-deriving the same voice-ordinal-channel matching
- * logic here.
+ * tieStart note immediately preceding it.
+ *
+ * Originally implemented via `tieChainFor` per tied note, which — for a
+ * track with many tied notes — rebuilds its voice-ordinal channel
+ * (`voiceChainFor`'s `locateVoiceIndex` + `voiceChannel`, each O(track
+ * size)) from scratch on *every* call and walks the full backward/forward
+ * chain by linear-scanning the channel at each hop: O(n) work per tied
+ * note, O(n^2) worst case across a track with O(n) tied notes (flagged in
+ * the Task 4 ledger as a risk against spec §29's 20k-note target).
+ *
+ * This only ever needs to know whether *one specific* note has a forward/
+ * backward partner (not the whole chain), so it builds each track/voice-
+ * ordinal channel exactly once via `voiceChannel` (same shared convention
+ * `tieChainFor` uses — see its doc comment), then indexes that channel by
+ * start tick and by end tick (`startTick + durationTicks`) for O(1)-average
+ * partner lookups. Net cost: O(n) per track instead of O(n^2). Matching
+ * semantics (same "does a same-pitch, correctly-tie-flagged event exist
+ * at the adjoining tick, within this voice-ordinal channel" question) are
+ * identical to the previous `tieChainFor`-based check, so the exact same
+ * set of issues is produced — see `checkTieTargets`'s tests, which cover
+ * both directions.
  */
 function checkTieTargets(score: Score): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   for (const track of score.tracks) {
-    for (const measure of track.measures) {
-      for (const voice of measure.voices) {
-        for (const event of voice.events) {
-          if (!isNoteEvent(event)) continue;
-          if (!event.tieStart && !event.tieStop) continue;
+    const voiceCount = trackVoiceCount(track);
 
-          const chain = tieChainFor(score, event.id);
-          const position = chain.findIndex((n) => n.id === event.id);
+    for (let voiceIndex = 0; voiceIndex < voiceCount; voiceIndex += 1) {
+      const channel = voiceChannel(track, voiceIndex);
+      if (channel.length === 0) continue;
 
-          if (event.tieStart && position === chain.length - 1) {
+      const byStartTick = new Map<number, ChannelCandidate[]>();
+      const byEndTick = new Map<number, ChannelCandidate[]>();
+      for (const candidate of channel) {
+        const start = candidate.event.startTick;
+        const end = start + candidate.event.durationTicks;
+        const startBucket = byStartTick.get(start);
+        if (startBucket) startBucket.push(candidate);
+        else byStartTick.set(start, [candidate]);
+        const endBucket = byEndTick.get(end);
+        if (endBucket) endBucket.push(candidate);
+        else byEndTick.set(end, [candidate]);
+      }
+
+      for (const { event, measureIndex } of channel) {
+        if (!event.tieStart && !event.tieStop) continue;
+        const measureId = track.measures[measureIndex]?.id;
+
+        if (event.tieStart) {
+          const targetTick = event.startTick + event.durationTicks;
+          const partner = findIndexedPartner(byStartTick, targetTick, event.id, event.pitch, (c) =>
+            Boolean(c.event.tieStop),
+          );
+          if (!partner) {
             issues.push(
               issue(
                 'warning',
                 ISSUE_CODES.MISSING_TIE_TARGET,
                 `Note ${event.id} has tieStart but no matching tieStop note at the next position with the same pitch.`,
-                { objectId: event.id, trackId: track.id, measureId: measure.id },
+                { objectId: event.id, trackId: track.id, measureId },
               ),
             );
           }
-          if (event.tieStop && position === 0) {
+        }
+        if (event.tieStop) {
+          const partner = findIndexedPartner(byEndTick, event.startTick, event.id, event.pitch, (c) =>
+            Boolean(c.event.tieStart),
+          );
+          if (!partner) {
             issues.push(
               issue(
                 'warning',
                 ISSUE_CODES.MISSING_TIE_TARGET,
                 `Note ${event.id} has tieStop but no matching tieStart note ending at its start tick with the same pitch.`,
-                { objectId: event.id, trackId: track.id, measureId: measure.id },
+                { objectId: event.id, trackId: track.id, measureId },
               ),
             );
           }

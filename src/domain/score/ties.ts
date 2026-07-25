@@ -88,7 +88,7 @@ export function joinTiedNotes(events: MusicalEvent[]): MusicalEvent[] {
 }
 
 /** A note event annotated with the index (within its track) of the measure it came from. */
-type ChannelCandidate = { event: NoteEvent; measureIndex: number };
+export type ChannelCandidate = { event: NoteEvent; measureIndex: number };
 
 /**
  * The ordinal index (position within `measure.voices`) of the voice
@@ -116,8 +116,14 @@ function locateVoiceIndex(track: Track, noteId: UUID): number {
  * a stand-in instead — a deliberate, documented approximation, not a
  * guarantee that voice N in one measure is musically continuous with
  * voice N in the next.
+ *
+ * Exported (Task 17) so `validation/validator.ts`'s `checkTieTargets` can
+ * build each track/voice-ordinal channel once and index it for O(1)-average
+ * partner lookups, instead of paying for a fresh `tieChainFor` walk (which
+ * itself rebuilds a channel from scratch) per tied note — see that
+ * function's doc comment for the super-linear-worst-case history.
  */
-function voiceChannel(track: Track, voiceIndex: number): ChannelCandidate[] {
+export function voiceChannel(track: Track, voiceIndex: number): ChannelCandidate[] {
   const channel: ChannelCandidate[] = [];
   track.measures.forEach((measure, measureIndex) => {
     const voice = measure.voices[voiceIndex];
