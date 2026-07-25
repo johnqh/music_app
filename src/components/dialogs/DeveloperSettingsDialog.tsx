@@ -23,6 +23,8 @@ import type { ScoreSmithDb } from '@/services/persistence/db';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { runBenchmark, toBenchmarkTable } from '@/services/perf/benchmark';
+import type { BenchmarkReport, BenchmarkSize } from '@/services/perf/benchmark';
 
 export type DeveloperSettingsDialogProps = {
   open: boolean;
@@ -31,6 +33,8 @@ export type DeveloperSettingsDialogProps = {
   store?: EditorStoreApi;
   /** The database "reset local database" clears. Required (not defaulted): the store alone has no `ScoreSmithDb` handle (see `project-slice.ts`'s doc comment). */
   db: ScoreSmithDb;
+  /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
+  benchmarkSizes?: BenchmarkSize[];
 };
 
 /** Spec §29's stress-test dimensions ("≥20 tracks; ≥500 measures"), applied to a fresh empty (fully-rested) score -- a lighter-weight stand-in for the fuller note-filled benchmark utility Task 17 owns. */
@@ -46,10 +50,18 @@ function generateStressTestScore() {
   return createEmptyScore({ title: 'Stress Test', measures: STRESS_MEASURE_COUNT, tracks });
 }
 
-export function DeveloperSettingsDialog({ open, onClose, store = useAppStore, db }: DeveloperSettingsDialogProps) {
+export function DeveloperSettingsDialog({
+  open,
+  onClose,
+  store = useAppStore,
+  db,
+  benchmarkSizes,
+}: DeveloperSettingsDialogProps) {
   const devSettings = store((s) => s.devSettings);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [benchmarkReport, setBenchmarkReport] = useState<BenchmarkReport | null>(null);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
 
   const handleResetDatabase = async (): Promise<void> => {
     setConfirmingReset(false);
@@ -64,6 +76,27 @@ export function DeveloperSettingsDialog({ open, onClose, store = useAppStore, db
 
   const handleGenerateStressTest = (): void => {
     store.getState().setScore(generateStressTestScore());
+  };
+
+  /**
+   * Runs the spec §29 benchmark suite (`services/perf/benchmark.ts`) and
+   * logs it as a `console.table` (per the Task 17 brief). Deferred one
+   * macrotask via `setTimeout` so the "Running benchmark…" button label
+   * actually paints before the synchronous, CPU-bound run blocks the main
+   * thread — `runBenchmark`'s default sizes go up to a 20-track/500-measure
+   * (~40,000-note) score and can take real time.
+   */
+  const handleRunBenchmark = (): void => {
+    setBenchmarkRunning(true);
+    setTimeout(() => {
+      try {
+        const report = runBenchmark(benchmarkSizes);
+        setBenchmarkReport(report);
+        console.table(toBenchmarkTable(report));
+      } finally {
+        setBenchmarkRunning(false);
+      }
+    }, 0);
   };
 
   const handleExportDiagnostics = (): void => {
@@ -83,6 +116,10 @@ export function DeveloperSettingsDialog({ open, onClose, store = useAppStore, db
           }
         : null,
       validationIssues: state.validationIssues,
+      // `null` unless "Run benchmark" was clicked at least once this
+      // session (spec §29: fold the benchmark utility's output into the
+      // diagnostic export, alongside the existing console.table).
+      benchmark: benchmarkReport,
     };
     downloadBlob('scoresmith-diagnostics.json', new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' }));
   };
@@ -167,6 +204,14 @@ export function DeveloperSettingsDialog({ open, onClose, store = useAppStore, db
             <Button size="small" aria-label="Generate stress-test score" onClick={handleGenerateStressTest}>
               Generate stress-test score
             </Button>
+            <Button
+              size="small"
+              aria-label="Run benchmark"
+              onClick={handleRunBenchmark}
+              disabled={benchmarkRunning}
+            >
+              {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
+            </Button>
             <Button size="small" aria-label="Export diagnostic JSON" onClick={handleExportDiagnostics}>
               Export diagnostic JSON
             </Button>
@@ -174,6 +219,14 @@ export function DeveloperSettingsDialog({ open, onClose, store = useAppStore, db
               Reset local database
             </Button>
           </Stack>
+
+          {benchmarkReport && (
+            <Alert severity="info" onClose={() => setBenchmarkReport(null)}>
+              Benchmark complete: {benchmarkReport.sizes.length} size(s) timed (validate/quantize/fragment/MIDI-export
+              {typeof document !== 'undefined' ? '/render' : ''}). Full results logged to the console and included in
+              the diagnostic JSON export.
+            </Alert>
+          )}
 
           {resetDone && (
             <Alert severity="success" onClose={() => setResetDone(false)}>

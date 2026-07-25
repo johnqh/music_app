@@ -8,6 +8,7 @@ import { createProject } from '@/services/persistence/projects';
 import { createEmptyScore } from '@/domain/score/factory';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import * as downloadExports from '@/services/import-export/download';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;
@@ -55,6 +56,62 @@ describe('DeveloperSettingsDialog', () => {
 
     expect(store.getState().score!.tracks.length).toBeGreaterThanOrEqual(20);
     expect(store.getState().score!.tracks[0].measures.length).toBeGreaterThanOrEqual(500);
+  });
+
+  it('Run benchmark runs runBenchmark with the given sizes, shows a summary, and logs a console.table', async () => {
+    const store = makeStore();
+    const consoleTable = vi.spyOn(console, 'table').mockImplementation(() => {});
+    render(
+      <DeveloperSettingsDialog
+        open
+        onClose={vi.fn()}
+        store={store}
+        db={db}
+        benchmarkSizes={[{ trackCount: 1, measureCount: 2 }]}
+      />,
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Run benchmark' }));
+
+    expect(await screen.findByText(/Benchmark complete: 1 size\(s\) timed/)).toBeInTheDocument();
+    expect(consoleTable).toHaveBeenCalledTimes(1);
+    const rows = consoleTable.mock.calls[0][0] as Array<{ operation: string }>;
+    expect(rows.map((r) => r.operation)).toContain('validateScore');
+
+    consoleTable.mockRestore();
+  });
+
+  it('Export diagnostic JSON includes the last benchmark report once one has been run', async () => {
+    const store = makeStore();
+    const consoleTable = vi.spyOn(console, 'table').mockImplementation(() => {});
+    const downloadBlobSpy = vi.spyOn(downloadExports, 'downloadBlob').mockImplementation(() => {});
+
+    render(
+      <DeveloperSettingsDialog
+        open
+        onClose={vi.fn()}
+        store={store}
+        db={db}
+        benchmarkSizes={[{ trackCount: 1, measureCount: 2 }]}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Run benchmark' }));
+    await screen.findByText(/Benchmark complete/);
+
+    await user.click(screen.getByRole('button', { name: 'Export diagnostic JSON' }));
+
+    expect(downloadBlobSpy).toHaveBeenCalledTimes(1);
+    const [name, blob] = downloadBlobSpy.mock.calls[0];
+    expect(name).toBe('scoresmith-diagnostics.json');
+    const text = await (blob as Blob).text();
+    const diagnostics = JSON.parse(text) as { benchmark: { sizes: unknown[] } | null };
+    expect(diagnostics.benchmark).not.toBeNull();
+    expect(diagnostics.benchmark!.sizes).toHaveLength(1);
+
+    consoleTable.mockRestore();
+    downloadBlobSpy.mockRestore();
   });
 
   it('Reset local database requires confirmation, then clears every project', async () => {
