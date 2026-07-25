@@ -8,17 +8,7 @@
  */
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
-import Alert from '@mui/material/Alert';
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
+import { Dialog } from '@sudobility/components';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
@@ -113,55 +103,82 @@ export function MusicXmlImportDialog({
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} aria-labelledby="musicxml-import-title" maxWidth="sm" fullWidth>
-        <DialogTitle id="musicxml-import-title">Import MusicXML</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2}>
-            <Button component="label" variant="outlined" aria-label="Choose MusicXML file">
+      <Dialog isOpen={open} onClose={handleClose} size="sm" showCloseButton={false}>
+        <div role="dialog" aria-labelledby="musicxml-import-title" className="p-6">
+          <h2 id="musicxml-import-title" className="text-lg font-semibold text-theme-text-primary">
+            Import MusicXML
+          </h2>
+
+          <div className="mt-4 flex flex-col gap-3">
+            <label
+              role="button"
+              tabIndex={0}
+              aria-label="Choose MusicXML file"
+              className="cursor-pointer rounded-md border border-theme-border px-3 py-2 text-center text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+            >
               {fileName ?? 'Choose MusicXML file...'}
               <input
                 type="file"
                 accept=".musicxml,.xml,application/vnd.recordare.musicxml+xml"
-                hidden
+                className="sr-only"
                 aria-label="MusicXML file input"
                 onChange={(e) => void handleFileChange(e)}
               />
-            </Button>
+            </label>
 
-            {error && <Alert severity="error">{error}</Alert>}
+            {error && (
+              <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             {result && (
               <>
-                <Typography variant="subtitle2">
+                <p className="text-sm font-medium text-theme-text-primary">
                   {result.score.tracks.length} track(s), {allNotes(result.score).length} notes
-                </Typography>
+                </p>
 
                 {result.warnings.length > 0 ? (
                   <>
-                    <Typography variant="body2" color="text.secondary">
+                    <p className="text-sm text-theme-text-secondary">
                       Unsupported elements were skipped and are reported below (import still proceeds safely):
-                    </Typography>
-                    <List dense aria-label="Import warnings">
+                    </p>
+                    <ul aria-label="Import warnings" className="flex flex-col gap-1">
                       {result.warnings.map((warning) => (
-                        <ListItem key={warning}>
-                          <ListItemText primary={warning} />
-                        </ListItem>
+                        <li key={warning} className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary">
+                          {warning}
+                        </li>
                       ))}
-                    </List>
+                    </ul>
                   </>
                 ) : (
-                  <Alert severity="success">No unsupported elements were found.</Alert>
+                  <div role="status" className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700">
+                    No unsupported elements were found.
+                  </div>
                 )}
               </>
             )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button variant="contained" aria-label="Import" disabled={!result || busy} onClick={handleImportClick}>
-            Import
-          </Button>
-        </DialogActions>
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              aria-label="Import"
+              disabled={!result || busy}
+              onClick={handleImportClick}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+            >
+              Import
+            </button>
+          </div>
+        </div>
       </Dialog>
 
       <ConfirmDialog

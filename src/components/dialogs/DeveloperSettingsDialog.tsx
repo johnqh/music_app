@@ -6,15 +6,7 @@
  * project database died with the Phase-2 move to server-side AI/storage.)
  */
 import { useState } from 'react';
-import Alert from '@mui/material/Alert';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Stack from '@mui/material/Stack';
+import { Dialog } from '@sudobility/components';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
 import { downloadBlob } from '@sudobility/music_lib';
@@ -46,6 +38,26 @@ function generateStressTestScore() {
     clef: (i % 2 === 0 ? 'treble' : 'bass') as Clef,
   }));
   return createEmptyScore({ title: 'Stress Test', measures: STRESS_MEASURE_COUNT, tracks });
+}
+
+type DevToggleProps = {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+function DevToggle({ label, checked, onChange }: DevToggleProps) {
+  return (
+    <label className="flex items-center gap-2 py-1 text-sm text-theme-text-primary">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-theme-border"
+      />
+      {label}
+    </label>
+  );
 }
 
 export function DeveloperSettingsDialog({
@@ -121,111 +133,123 @@ export function DeveloperSettingsDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} aria-labelledby="dev-settings-title" maxWidth="sm" fullWidth>
-      <DialogTitle id="dev-settings-title">Developer settings</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2}>
-          <Stack>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.enableDiagnostics}
-                  onChange={(e) => store.getState().setDevSettings({ enableDiagnostics: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Enable generation diagnostics' } }}
-                />
-              }
-              label="Enable generation diagnostics"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.showIds}
-                  onChange={(e) => store.getState().setDevSettings({ showIds: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Show score IDs' } }}
-                />
-              }
-              label="Show score IDs"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.showTicks}
-                  onChange={(e) => store.getState().setDevSettings({ showTicks: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Show tick positions' } }}
-                />
-              }
-              label="Show tick positions"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.showMeasureBoundaries}
-                  onChange={(e) => store.getState().setDevSettings({ showMeasureBoundaries: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Show measure boundaries' } }}
-                />
-              }
-              label="Show measure boundaries"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.showPlaybackScheduling}
-                  onChange={(e) => store.getState().setDevSettings({ showPlaybackScheduling: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Show playback scheduling data' } }}
-                />
-              }
-              label="Show playback scheduling data"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={devSettings.enableValidationWarnings}
-                  onChange={(e) => store.getState().setDevSettings({ enableValidationWarnings: e.target.checked })}
-                  slotProps={{ input: { 'aria-label': 'Enable validation warnings' } }}
-                />
-              }
-              label="Enable validation warnings"
-            />
-          </Stack>
+    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
+      <div role="dialog" aria-labelledby="dev-settings-title" className="p-6">
+        <h2 id="dev-settings-title" className="text-lg font-semibold text-theme-text-primary">
+          Developer settings
+        </h2>
 
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-            <Button size="small" aria-label="Generate stress-test score" onClick={handleGenerateStressTest}>
-              Generate stress-test score
-            </Button>
-            <Button
-              size="small"
-              aria-label="Run benchmark"
-              onClick={handleRunBenchmark}
-              disabled={benchmarkRunning}
-            >
-              {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
-            </Button>
-            <Button size="small" aria-label="Export diagnostic JSON" onClick={handleExportDiagnostics}>
-              Export diagnostic JSON
-            </Button>
-            <Button size="small" color="error" aria-label="Reset local database" onClick={() => setConfirmingReset(true)}>
-              Reset local database
-            </Button>
-          </Stack>
+        <div className="mt-4 flex flex-col">
+          <DevToggle
+            label="Enable generation diagnostics"
+            checked={devSettings.enableDiagnostics}
+            onChange={(checked) => store.getState().setDevSettings({ enableDiagnostics: checked })}
+          />
+          <DevToggle
+            label="Show score IDs"
+            checked={devSettings.showIds}
+            onChange={(checked) => store.getState().setDevSettings({ showIds: checked })}
+          />
+          <DevToggle
+            label="Show tick positions"
+            checked={devSettings.showTicks}
+            onChange={(checked) => store.getState().setDevSettings({ showTicks: checked })}
+          />
+          <DevToggle
+            label="Show measure boundaries"
+            checked={devSettings.showMeasureBoundaries}
+            onChange={(checked) => store.getState().setDevSettings({ showMeasureBoundaries: checked })}
+          />
+          <DevToggle
+            label="Show playback scheduling data"
+            checked={devSettings.showPlaybackScheduling}
+            onChange={(checked) => store.getState().setDevSettings({ showPlaybackScheduling: checked })}
+          />
+          <DevToggle
+            label="Enable validation warnings"
+            checked={devSettings.enableValidationWarnings}
+            onChange={(checked) => store.getState().setDevSettings({ enableValidationWarnings: checked })}
+          />
+        </div>
 
-          {benchmarkReport && (
-            <Alert severity="info" onClose={() => setBenchmarkReport(null)}>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-label="Generate stress-test score"
+            onClick={handleGenerateStressTest}
+            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+          >
+            Generate stress-test score
+          </button>
+          <button
+            type="button"
+            aria-label="Run benchmark"
+            onClick={handleRunBenchmark}
+            disabled={benchmarkRunning}
+            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:opacity-50"
+          >
+            {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
+          </button>
+          <button
+            type="button"
+            aria-label="Export diagnostic JSON"
+            onClick={handleExportDiagnostics}
+            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+          >
+            Export diagnostic JSON
+          </button>
+          <button
+            type="button"
+            aria-label="Reset local database"
+            onClick={() => setConfirmingReset(true)}
+            className="rounded-md border border-red-600 px-3 py-1.5 text-sm text-red-600 hover:bg-red-600/10"
+          >
+            Reset local database
+          </button>
+        </div>
+
+        {benchmarkReport && (
+          <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-md bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary">
+            <span>
               Benchmark complete: {benchmarkReport.sizes.length} size(s) timed (validate/quantize/fragment/MIDI-export
               {typeof document !== 'undefined' ? '/render' : ''}). Full results logged to the console and included in
               the diagnostic JSON export.
-            </Alert>
-          )}
+            </span>
+            <button
+              type="button"
+              aria-label="Dismiss benchmark result"
+              onClick={() => setBenchmarkReport(null)}
+              className="shrink-0 rounded p-1 hover:bg-theme-hover-bg"
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
-          {resetDone && (
-            <Alert severity="success" onClose={() => setResetDone(false)}>
-              Local database cleared. Reload the app to start fresh.
-            </Alert>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
+        {resetDone && (
+          <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700">
+            <span>Local database cleared. Reload the app to start fresh.</span>
+            <button
+              type="button"
+              aria-label="Dismiss reset confirmation"
+              onClick={() => setResetDone(false)}
+              className="shrink-0 rounded p-1 hover:bg-theme-hover-bg"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={confirmingReset}

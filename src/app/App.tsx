@@ -9,14 +9,9 @@
  */
 import { Component, useEffect, useMemo, useRef, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import CircularProgress from '@mui/material/CircularProgress';
 import CssBaseline from '@mui/material/CssBaseline';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import { ThemeProvider } from '@mui/material/styles';
+import { Spinner } from '@sudobility/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type ColorSchemeMode, createAppTheme, resolveColorScheme } from '@/app/theme';
 import { AppRouter } from '@/app/router';
@@ -44,17 +39,23 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render(): ReactNode {
     if (!this.state.error) return this.props.children;
     return (
-      <Box sx={{ p: 4, maxWidth: 480, mx: 'auto' }}>
-        <Stack spacing={2}>
-          <Alert severity="error">Something went wrong and ScoreSmith couldn't continue.</Alert>
-          <Typography variant="body2" color="text.secondary">
+      <div className="mx-auto max-w-[480px] p-8">
+        <div className="flex flex-col gap-4">
+          <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+            Something went wrong and ScoreSmith couldn't continue.
+          </div>
+          <p className="text-sm text-theme-text-secondary">
             Your work is autosaved as you go, so reloading is usually safe.
-          </Typography>
-          <Button variant="contained" onClick={() => window.location.reload()}>
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
             Reload
-          </Button>
-        </Stack>
-      </Box>
+          </button>
+        </div>
+      </div>
     );
   }
 }
@@ -68,9 +69,9 @@ function AuthGate({ store }: { store: EditorStoreApi }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
-        <CircularProgress aria-label="Loading" />
-      </Box>
+      <div className="grid min-h-screen place-items-center">
+        <Spinner ariaLabel="Loading" size="large" />
+      </div>
     );
   }
   if (!user) return <SignInScreen />;

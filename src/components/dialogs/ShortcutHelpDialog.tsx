@@ -3,14 +3,7 @@
  * listing the exact shortcut table `useEditorShortcuts.ts` implements
  * (spec §7).
  */
-import Dialog from '@mui/material/Dialog';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableRow from '@mui/material/TableRow';
+import { Dialog } from '@sudobility/components';
 
 export type ShortcutHelpDialogProps = {
   open: boolean;
@@ -33,27 +26,35 @@ const SHORTCUTS: Array<{ keys: string; action: string }> = [
 
 export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} aria-labelledby="shortcut-help-title" maxWidth="sm" fullWidth>
-      <DialogTitle id="shortcut-help-title">
-        Keyboard shortcuts
-        <IconButton aria-label="Close" onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}>
-          ✕
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Table size="small" aria-label="Keyboard shortcuts">
-          <TableBody>
+    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
+      <div role="dialog" aria-labelledby="shortcut-help-title" className="relative p-6">
+        <h2 id="shortcut-help-title" className="text-lg font-semibold text-theme-text-primary">
+          Keyboard shortcuts
+        </h2>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-md p-1 text-theme-text-secondary hover:bg-theme-hover-bg"
+        >
+          &times;
+        </button>
+        <table aria-label="Keyboard shortcuts" className="mt-4 w-full border-collapse text-sm">
+          <tbody>
             {SHORTCUTS.map((s) => (
-              <TableRow key={s.keys}>
-                <TableCell component="th" scope="row" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+              <tr key={s.keys} className="border-b border-theme-border last:border-b-0">
+                <th
+                  scope="row"
+                  className="whitespace-nowrap py-1.5 pr-4 text-left font-mono font-normal text-theme-text-primary"
+                >
                   {s.keys}
-                </TableCell>
-                <TableCell>{s.action}</TableCell>
-              </TableRow>
+                </th>
+                <td className="py-1.5 text-theme-text-secondary">{s.action}</td>
+              </tr>
             ))}
-          </TableBody>
-        </Table>
-      </DialogContent>
+          </tbody>
+        </table>
+      </div>
     </Dialog>
   );
 }
