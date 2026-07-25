@@ -1,0 +1,284 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.dark {
+  /* Sudoku board palette (dark) — decorative game identity, concrete colors
+     intentionally kept. The --color-* aliases above are driven by the design
+     tokens, so no .dark { --color-* } overrides are needed here. */
+  --sudoku-bg: #1e293b;
+  --sudoku-grid-line: #334155;
+  --sudoku-block-border: #e2e8f0;
+  --sudoku-cell-selected: #1e40af;
+  --sudoku-cell-related: #334155;
+  --sudoku-cell-error: #7f1d1d;
+  --sudoku-text-given: #f1f5f9;
+  --sudoku-text-input: #60a5fa;
+  --sudoku-text-error: #f87171;
+  --sudoku-pencilmark: #94a3b8;
+}
+
+/* Base styles */
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
+    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Utility for max-width container */
+.container-app {
+  max-width: 80rem; /* 1280px */
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-app {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-app {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* Technique HTML content styling - override legacy inline styles */
+.technique-content {
+  font-family: inherit !important;
+  color: var(--color-text-primary) !important;
+}
+
+.technique-content * {
+  font-family: inherit !important;
+}
+
+.technique-content p {
+  font: inherit !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  margin-bottom: 0.75rem !important;
+  color: var(--color-text-primary) !important;
+}
+
+.technique-content b {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: var(--color-text-primary) !important;
+}
+
+.technique-content table {
+  width: 100% !important;
+}
+
+.technique-content td {
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+.technique-content img {
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  margin: 1rem auto !important;
+  display: block;
+}
+
+.technique-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.technique-content li {
+  font: inherit !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  margin-bottom: 0.5rem !important;
+  color: var(--color-text-primary) !important;
+}
+
+.technique-content a {
+  color: #3b82f6 !important;
+  text-decoration: underline !important;
+  cursor: pointer !important;
+}
+
+.technique-content a:hover {
+  color: #2563eb !important;
+}
+
+.dark .technique-content a {
+  color: #60a5fa !important;
+}
+
+.dark .technique-content a:hover {
+  color: #93c5fd !important;
+}
+
+/* Semantic formatting classes for technique explanations */
+.technique-content .fmt-cell {
+  font-family: ui-monospace, SFMono-Regular, monospace !important;
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 0.9em !important;
+  font-weight: 600 !important;
+  white-space: nowrap !important;
+}
+
+.dark .technique-content .fmt-cell {
+  background: #1e3a5f !important;
+  color: #93c5fd !important;
+}
+
+.technique-content .fmt-digit {
+  font-family: ui-monospace, SFMono-Regular, monospace !important;
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-size: 0.95em !important;
+  font-weight: 700 !important;
+}
+
+.dark .technique-content .fmt-digit {
+  background: #14532d !important;
+  color: #86efac !important;
+}
+
+.technique-content .fmt-eliminate {
+  font-family: ui-monospace, SFMono-Regular, monospace !important;
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-size: 0.95em !important;
+  font-weight: 600 !important;
+  text-decoration: line-through !important;
+}
+
+.dark .technique-content .fmt-eliminate {
+  background: #450a0a !important;
+  color: #fca5a5 !important;
+}
+
+.technique-content .fmt-house {
+  font-weight: 700 !important;
+  color: #7c3aed !important;
+}
+
+.dark .technique-content .fmt-house {
+  color: #a78bfa !important;
+}
+
+.technique-content .fmt-action {
+  font-weight: 600 !important;
+  color: #dc2626 !important;
+}
+
+.dark .technique-content .fmt-action {
+  color: #f87171 !important;
+}
+
+.technique-content .fmt-result {
+  font-weight: 600 !important;
+  color: #059669 !important;
+}
+
+.dark .technique-content .fmt-result {
+  color: #34d399 !important;
+}
+
+/* Section titles in technique content */
+.technique-content .section-title {
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+  margin: 0 0 10px 0 !important;
+}
+
+.dark .technique-content .section-title {
+  color: #e5e7eb !important;
+}
+
+/* How it works box */
+.technique-content .how-it-works-content {
+  background: #f0f9ff !important;
+}
+
+.dark .technique-content .how-it-works-content {
+  background: #1e3a5f !important;
+}
+
+/* Example content box */
+.technique-content .example-content {
+  background: #f8fafc !important;
+}
+
+.dark .technique-content .example-content {
+  background: #1e293b !important;
+}
+
+/* Explanation box inside example */
+.technique-content .explanation {
+  background: white !important;
+  border-left: 4px solid #2563eb !important;
+}
+
+.dark .technique-content .explanation {
+  background: #0f172a !important;
+  border-left-color: #3b82f6 !important;
+}
+
+/* Tips content box */
+.technique-content .tips-content {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+}
+
+.dark .technique-content .tips-content {
+  background: linear-gradient(135deg, #78350f 0%, #92400e 100%) !important;
+}
+
+/* Practice CTA section */
+.technique-content .practice-cta {
+  border-top-color: #e5e7eb !important;
+}
+
+.dark .technique-content .practice-cta {
+  border-top-color: #334155 !important;
+}
+
+/* Cell list styling */
+.technique-content .fmt-cell-list {
+  font-family: ui-monospace, monospace !important;
+  background: #e0e7ff !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-size: 0.9em !important;
+}
+
+.dark .technique-content .fmt-cell-list {
+  background: #1e3a5f !important;
+  color: #93c5fd !important;
+}
+
+/* @sudobility/design theme tokens (semantic) — drives both the design
+   components and the app's aliased --color-* utilities, and flips light/dark.
+   Mirrors ~/projects/tapayoka_vendor_app/src/index.css. */

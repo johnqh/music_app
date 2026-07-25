@@ -36,7 +36,7 @@ test.describe('project persistence: save and reopen', () => {
 
     // Reopen via the dashboard's project grid.
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/en\/projects$/);
     await expect(page.getByRole('button', { name: 'Open project: Persistence Check' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Open project: Persistence Check' }).click();

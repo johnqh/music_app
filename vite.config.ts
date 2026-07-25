@@ -2,11 +2,18 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
+const stub = (name: string) => fileURLToPath(new URL(`./src/stubs/${name}.ts`, import.meta.url));
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Stub out @sudobility/building_blocks' optional peer deps we don't
+      // install (sudobility landing "stubs system" — see its CLAUDE.md).
+      '@sudobility/subscription-components': stub('subscription-components'),
+      '@sudobility/devops-components': stub('devops-components'),
+      '@sudobility/subscription_lib': stub('subscription_lib'),
     },
   },
   server: {
@@ -34,7 +41,7 @@ export default defineConfig({
     // package instead of externalizing it.
     server: {
       deps: {
-        inline: [/@sudobility\/music_lib/],
+        inline: [/@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/],
       },
     },
     coverage: {

@@ -1,0 +1,28 @@
+{
+  "appName": "ScoreSmith",
+  "tagline": "AI-assisted sheet music composition",
+  "nav": {
+    "dashboard": "Projects",
+    "settings": "Settings",
+    "signOut": "Sign out"
+  },
+  "home": {
+    "heroTitle": "Compose with AI, refine by hand",
+    "heroBody": "ScoreSmith pairs a full notation editor and piano roll with AI generation: describe the music you want, then edit every note.",
+    "cta": "Open your projects",
+    "featureEditorTitle": "Real notation editing",
+    "featureEditorBody": "Engraved notation and a piano roll over the same score, with full undo history.",
+    "featureAiTitle": "AI generation",
+    "featureAiBody": "Generate whole pieces or regenerate a selection with candidate previews.",
+    "featureFormatsTitle": "MIDI & MusicXML",
+    "featureFormatsBody": "Import and export standard formats that work with your other tools."
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "developerMode": "Developer mode"
+  }
+}

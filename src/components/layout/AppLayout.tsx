@@ -204,7 +204,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <AppBar position="static" color="primary" enableColorOnDark>
         <Toolbar sx={{ gap: 1 }}>
-          <IconButton aria-label="Back to dashboard" color="inherit" onClick={() => onNavigate?.('/')}>
+          <IconButton aria-label="Back to dashboard" color="inherit" onClick={() => onNavigate?.('/projects')}>
             ←
           </IconButton>
 

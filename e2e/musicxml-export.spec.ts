@@ -38,7 +38,7 @@ test.describe('MusicXML export', () => {
 
     // Round-trip it back in through the import dialog (spec §17).
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/en\/projects$/);
 
     await page.getByRole('button', { name: 'Import MusicXML' }).click();
     await page.getByLabel('MusicXML file input').setInputFiles(xmlPath!);

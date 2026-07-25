@@ -132,7 +132,7 @@ describe('AppLayout', () => {
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Validation issues list' })).not.toBeInTheDocument());
   });
 
-  it('"Back to dashboard" calls onNavigate("/")', async () => {
+  it('"Back to dashboard" calls onNavigate("/projects")', async () => {
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();
     render(<AppLayout store={store} onNavigate={onNavigate} />);
@@ -140,7 +140,7 @@ describe('AppLayout', () => {
 
     await user.click(screen.getByLabelText('Back to dashboard'));
 
-    expect(onNavigate).toHaveBeenCalledWith('/');
+    expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
 
   it('toggling the track panel hides and re-shows it', async () => {

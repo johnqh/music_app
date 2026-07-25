@@ -1,42 +1,65 @@
 /**
- * The app's two routes (spec §6/§19): `/` (the project dashboard) and
- * `/project/:id` (the editor shell, `AppLayout`). Uses `react-router-dom`
- * (per the Task 16 brief's explicit choice) purely for URL <-> screen
- * mapping; all actual project state still lives in the shared Zustand
- * store, not in the URL/router.
- *
- * `ProjectRoute` is the one piece of glue `AppLayout` itself can't own: it
- * makes sure the store's currently-open project matches the `:id` in the
- * URL *before* rendering `AppLayout` (e.g. a bookmarked/refreshed
- * `/project/:id` URL, or the id changing via in-app navigation) --
- * `AppLayout` itself never loads a project, only edits whichever one the
- * store already has open.
+ * Route structure (APP.md): everything lives under `/:lang` (en-only this
+ * phase). ScreenContainer wraps the content routes as a layout route; the
+ * editor route (`/:lang/project/:id`) renders the editor workspace inside
+ * the same shell with a non-scrollable page config (set by AppLayout).
+ * `ProjectRoute` keeps the store's open project in sync with the URL.
  */
-import { useEffect, useRef } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Suspense, lazy, useEffect, useRef } from 'react';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/projects/DashboardPage';
-import { reportError } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
+import { reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { ScreenContainer } from '@/components/shell/ScreenContainer';
+import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
+import { supportedLanguages } from '@/i18n';
+
+const HomePage = lazy(() => import('@/pages/HomePage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 
 export type AppRouterProps = {
-  /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
+  /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
   store?: EditorStoreApi;
 };
 
+function LoadingFallback() {
+  return <div className="p-8 text-theme-text-secondary">Loading…</div>;
+}
+
+function ScreenContainerLayout() {
+  return (
+    <ScreenContainer>
+      <Suspense fallback={<LoadingFallback />}>
+        <Outlet />
+      </Suspense>
+    </ScreenContainer>
+  );
+}
+
+function LanguageValidator() {
+  const { lang } = useParams<{ lang: string }>();
+  if (!lang || !(supportedLanguages as readonly string[]).includes(lang)) {
+    return <Navigate to="/en" replace />;
+  }
+  return <Outlet />;
+}
+
 function DashboardRoute({ store }: { store: EditorStoreApi }) {
-  const navigate = useNavigate();
+  const navigate = useLocalizedNavigate();
   return <DashboardPage store={store} onNavigate={navigate} />;
+}
+
+function SettingsRoute({ store }: { store: EditorStoreApi }) {
+  return <SettingsPage store={store} />;
 }
 
 function ProjectRoute({ store }: { store: EditorStoreApi }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const lang = useCurrentLanguage();
   // Guards against re-opening the same project on every render (openProject
-  // resets undo/redo history -- see score-slice's setScore doc) while still
-  // reacting to the id actually changing (in-app navigation to a different
-  // project).
+  // resets undo/redo history) while still reacting to id changes.
   const openedIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -50,20 +73,28 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
       .openProject(id)
       .catch((err: unknown) => {
         reportError(err, { context: 'Failed to open project', store });
-        navigate('/');
+        navigate(`/${lang}/projects`);
       });
-  }, [id, store, navigate]);
+  }, [id, store, navigate, lang]);
 
-  return <AppLayout store={store} onNavigate={navigate} />;
+  const localizedNavigate = useLocalizedNavigate();
+  return <AppLayout store={store} onNavigate={localizedNavigate} />;
 }
 
 export function AppRouter({ store = useAppStore }: AppRouterProps) {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<DashboardRoute store={store} />} />
-        <Route path="/project/:id" element={<ProjectRoute store={store} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<Navigate to="/en" replace />} />
+        <Route path="/:lang" element={<LanguageValidator />}>
+          <Route element={<ScreenContainerLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="projects" element={<DashboardRoute store={store} />} />
+            <Route path="settings" element={<SettingsRoute store={store} />} />
+          </Route>
+          <Route path="project/:id" element={<ProjectRoute store={store} />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/en" replace />} />
       </Routes>
     </BrowserRouter>
   );

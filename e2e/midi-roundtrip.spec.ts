@@ -33,7 +33,7 @@ test.describe('MIDI export and import round-trip', () => {
 
     // Import that exact file back in as a brand-new project, from the dashboard.
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/en\/projects$/);
 
     await page.getByRole('button', { name: 'Import MIDI' }).click();
     await page.getByLabel('MIDI file input').setInputFiles(midiPath!);

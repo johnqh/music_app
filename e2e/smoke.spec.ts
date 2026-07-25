@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 
-test('renders the ScoreSmith app bar title', async ({ page }) => {
+test('renders the home page hero', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'ScoreSmith' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Compose with AI, refine by hand' })
+  ).toBeVisible();
 });

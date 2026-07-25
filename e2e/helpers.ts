@@ -87,7 +87,7 @@ export type GenerationOptions = {
 
 /** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
 export async function gotoDashboard(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('/en/projects');
   await expect(page.getByRole('heading', { name: 'ScoreSmith' })).toBeVisible();
 }
 

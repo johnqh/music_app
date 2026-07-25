@@ -1,3 +1,4 @@
+import '@/i18n';
 import '@testing-library/jest-dom/vitest';
 
 // jsdom does not implement SVGElement.prototype.getBBox, but VexFlow (used by

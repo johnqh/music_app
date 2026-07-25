@@ -10,6 +10,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 }));
 
 import { AppRouter } from '@/app/router';
+import { AuthProvider } from '@/app/AuthContext';
 
 let context: TestStoreContext;
 
@@ -27,9 +28,20 @@ afterEach(() => {
 });
 
 describe('AppRouter', () => {
-  it('renders the dashboard at "/"', async () => {
+  it('redirects "/" to the localized home page', async () => {
     const store = makeStore();
-    render(<AppRouter store={store} />);
+    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+    );
+    expect(window.location.pathname).toBe('/en');
+  });
+
+  it('renders the dashboard at "/en/projects"', async () => {
+    const store = makeStore();
+    window.history.pushState({}, '', '/en/projects');
+    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
   });
@@ -40,31 +52,33 @@ describe('AppRouter', () => {
       { name: 'Router Test Project', score: createEmptyScore({ title: 'Router Test Project' }) },
       'test-token'
     );
-    window.history.pushState({}, '', `/project/${record.id}`);
+    window.history.pushState({}, '', `/en/project/${record.id}`);
 
-    render(<AppRouter store={store} />);
+    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
   });
 
-  it('an unknown path redirects to the dashboard', async () => {
+  it('an unknown path redirects to the localized home', async () => {
     const store = makeStore();
     window.history.pushState({}, '', '/nope');
 
-    render(<AppRouter store={store} />);
+    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
-    expect(window.location.pathname).toBe('/');
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+    );
+    expect(window.location.pathname).toBe('/en');
   });
 
   it('a nonexistent project id falls back to the dashboard with an error toast', async () => {
     const store = makeStore();
-    window.history.pushState({}, '', '/project/does-not-exist');
+    window.history.pushState({}, '', '/en/project/does-not-exist');
 
-    render(<AppRouter store={store} />);
+    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
 
-    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    await waitFor(() => expect(window.location.pathname).toBe('/en/projects'));
     await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
   });
 });

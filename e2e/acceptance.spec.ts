@@ -145,7 +145,7 @@ test.describe('spec §39 acceptance scenario', () => {
     expect(midiPath).toBeTruthy();
 
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL(/\/en\/projects$/);
     await page.getByRole('button', { name: 'Import MIDI' }).click();
     await page.getByLabel('MIDI file input').setInputFiles(midiPath!);
     await expect(page.getByRole('table', { name: 'MIDI track summary' })).toBeVisible();
