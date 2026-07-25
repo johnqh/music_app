@@ -13,23 +13,18 @@
  * concept died with the deterministic mock provider — real AI generation
  * (music_api/OpenAI) is not seedable. Both are documented as known
  * limitations in docs/architecture.md.
+ *
+ * Re-skinned onto Tailwind (T12 batch 4): the MUI Select becomes native
+ * `<select>`s, the MUI Menu becomes a small `role="menu"`/`role="menuitem"`
+ * popover built from plain buttons (same pattern as `EditorToolbar`'s
+ * articulation menu), MUI Checkboxes become native `<input
+ * type="checkbox">`s, and MUI LinearProgress becomes a `role="progressbar"`
+ * div — same roles/labels/accessible names as before, so no test
+ * assertions changed.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormGroup from '@mui/material/FormGroup';
-import LinearProgress from '@mui/material/LinearProgress';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
-import type { SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
 import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@sudobility/music_types';
 import { useAppStore } from '@sudobility/music_lib';
@@ -111,6 +106,46 @@ function toRequestTrack(option: (typeof INSTRUMENT_OPTIONS)[number]): GenerateSc
   return { name: option.label, instrumentName: option.instrumentName, midiProgram: option.midiProgram, clef: option.clef };
 }
 
+const TEXT_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const PRIMARY_BUTTON_CLASS =
+  'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
+
+const SELECT_CLASS =
+  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+
+const TEXT_INPUT_CLASS =
+  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  min,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  min?: number;
+  className?: string;
+}) {
+  return (
+    <label className={`flex flex-1 flex-col gap-1 ${className ?? ''}`}>
+      <span className="text-xs text-theme-text-secondary">{label}</span>
+      <input
+        type="number"
+        aria-label={label}
+        value={value}
+        min={min}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+        className={TEXT_INPUT_CLASS}
+      />
+    </label>
+  );
+}
+
 export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const pending = store((s) => s.pending);
   const error = store((s) => s.error);
@@ -125,7 +160,17 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const [keyFifths, setKeyFifths] = useState(0);
   const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
   const [timeSigPreset, setTimeSigPreset] = useState('4/4');
-  const [presetAnchor, setPresetAnchor] = useState<HTMLElement | null>(null);
+  const [presetOpen, setPresetOpen] = useState(false);
+  const presetRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!presetOpen) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!presetRef.current?.contains(event.target as Node)) setPresetOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [presetOpen]);
 
   const durationMeasures = Number(measures);
   const tracks = INSTRUMENT_OPTIONS.filter((opt) => instruments.has(opt.key)).map(toRequestTrack);
@@ -143,7 +188,7 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
 
   const handlePresetSelect = (text: string): void => {
     setPrompt(text);
-    setPresetAnchor(null);
+    setPresetOpen(false);
   };
 
   const handleGenerate = (): void => {
@@ -167,175 +212,176 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   };
 
   return (
-    <Stack spacing={2} sx={{ p: 2 }} aria-label="Generation panel">
-      <Typography variant="subtitle1">Generate a new score</Typography>
+    <div aria-label="Generation panel" className="flex flex-col gap-4 p-4">
+      <h3 className="text-sm font-semibold text-theme-text-primary">Generate a new score</h3>
 
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && (
+        <div role="alert" className="rounded-md bg-red-600 px-3 py-2 text-sm text-white">
+          {error}
+        </div>
+      )}
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-        <TextField
-          multiline
-          minRows={3}
-          fullWidth
-          label="Prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          slotProps={{ htmlInput: { 'aria-label': 'Prompt' } }}
-        />
-        <Button size="small" aria-label="Preset prompts" onClick={(e) => setPresetAnchor(e.currentTarget)}>
-          Presets
-        </Button>
-        <Menu anchorEl={presetAnchor} open={presetAnchor !== null} onClose={() => setPresetAnchor(null)}>
-          {PRESET_PROMPTS.map((text) => (
-            <MenuItem key={text} onClick={() => handlePresetSelect(text)}>
-              {text}
-            </MenuItem>
-          ))}
-        </Menu>
-      </Stack>
+      <div className="flex items-start gap-2">
+        <label className="flex flex-1 flex-col gap-1">
+          <span className="text-xs text-theme-text-secondary">Prompt</span>
+          <textarea
+            aria-label="Prompt"
+            rows={3}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className={TEXT_INPUT_CLASS}
+          />
+        </label>
+        <div ref={presetRef} className="relative shrink-0">
+          <button
+            type="button"
+            aria-label="Preset prompts"
+            aria-haspopup="menu"
+            aria-expanded={presetOpen}
+            onClick={() => setPresetOpen((open) => !open)}
+            className={TEXT_BUTTON_CLASS}
+          >
+            Presets
+          </button>
+          {presetOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md border border-theme-border bg-theme-bg-secondary py-1 shadow-lg"
+            >
+              {PRESET_PROMPTS.map((text) => (
+                <button
+                  key={text}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handlePresetSelect(text)}
+                  className="block w-full px-3 py-1.5 text-left text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-      <Stack direction="row" spacing={1}>
-        <Select
-          size="small"
-          fullWidth
-          displayEmpty
+      <div className="flex gap-2">
+        <select
+          aria-label="Style"
           value={style}
-          onChange={(e: SelectChangeEvent) => setStyle(e.target.value)}
-          inputProps={{ 'aria-label': 'Style' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setStyle(e.target.value)}
+          className={`${SELECT_CLASS} flex-1`}
         >
-          <MenuItem value="">
-            <em>No style</em>
-          </MenuItem>
+          <option value="">No style</option>
           {STYLE_OPTIONS.map((s) => (
-            <MenuItem key={s} value={s}>
+            <option key={s} value={s}>
               {s}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-        <Select
-          size="small"
-          fullWidth
-          displayEmpty
+        </select>
+        <select
+          aria-label="Mood"
           value={mood}
-          onChange={(e: SelectChangeEvent) => setMood(e.target.value)}
-          inputProps={{ 'aria-label': 'Mood' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setMood(e.target.value)}
+          className={`${SELECT_CLASS} flex-1`}
         >
-          <MenuItem value="">
-            <em>No mood</em>
-          </MenuItem>
+          <option value="">No mood</option>
           {MOOD_OPTIONS.map((m) => (
-            <MenuItem key={m} value={m}>
+            <option key={m} value={m}>
               {m}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-        <Select
-          size="small"
-          fullWidth
+        </select>
+        <select
+          aria-label="Complexity"
           value={complexity}
-          onChange={(e: SelectChangeEvent) =>
+          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
             setComplexity(e.target.value as NonNullable<GenerateScoreRequest['complexity']>)
           }
-          inputProps={{ 'aria-label': 'Complexity' }}
+          className={`${SELECT_CLASS} flex-1`}
         >
           {COMPLEXITY_OPTIONS.map((c) => (
-            <MenuItem key={c} value={c}>
+            <option key={c} value={c}>
               {c}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-      </Stack>
+        </select>
+      </div>
 
-      <Box role="group" aria-label="Instrumentation">
-        <Typography variant="body2">Instrumentation</Typography>
-        <FormGroup row>
+      <div role="group" aria-label="Instrumentation" className="flex flex-col gap-2">
+        <span className="text-sm text-theme-text-primary">Instrumentation</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
           {INSTRUMENT_OPTIONS.map((opt) => (
-            <FormControlLabel
-              key={opt.key}
-              control={
-                <Checkbox
-                  size="small"
-                  checked={instruments.has(opt.key)}
-                  onChange={() => toggleInstrument(opt.key)}
-                  slotProps={{ input: { 'aria-label': `Include ${opt.label}` } }}
-                />
-              }
-              label={opt.label}
-            />
+            <label key={opt.key} className="flex items-center gap-2 text-sm text-theme-text-primary">
+              <input
+                type="checkbox"
+                aria-label={`Include ${opt.label}`}
+                checked={instruments.has(opt.key)}
+                onChange={() => toggleInstrument(opt.key)}
+                className="h-4 w-4 rounded border-theme-border"
+              />
+              {opt.label}
+            </label>
           ))}
-        </FormGroup>
-      </Box>
+        </div>
+      </div>
 
-      <Stack direction="row" spacing={1}>
-        <TextField
-          size="small"
-          type="number"
-          label="Measures"
-          value={measures}
-          onChange={(e) => setMeasures(e.target.value)}
-          slotProps={{ htmlInput: { 'aria-label': 'Measures', min: 1 } }}
-        />
-        <TextField
-          size="small"
-          type="number"
-          label="Tempo"
-          value={tempo}
-          onChange={(e) => setTempo(e.target.value)}
-          slotProps={{ htmlInput: { 'aria-label': 'Tempo', min: 1 } }}
-        />
-      </Stack>
+      <div className="flex gap-2">
+        <LabeledInput label="Measures" value={measures} onChange={setMeasures} min={1} />
+        <LabeledInput label="Tempo" value={tempo} onChange={setTempo} min={1} />
+      </div>
 
-      <Stack direction="row" spacing={1}>
-        <Select
-          size="small"
-          fullWidth
+      <div className="flex gap-2">
+        <select
+          aria-label="Key"
           value={keyFifths}
-          onChange={(e: SelectChangeEvent<number>) => setKeyFifths(Number(e.target.value))}
-          inputProps={{ 'aria-label': 'Key' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setKeyFifths(Number(e.target.value))}
+          className={`${SELECT_CLASS} flex-1`}
         >
           {KEY_FIFTHS_OPTIONS.map((opt) => (
-            <MenuItem key={opt.fifths} value={opt.fifths}>
+            <option key={opt.fifths} value={opt.fifths}>
               {opt.label}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-        <Select
-          size="small"
-          fullWidth
+        </select>
+        <select
+          aria-label="Mode"
           value={keyMode}
-          onChange={(e: SelectChangeEvent) => setKeyMode(e.target.value as KeySignature['mode'])}
-          inputProps={{ 'aria-label': 'Mode' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setKeyMode(e.target.value as KeySignature['mode'])}
+          className={`${SELECT_CLASS} flex-1`}
         >
-          <MenuItem value="major">major</MenuItem>
-          <MenuItem value="minor">minor</MenuItem>
-        </Select>
-        <Select
-          size="small"
-          fullWidth
+          <option value="major">major</option>
+          <option value="minor">minor</option>
+        </select>
+        <select
+          aria-label="Time signature"
           value={timeSigPreset}
-          onChange={(e: SelectChangeEvent) => setTimeSigPreset(e.target.value)}
-          inputProps={{ 'aria-label': 'Time signature' }}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setTimeSigPreset(e.target.value)}
+          className={`${SELECT_CLASS} flex-1`}
         >
           {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
-            <MenuItem key={key} value={key}>
+            <option key={key} value={key}>
               {key}
-            </MenuItem>
+            </option>
           ))}
-        </Select>
-      </Stack>
+        </select>
+      </div>
 
-      {pending && <LinearProgress aria-label="Generating" />}
+      {pending && (
+        <div role="progressbar" aria-label="Generating" className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+        </div>
+      )}
 
-      <Stack direction="row" spacing={1}>
-        <Button variant="contained" aria-label="Generate" disabled={!canGenerate} onClick={handleGenerate}>
+      <div className="flex gap-2">
+        <button type="button" aria-label="Generate" disabled={!canGenerate} onClick={handleGenerate} className={PRIMARY_BUTTON_CLASS}>
           Generate
-        </Button>
+        </button>
         {pending && (
-          <Button aria-label="Cancel" onClick={handleCancel}>
+          <button type="button" aria-label="Cancel" onClick={handleCancel} className={TEXT_BUTTON_CLASS}>
             Cancel
-          </Button>
+          </button>
         )}
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

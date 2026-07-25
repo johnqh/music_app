@@ -13,17 +13,14 @@
  * regardless of which one was previously active, so Accept is never
  * "accept whatever happens to still be selected" — it always does what
  * the button it came from says.
+ *
+ * Re-skinned onto Tailwind (T12 batch 4): MUI Card/CardContent/CardActions
+ * become a plain `role="group"` div (same `Candidate card: <label>` name —
+ * e2e specs assert on it directly), and the MUI ToggleButtonGroup A/B
+ * toggle becomes two plain `aria-pressed` buttons.
  */
 import { useEffect, useState } from 'react';
-import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardActions from '@mui/material/CardActions';
-import CardContent from '@mui/material/CardContent';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Typography from '@mui/material/Typography';
+import type { ChangeEvent } from 'react';
 import type { RegenerationCandidate } from '@sudobility/music_types';
 import { playbackController } from '@sudobility/music_lib';
 import { scoreWithCandidate, summarizeFragment, previewStartTick } from '@/features/generation/preview';
@@ -40,6 +37,15 @@ function summaryLine(candidate: RegenerationCandidate): string {
   const noteWord = noteCount === 1 ? 'note' : 'notes';
   return pitchRangeLabel ? `${noteCount} ${noteWord}, ${pitchRangeLabel}` : `${noteCount} ${noteWord}`;
 }
+
+const TEXT_BUTTON_CLASS =
+  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+const PRIMARY_BUTTON_CLASS =
+  'rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
+
+const TOGGLE_BUTTON_CLASS =
+  'rounded-md px-2 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover-bg aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
 
 export function CandidateList({ store = useAppStore }: CandidateListProps) {
   const candidates = store((s) => s.candidates);
@@ -91,9 +97,7 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
     setPlayingId(null);
   };
 
-  const handleCompareChange = (candidate: RegenerationCandidate, value: 'candidate' | 'original' | null): void => {
-    if (!value) return;
-    const showOriginal = value === 'original';
+  const handleCompareChange = (candidate: RegenerationCandidate, showOriginal: boolean): void => {
     setComparingOriginal(showOriginal);
     store.getState().setPreviewFragment(showOriginal ? null : candidate.fragment);
   };
@@ -126,90 +130,113 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
   };
 
   return (
-    <Stack spacing={2} aria-label="Regeneration candidates">
+    <div aria-label="Regeneration candidates" className="flex flex-col gap-4">
       {candidates.map((candidate) => {
         const isActive = candidate.id === activeCandidateId;
         const isPlaying = playingId === candidate.id;
         return (
-          <Card key={candidate.id} variant="outlined" role="group" aria-label={`Candidate card: ${candidate.label}`}>
-            <CardContent>
-              <Button
-                variant={isActive ? 'contained' : 'text'}
+          <div
+            key={candidate.id}
+            role="group"
+            aria-label={`Candidate card: ${candidate.label}`}
+            className="rounded-md border border-theme-border bg-theme-bg-secondary p-4"
+          >
+            <div className="flex flex-col items-start gap-2">
+              <button
+                type="button"
                 aria-pressed={isActive}
                 onClick={() => handleSelect(candidate)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-theme-text-primary hover:bg-theme-hover-bg'
+                }`}
               >
                 {candidate.label}
-              </Button>
-              <Typography variant="body2" color="text.secondary">
-                {summaryLine(candidate)}
-              </Typography>
+              </button>
+              <p className="text-sm text-theme-text-secondary">{summaryLine(candidate)}</p>
               {isActive && (
-                <ToggleButtonGroup
-                  size="small"
-                  exclusive
-                  value={comparingOriginal ? 'original' : 'candidate'}
-                  onChange={(_e, value: 'candidate' | 'original' | null) => handleCompareChange(candidate, value)}
-                  aria-label="Compare candidate and original"
-                  sx={{ mt: 1 }}
-                >
-                  <ToggleButton value="candidate" aria-label="Show candidate">
+                <div role="group" aria-label="Compare candidate and original" className="mt-1 flex gap-0.5">
+                  <button
+                    type="button"
+                    aria-label="Show candidate"
+                    aria-pressed={!comparingOriginal}
+                    onClick={() => handleCompareChange(candidate, false)}
+                    className={TOGGLE_BUTTON_CLASS}
+                  >
                     Candidate
-                  </ToggleButton>
-                  <ToggleButton value="original" aria-label="Show original">
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Show original"
+                    aria-pressed={comparingOriginal}
+                    onClick={() => handleCompareChange(candidate, true)}
+                    className={TOGGLE_BUTTON_CLASS}
+                  >
                     Original
-                  </ToggleButton>
-                </ToggleButtonGroup>
+                  </button>
+                </div>
               )}
-            </CardContent>
-            <CardActions>
+            </div>
+            <div className="mt-3 flex gap-2">
               {isPlaying ? (
-                <Button size="small" aria-label={`Stop preview: ${candidate.label}`} onClick={handleStop}>
+                <button type="button" aria-label={`Stop preview: ${candidate.label}`} onClick={handleStop} className={TEXT_BUTTON_CLASS}>
                   Stop
-                </Button>
+                </button>
               ) : (
-                <Button
-                  size="small"
+                <button
+                  type="button"
                   aria-label={`Play in context: ${candidate.label}`}
                   disabled={!score}
                   onClick={() => handlePlay(candidate)}
+                  className={TEXT_BUTTON_CLASS}
                 >
                   Play in context
-                </Button>
+                </button>
               )}
-              <Button
-                size="small"
-                variant="contained"
+              <button
+                type="button"
                 aria-label={`Accept ${candidate.label}`}
                 onClick={() => handleAccept(candidate)}
+                className={PRIMARY_BUTTON_CLASS}
               >
                 Accept
-              </Button>
-            </CardActions>
-          </Card>
+              </button>
+            </div>
+          </div>
         );
       })}
 
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-        <TextField
-          size="small"
-          fullWidth
-          label="Retry with a revised instruction"
-          value={retryInstruction}
-          onChange={(e) => setRetryInstruction(e.target.value)}
-          slotProps={{ htmlInput: { 'aria-label': 'Retry instruction' } }}
-        />
-        <Button
+      <div className="flex items-start gap-2">
+        <label className="flex flex-1 flex-col gap-1">
+          <span className="text-xs text-theme-text-secondary">Retry with a revised instruction</span>
+          <input
+            type="text"
+            aria-label="Retry instruction"
+            value={retryInstruction}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setRetryInstruction(e.target.value)}
+            className="w-full rounded-md border border-theme-border bg-theme-bg-primary px-3 py-2 text-sm text-theme-text-primary"
+          />
+        </label>
+        <button
+          type="button"
           aria-label="Retry"
           disabled={pending || retryInstruction.trim() === ''}
           onClick={handleRetry}
+          className={TEXT_BUTTON_CLASS}
         >
           Retry
-        </Button>
-      </Stack>
+        </button>
+      </div>
 
-      <Button aria-label="Reject all" color="error" onClick={handleRejectAll}>
+      <button
+        type="button"
+        aria-label="Reject all"
+        onClick={handleRejectAll}
+        className="self-start rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+      >
         Reject all
-      </Button>
-    </Stack>
+      </button>
+    </div>
   );
 }

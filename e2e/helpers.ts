@@ -113,12 +113,10 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
     await page.getByLabel('Measures', { exact: true }).fill(String(options.measures));
   }
   if (options.keyFifths !== undefined) {
-    await page.getByRole('combobox', { name: 'Key', exact: true }).click();
-    await page.getByRole('option', { name: options.keyFifths, exact: true }).click();
+    await page.getByRole('combobox', { name: 'Key', exact: true }).selectOption({ label: options.keyFifths });
   }
   if (options.keyMode !== undefined) {
-    await page.getByRole('combobox', { name: 'Mode', exact: true }).click();
-    await page.getByRole('option', { name: options.keyMode, exact: true }).click();
+    await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption(options.keyMode);
   }
   if (options.tempo !== undefined) {
     await page.getByLabel('Tempo', { exact: true }).fill(String(options.tempo));
@@ -128,7 +126,7 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
   await waitForNotation(page);
 }
 
-/** Waits for `generation-slice.pending` to go back to `false` (Generate/Regenerate's `LinearProgress` disappears). */
+/** Waits for `generation-slice.pending` to go back to `false` (Generate/Regenerate's `role="progressbar"` indicator disappears). */
 export async function waitForGenerationSettled(page: Page): Promise<void> {
   await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 15_000 });
 }
