@@ -6,7 +6,9 @@ import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
 import { chordScore, twinkleScore } from '@/test/fixtures';
 import { exportMidi } from '@/adapters/midi/export';
+import { analyzeMidi } from '@/adapters/midi/analyze';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
+import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 let db: ScoreSmithDb;
@@ -119,5 +121,33 @@ describe('MidiImportWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Preview import' }));
 
     await waitFor(() => expect(screen.getByText(/notes after import\./).textContent).not.toBe(withAllTracks));
+  });
+
+  it('a failed import (commit step) shows an error toast, not a silent failure', async () => {
+    const store = makeStore();
+    const failingService = {
+      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer)),
+      import: vi.fn().mockRejectedValue(new Error('corrupt track data')),
+    };
+    render(
+      <>
+        <MidiImportWizard open onClose={vi.fn()} store={store} midiService={failingService} />
+        <Toasts store={store} />
+      </>,
+    );
+    const user = userEvent.setup();
+
+    await chooseFile(user, fixtureMidiFile());
+    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    // Queried by text, not `getByRole('alert')`: the wizard's own Dialog is
+    // still open (so the user can retry), and MUI's Modal marks every other
+    // top-level element -- including the Toasts Snackbar, mounted as a
+    // sibling -- `aria-hidden` while it's open, which role-based queries
+    // correctly treat as inaccessible even though it's still visible.
+    await waitFor(() => expect(screen.getByText('MIDI import failed: corrupt track data')).toBeInTheDocument());
+    expect(store.getState().projectId).toBeNull();
   });
 });
