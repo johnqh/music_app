@@ -97,6 +97,36 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
     globalWindow.__SCORESMITH_DB__ = appDb;
   }, [store, appDb]);
 
+  // Best-effort autosave flush before the tab actually goes away (spec §18
+  // "autosave" -- Task 19 review finding I3): without this, up to the
+  // autosaver's debounce window (`services/persistence/autosave.ts`,
+  // `DEFAULT_DEBOUNCE_MS` = 2s) of edits could be lost if the user closes
+  // the tab, navigates away, or switches apps before the next scheduled
+  // write fires. `pagehide` is the primary signal (fires reliably on tab
+  // close/navigation, unlike the less consistently fired `beforeunload`);
+  // `visibilitychange` -> `'hidden'` is a belt-and-suspenders second
+  // signal for the same "about to lose the page" moment, since mobile
+  // browsers backgrounding a tab don't always follow up with `pagehide` in
+  // time for a flush to complete. Both funnel through the exact same
+  // `store.getState().saveNow()` call, gated here (not left to `saveNow`'s
+  // own no-op guards) so the two are trivially observable/testable
+  // independently of `saveNow`'s internal state.
+  useEffect(() => {
+    const flushIfDirty = (): void => {
+      const state = store.getState();
+      if (state.projectId && state.dirty) void state.saveNow();
+    };
+    const handleVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') flushIfDirty();
+    };
+    window.addEventListener('pagehide', flushIfDirty);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushIfDirty);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [store]);
+
   // Bootstrap persisted settings (spec §18/§33) once on mount.
   useEffect(() => {
     let cancelled = false;

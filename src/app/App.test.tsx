@@ -88,4 +88,85 @@ describe('App', () => {
       });
     });
   });
+
+  // Task 19 review finding I3: nothing previously flushed a pending
+  // autosave before the tab actually closed, so up to the autosaver's ~2s
+  // debounce window of edits could be lost. `saveNow` is replaced with a
+  // plain `vi.fn()` via `store.setState(...)` (the same direct-state-merge
+  // pattern used elsewhere in this suite, e.g. `store.setState({ error:
+  // ... })`), rather than `vi.spyOn(store.getState(), 'saveNow')` --
+  // spying in place mutates a property on whatever state object Immer
+  // happens to have produced, which that same middleware can later freeze
+  // out from under `vi.restoreAllMocks()`; a plain replacement avoids that
+  // entirely and is simpler besides. Not asserting a real IndexedDB write
+  // landed since that's already covered end-to-end by
+  // `project-slice.test.ts`; this suite only needs to confirm *when* App
+  // wires the flush to fire.
+  describe('autosave flush on tab hide (spec §18, finding I3)', () => {
+    async function renderReady(store: EditorStoreApi) {
+      const utils = render(<App store={store} db={db} />);
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
+      return utils;
+    }
+
+    it('flushes on pagehide when a project is open and dirty', async () => {
+      const store = makeStore();
+      await renderReady(store);
+      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
+      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
+
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(saveNowSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not flush on pagehide when the project is clean', async () => {
+      const store = makeStore();
+      await renderReady(store);
+      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
+      store.setState({ projectId: 'test-project', dirty: false, saveNow: saveNowSpy });
+
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(saveNowSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not flush on pagehide when no project is open', async () => {
+      const store = makeStore();
+      await renderReady(store);
+      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
+      store.setState({ projectId: null, dirty: true, saveNow: saveNowSpy });
+
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(saveNowSpy).not.toHaveBeenCalled();
+    });
+
+    it('also flushes on a visibilitychange to hidden (belt-and-suspenders)', async () => {
+      const store = makeStore();
+      await renderReady(store);
+      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
+      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
+
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(saveNowSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      }
+    });
+
+    it('removes its listeners on unmount', async () => {
+      const store = makeStore();
+      const { unmount } = await renderReady(store);
+      const saveNowSpy = vi.fn().mockResolvedValue(undefined);
+      store.setState({ projectId: 'test-project', dirty: true, saveNow: saveNowSpy });
+
+      unmount();
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(saveNowSpy).not.toHaveBeenCalled();
+    });
+  });
 });
