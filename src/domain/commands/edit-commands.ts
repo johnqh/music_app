@@ -70,47 +70,142 @@ function clipToMeasure(event: MusicalEvent, measureStart: number, measureEnd: nu
 }
 
 /**
- * Quantizes the voice(s) containing any of `eventIds`, one measure at a
- * time: only that voice's *note* events (not the synthetic rests
- * `reflowVoice` fills gaps with — feeding those into `quantizeEvents`
- * alongside real notes could snap a filler rest's start independently of
- * its neighboring note and corrupt the measure) are passed through Task
- * 4's `quantizeEvents`, clipped back to the measure's span, and then
- * `reflowVoice` regenerates the voice's rests around the result. This
- * keeps quantization measure-local (no cross-measure re-splitting), a
- * deliberate Task 5 scope limitation documented in the brief.
+ * One voice (identified by `trackId`/`measureId`/`voiceId`) touched by a
+ * quantize action, with its *note* events already extracted (not the
+ * synthetic rests `reflowVoice` fills gaps with — feeding those into
+ * `quantizeEvents` alongside real notes could snap a filler rest's start
+ * independently of its neighboring note and corrupt the measure). Building
+ * this list is O(score) but doesn't itself call `quantizeEvents` — see
+ * `collectQuantizeTargets`'s doc comment for why it's split out as its own
+ * step (Task 17).
  */
-function quantize(score: Score, eventIds: readonly UUID[], options: QuantizeOptions): Score {
+export type QuantizeTarget = { trackId: UUID; measureId: UUID; voiceId: UUID; notes: NoteEvent[] };
+
+/**
+ * The cheap, non-quantizing "which voices does this selection touch, and
+ * what are their current notes" pass of quantization: walks the score once
+ * and collects one `QuantizeTarget` per voice containing at least one of
+ * `eventIds`. Split out from `quantizeCommand`'s transform so the
+ * intent layer (`editing.ts`'s `quantizeSelection`, `interactions.ts`'s
+ * `commitQuantize`) can run this synchronously to decide *how much* work a
+ * quantize action actually implies (spec §29: route a manual quantize of
+ * >2000 events through `services/quantization/quantize-service.ts`'s
+ * worker) before committing to the expensive `quantizeEvents` call either
+ * on the main thread or off it — without duplicating this measure/voice
+ * walk in two places.
+ */
+export function collectQuantizeTargets(score: Score, eventIds: readonly UUID[]): QuantizeTarget[] {
   const idSet = new Set(eventIds);
-  const tracks = score.tracks.map((track) => {
-    const measures = track.measures.map((measure) => {
-      let nextMeasure = measure;
-      let changed = false;
+  const targets: QuantizeTarget[] = [];
+  for (const track of score.tracks) {
+    for (const measure of track.measures) {
       for (const voice of measure.voices) {
         if (!voice.events.some((e) => idSet.has(e.id))) continue;
-        changed = true;
-        const measureEnd = measure.startTick + measure.durationTicks;
-        const notes = voice.events.filter(isNoteEvent);
-        const quantizedNotes = quantizeEvents(notes, options)
+        targets.push({ trackId: track.id, measureId: measure.id, voiceId: voice.id, notes: voice.events.filter(isNoteEvent) });
+      }
+    }
+  }
+  return targets;
+}
+
+/**
+ * Splices each target's already-quantized notes (`quantizedByVoiceId`,
+ * keyed by `QuantizeTarget.voiceId` — computed by the caller, either
+ * inline via `quantizeEvents` or off-thread via `QuantizeService`) back
+ * into `score`: clips each note back to its measure's span, then
+ * `reflowVoice` regenerates that voice's rests around the result. This
+ * keeps quantization measure-local (no cross-measure re-splitting), a
+ * deliberate Task 5 scope limitation documented in the original brief.
+ * A target whose `voiceId` has no entry in `quantizedByVoiceId` is treated
+ * as "nothing computed for it" (splices in an empty note list) — the
+ * intent-layer callers always populate every target's key before calling
+ * this, so that only matters if a voice was concurrently deleted between
+ * `collectQuantizeTargets` and this call (see `applyQuantizedCommand`'s
+ * doc comment).
+ */
+export function applyQuantizedGroups(
+  score: Score,
+  targets: readonly QuantizeTarget[],
+  quantizedByVoiceId: ReadonlyMap<UUID, MusicalEvent[]>,
+): Score {
+  const targetsByTrackMeasure = new Map<string, QuantizeTarget[]>();
+  for (const target of targets) {
+    const key = `${target.trackId}::${target.measureId}`;
+    const list = targetsByTrackMeasure.get(key);
+    if (list) list.push(target);
+    else targetsByTrackMeasure.set(key, [target]);
+  }
+
+  const tracks = score.tracks.map((track) => {
+    const measures = track.measures.map((measure) => {
+      const measureTargets = targetsByTrackMeasure.get(`${track.id}::${measure.id}`);
+      if (!measureTargets) return measure;
+
+      let nextMeasure = measure;
+      const measureEnd = measure.startTick + measure.durationTicks;
+      for (const target of measureTargets) {
+        const quantizedNotes = (quantizedByVoiceId.get(target.voiceId) ?? [])
           .map((e) => clipToMeasure(e, measure.startTick, measureEnd))
           .filter((e): e is MusicalEvent => e !== null);
         const withQuantized = {
           ...nextMeasure,
-          voices: nextMeasure.voices.map((v) => (v.id === voice.id ? { ...v, events: quantizedNotes } : v)),
+          voices: nextMeasure.voices.map((v) => (v.id === target.voiceId ? { ...v, events: quantizedNotes } : v)),
         };
-        nextMeasure = reflowVoice(withQuantized, voice.id, track.id);
+        nextMeasure = reflowVoice(withQuantized, target.voiceId, track.id);
       }
-      return changed ? nextMeasure : measure;
+      return nextMeasure;
     });
     const trackChanged = measures.some((m, i) => m !== track.measures[i]);
     return trackChanged ? { ...track, measures } : track;
   });
+
   return withTracks(score, tracks);
+}
+
+/**
+ * Quantizes the voice(s) containing any of `eventIds`, calling
+ * `quantizeEvents` synchronously on the main thread for every touched
+ * voice. Used directly for the common case (a modest-sized selection); a
+ * manual quantize of >2000 events is instead routed through
+ * `collectQuantizeTargets` + `QuantizeService` + `applyQuantizedCommand`
+ * by the intent layer, so the expensive part runs off-thread while this
+ * command factory itself stays synchronous/pure like every other
+ * `ScoreCommand` (see `applyQuantizedCommand`'s doc comment).
+ */
+function quantize(score: Score, eventIds: readonly UUID[], options: QuantizeOptions): Score {
+  const targets = collectQuantizeTargets(score, eventIds);
+  const quantizedByVoiceId = new Map(targets.map((t) => [t.voiceId, quantizeEvents(t.notes, options)] as const));
+  return applyQuantizedGroups(score, targets, quantizedByVoiceId);
 }
 
 /** Quantizes every voice containing at least one of `eventIds`, per Task 4's reusable quantization engine. */
 export function quantizeCommand(eventIds: UUID[], options: QuantizeOptions): ScoreCommand {
   return transformCommand('Quantize notes', (score) => quantize(score, eventIds, options));
+}
+
+/**
+ * Same measure-splice/reflow logic as `quantizeCommand`, but sources each
+ * voice's quantized notes from `quantizedByVoiceId` — precomputed
+ * elsewhere, in practice off the main thread via
+ * `services/quantization/quantize-service.ts`'s `QuantizeService` — instead
+ * of calling `quantizeEvents` itself here. Exists so the intent layer's
+ * >2000-event worker-routing (spec §29) can keep this command, like every
+ * other `ScoreCommand`, synchronous and pure: by the time this factory
+ * runs, the expensive quantization work already happened (off-thread, or
+ * inline in the fallback-no-worker environment), so `execute` here is just
+ * a cheap splice, not a redundant recomputation.
+ *
+ * `targets` is a snapshot taken before the (async) worker round-trip; if
+ * the score changed in the interim (e.g. the voice was deleted by another
+ * edit), `applyQuantizedGroups` degrades safely — a target whose track/
+ * measure/voice no longer exists simply contributes no splice, not an
+ * error.
+ */
+export function applyQuantizedCommand(
+  targets: QuantizeTarget[],
+  quantizedByVoiceId: ReadonlyMap<UUID, MusicalEvent[]>,
+): ScoreCommand {
+  return transformCommand('Quantize notes', (score) => applyQuantizedGroups(score, targets, quantizedByVoiceId));
 }
 
 // ---- transposeCommand -----------------------------------------------------------

@@ -26,10 +26,10 @@ import {
   resizeNotesCommand,
 } from '@/domain/commands/note-commands';
 import type { MoveNotesParams } from '@/domain/commands/note-commands';
-import { quantizeCommand } from '@/domain/commands/edit-commands';
 import type { QuantizeOptions } from '@/domain/quantization/options';
-import { dispatchTracked } from '@/features/score-editor/editing';
+import { dispatchTracked, runQuantize } from '@/features/score-editor/editing';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { QuantizeService } from '@/services/quantization/quantize-service';
 import { snapTick } from '@/features/piano-roll/geometry';
 
 export type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -82,10 +82,17 @@ export function commitDelete(store: EditorStoreApi, eventIds: UUID[]): void {
   store.getState().clearSelection();
 }
 
-/** Quantizes the voice(s) containing the given notes. No-op with no ids. */
-export function commitQuantize(store: EditorStoreApi, eventIds: UUID[], options: QuantizeOptions): void {
+/** Quantizes the voice(s) containing the given notes. No-op with no ids. See `editing.ts`'s `runQuantize` for the >2000-event worker-routing this delegates to (spec §29). */
+export async function commitQuantize(
+  store: EditorStoreApi,
+  eventIds: UUID[],
+  options: QuantizeOptions,
+  service?: QuantizeService,
+): Promise<void> {
   if (eventIds.length === 0) return;
-  dispatchTracked(store, quantizeCommand(eventIds, options));
+  const score = store.getState().score;
+  if (!score) return;
+  await runQuantize(store, score, eventIds, options, service);
 }
 
 // ---- add note (double-click empty cell) ----------------------------------------------

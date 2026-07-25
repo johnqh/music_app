@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore, twoTrackScore } from '@/test/fixtures';
+import { stressScore, twinkleScore, twoTrackScore } from '@/test/fixtures';
 import { allNotes, findEvent } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
 import {
@@ -19,6 +19,7 @@ import {
   maxVoiceCount,
   resolveActiveTrackId,
 } from '@/features/piano-roll/interactions';
+import { QuantizeService } from '@/services/quantization/quantize-service';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;
@@ -154,6 +155,18 @@ describe('commitQuantize', () => {
     const ppq = store.getState().score!.ppq;
 
     commitQuantize(store, [note.id], { grid: ppq / 4, quantizeStarts: true, quantizeDurations: true });
+
+    expect(store.getState().canUndo).toBe(true);
+  });
+
+  it('routes a selection touching >2000 notes through the given QuantizeService (spec §29)', async () => {
+    const big = stressScore(1, 600); // 2400 notes, over the worker-routing threshold
+    const store = makeStore(big);
+    const ids = allNotes(store.getState().score!).map((n) => n.id);
+    expect(ids.length).toBeGreaterThan(2000);
+
+    const service = new QuantizeService(); // no worker in vitest/jsdom: exercises the fallback
+    await commitQuantize(store, ids, { grid: big.ppq / 4, quantizeStarts: true, quantizeDurations: true }, service);
 
     expect(store.getState().canUndo).toBe(true);
   });

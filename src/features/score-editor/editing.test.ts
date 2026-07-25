@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
+import { stressScore, twinkleScore } from '@/test/fixtures';
 import { allNotes, findEvent } from '@/domain/score/queries';
 import { isNoteEvent } from '@/domain/score/types';
 import type { NoteEvent } from '@/domain/score/types';
@@ -28,6 +28,8 @@ import {
   transposeSemitone,
 } from '@/features/score-editor/editing';
 import { transformCommand } from '@/domain/commands/snapshot';
+import { QuantizeService } from '@/services/quantization/quantize-service';
+import type { QuantizeOptions } from '@/domain/quantization/options';
 
 let db: ScoreSmithDb;
 let dbCounter = 0;
@@ -313,6 +315,36 @@ describe('quantizeSelection', () => {
     quantizeSelection(store, { grid: ppq / 4, quantizeStarts: true, quantizeDurations: true });
 
     expect(store.getState().canUndo).toBe(true);
+  });
+
+  it('routes a selection touching >2000 notes through the given QuantizeService (spec §29) and produces the same result as the inline path', async () => {
+    dbCounter += 1;
+    const bigDb = new ScoreSmithDb(`scoresmith-test-editing-big-${dbCounter}`);
+    const store = createAppStore({ db: bigDb });
+    // 1 track x 600 measures x 4 notes/measure = 2400 notes, well over the
+    // 2000-note worker-routing threshold, spread across 600 per-measure
+    // voices (stressScore's convention) so no single voice is huge — the
+    // threshold sums notes across every touched voice, not per-voice.
+    const big = stressScore(1, 600);
+    store.getState().setScore(big);
+    const ids = allNotes(store.getState().score!).map((n) => n.id);
+    expect(ids.length).toBeGreaterThan(2000);
+    store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
+
+    const options: QuantizeOptions = { grid: big.ppq / 4, quantizeStarts: true, quantizeDurations: true };
+    // No worker in vitest/jsdom, so this exercises QuantizeService's
+    // direct-call fallback — still routed through the async worker-path
+    // code (not `quantizeCommand` synchronously), which is what this test
+    // checks.
+    const service = new QuantizeService();
+    expect(service.usesWorker).toBe(false);
+
+    await quantizeSelection(store, options, service);
+
+    expect(store.getState().canUndo).toBe(true);
+    expect(allNotes(store.getState().score!).every((n) => n.startTick % (big.ppq / 4) === 0)).toBe(true);
+
+    await bigDb.delete();
   });
 });
 

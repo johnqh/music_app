@@ -37,8 +37,16 @@ import {
   deleteEventsCommand,
   toggleTieCommand,
 } from '@/domain/commands/note-commands';
-import { pasteEventsCommand, quantizeCommand, transposeCommand } from '@/domain/commands/edit-commands';
+import {
+  applyQuantizedCommand,
+  collectQuantizeTargets,
+  pasteEventsCommand,
+  quantizeCommand,
+  transposeCommand,
+} from '@/domain/commands/edit-commands';
 import type { QuantizeOptions } from '@/domain/quantization/options';
+import { getQuantizeService } from '@/services/quantization/quantize-service';
+import type { QuantizeService } from '@/services/quantization/quantize-service';
 
 /** The store shape every function in this module operates on: same type `useAppStore`/`createAppStore()` produce. */
 export type EditorStoreApi = ReturnType<typeof createAppStore>;
@@ -338,11 +346,72 @@ export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'):
 
 // ---- quantize -------------------------------------------------------------------
 
-/** Quantizes the voice(s) containing the selected notes. No-op if no notes are selected. */
-export function quantizeSelection(store: EditorStoreApi, options: QuantizeOptions): void {
+/**
+ * Note-count threshold (spec §29: route a manual quantize of >2000 events
+ * through a worker) above which `runQuantize` sends the actual
+ * `quantizeEvents` work to `QuantizeService`'s worker instead of running it
+ * inline on the main thread. Measured as the total note count across every
+ * voice the action touches (`collectQuantizeTargets`'s output), not just
+ * `eventIds.length` — that's what `quantizeEvents` actually has to process
+ * per voice, and is the more direct proxy for "how much main-thread work
+ * would this block."
+ */
+const QUANTIZE_WORKER_THRESHOLD = 2000;
+
+/**
+ * Quantizes every voice touched by `eventIds` against `options` — the
+ * shared implementation behind both `quantizeSelection` (score editor) and
+ * `interactions.ts`'s `commitQuantize` (piano roll), so the >2000-event
+ * worker-routing decision (spec §29) lives in exactly one place.
+ *
+ * Below the threshold, dispatches the ordinary synchronous `quantizeCommand`
+ * — byte-for-byte the pre-Task-17 behavior, and since this function's own
+ * body has no `await` before that dispatch, it still happens synchronously
+ * within the call (an `async` function runs synchronously up to its first
+ * `await`), so callers that don't `await` the returned promise (existing
+ * tests, and the toolbar `onClick` handlers) see the same command-dispatched-
+ * immediately behavior as before this task.
+ *
+ * Above the threshold, `collectQuantizeTargets` (cheap: no `quantizeEvents`
+ * call) runs synchronously to snapshot which voices/notes are involved,
+ * then the actual quantization is sent to `service` — a real worker thread
+ * in the browser, a direct (but still off-the-critical-path) fallback call
+ * under vitest/jsdom, per `QuantizeService`'s doc comment — and the result
+ * applied via `applyQuantizedCommand`, which is itself synchronous/pure
+ * like every other `ScoreCommand` (spec §14): the *command* never awaits
+ * anything, only this intent-layer wrapper does.
+ */
+export async function runQuantize(
+  store: EditorStoreApi,
+  score: Score,
+  eventIds: UUID[],
+  options: QuantizeOptions,
+  service: QuantizeService = getQuantizeService(),
+): Promise<void> {
+  const targets = collectQuantizeTargets(score, eventIds);
+  const totalNotes = targets.reduce((sum, target) => sum + target.notes.length, 0);
+
+  if (totalNotes <= QUANTIZE_WORKER_THRESHOLD) {
+    dispatchTracked(store, quantizeCommand(eventIds, options));
+    return;
+  }
+
+  const quantizedByVoiceId = await service.quantizeGroups(
+    targets.map((target) => ({ key: target.voiceId, events: target.notes })),
+    options,
+  );
+  dispatchTracked(store, applyQuantizedCommand(targets, quantizedByVoiceId));
+}
+
+/** Quantizes the voice(s) containing the selected notes. No-op if no notes are selected. See `runQuantize` for the >2000-event worker-routing this delegates to. */
+export async function quantizeSelection(
+  store: EditorStoreApi,
+  options: QuantizeOptions,
+  service?: QuantizeService,
+): Promise<void> {
   const state = store.getState();
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, quantizeCommand(ids, options));
+  await runQuantize(store, state.score, ids, options, service ?? getQuantizeService());
 }

@@ -4,7 +4,14 @@ import { validateScore } from '@/domain/validation/validator';
 import { isNoteEvent } from '@/domain/score/types';
 import type { NoteEvent, Pitch } from '@/domain/score/types';
 import { addNoteCommand } from '@/domain/commands/note-commands';
-import { pasteEventsCommand, quantizeCommand, transposeCommand } from '@/domain/commands/edit-commands';
+import {
+  applyQuantizedCommand,
+  collectQuantizeTargets,
+  pasteEventsCommand,
+  quantizeCommand,
+  transposeCommand,
+} from '@/domain/commands/edit-commands';
+import { quantizeEvents } from '@/domain/quantization/quantize';
 import type { QuantizeOptions } from '@/domain/quantization/options';
 
 const PITCH: Pitch = { step: 'C', accidental: 0, octave: 4 };
@@ -118,6 +125,75 @@ describe('quantizeCommand', () => {
     const options: QuantizeOptions = { grid: 480, quantizeStarts: true, quantizeDurations: false };
     const cmd = quantizeCommand(['missing'], options);
     expect(cmd.execute(withNote)).toEqual(withNote);
+  });
+});
+
+describe('collectQuantizeTargets / applyQuantizedCommand (spec §29 worker-routing split)', () => {
+  it('collects one target per touched voice, with that voice\'s current notes', () => {
+    const withNote = withOneNote(50, 480);
+    const noteId = allNoteEvents(withNote)[0].id;
+
+    const targets = collectQuantizeTargets(withNote, [noteId]);
+
+    expect(targets).toHaveLength(1);
+    expect(targets[0].notes.map((n) => n.id)).toEqual([noteId]);
+    expect(targets[0].trackId).toBe(withNote.tracks[0].id);
+  });
+
+  it('is empty for unknown event ids', () => {
+    const withNote = withOneNote();
+    expect(collectQuantizeTargets(withNote, ['missing'])).toEqual([]);
+  });
+
+  it('applyQuantizedCommand, fed the same quantizeEvents output collectQuantizeTargets/quantizeEvents would compute inline, matches quantizeCommand exactly (mod fresh filler-rest ids)', () => {
+    const withNote = withOneNote(50, 480); // 50 ticks off a 480-tick grid
+    const noteId = allNoteEvents(withNote)[0].id;
+    const options: QuantizeOptions = { grid: 480, quantizeStarts: true, quantizeDurations: false };
+
+    const targets = collectQuantizeTargets(withNote, [noteId]);
+    const quantizedByVoiceId = new Map(targets.map((t) => [t.voiceId, quantizeEvents(t.notes, options)] as const));
+    const precomputedCmd = applyQuantizedCommand(targets, quantizedByVoiceId);
+    const inlineCmd = quantizeCommand([noteId], options);
+
+    const viaPrecomputed = precomputedCmd.execute(withNote);
+    const viaInline = inlineCmd.execute(withNote);
+
+    // Each `.execute()` call independently reflows its voice, which mints a
+    // fresh `createId()` for any filler rest — an expected, harmless
+    // divergence unrelated to what this test actually checks (that the two
+    // code paths compute the same *musical* result), so rest ids are
+    // normalized out before comparing.
+    const normalizeRestIds = (score: typeof viaPrecomputed) => ({
+      ...score,
+      tracks: score.tracks.map((t) => ({
+        ...t,
+        measures: t.measures.map((m) => ({
+          ...m,
+          voices: m.voices.map((v) => ({
+            ...v,
+            events: v.events.map((e) => (isNoteEvent(e) ? e : { ...e, id: 'rest' })),
+          })),
+        })),
+      })),
+    });
+
+    expect(normalizeRestIds(viaPrecomputed)).toEqual(normalizeRestIds(viaInline));
+    expect(validateScore(viaPrecomputed)).toEqual([]);
+    expect(precomputedCmd.undo(viaPrecomputed)).toEqual(withNote);
+  });
+
+  it('degrades safely (reflows to fully-rested, not a throw) when a target has no entry in the quantized-results map', () => {
+    const withNote = withOneNote(50, 480);
+    const noteId = allNoteEvents(withNote)[0].id;
+    const targets = collectQuantizeTargets(withNote, [noteId]);
+
+    // An empty map, as if a concurrent edit removed the voice before the
+    // (async) worker round-trip resolved with results for its key.
+    const cmd = applyQuantizedCommand(targets, new Map());
+    const next = cmd.execute(withNote);
+
+    expect(allNoteEvents(next)).toHaveLength(0);
+    expect(validateScore(next)).toEqual([]);
   });
 });
 
