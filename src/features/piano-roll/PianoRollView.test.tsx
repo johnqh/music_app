@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLayoutEffect } from 'react';
 import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -39,6 +40,31 @@ function noteRect(container: HTMLElement, id: string): HTMLElement {
   const el = container.querySelector<HTMLElement>(`[data-testid="pr-note-${id}"]`);
   if (!el) throw new Error(`No rendered rect for note ${id}`);
   return el;
+}
+
+/**
+ * Test-only helper (Task 17 review finding 1) that captures a DOM
+ * snapshot at the very first commit of whatever it's rendered alongside,
+ * via its own `useLayoutEffect` with an empty dependency array (so it
+ * fires exactly once, as part of the first commit's layout-effect phase —
+ * before any state update *that same first commit's* own layout effects
+ * may have queued has been applied). Rendered as a sibling (order doesn't
+ * matter: React finishes applying every DOM mutation for a commit before
+ * running *any* component's layout effects, and only processes queued
+ * updates after that whole batch completes), so this observes the raw,
+ * pre-correction DOM — not the settled state `render()` normally hands
+ * back once every effect (including any corrective ones) has flushed.
+ * Reads from `document.body` rather than RTL's own `container` return
+ * value, since this callback fires synchronously *during* `render()`,
+ * before that value even exists.
+ */
+function FirstCommitProbe({ onFirstCommit }: { onFirstCommit: () => void }) {
+  useLayoutEffect(() => {
+    onFirstCommit();
+    // Deliberately empty deps: capture the very first commit only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
 }
 
 describe('PianoRollView', () => {
@@ -365,9 +391,15 @@ describe('PianoRollView', () => {
       return container.querySelectorAll('[data-testid^="pr-note-"]').length;
     }
 
-    it('renders every note before the viewport has been measured', () => {
+    it('renders every note once settled when the viewport is genuinely unmeasurable (jsdom fallback)', () => {
       const store = makeBigStore();
       const { container } = render(<PianoRollView store={store} />);
+      // jsdom's `clientHeight` is always 0, so `measureViewport` (run by
+      // the mount `useLayoutEffect`, already flushed by the time `render()`
+      // returns) records the `'unmeasurable'` sentinel, which falls back
+      // to rendering every note - exactly the pre-fix behavior, so this
+      // environment (and any other that can never produce a real
+      // measurement) keeps working.
       expect(noteTestIds(container)).toBe(allNotes(store.getState().score!).length);
     });
 
@@ -400,19 +432,45 @@ describe('PianoRollView', () => {
       expect(container.querySelector(`[data-testid="pr-note-${firstNoteId}"]`)).toBeNull();
     });
 
-    it('culls notes already by the time mount settles when the viewport is measurable (Task 17 review finding: no lingering full-then-corrected render)', () => {
+    it('renders an EMPTY note layer on the true first commit, not every note (Task 17 review finding 1: the first commit must not mount-then-discard every note)', () => {
+      const store = makeBigStore();
+
+      // Patches `clientWidth`/`clientHeight` on every element (prototype
+      // getters, not per-node) *before* mount, simulating a real browser's
+      // first layout pass rather than jsdom's always-zero one - so
+      // `useLayoutEffect`'s corrective measurement has a real, nonzero
+      // value to work with the moment it runs.
+      const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400);
+      const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+
+      let firstCommitNoteCount: number | null = null;
+      render(
+        <>
+          <FirstCommitProbe
+            onFirstCommit={() => {
+              firstCommitNoteCount = document.body.querySelectorAll('[data-testid^="pr-note-"]').length;
+            }}
+          />
+          <PianoRollView store={store} />
+        </>,
+      );
+
+      // The very first commit - before PianoRollView's own mount
+      // useLayoutEffect has had a chance to apply its correction - already
+      // rendered an empty note layer, not every note. This is the actual
+      // fix: previously this was the *total* note count (thousands of
+      // `Box` elements mounted, then immediately discarded on the very
+      // next commit).
+      expect(firstCommitNoteCount).toBe(0);
+
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    });
+
+    it('culls notes already by the time mount settles when the viewport is measurable (no lingering full-then-corrected render)', () => {
       const store = makeBigStore();
       const totalNotes = allNotes(store.getState().score!).length;
 
-      // Patches `clientWidth`/`clientHeight` on every element (prototype
-      // getters, not per-node) *before* mount, so `useLayoutEffect`'s
-      // corrective measurement (see `PianoRollView.tsx`'s doc comment on
-      // it) has a real, nonzero value to work with the moment it runs -
-      // simulating a real browser's first layout pass rather than jsdom's
-      // always-zero one. By the time `render()` (wrapped in `act()`)
-      // returns, every effect - including this corrective one - has
-      // already flushed, so the DOM it hands back is the final, settled
-      // state, not an intermediate one.
       const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400);
       const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
 
@@ -423,6 +481,29 @@ describe('PianoRollView', () => {
 
       widthSpy.mockRestore();
       heightSpy.mockRestore();
+    });
+
+    it('renders an EMPTY note layer on the true first commit even when the viewport turns out to be unmeasurable (jsdom)', () => {
+      const store = makeBigStore();
+
+      let firstCommitNoteCount: number | null = null;
+      render(
+        <>
+          <FirstCommitProbe
+            onFirstCommit={() => {
+              firstCommitNoteCount = document.body.querySelectorAll('[data-testid^="pr-note-"]').length;
+            }}
+          />
+          <PianoRollView store={store} />
+        </>,
+      );
+
+      // Still empty on the true first commit - `visibleNoteIds` starts
+      // `undefined` regardless of whether the mount effect will go on to
+      // resolve it to a real culled set or the `'unmeasurable'` fallback;
+      // only the *settled* state (after that effect runs) differs between
+      // the two cases.
+      expect(firstCommitNoteCount).toBe(0);
     });
 
     it('does not re-render the note layer for repeated scroll positions within the same visible window, but does when scrolling reveals different notes', () => {

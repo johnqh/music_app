@@ -194,14 +194,31 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
   const [dragBox, setDragBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   // The ids of the notes currently within the scroll viewport (spec §29
-  // virtualization). `undefined` means "not yet measured" (jsdom's
-  // `clientHeight` is always 0) — treated as "every note is visible"
-  // rather than an empty set; see `measureViewport`. Held as a resolved id
-  // set (rather than a raw `{x,y,width,height}` viewport + a separately
-  // memoized filter) so `measureViewport` can bail out of the state update
-  // entirely via `sameIdSet` when a scroll doesn't actually change which
-  // notes are visible, without a second value to keep in sync.
-  const [visibleNoteIds, setVisibleNoteIds] = useState<ReadonlySet<UUID> | undefined>(undefined);
+  // virtualization) — a three-state value, deliberately distinguishing
+  // "not yet measured" from "measured, but unusable":
+  //   - `undefined`: no measurement attempt has happened yet (true initial
+  //     mount, before any effect has run). Renders an EMPTY note layer for
+  //     this pass — see `visibleNoteRects` — rather than every note,
+  //     because a real browser's very first commit for a fresh mount
+  //     *does* have a real viewport available by the time the very next
+  //     (pre-paint) layout effect runs; there is no reason to pay for
+  //     mounting (and immediately discarding) up to tens of thousands of
+  //     note `Box` elements just because that measurement hasn't landed
+  //     yet (Task 17 review finding 1).
+  //   - `'unmeasurable'`: a measurement was attempted (`measureViewport`
+  //     ran) but `clientHeight <= 0` (jsdom, which never lays anything
+  //     out, or a container that genuinely isn't laid out for some other
+  //     reason) — falls back to rendering every note, exactly like the
+  //     pre-fix behavior, so jsdom-based tests and any other environment
+  //     that can never produce a real measurement still work.
+  //   - a `Set<UUID>`: a real measurement succeeded; renders exactly that
+  //     culled set.
+  // Held as a resolved id set (rather than a raw `{x,y,width,height}`
+  // viewport + a separately memoized filter) so `measureViewport` can bail
+  // out of the state update entirely via `sameIdSet` when a scroll doesn't
+  // actually change which notes are visible, without a second value to
+  // keep in sync.
+  const [visibleNoteIds, setVisibleNoteIds] = useState<ReadonlySet<UUID> | 'unmeasurable' | undefined>(undefined);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -243,24 +260,31 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   }, []);
 
   /**
-   * Culled to the scroll viewport (spec §29): every rect in `noteRects`
-   * whose id is in `visibleNoteIds`, or every rect unchanged when
-   * `visibleNoteIds` is `undefined` (not yet measured). Unlike
-   * `ScoreEditorView.tsx`'s draw effect (which can measure and paint
-   * inline within the same imperative `useEffect`, entirely bypassing
-   * state for its own first pass — see that file's `measuredForPlanRef`
-   * doc comment), this component's "draw" *is* its render output — a
-   * `useMemo`, evaluated during the render phase, before any commit has
-   * happened and before `scrollRef.current` can possibly be non-null. So
-   * the very first commit for a brand-new `noteRects` unavoidably renders
-   * every note (there is nothing yet to measure); what *is* avoidable
-   * (and handled by the `useLayoutEffect` below, not a plain `useEffect`)
-   * is delaying the *correction* past the browser's next paint.
+   * Culled to the scroll viewport (spec §29): `[]` while `visibleNoteIds`
+   * is `undefined` (no measurement attempt has landed yet — see
+   * `visibleNoteIds`'s doc comment for why this is empty, not "every
+   * note"), every `noteRects` entry unfiltered once it's known the
+   * viewport genuinely can't be measured (`'unmeasurable'`), or exactly
+   * the culled set once a real measurement has succeeded.
+   *
+   * Unlike `ScoreEditorView.tsx`'s draw effect (which can measure and
+   * paint inline within the same imperative `useEffect`, entirely
+   * bypassing state for its own first pass — see that file's
+   * `measuredForPlanRef` doc comment), this component's "draw" *is* its
+   * render output — a `useMemo`, evaluated during the render phase,
+   * before any commit has happened and before `scrollRef.current` can
+   * possibly be non-null. So the very first commit for a brand-new
+   * `noteRects` cannot itself measure (there is nothing yet to measure
+   * against) — rendering empty here, rather than everything, is what
+   * keeps that unavoidable first commit cheap; the `useLayoutEffect`
+   * below then resolves `visibleNoteIds` to its real value (a culled set,
+   * or `'unmeasurable'`) synchronously, before the browser's next paint.
    */
-  const visibleNoteRects = useMemo(
-    () => (visibleNoteIds ? noteRects.filter((r) => visibleNoteIds.has(r.id)) : noteRects),
-    [noteRects, visibleNoteIds],
-  );
+  const visibleNoteRects = useMemo(() => {
+    if (visibleNoteIds === undefined) return [];
+    if (visibleNoteIds === 'unmeasurable') return noteRects;
+    return noteRects.filter((r) => visibleNoteIds.has(r.id));
+  }, [noteRects, visibleNoteIds]);
 
   const selectedIds = useMemo(() => new Set(selection.eventIds), [selection.eventIds]);
 
@@ -272,13 +296,18 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
    * updater is a standard React bail-out: no re-render (and so no
    * re-filter/re-render of `NoteLayer`) happens for a scroll that doesn't
    * change which notes are visible (Task 17 review finding). A
-   * `clientHeight <= 0` (jsdom, or a container not yet laid out) leaves
-   * `visibleNoteIds` unchanged rather than recording a bogus empty set.
+   * `clientHeight <= 0` (jsdom, or a container not yet laid out) records
+   * the `'unmeasurable'` sentinel (see `visibleNoteIds`'s doc comment) —
+   * once, not on every failed attempt — rather than leaving state
+   * unchanged forever.
    */
   const measureViewport = useCallback(() => {
     const next = measureVisibleIds(noteRects);
-    if (next === undefined) return;
-    setVisibleNoteIds((prev) => (prev && sameIdSet(prev, next) ? prev : next));
+    if (next === undefined) {
+      setVisibleNoteIds((prev) => (prev === 'unmeasurable' ? prev : 'unmeasurable'));
+      return;
+    }
+    setVisibleNoteIds((prev) => (prev instanceof Set && sameIdSet(prev, next) ? prev : next));
   }, [noteRects, measureVisibleIds]);
 
   /**
@@ -309,19 +338,21 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     };
   }, []);
 
-  // Corrects `visibleNoteIds` before the browser paints (Task 17 review
-  // finding). `visibleNoteRects`'s own doc comment explains why the very
-  // first commit for a brand-new `noteRects` can't itself be culled (no
-  // DOM exists yet to measure) — this is the catch-up step: `useLayoutEffect`
-  // runs after DOM mutations but before paint, so `scrollRef.current` is
-  // now attached and measurable, and its `setState` call is flushed
-  // synchronously (still pre-paint) — so even though React does perform a
-  // second, internal re-render to apply the correction, the *browser*
-  // never actually paints the uncalled "every note visible" frame the
-  // user would otherwise see for one frame in a real browser.
-  // `measureViewport` itself already depends on `noteRects` (which depends
-  // on `score`/`zoomH`/`zoomV`/`visibleTrackIds`), so depending on it
-  // alone here covers all of those changes too.
+  // Resolves `visibleNoteIds` from its initial `undefined` (renders an
+  // empty note layer — see `visibleNoteIds`'s doc comment) to its real
+  // value before the browser paints (Task 17 review finding 1).
+  // `useLayoutEffect` runs after DOM mutations but before paint, so
+  // `scrollRef.current` is now attached and measurable (in a real
+  // browser), and its `setState` call is flushed synchronously (still
+  // pre-paint) — so the very first thing the browser actually paints for
+  // a fresh mount is either the correctly culled set (real viewport) or
+  // every note (genuinely unmeasurable, e.g. jsdom), never an
+  // intermediate empty-then-corrected flash, and — the actual fix this
+  // finding wanted — never an initial commit that mounted every note into
+  // real DOM only to immediately discard most of them. `measureViewport`
+  // itself already depends on `noteRects` (which depends on `score`/
+  // `zoomH`/`zoomV`/`visibleTrackIds`), so depending on it alone here
+  // covers all of those changes too.
   useLayoutEffect(() => {
     measureViewport();
   }, [measureViewport]);
