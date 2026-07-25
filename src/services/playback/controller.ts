@@ -62,6 +62,27 @@ export class PlaybackController {
    * arriving right after the first one's `engine.stop()` would otherwise
    * see `state: 'stopped'`/`positionTick: 0` and wrongly conclude nothing
    * needs to resume (see `handleScoreChange`'s doc for the full story).
+   *
+   * Two more invariants a value living this long has to uphold, both fixed
+   * after being caught in review:
+   *
+   * 1. A failed `loadScore` must clear it (in `handleScoreChange`'s
+   *    `catch`, guarded by `scoreChangeGeneration` so a *stale/superseded*
+   *    call's failure can't clear a *newer*, still-in-flight call's
+   *    legitimately-owned pending resume) — otherwise a later, completely
+   *    unrelated score change (made while genuinely stopped) would see a
+   *    stale `pendingResume` left over from the earlier failure and
+   *    auto-play when the user never asked to resume anything.
+   * 2. Any explicit user transport action — `stop()`, `togglePlay()` (both
+   *    branches), `seek()` (and everything that funnels through it:
+   *    `seekToMeasure`/`goToStart`/`previousMeasure`/`nextMeasure`) — must
+   *    clear it, so a `handleScoreChange` that's still in flight when the
+   *    user stops/pauses/seeks doesn't resurrect playback out from under
+   *    them once its `loadScore` eventually resolves. `handleScoreChange`'s
+   *    own *internal* `this.engine.stop()` call (the "stop" half of
+   *    stop-reload-seek-resume) intentionally does **not** go through the
+   *    public `stop()` method and so never clears the very `pendingResume`
+   *    it just captured for itself.
    */
   private pendingResume: { tick: number } | null = null;
 
@@ -103,6 +124,7 @@ export class PlaybackController {
   togglePlay(): void {
     const { state, score } = this.store.getState();
     if (!score) return;
+    this.pendingResume = null; // an explicit user play/pause action takes over from any queued auto-resume
     if (state === 'playing') {
       this.engine.pause();
     } else {
@@ -111,11 +133,13 @@ export class PlaybackController {
   }
 
   stop(): void {
+    this.pendingResume = null; // an explicit user stop cancels any queued auto-resume from an in-flight reload
     this.engine.stop();
   }
 
   seek(tick: number): void {
     if (!this.store.getState().score) return;
+    this.pendingResume = null; // an explicit user seek cancels any queued auto-resume from an in-flight reload
     this.engine.seek(Math.max(0, tick));
   }
 
@@ -241,6 +265,14 @@ export class PlaybackController {
         await this.engine.play(tick);
       }
     } catch (error) {
+      // Only clear pendingResume if this call is still the current one: a
+      // stale/superseded call's failure (it already returned above if it
+      // failed the generation check *before* throwing, but loadScore can
+      // reject either before or interleaved with that check) must not wipe
+      // out a newer, still-in-flight call's legitimately-owned resume.
+      if (generation === this.scoreChangeGeneration) {
+        this.pendingResume = null;
+      }
       this.reportError('Failed to load the score for playback', error);
     }
   }

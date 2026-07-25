@@ -211,6 +211,65 @@ describe('PlaybackController: construction and score subscription', () => {
     expect(engine.play).toHaveBeenCalledTimes(1);
     expect(engine.play).toHaveBeenCalledWith(480);
   });
+
+  it('a rejected loadScore while playing does not leave a stale pendingResume for a later, unrelated score change', async () => {
+    const store = makeStore();
+    store.getState().setScore(twinkleScore());
+    const engine = createFakeEngine();
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+    vi.mocked(engine.loadScore).mockClear();
+    vi.mocked(engine.play).mockClear();
+
+    store.getState().setPlaybackState('playing');
+    store.getState().setPositionTick(480);
+
+    vi.mocked(engine.loadScore).mockRejectedValueOnce(new Error('corrupt edit'));
+    store.getState().dispatchCommand(addMeasureCommand());
+    await flushAsync();
+
+    // Sanity: the failed load itself never resumed anything, and reported an error.
+    expect(engine.play).not.toHaveBeenCalled();
+    expect(store.getState().toasts.at(-1)?.severity).toBe('error');
+
+    // A later, unrelated score change (made while genuinely stopped — the
+    // fake's stop() already flipped state to 'stopped') must not auto-play
+    // using a pendingResume left over from the earlier failure.
+    vi.mocked(engine.play).mockClear();
+    store.getState().dispatchCommand(addMeasureCommand());
+    await flushAsync();
+
+    expect(engine.play).not.toHaveBeenCalled();
+  });
+
+  it('an explicit stop() during an in-flight reload cancels the queued resume', async () => {
+    const store = makeStore();
+    store.getState().setScore(twinkleScore());
+    const engine = createFakeEngine();
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+    vi.mocked(engine.loadScore).mockClear();
+    vi.mocked(engine.play).mockClear();
+
+    store.getState().setPlaybackState('playing');
+    store.getState().setPositionTick(480);
+
+    // Make loadScore controllable so an explicit stop() can land while it's still pending.
+    let resolveLoad!: () => void;
+    vi.mocked(engine.loadScore).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+
+    store.getState().dispatchCommand(addMeasureCommand()); // captures pendingResume, calls engine.stop(), suspends awaiting loadScore
+    controller.stop(); // explicit user Stop while the reload is still in flight
+    resolveLoad();
+    await flushAsync();
+
+    expect(engine.play).not.toHaveBeenCalled();
+  });
 });
 
 describe('PlaybackController: observer wiring', () => {
