@@ -62,12 +62,30 @@ export type GenerationSlice = {
   generate: (params: GenerateScoreRequest) => Promise<void>;
   /** Requests 1-3 regeneration candidates for the current selection (spec §12 items 1-6); does not touch the committed score. Throws no further than setting `error` if the selection isn't regenerable or the provider rejects the request. */
   regenerate: (instruction: string, options?: PrepareRegenerationOptions) => Promise<void>;
-  /** Selects which candidate is currently previewed (spec §13). */
+  /** Selects which candidate is currently previewed (spec §13); also sets `activeCandidateId`, so this is the "accept target" as well as the overlay. */
   selectCandidate: (id: string | null) => void;
+  /**
+   * Overlays `fragment` (or clears the overlay, with `null`) without
+   * touching `activeCandidateId` — the A/B "compare original vs candidate"
+   * toggle (spec §13) uses this so switching the preview display back and
+   * forth never changes which candidate `acceptCandidate()` would commit.
+   * `selectCandidate` remains the only action that changes
+   * `activeCandidateId`.
+   */
+  setPreviewFragment: (fragment: ScoreFragment | null) => void;
   /** Replaces the regenerated region with the active candidate as a single undoable command (spec §12 items 10-13), then clears candidate/preview state. No-op if there's no active candidate. */
   acceptCandidate: () => void;
   /** Discards every candidate without touching the score (spec §12 item 14). */
   rejectCandidates: () => void;
+  /**
+   * Aborts whichever `generate()`/`regenerate()` call is currently in
+   * flight (the generation panel's "Cancel" button) and clears `pending`.
+   * Does not touch `candidates`/`error`/`score` — a cancelled request
+   * simply never gets to write its result; whatever was previewed/
+   * committed before the cancelled call started is left exactly as it
+   * was. A no-op if nothing is in flight.
+   */
+  cancel: () => void;
 };
 
 export const createGenerationSlice: StateCreator<
@@ -216,6 +234,12 @@ export const createGenerationSlice: StateCreator<
       });
     },
 
+    setPreviewFragment: (fragment) => {
+      set((state) => {
+        state.previewFragment = fragment;
+      });
+    },
+
     acceptCandidate: () => {
       const { score, candidates, activeCandidateId } = get();
       if (!score) return;
@@ -237,6 +261,13 @@ export const createGenerationSlice: StateCreator<
         state.candidates = [];
         state.activeCandidateId = null;
         state.previewFragment = null;
+      });
+    },
+
+    cancel: () => {
+      abortController?.abort();
+      set((state) => {
+        state.pending = false;
       });
     },
   };

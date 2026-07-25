@@ -333,5 +333,82 @@ describe('generation-slice', () => {
       expect(state.score).toBe(scoreBefore);
       expect(state.canUndo).toBe(false);
     });
+
+    it('setPreviewFragment overlays a fragment without touching activeCandidateId (A/B compare)', async () => {
+      const store = await seedCandidates();
+      const [active] = store.getState().candidates;
+
+      store.getState().setPreviewFragment(null);
+      expect(store.getState().previewFragment).toBeNull();
+      expect(store.getState().activeCandidateId).toBe(active.id); // unchanged
+
+      store.getState().setPreviewFragment(active.fragment);
+      expect(store.getState().previewFragment).toEqual(active.fragment);
+      expect(store.getState().activeCandidateId).toBe(active.id);
+    });
+
+    it('acceptCandidate still accepts the right candidate after setPreviewFragment toggled the overlay to the original', async () => {
+      const store = await seedCandidates();
+      store.getState().setPreviewFragment(null); // "showing original" (A/B toggle)
+
+      store.getState().acceptCandidate();
+
+      expect(store.getState().canUndo).toBe(true);
+    });
+  });
+
+  describe('cancel', () => {
+    it('aborts an in-flight generate() call and clears pending without setting an error', async () => {
+      const provider = new ControllableProvider();
+      setProvider(provider);
+      const store = createAppStore();
+
+      const promise = store.getState().generate(REQUEST);
+      expect(store.getState().pending).toBe(true);
+
+      store.getState().cancel();
+      await promise;
+
+      const state = store.getState();
+      expect(state.pending).toBe(false);
+      expect(state.error).toBeNull();
+      expect(state.score).toBeNull();
+    });
+
+    it('aborts an in-flight regenerate() call and clears pending without setting an error or candidates', async () => {
+      const provider = new ControllableProvider();
+      setProvider(provider);
+      const store = createAppStore();
+      const score = twinkleScore();
+      store.getState().setScore(score);
+      store.getState().selectMeasures([score.tracks[0].measures[0].id]);
+
+      const promise = store.getState().regenerate('Make this more dramatic');
+      expect(store.getState().pending).toBe(true);
+
+      store.getState().cancel();
+      await promise;
+
+      const state = store.getState();
+      expect(state.pending).toBe(false);
+      expect(state.error).toBeNull();
+      expect(state.candidates).toEqual([]);
+    });
+
+    it('is a no-op when nothing is in flight', () => {
+      const store = createAppStore();
+      expect(() => store.getState().cancel()).not.toThrow();
+      expect(store.getState().pending).toBe(false);
+    });
+
+    it('a generate() call started after cancel() is unaffected', async () => {
+      const store = createAppStore();
+      store.getState().cancel();
+
+      await store.getState().generate(REQUEST);
+
+      expect(store.getState().score).not.toBeNull();
+      expect(store.getState().error).toBeNull();
+    });
   });
 });
