@@ -1,7 +1,12 @@
 /**
  * Piano-roll toolbar (spec §8): independent horizontal/vertical zoom,
  * snap-grid select (shared with the notation view's `uiSlice.snapGrid`),
- * quantize, a per-track visibility filter, and "loop selection".
+ * quantize, a per-track visibility filter, "loop selection", and the same
+ * notation/piano-roll view switch `EditorToolbar` shows (spec §6/§8: the
+ * two views are meant to be freely interchangeable -- without a matching
+ * control here, switching to the piano roll would strand the user with no
+ * way back to notation, since `EditorToolbar` itself only mounts while
+ * `view === 'notation'`).
  *
  * Zoom is piano-roll-local view state (owned by `PianoRollView`, passed
  * down as props — same pattern as `ScoreEditorView`'s `layoutMode`): it's
@@ -21,6 +26,8 @@ import Select from '@mui/material/Select';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Toolbar from '@mui/material/Toolbar';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { DurationName, UUID } from '@/domain/score/types';
@@ -63,6 +70,7 @@ export function PianoRollToolbar({
 }: PianoRollToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
+  const view = store((s) => s.view);
   const hasScore = score !== null;
   const trackIds = score?.tracks.map((t) => t.id) ?? [];
   const selectedTrackIds = visibleTrackIds ?? new Set(trackIds);
@@ -202,6 +210,23 @@ export function PianoRollToolbar({
           </MenuItem>
         ))}
       </Select>
+
+      <Divider orientation="vertical" flexItem />
+
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={view}
+        onChange={(_e, value: 'notation' | 'piano-roll' | null) => value && store.getState().setView(value)}
+        aria-label="Editor view"
+      >
+        <ToggleButton value="notation" aria-label="Notation view">
+          Notation
+        </ToggleButton>
+        <ToggleButton value="piano-roll" aria-label="Piano roll view">
+          Piano roll
+        </ToggleButton>
+      </ToggleButtonGroup>
     </Toolbar>
   );
 }

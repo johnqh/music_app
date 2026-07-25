@@ -76,6 +76,22 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
   // resolves and applies the real persisted values.
   const settingsLoaded = useRef(false);
 
+  // e2e test hook (spec §30 Playwright coverage): exposes the live store
+  // and its db on `window` so Playwright specs can read/drive state that
+  // has no meaningful UI surface -- deterministic measure selection,
+  // asserting store-level playback/generation state instead of real audio
+  // (Tone.js needs a user gesture and produces no observable DOM signal in
+  // headless Chromium), etc. Gated behind `import.meta.env.DEV` (true for
+  // the `npm run dev` server Playwright's `webServer` boots) or an
+  // explicit `?e2e=1`, so a production build never ships it.
+  useEffect(() => {
+    const e2eRequested = new URLSearchParams(window.location.search).get('e2e') === '1';
+    if (!import.meta.env.DEV && !e2eRequested) return;
+    const globalWindow = window as unknown as { __SCORESMITH_STORE__?: EditorStoreApi; __SCORESMITH_DB__?: ScoreSmithDb };
+    globalWindow.__SCORESMITH_STORE__ = store;
+    globalWindow.__SCORESMITH_DB__ = appDb;
+  }, [store, appDb]);
+
   // Bootstrap persisted settings (spec §18/§33) once on mount.
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +105,13 @@ export function App({ store = useAppStore, db: appDb = db }: AppProps) {
       settingsLoaded.current = true;
       store.getState().setThemeMode(settings.theme);
       store.getState().setDeveloperMode(settings.developerMode);
-      store.getState().setDevSettings({ seed: settings.mockSeed });
+      // A `?seed=` URL query param (e2e/manual-testing convenience -- spec
+      // §30/§31: Playwright e2e needs deterministic mock-provider output)
+      // always wins over whatever seed was persisted, so a bookmarked/
+      // scripted `?seed=42` URL reproduces the same generation output on
+      // every load regardless of prior sessions' developer-settings seed.
+      const urlSeed = new URLSearchParams(window.location.search).get('seed');
+      store.getState().setDevSettings({ seed: urlSeed ?? settings.mockSeed });
     });
     return () => {
       cancelled = true;
