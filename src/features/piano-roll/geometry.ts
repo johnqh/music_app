@@ -320,3 +320,23 @@ export function totalCanvasHeight(zoomV: number, voiceCount: number): number {
 export function cullToViewport<T extends BBox>(rects: readonly T[], viewport: BBox): T[] {
   return rects.filter((r) => bboxesIntersect(r, viewport));
 }
+
+/**
+ * Whether `a` and `b` contain exactly the same ids (set equality,
+ * order-independent). Used by `PianoRollView` to decide whether a
+ * freshly-`cullToViewport`-computed visible-note-id set actually differs
+ * from the currently-applied one before committing a state update — a
+ * scroll that doesn't change which notes are visible should never trigger
+ * a re-render (spec §29: virtualization shouldn't itself become a
+ * per-scroll-frame performance cost). Mirrors
+ * `adapters/vexflow/layout.ts`'s `sameMeasureIndices` for the score
+ * editor's analogous guard.
+ */
+export function sameIdSet<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const id of a) {
+    if (!b.has(id)) return false;
+  }
+  return true;
+}

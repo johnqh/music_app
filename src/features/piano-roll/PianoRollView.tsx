@@ -33,7 +33,7 @@
  * times a second) re-renders only the cursor line, not the note/grid
  * layers (`NoteLayer`/`GridLinesLayer`, both `React.memo`'d besides).
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -61,6 +61,7 @@ import {
   isNearRightEdge,
   keyboardHeightPx,
   rowHeight,
+  sameIdSet,
   snapTick,
   tickToX,
   totalCanvasHeight,
@@ -192,16 +193,28 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const [zoomV, setZoomV] = useState(1);
   const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
   const [dragBox, setDragBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  // Screen-pixel scroll viewport (grid-local coordinates, i.e. with the
-  // sticky keyboard column's width subtracted out) of the scrollable
-  // container, used to cull off-screen notes (spec §29). `null` means "not
-  // yet measured" (jsdom's `clientHeight` is always 0) — treated as
-  // "render everything" rather than an empty viewport; see `measureViewport`.
-  const [viewport, setViewport] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  // The ids of the notes currently within the scroll viewport (spec §29
+  // virtualization). `undefined` means "not yet measured" (jsdom's
+  // `clientHeight` is always 0) — treated as "every note is visible"
+  // rather than an empty set; see `measureViewport`. Held as a resolved id
+  // set (rather than a raw `{x,y,width,height}` viewport + a separately
+  // memoized filter) so `measureViewport` can bail out of the state update
+  // entirely via `sameIdSet` when a scroll doesn't actually change which
+  // notes are visible, without a second value to keep in sync.
+  const [visibleNoteIds, setVisibleNoteIds] = useState<ReadonlySet<UUID> | undefined>(undefined);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  /**
+   * Throttling bookkeeping for `handleScroll`'s `requestAnimationFrame`-
+   * scheduled `measureViewport` call — see `ScoreEditorView.tsx`'s
+   * identical fields for why this is two separate refs (a `true`-before-
+   * scheduling guard flag, plus the frame id purely for unmount cleanup)
+   * rather than one "id, or null" ref.
+   */
+  const scrollFrameScheduledRef = useRef(false);
+  const scrollRafIdRef = useRef<number | null>(null);
 
   const ppq = score?.ppq ?? 480;
   const referenceTrack = score?.tracks[0] ?? null;
@@ -215,37 +228,103 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   // below) only decides what's actually drawn, not what's interactable, so
   // interaction behavior is identical regardless of scroll position.
   const noteRectsById = useMemo(() => new Map(noteRects.map((r) => [r.id, r])), [noteRects]);
-  const visibleNoteRects = useMemo(
-    () => (viewport ? cullToViewport(noteRects, viewport) : noteRects),
-    [noteRects, viewport],
-  );
-  const selectedIds = useMemo(() => new Set(selection.eventIds), [selection.eventIds]);
 
-  /**
-   * Re-measures `scrollRef`'s scroll position/size into `viewport` (spec
-   * §29 virtualization), converting to grid-local coordinates by
-   * subtracting the sticky keyboard column's width and padding by
-   * `VIRTUALIZATION_OVERSCAN_PX` on every side. A `clientHeight <= 0`
-   * (jsdom, or a container not yet laid out) leaves `viewport` unchanged
-   * rather than recording a bogus zero-size range.
-   */
-  const measureViewport = useCallback(() => {
+  /** The ids of `rects` intersecting the scrollable ancestor's current scroll position (grid-local coordinates: sticky keyboard column's width subtracted out, padded by `VIRTUALIZATION_OVERSCAN_PX`), or `undefined` if the container isn't measurable right now (`clientHeight <= 0` — jsdom, or not yet laid out). Reads live DOM geometry off `scrollRef`, not React state. */
+  const measureVisibleIds = useCallback((rects: NoteRect[]): Set<UUID> | undefined => {
     const el = scrollRef.current;
-    if (!el || el.clientHeight <= 0) return;
-    setViewport({
+    if (!el || el.clientHeight <= 0) return undefined;
+    const rect = {
       x: el.scrollLeft - KEYBOARD_WIDTH - VIRTUALIZATION_OVERSCAN_PX,
       y: el.scrollTop - VIRTUALIZATION_OVERSCAN_PX,
       width: el.clientWidth + VIRTUALIZATION_OVERSCAN_PX * 2,
       height: el.clientHeight + VIRTUALIZATION_OVERSCAN_PX * 2,
-    });
+    };
+    return new Set(cullToViewport(rects, rect).map((r) => r.id));
   }, []);
 
-  // Re-measure once whenever the score or zoom changes (e.g. a fresh score
-  // may reset scroll position); real usage also re-measures on every
-  // `onScroll` (wired below), which is when the viewport actually moves.
+  /**
+   * Culled to the scroll viewport (spec §29): every rect in `noteRects`
+   * whose id is in `visibleNoteIds`, or every rect unchanged when
+   * `visibleNoteIds` is `undefined` (not yet measured). Unlike
+   * `ScoreEditorView.tsx`'s draw effect (which can measure and paint
+   * inline within the same imperative `useEffect`, entirely bypassing
+   * state for its own first pass — see that file's `measuredForPlanRef`
+   * doc comment), this component's "draw" *is* its render output — a
+   * `useMemo`, evaluated during the render phase, before any commit has
+   * happened and before `scrollRef.current` can possibly be non-null. So
+   * the very first commit for a brand-new `noteRects` unavoidably renders
+   * every note (there is nothing yet to measure); what *is* avoidable
+   * (and handled by the `useLayoutEffect` below, not a plain `useEffect`)
+   * is delaying the *correction* past the browser's next paint.
+   */
+  const visibleNoteRects = useMemo(
+    () => (visibleNoteIds ? noteRects.filter((r) => visibleNoteIds.has(r.id)) : noteRects),
+    [noteRects, visibleNoteIds],
+  );
+
+  const selectedIds = useMemo(() => new Set(selection.eventIds), [selection.eventIds]);
+
+  /**
+   * Re-measures `scrollRef`'s scroll position/size and updates
+   * `visibleNoteIds` — but only when the freshly-computed visible-note-id
+   * set actually differs (by value, via `sameIdSet`) from the currently-
+   * applied one. Returning the *same* object reference from a state
+   * updater is a standard React bail-out: no re-render (and so no
+   * re-filter/re-render of `NoteLayer`) happens for a scroll that doesn't
+   * change which notes are visible (Task 17 review finding). A
+   * `clientHeight <= 0` (jsdom, or a container not yet laid out) leaves
+   * `visibleNoteIds` unchanged rather than recording a bogus empty set.
+   */
+  const measureViewport = useCallback(() => {
+    const next = measureVisibleIds(noteRects);
+    if (next === undefined) return;
+    setVisibleNoteIds((prev) => (prev && sameIdSet(prev, next) ? prev : next));
+  }, [noteRects, measureVisibleIds]);
+
+  /**
+   * `onScroll` handler: throttles `measureViewport` to at most once per
+   * animation frame (Task 17 review finding — every raw scroll event would
+   * otherwise trigger a measurement, and potentially a re-render, per
+   * event rather than per frame). Trailing-edge: multiple scroll events
+   * within one frame collapse into a single measurement using the
+   * position at the time the frame actually fires.
+   */
+  const handleScroll = useCallback(() => {
+    if (scrollFrameScheduledRef.current) return;
+    scrollFrameScheduledRef.current = true;
+    scrollRafIdRef.current = requestAnimationFrame(() => {
+      scrollFrameScheduledRef.current = false;
+      scrollRafIdRef.current = null;
+      measureViewport();
+    });
+  }, [measureViewport]);
+
   useEffect(() => {
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+      scrollFrameScheduledRef.current = false;
+    };
+  }, []);
+
+  // Corrects `visibleNoteIds` before the browser paints (Task 17 review
+  // finding). `visibleNoteRects`'s own doc comment explains why the very
+  // first commit for a brand-new `noteRects` can't itself be culled (no
+  // DOM exists yet to measure) — this is the catch-up step: `useLayoutEffect`
+  // runs after DOM mutations but before paint, so `scrollRef.current` is
+  // now attached and measurable, and its `setState` call is flushed
+  // synchronously (still pre-paint) — so even though React does perform a
+  // second, internal re-render to apply the correction, the *browser*
+  // never actually paints the uncalled "every note visible" frame the
+  // user would otherwise see for one frame in a real browser.
+  // `measureViewport` itself already depends on `noteRects` (which depends
+  // on `score`/`zoomH`/`zoomV`/`visibleTrackIds`), so depending on it
+  // alone here covers all of those changes too.
+  useLayoutEffect(() => {
     measureViewport();
-  }, [measureViewport, score, zoomH, zoomV]);
+  }, [measureViewport]);
 
   const previewRects = useMemo(
     () => computePreviewNoteRects(previewFragment, { zoomH, zoomV }),
@@ -480,7 +559,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         role="region"
         aria-label="Piano roll"
         data-testid="piano-roll-scroll"
-        onScroll={measureViewport}
+        onScroll={handleScroll}
         sx={{ flex: 1, overflow: 'auto', minHeight: CONTAINER_MIN_HEIGHT, position: 'relative' }}
       >
         <Box sx={{ display: 'flex', width: KEYBOARD_WIDTH + gridWidth }}>

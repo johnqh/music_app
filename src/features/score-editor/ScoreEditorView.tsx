@@ -21,7 +21,8 @@ import Box from '@mui/material/Box';
 import { useTheme } from '@mui/material/styles';
 import { applyHighlights, VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
 import type { BBox, RenderResult, RenderTheme } from '@/adapters/vexflow/types';
-import { boxForMeasureIndex, computeLayout, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
+import { boxForMeasureIndex, computeLayout, sameMeasureIndices, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
+import type { LayoutPlan } from '@/adapters/vexflow/layout';
 import type { ScoreFragment } from '@/domain/score/fragment';
 import type { Score } from '@/domain/score/types';
 import { selectionSummaryLabel } from '@/domain/selection/selection';
@@ -94,12 +95,18 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
-  // Screen-pixel scroll viewport of the scrollable ancestor (`scrollBoxRef`),
-  // used to cull off-screen systems (spec §26/§29). `null` means "not yet
-  // measured" (or unmeasurable, e.g. jsdom's `clientHeight` is always 0) —
-  // treated as "render everything" rather than guessing an empty viewport;
-  // see `visibleMeasureIndices` below.
-  const [viewport, setViewport] = useState<{ top: number; bottom: number } | null>(null);
+  // Which measures to actually draw (spec §26 "Render only visible systems
+  // where practical"; §29 virtualization for long scores): `undefined`
+  // (render every measure) until the viewport has been measured at least
+  // once (or is unmeasurable, e.g. jsdom's `clientHeight` is always 0),
+  // then every measure belonging to a system whose logical-unit span
+  // intersects the scrolled viewport (plus overscan) — see
+  // `measureViewport`. Held directly as state (rather than a separate
+  // `{top, bottom}` viewport + derived memo) so `measureViewport` can bail
+  // out of the state update entirely via `sameMeasureIndices` when a scroll
+  // doesn't actually change the visible set, without a stale second value
+  // to keep in sync.
+  const [visibleMeasureIndices, setVisibleMeasureIndices] = useState<Set<number> | undefined>(undefined);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
@@ -110,6 +117,24 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const suppressNextClickRef = useRef(false);
   const lastScrolledMeasureRef = useRef<string | null>(null);
   const lastScrolledScoreRef = useRef<Score | null>(null);
+  /**
+   * Throttling bookkeeping for `handleScroll`'s `requestAnimationFrame`-
+   * scheduled `measureViewport` call: `scrollFrameScheduledRef` is the
+   * actual "is one already pending" guard, set `true` *before*
+   * `requestAnimationFrame` is called and back to `false` inside the
+   * callback; `scrollRafIdRef` separately holds the frame id purely so
+   * the unmount cleanup can `cancelAnimationFrame` it. These are
+   * deliberately two separate refs rather than one "id, or null" ref:
+   * a single ref set to the return value of `requestAnimationFrame`
+   * *after* the call would be wrong if the callback itself could ever run
+   * synchronously (which real browsers never do, but a test double or a
+   * polyfill might) — the callback's own `= null` reset would run before
+   * the post-call assignment, leaving the guard permanently "stuck"
+   * scheduled. Keeping the guard's own write strictly before the
+   * `requestAnimationFrame` call sidesteps that ordering hazard entirely.
+   */
+  const scrollFrameScheduledRef = useRef(false);
+  const scrollRafIdRef = useRef<number | null>(null);
 
   const renderTheme: RenderTheme = useMemo(
     () => ({
@@ -124,56 +149,146 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const previewIds = useMemo(() => previewEventIds(previewFragment), [previewFragment]);
 
   /**
-   * Re-measures `scrollBoxRef`'s scroll position/height into `viewport`
-   * (spec §26/§29 virtualization). A `clientHeight <= 0` (jsdom, or a
-   * container that hasn't been laid out yet) leaves `viewport` at its
-   * current value rather than recording a bogus zero-height range — see
-   * `viewport`'s doc comment.
+   * The current score's system/measure geometry (spec §26), memoized on
+   * exactly the inputs that actually change it — deliberately *not* the
+   * scroll viewport, so scrolling never recomputes layout (Task 17 review
+   * finding: a naive `computeLayout` call inside the viewport-dependent
+   * memo re-ran on every scroll frame). Both `measureViewport` (culling)
+   * and the playback scroll-into-view effect read this same memoized plan,
+   * instead of each computing their own.
    */
-  const measureViewport = useCallback(() => {
-    const el = scrollBoxRef.current;
-    if (!el || el.clientHeight <= 0) return;
-    setViewport({ top: el.scrollTop, bottom: el.scrollTop + el.clientHeight });
-  }, []);
+  const layoutPlan = useMemo(() => {
+    if (!score) return null;
+    const width = containerRef.current?.clientWidth || DEFAULT_WIDTH;
+    return computeLayout(score, { zoom, layoutMode, width, theme: renderTheme });
+  }, [score, zoom, layoutMode, renderTheme]);
 
-  // Re-measure once after every score/zoom/layoutMode change (a fresh score
-  // may reset scroll position, and zoom/layoutMode change what a given
-  // scrollTop range actually covers) — real browsers get an accurate
-  // viewport for the very first render, not just after the user's first
-  // scroll.
-  useEffect(() => {
-    measureViewport();
-  }, [measureViewport, score, zoom, layoutMode]);
+  /** Which measures of `plan` intersect the scrollable ancestor's current scroll position (grid-local/logical units, padded by `VIRTUALIZATION_OVERSCAN_PX`), or `undefined` if the container isn't measurable right now (`clientHeight <= 0` — jsdom, or not yet laid out). Pure w.r.t. its arguments; reads live DOM geometry off `scrollBoxRef`, not React state, so it's safe to call synchronously from either an effect or a callback without worrying about state staleness. */
+  const measureVisibleIndices = useCallback(
+    (plan: LayoutPlan): Set<number> | undefined => {
+      const el = scrollBoxRef.current;
+      if (!el || el.clientHeight <= 0) return undefined;
+      const overscan = VIRTUALIZATION_OVERSCAN_PX / zoom;
+      return visibleSystemMeasureIndices(
+        plan,
+        { top: el.scrollTop / zoom, bottom: (el.scrollTop + el.clientHeight) / zoom },
+        overscan,
+      );
+    },
+    [zoom],
+  );
 
   /**
-   * Which measures to actually draw (spec §26 "Render only visible systems
-   * where practical"; §29 virtualization for long scores): `undefined`
-   * (render every measure) until `viewport` has been measured at least
-   * once, then every measure belonging to a system whose logical-unit span
-   * intersects the scrolled viewport (plus overscan), per
-   * `layout.ts`'s `visibleSystemMeasureIndices`. Recomputing `computeLayout`
-   * here is cheap (pure geometry, no VexFlow/DOM work) relative to the
-   * actual draw it lets `render()` skip.
+   * Re-measures the viewport against `layoutPlan` and updates
+   * `visibleMeasureIndices` — but only when the freshly-computed
+   * visible-measure set actually differs (by value, via `sameMeasureIndices`)
+   * from the currently-applied one. Returning the *same* object reference
+   * from a state updater is a standard React bail-out: no re-render (and so
+   * no re-run of the draw effect below) happens for a scroll that stays
+   * within the same system(s) plus overscan (Task 17 review finding).
+   * Used by `handleScroll` (below) for scroll-driven updates; the *initial*
+   * measurement for a brand-new `layoutPlan` (mount, or a score/zoom/
+   * layoutMode/theme change) is instead handled inline by the draw effect
+   * itself — see `measuredForPlanRef`'s doc comment for why a separate
+   * "measure on mount" effect can't reliably avoid a wasted first draw.
    */
-  const visibleMeasureIndices = useMemo(() => {
-    if (!score || !viewport) return undefined;
-    const width = containerRef.current?.clientWidth || DEFAULT_WIDTH;
-    const plan = computeLayout(score, { zoom, layoutMode, width, theme: renderTheme });
-    const overscan = VIRTUALIZATION_OVERSCAN_PX / zoom;
-    return visibleSystemMeasureIndices(plan, { top: viewport.top / zoom, bottom: viewport.bottom / zoom }, overscan);
-  }, [score, viewport, zoom, layoutMode, renderTheme]);
+  const measureViewport = useCallback(() => {
+    if (!layoutPlan) return;
+    const next = measureVisibleIndices(layoutPlan);
+    if (next === undefined) return;
+    setVisibleMeasureIndices((prev) => (prev && sameMeasureIndices(prev, next) ? prev : next));
+  }, [layoutPlan, measureVisibleIndices]);
+
+  /**
+   * `onScroll` handler: throttles `measureViewport` to at most once per
+   * animation frame (Task 17 review finding — every raw scroll event would
+   * otherwise trigger a measurement, and potentially a re-render, per
+   * event rather than per frame). Trailing-edge: multiple scroll events
+   * within one frame collapse into a single measurement using the
+   * position at the time the frame actually fires.
+   */
+  const handleScroll = useCallback(() => {
+    if (scrollFrameScheduledRef.current) return;
+    scrollFrameScheduledRef.current = true;
+    scrollRafIdRef.current = requestAnimationFrame(() => {
+      scrollFrameScheduledRef.current = false;
+      scrollRafIdRef.current = null;
+      measureViewport();
+    });
+  }, [measureViewport]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafIdRef.current !== null) {
+        cancelAnimationFrame(scrollRafIdRef.current);
+        scrollRafIdRef.current = null;
+      }
+      scrollFrameScheduledRef.current = false;
+    };
+  }, []);
+
+  /**
+   * Which `layoutPlan` the draw effect below has already measured a fresh
+   * `visibleMeasureIndices` for (a plain ref, deliberately *not* mirrored
+   * into React state — see below). `null` initially (nothing measured
+   * yet).
+   *
+   * Why this exists: a naive separate "measure on mount/layout-change"
+   * `useLayoutEffect` calling `setVisibleMeasureIndices` does *not*
+   * actually prevent the draw effect's first invocation from running with
+   * the pre-measurement value — React runs a commit's own passive effects
+   * (`useEffect`, including the draw effect) using *that commit's*
+   * committed state, even when an earlier `useLayoutEffect` in the same
+   * commit already queued a state update; the update only takes effect on
+   * the *next* commit's effects, so the draw effect still fires once with
+   * `undefined` (i.e. "render everything") before a second, corrected
+   * commit's draw effect run catches up (confirmed empirically while
+   * building this fix — the two effects do not coalesce). The fix is for
+   * the draw effect to measure *itself*, inline, synchronously, whenever
+   * it notices `layoutPlan` changed since the last measurement — so its
+   * very first `render()` call for a new plan already uses a fresh,
+   * correct value instead of a stale or absent one.
+   *
+   * Critically, this inline measurement is tracked only via this ref, not
+   * by also calling `setVisibleMeasureIndices` (which — since
+   * `visibleMeasureIndices` is itself one of this effect's own
+   * dependencies — would schedule a second commit whose draw effect run
+   * (now satisfying `measuredForPlanRef.current === layoutPlan`) draws
+   * again with the *same* value: correct, but a second wasted `render()`
+   * call, the exact per-mount waste this fix exists to eliminate).
+   * `visibleMeasureIndices` state remains reserved for exactly one thing:
+   * `measureViewport`'s scroll-driven updates (Task 17 review finding 2)
+   * — a genuine visible-set change from scrolling should trigger a redraw
+   * via state changing, but the effect's own first-run-per-plan
+   * measurement should not roundtrip through state to render correctly.
+   */
+  const measuredForPlanRef = useRef<LayoutPlan | null>(null);
 
   // Full render: only on score/zoom/layoutMode/theme/visible-window changes.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !score) return;
+
+    // See `measuredForPlanRef`'s doc comment: if `layoutPlan` changed since
+    // the last measurement (mount, or a score/zoom/layoutMode/theme
+    // change), `visibleMeasureIndices` state is either stale (measured
+    // against a *previous* plan) or was never set at all — measure fresh,
+    // right here (ref-only, not persisted to state), so this draw call
+    // already reflects a real viewport whenever one is measurable, without
+    // waiting for a second, corrective render.
+    let effectiveVisibleMeasureIndices = visibleMeasureIndices;
+    if (layoutPlan && measuredForPlanRef.current !== layoutPlan) {
+      effectiveVisibleMeasureIndices = measureVisibleIndices(layoutPlan);
+      measuredForPlanRef.current = layoutPlan;
+    }
+
     const width = container.clientWidth || DEFAULT_WIDTH;
     const result = rendererRef.current!.render(score, container, {
       zoom,
       layoutMode,
       width,
       theme: renderTheme,
-      visibleMeasureIndices,
+      visibleMeasureIndices: effectiveVisibleMeasureIndices,
     });
     resultRef.current = result;
     applyHighlights(result, { selectedIds: selection.eventIds, playingIds: activeNoteIds, previewIds });
@@ -181,7 +296,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     // the effect below re-paints highlights on their own change without
     // triggering this full re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [score, zoom, layoutMode, renderTheme, visibleMeasureIndices]);
+  }, [score, zoom, layoutMode, renderTheme, layoutPlan, measureVisibleIndices, visibleMeasureIndices]);
 
   // Highlight-only repaint: selection/playback/preview changes never re-render.
   useEffect(() => {
@@ -216,18 +331,16 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     const measureId = currentMeasureId(score, positionTick);
     if (!measureId || measureId === lastScrolledMeasureRef.current) return;
 
-    // Computed straight from layout (not `resultRef.current.measureIdToBBox`)
-    // so this still finds the target measure's position even when
-    // virtualization (spec §26/§29) hasn't rendered it yet — e.g. jumping
-    // to a measure several systems below the current scroll position.
-    // Scrolling there will itself update `viewport` (via the scroll
-    // handler), which brings that measure into the rendered/culled window
-    // on the next pass.
+    // Computed straight from the memoized `layoutPlan` (not
+    // `resultRef.current.measureIdToBBox`) so this still finds the target
+    // measure's position even when virtualization (spec §26/§29) hasn't
+    // rendered it yet — e.g. jumping to a measure several systems below the
+    // current scroll position. Scrolling there will itself fire `onScroll`
+    // (`handleScroll` -> `measureViewport`), which brings that measure into
+    // the rendered/culled window on the next pass.
     const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
-    if (measureIndex === -1) return;
-    const width = container.clientWidth || DEFAULT_WIDTH;
-    const plan = computeLayout(score, { zoom, layoutMode, width, theme: renderTheme });
-    const bbox = boxForMeasureIndex(plan, 0, measureIndex);
+    if (measureIndex === -1 || !layoutPlan) return;
+    const bbox = boxForMeasureIndex(layoutPlan, 0, measureIndex);
     if (!bbox) return;
 
     lastScrolledMeasureRef.current = measureId;
@@ -238,7 +351,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         behavior: prefersReducedMotion() ? 'auto' : 'smooth',
       });
     }
-  }, [score, positionTick, playbackState, zoom, layoutMode, renderTheme]);
+  }, [score, positionTick, playbackState, layoutPlan, zoom]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -341,7 +454,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       <Box
         ref={scrollBoxRef}
         data-testid="score-editor-scroll"
-        onScroll={measureViewport}
+        onScroll={handleScroll}
         sx={{ position: 'relative', flex: 1, overflow: 'auto', minHeight: CONTAINER_MIN_HEIGHT }}
       >
         <Box

@@ -17,6 +17,7 @@ import {
   midiToY,
   noteLabel,
   rowHeight,
+  sameIdSet,
   snapTick,
   tickToX,
   totalCanvasHeight,
@@ -306,5 +307,28 @@ describe('cullToViewport (Task 17, spec §29 virtualization)', () => {
   it('returns every rect for a viewport covering all of them', () => {
     const rects = [rect('a', 0, 0), rect('b', 500, 500)];
     expect(cullToViewport(rects, { x: 0, y: 0, width: 1000, height: 1000 })).toEqual(rects);
+  });
+});
+
+describe('sameIdSet (Task 17, spec §29 scroll-throttle guard)', () => {
+  it('is true for two sets with the same members, regardless of insertion order', () => {
+    expect(sameIdSet(new Set(['a', 'b', 'c']), new Set(['c', 'b', 'a']))).toBe(true);
+  });
+
+  it('is true for the identical reference', () => {
+    const s = new Set(['a', 'b']);
+    expect(sameIdSet(s, s)).toBe(true);
+  });
+
+  it('is false for sets of different size', () => {
+    expect(sameIdSet(new Set(['a', 'b']), new Set(['a', 'b', 'c']))).toBe(false);
+  });
+
+  it('is false for same-size sets with different members', () => {
+    expect(sameIdSet(new Set(['a', 'b', 'c']), new Set(['a', 'b', 'd']))).toBe(false);
+  });
+
+  it('is true for two empty sets', () => {
+    expect(sameIdSet(new Set(), new Set())).toBe(true);
   });
 });

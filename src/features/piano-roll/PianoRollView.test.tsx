@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -335,6 +335,24 @@ describe('PianoRollView', () => {
       Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
     }
 
+    // `handleScroll` throttles `measureViewport` via `requestAnimationFrame`
+    // (Task 17 review finding), so `fireEvent.scroll` alone wouldn't
+    // synchronously apply a new measurement in these tests. Stubbing rAF to
+    // invoke its callback immediately keeps the tests synchronous while
+    // still exercising the real scroll -> measure -> cull code path (only
+    // the "wait for the next frame" part is short-circuited).
+    beforeEach(() => {
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      });
+      vi.stubGlobal('cancelAnimationFrame', () => {});
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     function makeBigStore(): EditorStoreApi {
       dbCounter += 1;
       db = new ScoreSmithDb(`scoresmith-test-piano-roll-view-virtualization-${dbCounter}`);
@@ -380,6 +398,62 @@ describe('PianoRollView', () => {
 
       expect(container.querySelector(`[data-testid="pr-note-${lastNoteId}"]`)).not.toBeNull();
       expect(container.querySelector(`[data-testid="pr-note-${firstNoteId}"]`)).toBeNull();
+    });
+
+    it('culls notes already by the time mount settles when the viewport is measurable (Task 17 review finding: no lingering full-then-corrected render)', () => {
+      const store = makeBigStore();
+      const totalNotes = allNotes(store.getState().score!).length;
+
+      // Patches `clientWidth`/`clientHeight` on every element (prototype
+      // getters, not per-node) *before* mount, so `useLayoutEffect`'s
+      // corrective measurement (see `PianoRollView.tsx`'s doc comment on
+      // it) has a real, nonzero value to work with the moment it runs -
+      // simulating a real browser's first layout pass rather than jsdom's
+      // always-zero one. By the time `render()` (wrapped in `act()`)
+      // returns, every effect - including this corrective one - has
+      // already flushed, so the DOM it hands back is the final, settled
+      // state, not an intermediate one.
+      const widthSpy = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400);
+      const heightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+
+      const { container } = render(<PianoRollView store={store} />);
+
+      expect(noteTestIds(container)).toBeLessThan(totalNotes);
+      expect(noteTestIds(container)).toBeGreaterThan(0);
+
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    });
+
+    it('does not re-render the note layer for repeated scroll positions within the same visible window, but does when scrolling reveals different notes', () => {
+      const store = makeBigStore();
+      const { getByTestId } = render(<PianoRollView store={store} />);
+      const scrollBox = getByTestId('piano-roll-scroll');
+
+      // Establishing the first *real* (non-jsdom-default) measurement is
+      // expected to trigger exactly one NoteLayer re-render, since it
+      // necessarily differs from the pre-measurement "every note visible"
+      // state.
+      mockScrollGeometry(scrollBox, 400, 2000, 0, 0);
+      fireEvent.scroll(scrollBox);
+      const countAfterFirstScroll = __getNoteLayerRenderCountForTests();
+
+      // Two more tiny scrolls, nowhere near the overscan boundary - neither
+      // should change which notes are visible, so neither should re-render
+      // NoteLayer.
+      mockScrollGeometry(scrollBox, 400, 2000, 5, 0);
+      fireEvent.scroll(scrollBox);
+      mockScrollGeometry(scrollBox, 400, 2000, 10, 0);
+      fireEvent.scroll(scrollBox);
+      expect(__getNoteLayerRenderCountForTests()).toBe(countAfterFirstScroll);
+
+      // A large scroll, far past the overscan buffer, reveals a genuinely
+      // different set of notes and must re-render.
+      const score = store.getState().score!;
+      const totalWidth = trackWidthPx(score.tracks[0], score.ppq, 1);
+      mockScrollGeometry(scrollBox, 400, 2000, Math.max(0, totalWidth - 400), 0);
+      fireEvent.scroll(scrollBox);
+      expect(__getNoteLayerRenderCountForTests()).toBeGreaterThan(countAfterFirstScroll);
     });
 
     it('does not change which notes are interactable: a culled-from-the-DOM note can still be clicked and selected', () => {

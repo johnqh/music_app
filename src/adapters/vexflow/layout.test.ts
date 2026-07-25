@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boxForMeasureIndex, computeLayout, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
+import { boxForMeasureIndex, computeLayout, sameMeasureIndices, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
 import type { RenderTheme } from '@/adapters/vexflow/types';
 import { chordScore, twinkleScore, twoTrackScore } from '@/test/fixtures';
 
@@ -177,5 +177,28 @@ describe('boxForMeasureIndex (Task 17 virtualization)', () => {
     const score = twinkleScore();
     const plan = computeLayout(score, options());
     expect(boxForMeasureIndex(plan, 0, 9999)).toBeNull();
+  });
+});
+
+describe('sameMeasureIndices (Task 17 virtualization scroll-throttle guard)', () => {
+  it('is true for two sets with the same members, regardless of insertion order', () => {
+    expect(sameMeasureIndices(new Set([1, 2, 3]), new Set([3, 2, 1]))).toBe(true);
+  });
+
+  it('is true for the identical reference', () => {
+    const s = new Set([1, 2]);
+    expect(sameMeasureIndices(s, s)).toBe(true);
+  });
+
+  it('is false for sets of different size', () => {
+    expect(sameMeasureIndices(new Set([1, 2]), new Set([1, 2, 3]))).toBe(false);
+  });
+
+  it('is false for same-size sets with different members', () => {
+    expect(sameMeasureIndices(new Set([1, 2, 3]), new Set([1, 2, 4]))).toBe(false);
+  });
+
+  it('is true for two empty sets', () => {
+    expect(sameMeasureIndices(new Set(), new Set())).toBe(true);
   });
 });

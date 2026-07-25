@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
@@ -239,6 +239,24 @@ describe('ScoreEditorView', () => {
       Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
     }
 
+    // `handleScroll` throttles `measureViewport` via `requestAnimationFrame`
+    // (Task 17 review finding), so `fireEvent.scroll` alone wouldn't
+    // synchronously apply a new measurement in these tests. Stubbing rAF to
+    // invoke its callback immediately keeps the tests synchronous while
+    // still exercising the real scroll -> measure -> cull code path (only
+    // the "wait for the next frame" part is short-circuited).
+    beforeEach(() => {
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      });
+      vi.stubGlobal('cancelAnimationFrame', () => {});
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
     const BIG_MEASURE_COUNT = 80;
 
     function makeBigStore(): EditorStoreApi {
@@ -256,6 +274,37 @@ describe('ScoreEditorView', () => {
         const { container } = render(<ScoreEditorView store={store} />);
         const totalMeasures = store.getState().score!.tracks[0].measures.length;
         expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
+      },
+      15_000,
+    );
+
+    it(
+      'culls the very first draw when the viewport is already measurable at mount (Task 17 review finding: no full-then-corrected double render)',
+      () => {
+        const store = makeBigStore();
+        const totalMeasures = store.getState().score!.tracks[0].measures.length;
+
+        // Patches `clientHeight` on every element (a prototype getter, not
+        // per-node) *before* mount, so the draw effect's own inline
+        // fresh-measurement fallback (see `measuredForPlanRef`'s doc
+        // comment) already sees a real, nonzero value on its very first
+        // run, simulating a real browser's first layout pass rather than
+        // jsdom's always-zero one.
+        const clientHeightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
+        const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+
+        const { container } = render(<ScoreEditorView store={store} />);
+
+        // Exactly one render() call for the initial mount - not a full
+        // render immediately followed by a corrective culled one.
+        expect(renderSpy).toHaveBeenCalledTimes(1);
+        // ...and that one call already has a real `visibleMeasureIndices`
+        // (not `undefined`, i.e. not "render everything").
+        const firstCallOptions = renderSpy.mock.calls[0][2];
+        expect(firstCallOptions.visibleMeasureIndices).not.toBeUndefined();
+        expect(container.querySelectorAll('.vf-stave').length).toBeLessThan(totalMeasures);
+
+        clientHeightSpy.mockRestore();
       },
       15_000,
     );
@@ -299,6 +348,52 @@ describe('ScoreEditorView', () => {
 
         expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).not.toBeNull();
         expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).toBeNull();
+      },
+      15_000,
+    );
+
+    it(
+      'does not re-render for repeated scroll positions within the same visible system(s), but does when a scroll crosses into a different one (Task 17 review finding: scroll-throttle equality guard)',
+      () => {
+        const store = makeBigStore();
+        const score = store.getState().score!;
+        const plan = computeLayout(score, {
+          zoom: 1,
+          layoutMode: 'page',
+          width: 900,
+          theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
+        });
+        expect(plan.systems.length).toBeGreaterThan(2);
+
+        const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+        const { getByTestId } = render(<ScoreEditorView store={store} />);
+        const scrollBox = getByTestId('score-editor-scroll');
+        const callsAfterMount = renderSpy.mock.calls.length;
+
+        // Establishing the first *real* (non-jsdom-default) measurement is
+        // expected to trigger exactly one render, since it necessarily
+        // differs from the pre-measurement "render everything" state.
+        const firstSystem = plan.systems[0];
+        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 5);
+        fireEvent.scroll(scrollBox);
+        expect(renderSpy.mock.calls.length).toBe(callsAfterMount + 1);
+        const callsAfterFirstScroll = renderSpy.mock.calls.length;
+
+        // Two more small scrolls, still comfortably inside the first
+        // system's own span (and nowhere near the overscan boundary) -
+        // neither should trigger a re-render.
+        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 10);
+        fireEvent.scroll(scrollBox);
+        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 15);
+        fireEvent.scroll(scrollBox);
+        expect(renderSpy.mock.calls.length).toBe(callsAfterFirstScroll);
+
+        // Scrolling to the last system (far past the overscan buffer) is a
+        // genuinely different visible set and must trigger a fresh render.
+        const lastSystem = plan.systems[plan.systems.length - 1];
+        mockScrollGeometry(scrollBox, 50, lastSystem.yTop + 5);
+        fireEvent.scroll(scrollBox);
+        expect(renderSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstScroll);
       },
       15_000,
     );

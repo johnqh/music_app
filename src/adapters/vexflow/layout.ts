@@ -210,6 +210,25 @@ export function visibleSystemMeasureIndices(plan: LayoutPlan, viewport: Viewport
 }
 
 /**
+ * Whether `a` and `b` contain exactly the same measure indices (set
+ * equality, order-independent). Used by `ScoreEditorView` to decide whether
+ * a freshly-`visibleSystemMeasureIndices`-computed set actually differs
+ * from the currently-applied one before committing a state update — a
+ * scroll that stays within the same visible system(s) (plus overscan)
+ * should never trigger a re-render, only a scroll that actually crosses
+ * into/out of a system should (spec §29: virtualization shouldn't itself
+ * become a per-scroll-frame performance cost).
+ */
+export function sameMeasureIndices(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const index of a) {
+    if (!b.has(index)) return false;
+  }
+  return true;
+}
+
+/**
  * The stave box for `measureIndex` on `plan.trackLayouts[trackIndex]`
  * (logical units), or `null` if that track/measure index isn't present in
  * the plan. Lets a caller locate a measure's position (e.g. to scroll to
