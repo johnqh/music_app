@@ -20,6 +20,8 @@ import type { Measure, MusicalEvent, Score } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { pitchToMidi } from '@/domain/pitch/pitch';
 import { measureDurationTicks } from '@/domain/time/ticks';
+import { regenerateRegionResultSchema } from '@/services/generation/schema';
+import type { RegenerateRegionResult } from '@/services/generation/types';
 
 /** Thrown when a generated score has a problem `sanitizeGeneratedScore` cannot safely repair. */
 export class GenerationValidationError extends Error {
@@ -273,4 +275,71 @@ export function sanitizeGeneratedScore(
   }
 
   return { score: parsed, warnings };
+}
+
+/**
+ * Validates a regeneration provider's raw result before any candidate is
+ * ever previewed or stored (spec §12/§37.8: "every AI-generated response
+ * must be validated" — Task 19 review finding I1: this was previously
+ * skipped entirely for `regenerateRegion`'s response, unlike
+ * `generateScore`'s, which always went through `sanitizeGeneratedScore`).
+ *
+ * 1. Zod-parses the shape via `regenerateRegionResultSchema` (throws
+ *    `GenerationValidationError` if it doesn't even match).
+ * 2. For every candidate's fragment: its `ppq` must match `score.ppq`
+ *    (mismatched resolution would silently corrupt tick math once
+ *    spliced in), and every measure's every voice must cover *exactly*
+ *    its own `durationTicks` — reusing the same `coveredTicks` merge-and-
+ *    sum this module already uses for `sanitizeGeneratedScore`'s overfull-
+ *    measure check, applied here as a stricter equality (not just
+ *    "not overfull"): a regeneration candidate that leaves gaps or
+ *    overflows can't be safely spliced into an otherwise-valid score the
+ *    way a repairable whole-score generation can.
+ *
+ * Unlike `sanitizeGeneratedScore`, nothing here is repaired — no id
+ * regeneration, no gap-padding: a candidate is either already correct or
+ * it's rejected outright, since (unlike a brand-new generated score) it's
+ * about to be spliced into an already-valid, already-committed score
+ * (`acceptCandidate`/`replaceFragment`), where silently padding/altering
+ * its content would violate spec §37.9's "candidates are non-destructive"
+ * expectation just as much as skipping validation entirely would.
+ *
+ * Throws `GenerationValidationError` (with every issue found, not just the
+ * first) on any problem; returns the parsed, still-untouched result
+ * otherwise.
+ */
+export function validateRegenerateRegionResult(score: Score, json: unknown): RegenerateRegionResult {
+  const parseResult = regenerateRegionResultSchema.safeParse(json);
+  if (!parseResult.success) {
+    throw new GenerationValidationError(parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`));
+  }
+  const result = parseResult.data as RegenerateRegionResult;
+
+  const issues: string[] = [];
+  for (const candidate of result.candidates) {
+    if (candidate.fragment.ppq !== score.ppq) {
+      issues.push(
+        `Candidate "${candidate.id}" fragment has ppq ${candidate.fragment.ppq}, expected the score's own ppq (${score.ppq}).`,
+      );
+      continue;
+    }
+    for (const trackFragment of candidate.fragment.tracks) {
+      for (const measure of trackFragment.measures) {
+        for (const voice of measure.voices) {
+          const covered = coveredTicks(voice.events);
+          if (covered !== measure.durationTicks) {
+            issues.push(
+              `Candidate "${candidate.id}" measure ${measure.index} voice "${voice.name}" on track "${trackFragment.trackId}" covers ${covered} ticks, expected exactly ${measure.durationTicks}.`,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new GenerationValidationError(issues);
+  }
+
+  return result;
 }

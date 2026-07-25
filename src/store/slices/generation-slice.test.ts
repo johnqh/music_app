@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createAppStore } from '@/store/useAppStore';
 import { resetProvider, setProvider } from '@/services/generation/registry';
 import { extractFragment } from '@/domain/score/fragment';
+import type { ScoreFragment } from '@/domain/score/fragment';
+import { findMeasure } from '@/domain/score/queries';
 import { selectionToRange } from '@/domain/selection/selection';
 import { twinkleScore } from '@/test/fixtures';
 import type { Score } from '@/domain/score/types';
@@ -271,6 +273,105 @@ describe('generation-slice', () => {
     });
   });
 
+  describe('regenerate response validation (spec §12/§37.8, finding I1)', () => {
+    /** Always resolves `regenerateRegion` with a fixed, caller-supplied raw result -- for exercising `validateRegenerateRegionResult` against results a real seeded transform would never itself produce. */
+    class FixedResultProvider implements MusicGenerationProvider {
+      readonly id = 'fixed-result';
+      readonly name = 'Fixed Result Test Provider';
+      constructor(private readonly result: unknown) {}
+      generateScore(): Promise<GenerateScoreResult> {
+        throw new Error('not used by this suite');
+      }
+      regenerateRegion(): Promise<RegenerateRegionResult> {
+        return Promise.resolve(this.result as RegenerateRegionResult);
+      }
+    }
+
+    function seedRegenerableSelection() {
+      const store = createAppStore();
+      const score = twinkleScore();
+      store.getState().setScore(score);
+      const measureId = score.tracks[0].measures[0].id;
+      store.getState().selectMeasures([measureId]);
+      return store;
+    }
+
+    it('rejects a malformed candidate (bad shape) with an error and stores no candidates', async () => {
+      const store = seedRegenerableSelection();
+      setProvider(new FixedResultProvider({ candidates: [{ id: 'bad', label: 'Bad' }], warnings: [] }));
+
+      await store.getState().regenerate('Make this more dramatic');
+
+      const state = store.getState();
+      expect(state.pending).toBe(false);
+      expect(state.error).not.toBeNull();
+      expect(state.candidates).toEqual([]);
+      expect(state.activeCandidateId).toBeNull();
+      expect(state.previewFragment).toBeNull();
+    });
+
+    it('rejects a candidate fragment with an overfull measure', async () => {
+      const store = seedRegenerableSelection();
+      const score = store.getState().score!;
+      const range = selectionToRange(score, store.getState().selection)!;
+      const fragment = extractFragment(score, range);
+      const overfullFragment: ScoreFragment = {
+        ...fragment,
+        tracks: fragment.tracks.map((t) => ({
+          ...t,
+          measures: t.measures.map((m) => ({
+            ...m,
+            voices: m.voices.map((v) => ({
+              ...v,
+              // Doubling the first event's duration makes this voice cover
+              // more ticks than the measure actually has.
+              events: v.events.map((e, i) => (i === 0 ? { ...e, durationTicks: e.durationTicks + m.durationTicks } : e)),
+            })),
+          })),
+        })),
+      };
+      setProvider(
+        new FixedResultProvider({ candidates: [{ id: 'overfull', label: 'Overfull', fragment: overfullFragment }], warnings: [] }),
+      );
+
+      await store.getState().regenerate('Make this more dramatic');
+
+      const state = store.getState();
+      expect(state.error).toMatch(/covers/i);
+      expect(state.candidates).toEqual([]);
+    });
+
+    it('rejects a candidate fragment whose ppq does not match the score', async () => {
+      const store = seedRegenerableSelection();
+      const score = store.getState().score!;
+      const range = selectionToRange(score, store.getState().selection)!;
+      const fragment = extractFragment(score, range);
+      const mismatchedPpqFragment: ScoreFragment = { ...fragment, ppq: fragment.ppq * 2 };
+      setProvider(
+        new FixedResultProvider({
+          candidates: [{ id: 'mismatched-ppq', label: 'Mismatched', fragment: mismatchedPpqFragment }],
+          warnings: [],
+        }),
+      );
+
+      await store.getState().regenerate('Make this more dramatic');
+
+      const state = store.getState();
+      expect(state.error).toMatch(/ppq/i);
+      expect(state.candidates).toEqual([]);
+    });
+
+    it('still adopts valid candidates from the real (seeded mock) provider', async () => {
+      const store = seedRegenerableSelection();
+
+      await store.getState().regenerate('Make this more dramatic');
+
+      const state = store.getState();
+      expect(state.error).toBeNull();
+      expect(state.candidates.length).toBeGreaterThan(0);
+    });
+  });
+
   describe('selectCandidate / acceptCandidate / rejectCandidates', () => {
     async function seedCandidates() {
       const store = createAppStore();
@@ -296,10 +397,11 @@ describe('generation-slice', () => {
       expect(store.getState().previewFragment).toBeNull();
     });
 
-    it('acceptCandidate replaces the region as one undoable command and clears preview state, preserving the selection', async () => {
+    it('acceptCandidate replaces the region as one undoable command, clears preview state, and remaps the selection onto the new (live) measures rather than stranding it (spec §13, finding I2)', async () => {
       const store = await seedCandidates();
-      const originalScore = store.getState().score;
-      const selectionBefore = store.getState().selection;
+      const originalScore = store.getState().score!;
+      const measureIndexBefore = originalScore.tracks[0].measures[0].index;
+      const measureIdBefore = store.getState().selection.measureIds[0];
 
       store.getState().acceptCandidate();
 
@@ -310,7 +412,34 @@ describe('generation-slice', () => {
       expect(state.candidates).toEqual([]);
       expect(state.activeCandidateId).toBeNull();
       expect(state.previewFragment).toBeNull();
-      expect(state.selection).toEqual(selectionBefore);
+
+      // The selection no longer references the deleted measure...
+      expect(state.selection.measureIds).not.toContain(measureIdBefore);
+      // ...but still names exactly one measure, at the same position, that
+      // actually resolves in the new score (not stranded).
+      expect(state.selection.measureIds).toHaveLength(1);
+      const newMeasure = findMeasure(state.score!, state.selection.measureIds[0]);
+      expect(newMeasure).not.toBeNull();
+      expect(newMeasure!.index).toBe(measureIndexBefore);
+      expect(state.selection.eventIds).toEqual([]);
+
+      const range = selectionToRange(state.score!, state.selection);
+      expect(range).not.toBeNull();
+      expect(range!.startTick).toBe(0);
+    });
+
+    it('regenerating the same, just-accepted region a second time succeeds immediately, without a manual reselect (spec §13, finding I2 regression)', async () => {
+      const store = await seedCandidates();
+
+      store.getState().acceptCandidate();
+      expect(store.getState().error).toBeNull();
+
+      await store.getState().regenerate('Simplify this passage');
+
+      const state = store.getState();
+      expect(state.error).toBeNull();
+      expect(state.candidates.length).toBeGreaterThan(0);
+      expect(state.previewFragment).not.toBeNull();
     });
 
     it('acceptCandidate is a no-op when there is no active candidate', async () => {

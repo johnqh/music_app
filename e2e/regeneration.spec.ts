@@ -93,6 +93,26 @@ test.describe('region regeneration: preview and accept', () => {
     // Candidates are cleared once accepted.
     await expect(candidateCards).toHaveCount(0);
 
+    // Regression coverage (Task 19 review finding I2): accepting a
+    // candidate must not strand the selection on the measures it just
+    // replaced -- the status bar should still report the same region
+    // selected, the regeneration panel should still be showing it (not
+    // fallen back to "nothing selected"), and regenerating that same,
+    // now-live region again must work immediately, with no manual
+    // reselect in between.
+    await expect(page.getByText('2 measure(s) selected')).toBeVisible();
+    await expect(regenerationPanel).toBeVisible();
+    await expect(regenerationPanel.getByText(/Measures 3.4/)).toBeVisible();
+
+    await page.getByLabel('Regeneration instruction').fill('Simplify this passage.');
+    await page.getByRole('button', { name: 'Generate alternatives' }).click();
+    await expect(candidateCards).toHaveCount(3, { timeout: 15_000 });
+
+    // Reject this second round so the score below only reflects the first
+    // accepted change.
+    await page.getByRole('button', { name: 'Reject all' }).click();
+    await expect(candidateCards).toHaveCount(0);
+
     // Only measures 3 and 4 changed (spec §39 item 13).
     const after = await readScoreSummary(page);
     expect(after).not.toBeNull();

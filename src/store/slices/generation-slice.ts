@@ -16,11 +16,13 @@ import type {
 import { getProvider } from '@/services/generation/registry';
 import {
   sanitizeGeneratedScore,
+  validateRegenerateRegionResult,
   GenerationValidationError,
 } from '@/services/generation/validate-response';
 import type { GenerateScoreRequest, RegenerationCandidate } from '@/services/generation/types';
 import type { ScoreFragment } from '@/domain/score/fragment';
-import { selectionIsRegenerable } from '@/domain/selection/selection';
+import { measuresInRange } from '@/domain/score/queries';
+import { normalizeSelection, selectionIsRegenerable } from '@/domain/selection/selection';
 import type { ScoreSelection } from '@/domain/selection/types';
 import type { AppState } from '@/store/useAppStore';
 
@@ -201,8 +203,15 @@ export const createGenerationSlice: StateCreator<
 
       try {
         const prepared = prepareRegenerationRequest(score, selection, instruction, options);
-        const result = await getProvider().regenerateRegion(prepared, signal);
+        const rawResult = await getProvider().regenerateRegion(prepared, signal);
         if (token !== requestToken) return; // superseded by a newer generate()/regenerate() call
+        // spec §12/§37.8: every regenerated result is validated before any
+        // candidate is ever previewed/stored -- a malformed or structurally
+        // broken candidate (bad shape, mismatched ppq, a measure that
+        // doesn't exactly fill its own duration) must never reach
+        // `candidates`/`previewFragment`, since accepting it would corrupt
+        // the committed score once spliced in.
+        const result = validateRegenerateRegionResult(score, rawResult);
         const first = result.candidates[0] ?? null;
         set((state) => {
           state.pending = false;
@@ -241,19 +250,62 @@ export const createGenerationSlice: StateCreator<
     },
 
     acceptCandidate: () => {
-      const { score, candidates, activeCandidateId } = get();
+      const { score, candidates, activeCandidateId, selection } = get();
       if (!score) return;
       const candidate = candidates.find((c) => c.id === activeCandidateId);
       if (!candidate) return;
 
+      // Captured *before* dispatch: for every measure `replaceFragment` is
+      // about to delete (the region's old, contiguous measure block, per
+      // track), which position within that block it occupies -- so any of
+      // `selection.measureIds` naming one of those measures can be mapped
+      // forward onto the candidate's own (fresh-id) measure at the same
+      // position afterward, instead of being left stranded on an id that
+      // no longer resolves (spec §13 -- Task 19 review finding I2: without
+      // this, the status bar kept reporting "N measure(s) selected" for
+      // measures that had just been deleted, and re-regenerating the same
+      // region failed until the user manually reselected it).
+      const range = candidate.fragment.range;
+      const positionByOldMeasureId = new Map<string, { trackId: string; position: number }>();
+      for (const { trackId, measures } of measuresInRange(score, range)) {
+        measures.forEach((measure, position) => {
+          positionByOldMeasureId.set(measure.id, { trackId, position });
+        });
+      }
+
       const command = applyCandidate(score, candidate);
       get().dispatchCommand(command);
+
+      // Event ids never survive a splice (a candidate's own event ids are
+      // always freshly generated, and nothing here has enough information
+      // to map an old event onto a specific new one) -- cleared
+      // unconditionally, same as `measureIds` is remapped or dropped.
+      const newMeasuresByTrack = new Map(candidate.fragment.tracks.map((t) => [t.trackId, t.measures]));
+      const remappedSelection: ScoreSelection = {
+        ...selection,
+        eventIds: [],
+        measureIds: selection.measureIds
+          .map((id) => {
+            const position = positionByOldMeasureId.get(id);
+            if (!position) return id; // outside the regenerated region -- untouched, unaffected
+            return newMeasuresByTrack.get(position.trackId)?.[position.position]?.id ?? null;
+          })
+          .filter((id): id is string => id !== null),
+      };
+      // `normalizeSelection` drops anything that still doesn't resolve
+      // against the post-accept score (dedup/stale-id cleanup it already
+      // does for any selection) so a mapping miss degrades to "unselected"
+      // rather than a selection that looks populated but can't actually be
+      // regenerated again.
+      const normalizedSelection = normalizeSelection(get().score!, remappedSelection);
 
       set((state) => {
         state.candidates = [];
         state.activeCandidateId = null;
         state.previewFragment = null;
+        state.selection = normalizedSelection;
       });
+      get().syncModeFromSelection(normalizedSelection);
     },
 
     rejectCandidates: () => {
