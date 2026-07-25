@@ -20,7 +20,9 @@ export type DevSettings = {
 };
 
 export type ToastSeverity = 'info' | 'success' | 'warning' | 'error';
-export type Toast = { id: string; message: string; severity: ToastSeverity };
+/** An optional action button (spec §28: "retry actions where appropriate"), e.g. "Retry" on a failed import/save toast. */
+export type ToastAction = { label: string; onClick: () => void };
+export type Toast = { id: string; message: string; severity: ToastSeverity; action?: ToastAction };
 
 const DEFAULT_DEV_SETTINGS: DevSettings = {
   // Shares registry.ts's DEFAULT_MOCK_SEED (rather than a locally hardcoded
@@ -53,7 +55,7 @@ export type UiSlice = {
   closeDialog: (id: string) => void;
   toggleDialog: (id: string) => void;
   /** Enqueues a toast and returns its generated id (so a caller can `dismissToast` it early, e.g. on an "undo" action inside the toast itself). */
-  pushToast: (toast: { message: string; severity?: ToastSeverity }) => string;
+  pushToast: (toast: { message: string; severity?: ToastSeverity; action?: ToastAction }) => string;
   dismissToast: (id: string) => void;
 };
 
@@ -118,7 +120,12 @@ export const createUiSlice: StateCreator<AppState, [['zustand/immer', never]], [
   pushToast: (toast) => {
     const id = createId();
     set((state) => {
-      state.toasts.push({ id, message: toast.message, severity: toast.severity ?? 'info' });
+      state.toasts.push({
+        id,
+        message: toast.message,
+        severity: toast.severity ?? 'info',
+        ...(toast.action ? { action: toast.action } : {}),
+      });
     });
     return id;
   },
