@@ -1,15 +1,11 @@
 /**
  * Generic yes/no confirmation dialog (spec §6: "confirmation dialogs"),
- * used before every destructive action this task's app shell offers:
- * delete project, delete track, reset local database, replace a project
- * with a fresh MIDI/MusicXML import.
+ * used before every destructive action the app shell offers: delete
+ * project, delete track, reset device data, replace a project with a fresh
+ * MIDI/MusicXML import. Re-skinned onto @sudobility/components' dialog
+ * primitive (same props/labels as the MUI-era version).
  */
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
+import { Dialog } from '@sudobility/components';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -17,7 +13,7 @@ export type ConfirmDialogProps = {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** Renders the confirm button in the "destructive" (error) color; default `true`, since every current caller confirms a destructive action. */
+  /** Renders the confirm button in the destructive color; default `true`, since every current caller confirms a destructive action. */
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -34,17 +30,32 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onClose={onCancel} aria-labelledby="confirm-dialog-title">
-      <DialogTitle id="confirm-dialog-title">{title}</DialogTitle>
-      <DialogContent>
-        <DialogContentText>{message}</DialogContentText>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel}>{cancelLabel}</Button>
-        <Button onClick={onConfirm} color={destructive ? 'error' : 'primary'} variant="contained" autoFocus>
-          {confirmLabel}
-        </Button>
-      </DialogActions>
+    <Dialog isOpen={open} onClose={onCancel} size="sm">
+      <div role="dialog" aria-labelledby="confirm-dialog-title" className="p-6">
+        <h2 id="confirm-dialog-title" className="text-lg font-semibold text-theme-text-primary">
+          {title}
+        </h2>
+        <p className="mt-3 text-sm text-theme-text-secondary">{message}</p>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            autoFocus
+            className={`rounded-md px-4 py-2 text-sm text-white ${
+              destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:opacity-90'
+            }`}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </Dialog>
   );
 }
