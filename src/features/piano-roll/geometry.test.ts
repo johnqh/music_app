@@ -4,23 +4,30 @@ import {
   MAX_MIDI,
   MIN_MIDI,
   ROW_HEIGHT,
+  VELOCITY_LANE_HEIGHT,
+  VOICE_LANE_ROW_HEIGHT,
   computeGridLines,
   computeKeyboardRows,
   computeNoteRects,
+  computePreviewNoteRects,
   isBlackKey,
   isNearRightEdge,
+  keyboardHeightPx,
   midiToY,
   noteLabel,
   rowHeight,
   snapTick,
   tickToX,
+  totalCanvasHeight,
   trackColor,
+  voiceLaneStripHeight,
   xToTick,
   yToMidi,
 } from '@/features/piano-roll/geometry';
 import { twinkleScore, twoTrackScore } from '@/test/fixtures';
 import { allNotes } from '@/domain/score/queries';
 import { pitchToMidi } from '@/domain/pitch/pitch';
+import { extractFragment } from '@/domain/score/fragment';
 
 describe('tickToX / xToTick', () => {
   it('is 0 at tick 0', () => {
@@ -192,5 +199,44 @@ describe('computeGridLines', () => {
 describe('KEYBOARD_WIDTH', () => {
   it('is a positive constant', () => {
     expect(KEYBOARD_WIDTH).toBeGreaterThan(0);
+  });
+});
+
+describe('computePreviewNoteRects', () => {
+  it('returns an empty array for a null fragment', () => {
+    expect(computePreviewNoteRects(null, { zoomH: 1, zoomV: 1 })).toEqual([]);
+  });
+
+  it('positions preview notes the same way as computeNoteRects, via the fragment ppq', () => {
+    const score = twinkleScore();
+    const track = score.tracks[0];
+    const range = { startTick: 0, endTick: track.measures[0].durationTicks, trackIds: [track.id] };
+    const fragment = extractFragment(score, range);
+
+    const rects = computePreviewNoteRects(fragment, { zoomH: 1, zoomV: 1 });
+
+    expect(rects.length).toBeGreaterThan(0);
+    const firstNote = track.measures[0].voices[0].events[0];
+    const rect = rects.find((r) => r.id === firstNote.id)!;
+    expect(rect.x).toBeCloseTo(tickToX(firstNote.startTick, score.ppq, 1));
+    expect(rect.trackId).toBe(track.id);
+  });
+});
+
+describe('keyboardHeightPx / voiceLaneStripHeight / totalCanvasHeight', () => {
+  it('keyboardHeightPx spans every key at the given zoom', () => {
+    expect(keyboardHeightPx(1)).toBe((MAX_MIDI - MIN_MIDI + 1) * ROW_HEIGHT);
+  });
+
+  it('voiceLaneStripHeight scales with voice count', () => {
+    expect(voiceLaneStripHeight(2)).toBe(2 * VOICE_LANE_ROW_HEIGHT);
+  });
+
+  it('totalCanvasHeight sums the keyboard, voice-lane, and velocity-lane heights', () => {
+    const zoomV = 1;
+    const voiceCount = 2;
+    expect(totalCanvasHeight(zoomV, voiceCount)).toBe(
+      keyboardHeightPx(zoomV) + voiceLaneStripHeight(voiceCount) + VELOCITY_LANE_HEIGHT,
+    );
   });
 });

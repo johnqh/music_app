@@ -18,6 +18,7 @@ import type { NoteEvent, Score, Track, UUID } from '@/domain/score/types';
 import { isNoteEvent } from '@/domain/score/types';
 import { pitchToMidi, midiToPitch, pitchToString } from '@/domain/pitch/pitch';
 import { beatBoundaries, measureDurationTicks } from '@/domain/time/ticks';
+import type { ScoreFragment } from '@/domain/score/fragment';
 
 export { boxFromPoints, pointInBBox, bboxesIntersect, eventIdAtPoint, eventIdsInBox };
 export type { Point };
@@ -39,6 +40,12 @@ export const KEYBOARD_WIDTH = 56;
 
 /** Pointer-proximity tolerance (px) for the right-edge resize handle. */
 export const RESIZE_HANDLE_PX = 6;
+
+/** Height (px) of one row in the below-the-keyboard "voice lane" strip (spec §8's "drag onto another track row region" — see `interactions.ts` for why this targets voice, not track, reassignment). */
+export const VOICE_LANE_ROW_HEIGHT = 20;
+
+/** Height (px) of the velocity lane at the bottom of the canvas. */
+export const VELOCITY_LANE_HEIGHT = 70;
 
 // ---- tick <-> x -----------------------------------------------------------------
 
@@ -215,4 +222,62 @@ export function trackWidthPx(track: Track, ppq: number, zoomH: number): number {
 export function firstMeasureDurationTicks(track: Track, ppq: number): number {
   const first = track.measures[0];
   return first ? measureDurationTicks(first.timeSignature, ppq) : measureDurationTicks({ numerator: 4, denominator: 4 }, ppq);
+}
+
+// ---- preview-fragment note rects ---------------------------------------------------
+
+export type PreviewNoteRect = BBox & { id: UUID; trackId: UUID };
+
+/**
+ * Positions a regeneration preview's note events (spec §8/§13:
+ * "preview-fragment notes rendered distinctly") the same way
+ * `computeNoteRects` positions committed notes, reading `fragment.ppq`
+ * (rather than a `Score`'s) since a `ScoreFragment` carries its own.
+ * `null`/no-fragment yields an empty array.
+ */
+export function computePreviewNoteRects(
+  fragment: ScoreFragment | null,
+  options: { zoomH: number; zoomV: number },
+): PreviewNoteRect[] {
+  if (!fragment) return [];
+  const rects: PreviewNoteRect[] = [];
+
+  for (const trackFragment of fragment.tracks) {
+    for (const measure of trackFragment.measures) {
+      for (const voice of measure.voices) {
+        for (const event of voice.events) {
+          if (!isNoteEvent(event)) continue;
+          const note = event as NoteEvent;
+          const midi = pitchToMidi(note.pitch);
+          rects.push({
+            id: note.id,
+            trackId: trackFragment.trackId,
+            x: tickToX(note.startTick, fragment.ppq, options.zoomH),
+            y: midiToY(midi, options.zoomV),
+            width: Math.max(1, tickToX(note.durationTicks, fragment.ppq, options.zoomH)),
+            height: rowHeight(options.zoomV),
+          });
+        }
+      }
+    }
+  }
+
+  return rects;
+}
+
+// ---- overall canvas layout ---------------------------------------------------------
+
+/** Total px height of the keyboard/note-grid area at the given vertical zoom (every key, `MIN_MIDI..MAX_MIDI`). */
+export function keyboardHeightPx(zoomV: number): number {
+  return (MAX_MIDI - MIN_MIDI + 1) * rowHeight(zoomV);
+}
+
+/** Total px height of the below-the-grid voice-lane strip for `voiceCount` lanes. */
+export function voiceLaneStripHeight(voiceCount: number): number {
+  return voiceCount * VOICE_LANE_ROW_HEIGHT;
+}
+
+/** Total px height of the piano-roll canvas: keyboard/grid + voice-lane strip + velocity lane. */
+export function totalCanvasHeight(zoomV: number, voiceCount: number): number {
+  return keyboardHeightPx(zoomV) + voiceLaneStripHeight(voiceCount) + VELOCITY_LANE_HEIGHT;
 }
