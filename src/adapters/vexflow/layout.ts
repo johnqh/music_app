@@ -175,3 +175,50 @@ export function computeLayout(score: Score, options: RenderOptions): LayoutPlan 
 
   return { tracks, trackLayouts, systems, totalWidth, totalHeight };
 }
+
+// ---- virtualization (Task 17, spec §26/§29) --------------------------------
+
+/** A vertical scroll range, in the same LOGICAL (unscaled) units as `LayoutPlan` — see the module doc. */
+export type Viewport = { top: number; bottom: number };
+
+/**
+ * Every measure index belonging to a system whose vertical span
+ * (`[yTop, yBottom]`) intersects `viewport` (expanded by `overscan` on both
+ * sides, e.g. one extra system's worth of buffer so scrolling doesn't flash
+ * blank staves before the next render pass catches up).
+ *
+ * Deliberately a pure function of an already-computed `LayoutPlan`, not
+ * something `computeLayout` itself does: culling only decides which
+ * *already-positioned* measures actually get drawn (spec §26: "Render only
+ * visible systems where practical"; §29: virtualization for long scores) —
+ * every system keeps the same box regardless of what a given render pass
+ * chooses to draw, so scroll geometry (and a not-yet-rendered measure's
+ * position — see `boxForMeasureIndex`) never shifts as the visible window
+ * changes. The caller (`ScoreEditorView`) is responsible for converting its
+ * screen-pixel scroll viewport to these logical units (divide by zoom)
+ * before calling this.
+ */
+export function visibleSystemMeasureIndices(plan: LayoutPlan, viewport: Viewport, overscan = 0): Set<number> {
+  const top = viewport.top - overscan;
+  const bottom = viewport.bottom + overscan;
+  const indices = new Set<number>();
+  for (const system of plan.systems) {
+    if (system.yBottom < top || system.yTop > bottom) continue;
+    for (const index of system.measureIndices) indices.add(index);
+  }
+  return indices;
+}
+
+/**
+ * The stave box for `measureIndex` on `plan.trackLayouts[trackIndex]`
+ * (logical units), or `null` if that track/measure index isn't present in
+ * the plan. Lets a caller locate a measure's position (e.g. to scroll to
+ * it during playback) directly from layout, independent of whether that
+ * measure was actually drawn by a culled render pass — see
+ * `visibleSystemMeasureIndices`'s doc comment.
+ */
+export function boxForMeasureIndex(plan: LayoutPlan, trackIndex: number, measureIndex: number): StaveBox | null {
+  const trackLayout = plan.trackLayouts[trackIndex];
+  if (!trackLayout) return null;
+  return trackLayout.measures.find((m) => m.measureIndex === measureIndex)?.box ?? null;
+}

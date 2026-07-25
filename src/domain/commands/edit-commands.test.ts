@@ -158,13 +158,16 @@ describe('collectQuantizeTargets / applyQuantizedCommand (spec §29 worker-routi
     const viaPrecomputed = precomputedCmd.execute(withNote);
     const viaInline = inlineCmd.execute(withNote);
 
-    // Each `.execute()` call independently reflows its voice, which mints a
-    // fresh `createId()` for any filler rest — an expected, harmless
-    // divergence unrelated to what this test actually checks (that the two
-    // code paths compute the same *musical* result), so rest ids are
-    // normalized out before comparing.
+    // Each `.execute()` call independently reflows its voice (minting a
+    // fresh `createId()` for any filler rest) and re-touches
+    // `metadata.updatedAt` (`Date.now()`/`toISOString()`, which can tick
+    // over a millisecond between the two calls) — both expected, harmless
+    // divergences unrelated to what this test actually checks (that the two
+    // code paths compute the same *musical* result), so both are normalized
+    // out before comparing.
     const normalizeRestIds = (score: typeof viaPrecomputed) => ({
       ...score,
+      metadata: { ...score.metadata, updatedAt: 'normalized' },
       tracks: score.tracks.map((t) => ({
         ...t,
         measures: t.measures.map((m) => ({

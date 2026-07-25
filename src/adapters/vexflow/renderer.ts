@@ -172,11 +172,20 @@ export class VexFlowScoreRenderer implements ScoreRenderer {
     /** trackId -> measureIndex -> its drawn Stave, for connector placement. */
     const staveByTrackMeasure = new Map<string, Map<number, Stave>>();
 
+    const visibleMeasureIndices = options.visibleMeasureIndices;
+
     plan.trackLayouts.forEach(({ track, measures }) => {
       const channels = new Map<number, Channel>();
       staveByTrackMeasure.set(track.id, new Map());
 
       measures.forEach((placement) => {
+        // Virtualization (spec §26/§29): a measure outside the visible set
+        // is skipped entirely — no stave, no voice/note content, no
+        // `RenderResult` entries — leaving its already-reserved layout
+        // space (from the full, uncalled `plan`) blank. See
+        // `RenderOptions.visibleMeasureIndices`'s doc comment.
+        if (visibleMeasureIndices && !visibleMeasureIndices.has(placement.measureIndex)) return;
+
         const measure = track.measures[placement.measureIndex];
         const prevMeasure = track.measures[placement.measureIndex - 1];
         allMeasureIds.push(measure.id);

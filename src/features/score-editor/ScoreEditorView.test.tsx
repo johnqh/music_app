@@ -4,7 +4,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
-import { twinkleScore } from '@/test/fixtures';
+import { stressScore, twinkleScore } from '@/test/fixtures';
+import { computeLayout } from '@/adapters/vexflow/layout';
 import { allNotes, findEvent } from '@/domain/score/queries';
 import type { NoteEvent } from '@/domain/score/types';
 import { VexFlowScoreRenderer } from '@/adapters/vexflow/renderer';
@@ -224,6 +225,83 @@ describe('ScoreEditorView', () => {
 
       expect(store.getState().selection.eventIds).toEqual([note.id]);
     });
+  });
+
+  describe('virtualization (spec §26/§29): culls systems outside the scroll viewport', () => {
+    // jsdom never lays anything out (`clientHeight` is always 0), which
+    // ScoreEditorView treats as "viewport not measurable yet" and renders
+    // everything (see `measureViewport`'s doc comment) - exactly what every
+    // other test in this file relies on. These tests instead stub
+    // `clientHeight`/`scrollTop` on the scrollable ancestor directly so a
+    // real (non-zero) viewport measurement flows through `visibleSystemMeasureIndices`.
+    function mockScrollGeometry(scrollBox: HTMLElement, clientHeight: number, scrollTop: number): void {
+      Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
+      Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
+    }
+
+    const BIG_MEASURE_COUNT = 80;
+
+    function makeBigStore(): EditorStoreApi {
+      dbCounter += 1;
+      db = new ScoreSmithDb(`scoresmith-test-score-editor-view-virtualization-${dbCounter}`);
+      const store = createAppStore({ db });
+      store.getState().setScore(stressScore(1, BIG_MEASURE_COUNT)); // wraps into many systems at the default render width
+      return store;
+    }
+
+    it(
+      'renders every measure before the viewport has been measured',
+      () => {
+        const store = makeBigStore();
+        const { container } = render(<ScoreEditorView store={store} />);
+        const totalMeasures = store.getState().score!.tracks[0].measures.length;
+        expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
+      },
+      15_000,
+    );
+
+    it(
+      'renders only measures near the top of a short viewport, and flips to the bottom set on scroll',
+      () => {
+        const store = makeBigStore();
+        const score = store.getState().score!;
+        const notes = allNotes(score);
+        const firstNoteId = notes[0].id;
+        const lastNoteId = notes[notes.length - 1].id;
+        const totalMeasures = score.tracks[0].measures.length;
+
+        // The real total logical-unit height, from the same layout the
+        // component itself computes (page mode, DEFAULT_WIDTH's 900px
+        // fallback since jsdom reports clientWidth 0) — used to pick a
+        // scrollTop genuinely near the bottom of *this* score, rather than
+        // an arbitrary huge number that could overshoot every system.
+        const plan = computeLayout(score, {
+          zoom: 1,
+          layoutMode: 'page',
+          width: 900,
+          theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
+        });
+
+        const { container, getByTestId } = render(<ScoreEditorView store={store} />);
+        const scrollBox = getByTestId('score-editor-scroll');
+
+        mockScrollGeometry(scrollBox, 200, 0);
+        fireEvent.scroll(scrollBox);
+
+        const staveCountNearTop = container.querySelectorAll('.vf-stave').length;
+        expect(staveCountNearTop).toBeGreaterThan(0);
+        expect(staveCountNearTop).toBeLessThan(totalMeasures);
+        expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).not.toBeNull();
+        expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).toBeNull();
+
+        mockScrollGeometry(scrollBox, 200, Math.max(0, plan.totalHeight - 200));
+        fireEvent.scroll(scrollBox);
+
+        expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).not.toBeNull();
+        expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).toBeNull();
+      },
+      15_000,
+    );
   });
 
   describe('scroll-into-view during playback', () => {

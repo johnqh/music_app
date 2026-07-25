@@ -133,6 +133,59 @@ describe('VexFlowScoreRenderer.render', () => {
     void bass;
   });
 
+  describe('visibleMeasureIndices (spec §26/§29 virtualization)', () => {
+    it('draws staves/notes only for measures in the set, and omits the rest from every RenderResult map', () => {
+      const score = twinkleScore(); // 8 measures
+      const visible = new Set([2, 3]);
+      const result = renderer.render(score, container, options({ visibleMeasureIndices: visible }));
+
+      const staveGroups = container.querySelectorAll('.vf-stave');
+      expect(staveGroups.length).toBe(visible.size);
+
+      score.tracks[0].measures.forEach((measure, index) => {
+        expect(result.measureIdToBBox.has(measure.id)).toBe(visible.has(index));
+      });
+      for (const note of allNotes(score)) {
+        const owningMeasure = score.tracks[0].measures.find((m) =>
+          m.voices.some((v) => v.events.some((e) => e.id === note.id)),
+        )!;
+        const owningIndex = score.tracks[0].measures.indexOf(owningMeasure);
+        expect(result.idToElement.has(note.id)).toBe(visible.has(owningIndex));
+      }
+    });
+
+    it('renders every measure when omitted (matches pre-virtualization behavior)', () => {
+      const score = twinkleScore();
+      const result = renderer.render(score, container, options());
+      expect(result.measureIdToBBox.size).toBe(score.tracks[0].measures.length);
+    });
+
+    it('leaves the canvas sized from the full layout even when most measures are culled', () => {
+      const score = twinkleScore();
+      const full = renderer.render(score, container, options());
+      const fullWidth = container.querySelector('svg')!.getAttribute('width');
+      const fullHeight = container.querySelector('svg')!.getAttribute('height');
+
+      const culled = renderer.render(score, container, options({ visibleMeasureIndices: new Set([0]) }));
+      const culledWidth = container.querySelector('svg')!.getAttribute('width');
+      const culledHeight = container.querySelector('svg')!.getAttribute('height');
+
+      expect(culledWidth).toBe(fullWidth);
+      expect(culledHeight).toBe(fullHeight);
+      void full;
+      void culled;
+    });
+
+    it('draws nothing for an empty visible set (still sizes the canvas)', () => {
+      const score = twinkleScore();
+      const result = renderer.render(score, container, options({ visibleMeasureIndices: new Set() }));
+      expect(container.querySelectorAll('.vf-stave')).toHaveLength(0);
+      expect(result.idToElement.size).toBe(0);
+      expect(result.measureIdToBBox.size).toBe(0);
+      expect(container.querySelector('svg')).not.toBeNull();
+    });
+  });
+
   it('returns a positive height', () => {
     const score = twinkleScore();
     const result = renderer.render(score, container, options());

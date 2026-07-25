@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeLayout } from '@/adapters/vexflow/layout';
+import { boxForMeasureIndex, computeLayout, visibleSystemMeasureIndices } from '@/adapters/vexflow/layout';
 import type { RenderTheme } from '@/adapters/vexflow/types';
 import { chordScore, twinkleScore, twoTrackScore } from '@/test/fixtures';
 
@@ -103,5 +103,79 @@ describe('computeLayout', () => {
     const plan = computeLayout(score, options());
     expect(plan.totalWidth).toBeGreaterThan(0);
     expect(plan.totalHeight).toBeGreaterThan(0);
+  });
+});
+
+describe('visibleSystemMeasureIndices (Task 17 virtualization)', () => {
+  it('returns every measure index of a system whose span intersects the viewport, and none of an out-of-range system', () => {
+    const score = twinkleScore(); // 8 measures
+    const plan = computeLayout(score, options({ width: 300 })); // wraps into multiple systems
+    expect(plan.systems.length).toBeGreaterThan(2);
+
+    const firstSystem = plan.systems[0];
+    const indices = visibleSystemMeasureIndices(plan, { top: firstSystem.yTop, bottom: firstSystem.yBottom });
+
+    expect([...indices].sort((a, b) => a - b)).toEqual(firstSystem.measureIndices);
+    // A system well past the viewport contributes nothing.
+    const lastSystem = plan.systems[plan.systems.length - 1];
+    for (const index of lastSystem.measureIndices) {
+      if (!firstSystem.measureIndices.includes(index)) expect(indices.has(index)).toBe(false);
+    }
+  });
+
+  it('expands the viewport by overscan on both sides', () => {
+    const score = twinkleScore();
+    const plan = computeLayout(score, options({ width: 300 }));
+    expect(plan.systems.length).toBeGreaterThan(1);
+
+    const secondSystem = plan.systems[1];
+    // A viewport that ends exactly where system 1 starts misses it without
+    // overscan...
+    const tight = visibleSystemMeasureIndices(plan, { top: 0, bottom: secondSystem.yTop - 1 });
+    for (const index of secondSystem.measureIndices) expect(tight.has(index)).toBe(false);
+
+    // ...but picks it up with enough overscan.
+    const overscanned = visibleSystemMeasureIndices(
+      plan,
+      { top: 0, bottom: secondSystem.yTop - 1 },
+      secondSystem.yBottom - secondSystem.yTop + 1,
+    );
+    for (const index of secondSystem.measureIndices) expect(overscanned.has(index)).toBe(true);
+  });
+
+  it('returns every measure index for a viewport spanning the whole plan', () => {
+    const score = twinkleScore();
+    const plan = computeLayout(score, options());
+    const indices = visibleSystemMeasureIndices(plan, { top: 0, bottom: plan.totalHeight });
+    expect([...indices].sort((a, b) => a - b)).toEqual(score.tracks[0].measures.map((_, i) => i));
+  });
+
+  it('returns an empty set for an out-of-range viewport', () => {
+    const score = twinkleScore();
+    const plan = computeLayout(score, options());
+    expect(visibleSystemMeasureIndices(plan, { top: plan.totalHeight + 1000, bottom: plan.totalHeight + 2000 }).size).toBe(
+      0,
+    );
+  });
+});
+
+describe('boxForMeasureIndex (Task 17 virtualization)', () => {
+  it('matches the box computeLayout already assigned that track/measure', () => {
+    const score = twoTrackScore();
+    const plan = computeLayout(score, options());
+    expect(boxForMeasureIndex(plan, 0, 2)).toEqual(plan.trackLayouts[0].measures[2].box);
+    expect(boxForMeasureIndex(plan, 1, 0)).toEqual(plan.trackLayouts[1].measures[0].box);
+  });
+
+  it('returns null for an out-of-range track index', () => {
+    const score = twinkleScore();
+    const plan = computeLayout(score, options());
+    expect(boxForMeasureIndex(plan, 5, 0)).toBeNull();
+  });
+
+  it('returns null for an out-of-range measure index', () => {
+    const score = twinkleScore();
+    const plan = computeLayout(score, options());
+    expect(boxForMeasureIndex(plan, 0, 9999)).toBeNull();
   });
 });

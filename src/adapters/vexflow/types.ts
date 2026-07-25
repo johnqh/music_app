@@ -27,6 +27,21 @@ export type RenderOptions = {
   /** Track ids to render, in the order they should be stacked top-to-bottom; omit/empty = all tracks in score order. */
   trackIds?: string[];
   theme: RenderTheme;
+  /**
+   * Virtualization (spec §26 "Render only visible systems where
+   * practical"; §29 virtualization for long scores): when set, only
+   * measures whose index is in this set get their stave/notes/beams/ties
+   * actually built and drawn — every other measure is skipped entirely
+   * (no stave, no `RenderResult` entries for its events). The canvas is
+   * still sized from the *full* layout (`adapters/vexflow/layout.ts`'s
+   * `computeLayout`, always run over every measure regardless of this
+   * option), so skipped measures simply leave their already-reserved
+   * space blank rather than shrinking the canvas — scroll position and
+   * geometry stay stable as the visible set changes between renders.
+   * `undefined`/omitted renders every measure, matching pre-Task-17
+   * behavior exactly.
+   */
+  visibleMeasureIndices?: ReadonlySet<number>;
 };
 
 export type BBox = { x: number; y: number; width: number; height: number };
