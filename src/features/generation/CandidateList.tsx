@@ -67,6 +67,14 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
   if (candidates.length === 0) return null;
 
   const handleSelect = (candidate: RegenerationCandidate): void => {
+    // Switching which candidate is active must not leave stale audio
+    // playing for whichever candidate the overlay just switched *away*
+    // from — otherwise the editor/piano-roll overlay shows `candidate`
+    // while the engine keeps sounding the previously-active one. Simplest,
+    // most predictable fix (matching `handleAccept`/`handleRejectAll`,
+    // which already do this): stop the preview outright on switch, rather
+    // than trying to seamlessly hand the engine off to the new candidate.
+    if (playingId && playingId !== candidate.id) handleStop();
     store.getState().selectCandidate(candidate.id);
   };
 

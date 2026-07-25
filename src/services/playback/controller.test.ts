@@ -606,6 +606,33 @@ describe('PlaybackController: candidate preview (playPreview/stopPreview)', () =
     expect(engine.play).toHaveBeenCalledTimes(1);
     expect(engine.play).toHaveBeenCalledWith(240);
   });
+
+  it('a failed playPreview resyncs the engine to the committed score rather than stranding it mid-preview', async () => {
+    const store = makeStore();
+    const committed = twinkleScore();
+    store.getState().setScore(committed);
+    const engine = createFakeEngine();
+    controller = createPlaybackController(engine, store);
+    await flushAsync();
+    vi.mocked(engine.loadScore).mockClear();
+
+    vi.mocked(engine.loadScore).mockRejectedValueOnce(new Error('corrupt preview'));
+    await controller.playPreview(twoTrackScore(), 0);
+
+    // The failed preview load's own engine.stop() (inside playPreview) plus
+    // the resync's engine.stop() both fire; what matters is the *last*
+    // loadScore call is the committed score, not the failed preview.
+    expect(engine.loadScore).toHaveBeenLastCalledWith(committed);
+    const toast = store.getState().toasts.at(-1);
+    expect(toast?.severity).toBe('error');
+    expect(toast?.message).toContain('corrupt preview');
+
+    // The subscription is live again afterward -- confirms `previewing` was cleared.
+    vi.mocked(engine.loadScore).mockClear();
+    store.getState().dispatchCommand(addMeasureCommand());
+    await flushAsync();
+    expect(engine.loadScore).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('PlaybackController.dispose', () => {

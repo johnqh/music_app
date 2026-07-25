@@ -63,6 +63,19 @@ describe('GenerationPanel', () => {
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled();
   });
 
+  it('shows the full six-instrument checklist, with Piano checked by default', () => {
+    const store = makeStore();
+    renderPanel(store);
+
+    for (const label of ['Piano', 'Electric Piano', 'Strings', 'Bass', 'Synth Lead', 'Drums']) {
+      expect(screen.getByRole('checkbox', { name: `Include ${label}` })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('checkbox', { name: 'Include Piano' })).toBeChecked();
+    for (const label of ['Electric Piano', 'Strings', 'Bass', 'Synth Lead', 'Drums']) {
+      expect(screen.getByRole('checkbox', { name: `Include ${label}` })).not.toBeChecked();
+    }
+  });
+
   it('Generate is disabled when every instrument is unchecked', async () => {
     const store = makeStore();
     renderPanel(store);

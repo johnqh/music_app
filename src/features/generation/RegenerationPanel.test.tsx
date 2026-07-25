@@ -5,8 +5,15 @@ import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import { ScoreSmithDb } from '@/services/persistence/db';
 import { twinkleScore } from '@/test/fixtures';
+import { resetProvider, setProvider } from '@/services/generation/registry';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
+import type {
+  MusicGenerationProvider,
+  RegenerateRegionRequest,
+  RegenerateRegionResult,
+} from '@/services/generation/types';
+import type { GenerateScoreResult } from '@/services/generation/types';
 
 vi.mock('@/services/playback/controller', () => ({
   playbackController: {
@@ -24,6 +31,24 @@ function makeStore(): GenerationStoreApi {
   return createAppStore({ db });
 }
 
+/** A provider whose `regenerateRegion` call stays pending until resolved by hand (mirrors GenerationPanel.test.tsx's `ControllableProvider`, plumbed for regenerate instead of generate). */
+class ControllableProvider implements MusicGenerationProvider {
+  readonly id = 'controllable';
+  readonly name = 'Controllable Test Provider';
+  readonly calls: Array<{ request: RegenerateRegionRequest; resolve: (r: RegenerateRegionResult) => void }> = [];
+
+  generateScore(): Promise<GenerateScoreResult> {
+    return new Promise(() => {});
+  }
+
+  regenerateRegion(request: RegenerateRegionRequest, signal?: AbortSignal): Promise<RegenerateRegionResult> {
+    return new Promise((resolve, reject) => {
+      this.calls.push({ request, resolve });
+      signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+    });
+  }
+}
+
 afterEach(async () => {
   // See CandidateList.test.tsx's afterEach doc: explicit cleanup() first so
   // vitest's reverse-registration-order afterEach hooks don't leak a stray
@@ -32,6 +57,7 @@ afterEach(async () => {
   cleanup();
   await db?.delete();
   vi.clearAllMocks();
+  resetProvider();
 });
 
 function renderPanel(store: GenerationStoreApi) {
@@ -139,6 +165,8 @@ describe('RegenerationPanel', () => {
   });
 
   it('shows Cancel while pending and stops the request when clicked', async () => {
+    const provider = new ControllableProvider();
+    setProvider(provider);
     const store = makeStore();
     const score = twinkleScore();
     store.getState().setScore(score);
@@ -148,9 +176,27 @@ describe('RegenerationPanel', () => {
     await user.type(screen.getByRole('textbox', { name: 'Regeneration instruction' }), 'Simplify this passage');
 
     await user.click(screen.getByRole('button', { name: 'Generate alternatives' }));
-    // The mock provider resolves on a microtask; assert pending was at
-    // least observable via the store directly rather than racing the UI.
-    await vi.waitFor(() => expect(store.getState().pending).toBe(false));
+
+    // The request is genuinely stuck pending (the provider never resolves
+    // on its own) until Cancel is clicked -- unlike the earlier vacuous
+    // version of this test, nothing here can pass just because the mock
+    // provider happens to resolve quickly.
+    expect(await screen.findByLabelText('Regenerating')).toBeInTheDocument();
+    expect(store.getState().pending).toBe(true);
+    expect(provider.calls).toHaveLength(1);
+    expect(store.getState().candidates).toEqual([]);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(store.getState().pending).toBe(false);
+    expect(store.getState().error).toBeNull();
+    expect(screen.queryByLabelText('Regenerating')).not.toBeInTheDocument();
+
+    // The cancelled call's provider promise never resolves on its own (this
+    // provider only rejects via the abort listener `cancel()` triggered) --
+    // candidates stay empty, confirming cancel() actually stopped the
+    // request rather than the UI merely hiding a result that landed anyway.
+    expect(store.getState().candidates).toEqual([]);
   });
 
   it('every interactive control has an accessible name', () => {

@@ -112,6 +112,44 @@ describe('CandidateList', () => {
     expect(playbackController.stopPreview).toHaveBeenCalledTimes(1);
   });
 
+  it('switching the active candidate while a preview plays stops the stale audio, so it never desyncs from the overlay', async () => {
+    const store = makeStoreWithCandidates();
+    await seedCandidates(store);
+    renderList(store);
+    const user = userEvent.setup();
+    const candidates = store.getState().candidates;
+    expect(candidates.length).toBeGreaterThan(1);
+    const [candidateA, candidateB] = candidates;
+
+    await user.click(screen.getByRole('button', { name: `Play in context: ${candidateA.label}` }));
+    expect(screen.getByRole('button', { name: `Stop preview: ${candidateA.label}` })).toBeInTheDocument();
+
+    // Switch to candidate B by clicking its label while A is still "playing".
+    await user.click(screen.getByText(candidateB.label));
+
+    expect(playbackController.stopPreview).toHaveBeenCalledTimes(1); // stale audio for A stopped
+    expect(store.getState().activeCandidateId).toBe(candidateB.id); // overlay now shows B
+    expect(store.getState().previewFragment).toEqual(candidateB.fragment);
+    // A's card is back to "Play in context" (playingId cleared), not "Stop".
+    expect(screen.getByRole('button', { name: `Play in context: ${candidateA.label}` })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Stop preview: ${candidateA.label}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Stop preview: ${candidateB.label}` })).not.toBeInTheDocument();
+  });
+
+  it('selecting a different candidate while nothing plays does not call stopPreview', async () => {
+    const store = makeStoreWithCandidates();
+    await seedCandidates(store);
+    renderList(store);
+    const user = userEvent.setup();
+    const candidates = store.getState().candidates;
+    const other = candidates[1];
+
+    await user.click(screen.getByText(other.label));
+
+    expect(playbackController.stopPreview).not.toHaveBeenCalled();
+    expect(store.getState().activeCandidateId).toBe(other.id);
+  });
+
   it('the A/B compare toggle only appears for the active candidate, and toggling to Original clears the overlay without changing activeCandidateId', async () => {
     const store = makeStoreWithCandidates();
     await seedCandidates(store);

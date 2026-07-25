@@ -172,7 +172,16 @@ export class PlaybackController {
       if (generation !== this.previewGeneration) return; // superseded by a newer playPreview()/stopPreview()
       await this.engine.play(fromTick);
     } catch (error) {
-      if (generation === this.previewGeneration) this.previewing = false;
+      // A failed preview load/play must not strand the engine mid-preview
+      // (partial preview audio state, or simply not pointed at the
+      // committed score any more) — resync it exactly like a successful
+      // `stopPreview()` would, but only if this call is still current: a
+      // stale/superseded call's failure must not undo a *newer*
+      // `playPreview`/`stopPreview` call's already-in-progress state.
+      if (generation === this.previewGeneration) {
+        this.previewing = false;
+        this.resyncEngineToCommittedScore();
+      }
       this.reportError('Preview playback failed to start', error);
     }
   }
@@ -182,6 +191,11 @@ export class PlaybackController {
     this.previewGeneration++; // invalidate any playPreview() still in flight
     if (!this.previewing) return;
     this.previewing = false;
+    this.resyncEngineToCommittedScore();
+  }
+
+  /** Stops the engine and reloads whatever `score-slice.score` currently is — the shared "return the engine to the committed score" step behind both `stopPreview()` and `playPreview()`'s failure path. */
+  private resyncEngineToCommittedScore(): void {
     this.engine.stop();
     const score = this.store.getState().score;
     if (score) void this.handleScoreChange(score);
