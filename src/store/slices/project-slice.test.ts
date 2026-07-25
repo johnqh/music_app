@@ -111,4 +111,29 @@ describe('project-slice', () => {
       await expect(store.getState().saveNow()).resolves.toBeUndefined();
     });
   });
+
+  describe('renameProject', () => {
+    it('updates projectName and persists the new name (not silently reverted by the next autosave)', async () => {
+      const store = createAppStore({ db });
+      await store.getState().newProject({ name: 'Original', score: twinkleScore() });
+      const projectId = store.getState().projectId!;
+
+      store.getState().renameProject('Renamed');
+
+      expect(store.getState().projectName).toBe('Renamed');
+      expect(store.getState().dirty).toBe(true);
+
+      await store.getState().saveNow();
+
+      const persisted = await loadProject(db, projectId);
+      expect(persisted.name).toBe('Renamed');
+    });
+
+    it('is a no-op when no project has been opened yet', () => {
+      const store = createAppStore({ db });
+      store.getState().renameProject('Nope');
+      expect(store.getState().projectName).toBe('');
+      expect(store.getState().dirty).toBe(false);
+    });
+  });
 });

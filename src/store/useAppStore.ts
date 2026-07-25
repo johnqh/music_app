@@ -56,5 +56,15 @@ export function createAppStore(options: CreateAppStoreOptions = {}) {
   );
 }
 
-/** The app's single running store instance, backed by the real IndexedDB. */
-export const useAppStore = createAppStore();
+/**
+ * The real IndexedDB-backed `ScoreSmithDb` behind the app-wide store
+ * (below). Exported (not just closed over) so app-shell code that needs
+ * direct `db` access for something outside `project-slice`'s own
+ * CRUD/autosave (project-JSON import/export, the developer-settings
+ * "reset local database" action) can share the exact same connection
+ * rather than opening a second one against the same underlying database.
+ */
+export const db: ScoreSmithDb = createDb();
+
+/** The app's single running store instance, backed by `db` above. */
+export const useAppStore = createAppStore({ db });

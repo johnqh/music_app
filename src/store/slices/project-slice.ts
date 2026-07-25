@@ -41,6 +41,8 @@ export type ProjectSlice = {
   saveNow: () => Promise<void>;
   /** Marks the current project dirty and notifies the autosaver. Called by `score-slice` after every `dispatchCommand`/`undo`/`redo`, and by `generation-slice` after `generate()`; not normally called directly by UI code. */
   markDirty: () => void;
+  /** Renames the currently-open project (spec §19: "rename project" — the app bar's editable project title). No-op if no project is open. Routes through the autosaver like any other change, so the new name is what gets persisted on the next autosave/`saveNow()` flush — not silently overwritten by it. */
+  renameProject: (name: string) => void;
 };
 
 export function createProjectSlice(
@@ -110,6 +112,15 @@ export function createProjectSlice(
           state.saveState = 'unsaved';
         });
         autosaver?.notifyChange();
+      },
+
+      renameProject: (name) => {
+        if (!currentRecord) return;
+        currentRecord = { ...currentRecord, name };
+        set((state) => {
+          state.projectName = name;
+        });
+        get().markDirty();
       },
     };
   };
