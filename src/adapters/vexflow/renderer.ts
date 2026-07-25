@@ -327,28 +327,55 @@ function paintDescendants(root: SVGElement, color: string): void {
   }
 }
 
-function paint(result: RenderResult, id: string, cls: string, color: string): void {
+/**
+ * CSS `outline` style per highlight kind (spec §27: "Do not rely on color
+ * alone for selection or errors") — a shape/pattern cue distinct from
+ * `paintDescendants`'s fill/stroke color change, so a colorblind user (or
+ * anyone in a low-color-contrast viewing condition) still has a non-color
+ * signal for which notes are selected/playing/previewed. `outline` (not a
+ * new SVG shape/`stroke-width` bump) is used deliberately: it draws around
+ * an element's own bounding box with no bbox math or extra DOM nodes
+ * needed here, doesn't affect layout, and is independent of whatever
+ * fill/stroke attributes a given glyph happens to declare (unlike
+ * `paintDescendants`'s stroke recoloring, which explicitly skips any
+ * descendant declaring `stroke="none"` — most notehead glyphs, in
+ * practice, per that function's own doc comment).
+ */
+const HIGHLIGHT_OUTLINE_STYLE: Record<(typeof HIGHLIGHT_CLASSES)[number], string> = {
+  selected: 'solid',
+  playing: 'dashed',
+  preview: 'dotted',
+};
+
+function paint(result: RenderResult, id: string, cls: (typeof HIGHLIGHT_CLASSES)[number], color: string): void {
   const element = result.idToElement.get(id);
   if (!element) return;
   element.classList.add(cls);
   paintDescendants(element, color);
+  element.style.outline = `2px ${HIGHLIGHT_OUTLINE_STYLE[cls]} ${color}`;
+  element.style.outlineOffset = '1px';
 }
 
 /**
- * Sets/clears `.selected` / `.playing` / `.preview` classes and fill/stroke
- * colors (from `result.theme`) on the elements in `result.idToElement`
- * named by `highlights`. Every previously-painted element is reset first —
- * back to `result.theme.foreground` (the color the base notation was drawn
- * with, not VexFlow's default black/removed-property) — so calling this
- * again with a smaller/different set correctly un-highlights whatever fell
- * out without ever reverting to an untheme color. When an id appears in
- * more than one set, `playing` wins over `selected`, which wins over
- * `preview` (applied in that order, last wins).
+ * Sets/clears `.selected` / `.playing` / `.preview` classes, fill/stroke
+ * colors (from `result.theme`), and a distinct-per-kind CSS outline (see
+ * `HIGHLIGHT_OUTLINE_STYLE`) on the elements in `result.idToElement` named
+ * by `highlights`. Every previously-painted element is reset first — fill/
+ * stroke back to `result.theme.foreground` (the color the base notation
+ * was drawn with, not VexFlow's default black/removed-property) and the
+ * outline cleared entirely — so calling this again with a smaller/
+ * different set correctly un-highlights whatever fell out without ever
+ * reverting to an untheme color or leaving a stale outline. When an id
+ * appears in more than one set, `playing` wins over `selected`, which wins
+ * over `preview` (applied in that order, last wins, for both the color and
+ * the outline).
  */
 export function applyHighlights(result: RenderResult, highlights: HighlightSets): void {
   for (const element of result.idToElement.values()) {
     for (const cls of HIGHLIGHT_CLASSES) element.classList.remove(cls);
     paintDescendants(element, result.theme.foreground);
+    element.style.outline = 'none';
+    element.style.outlineOffset = '';
   }
 
   for (const id of highlights.previewIds) paint(result, id, 'preview', result.theme.preview);

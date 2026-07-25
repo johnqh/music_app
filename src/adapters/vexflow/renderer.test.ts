@@ -255,6 +255,46 @@ describe('applyHighlights', () => {
     expect(() => applyHighlights(result, { selectedIds: ['nope'], playingIds: [], previewIds: [] })).not.toThrow();
   });
 
+  describe('shape+color highlight cue (spec §27: not color alone)', () => {
+    it('gives selected/playing/preview each a distinct outline style, not just a color', () => {
+      const score = twinkleScore();
+      const result = renderer.render(score, container, options());
+      const [a, b, c] = allNotes(score);
+
+      applyHighlights(result, { selectedIds: [a.id], playingIds: [b.id], previewIds: [c.id] });
+
+      const selectedEl = result.idToElement.get(a.id)!;
+      const playingEl = result.idToElement.get(b.id)!;
+      const previewEl = result.idToElement.get(c.id)!;
+
+      // jsdom's CSSOM doesn't decompose the `outline` shorthand into
+      // longhands (`style.outlineStyle` stays empty even after setting
+      // `style.outline`), so these assert against the raw shorthand string.
+      expect(selectedEl.style.outline).toContain('solid');
+      expect(playingEl.style.outline).toContain('dashed');
+      expect(previewEl.style.outline).toContain('dotted');
+
+      // Every one of the three outline styles differs from the other two -
+      // this is the actual "not color alone" guarantee, independent of
+      // which colors the theme happens to use.
+      const styles = [selectedEl.style.outline, playingEl.style.outline, previewEl.style.outline];
+      expect(new Set(styles).size).toBe(3);
+    });
+
+    it('clears the outline on un-highlight', () => {
+      const score = twinkleScore();
+      const result = renderer.render(score, container, options());
+      const [a] = allNotes(score);
+      const element = result.idToElement.get(a.id)!;
+
+      applyHighlights(result, { selectedIds: [a.id], playingIds: [], previewIds: [] });
+      expect(element.style.outline).toContain('solid');
+
+      applyHighlights(result, { selectedIds: [], playingIds: [], previewIds: [] });
+      expect(element.style.outline).toBe('none');
+    });
+  });
+
   it('paints highlighted notes with theme colors and restores the base foreground on un-highlight (finding 2)', () => {
     const score = twinkleScore();
     const result = renderer.render(score, container, options());

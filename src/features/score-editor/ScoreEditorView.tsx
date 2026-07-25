@@ -25,6 +25,7 @@ import { boxForMeasureIndex, computeLayout, visibleSystemMeasureIndices } from '
 import type { ScoreFragment } from '@/domain/score/fragment';
 import type { Score } from '@/domain/score/types';
 import { selectionSummaryLabel } from '@/domain/selection/selection';
+import { prefersReducedMotion } from '@/app/theme';
 import { useAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
@@ -78,15 +79,6 @@ function currentMeasureId(score: Score, positionTick: number): string | null {
   return measure.id;
 }
 
-/** Spec §27 (reduced-motion support): `true` when the user's OS/browser prefers reduced motion. Guarded for jsdom/SSR, where `matchMedia` doesn't exist. */
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  try {
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  } catch {
-    return false;
-  }
-}
 
 export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
