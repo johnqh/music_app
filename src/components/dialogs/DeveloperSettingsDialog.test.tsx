@@ -127,3 +127,14 @@ describe('DeveloperSettingsDialog', () => {
     expect(await db.projects.count()).toBe(0);
   });
 });
+
+describe('accessibility (spec §27)', () => {
+  it('every interactive control has an accessible name', () => {
+    const store = makeStore();
+    render(<DeveloperSettingsDialog open onClose={vi.fn()} store={store} db={db} />);
+    const dialog = screen.getByRole('dialog');
+    for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
+    for (const checkbox of within(dialog).getAllByRole('checkbox')) expect(checkbox).toHaveAccessibleName();
+    for (const textbox of within(dialog).getAllByRole('textbox')) expect(textbox).toHaveAccessibleName();
+  });
+});

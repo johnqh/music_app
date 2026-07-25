@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/store/useAppStore';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -116,5 +116,19 @@ describe('PianoRollToolbar', () => {
 
     const bassId = store.getState().score!.tracks[1].id;
     expect(onVisibleTrackIdsChange).toHaveBeenCalledWith(new Set([bassId]));
+  });
+});
+
+describe('accessibility (spec §27)', () => {
+  it('every interactive control has an accessible name', () => {
+    const store = makeStore();
+    renderToolbar(store);
+    const toolbar = screen.getByRole('toolbar');
+    for (const button of within(toolbar).getAllByRole('button')) {
+      expect(button).toHaveAccessibleName();
+    }
+    for (const combobox of within(toolbar).getAllByRole('combobox')) {
+      expect(combobox).toHaveAccessibleName();
+    }
   });
 });

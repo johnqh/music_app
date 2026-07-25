@@ -130,3 +130,23 @@ describe('MusicXmlImportDialog', () => {
     expect(store.getState().projectId).toBeNull();
   });
 });
+
+describe('accessibility (spec §27)', () => {
+  it('every interactive control has an accessible name, before and after a file is chosen', async () => {
+    const store = makeStore();
+    render(<MusicXmlImportDialog open onClose={vi.fn()} store={store} />);
+    const user = userEvent.setup();
+
+    const checkAllControls = () => {
+      const dialog = screen.getByRole('dialog');
+      for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
+    };
+
+    checkAllControls();
+
+    await chooseFile(user, fixtureFile());
+    await waitFor(() => expect(screen.getByText(/track\(s\)/)).toBeInTheDocument());
+
+    checkAllControls();
+  });
+});

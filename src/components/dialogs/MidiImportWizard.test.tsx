@@ -151,3 +151,25 @@ describe('MidiImportWizard', () => {
     expect(store.getState().projectId).toBeNull();
   });
 });
+
+describe('accessibility (spec §27)', () => {
+  it('every interactive control has an accessible name, before and after a file is chosen', async () => {
+    const store = makeStore();
+    render(<MidiImportWizard open onClose={vi.fn()} store={store} />);
+    const user = userEvent.setup();
+
+    const checkAllControls = () => {
+      const dialog = screen.getByRole('dialog');
+      for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
+      for (const checkbox of within(dialog).queryAllByRole('checkbox')) expect(checkbox).toHaveAccessibleName();
+      for (const combobox of within(dialog).queryAllByRole('combobox')) expect(combobox).toHaveAccessibleName();
+    };
+
+    checkAllControls();
+
+    await chooseFile(user, fixtureMidiFile());
+    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+
+    checkAllControls();
+  });
+});

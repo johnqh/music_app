@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
 
@@ -26,5 +26,11 @@ describe('ShortcutHelpDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('every interactive control has an accessible name (spec §27)', () => {
+    render(<ShortcutHelpDialog open onClose={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
   });
 });
