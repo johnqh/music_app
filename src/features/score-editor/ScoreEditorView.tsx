@@ -23,11 +23,17 @@
  * `handleClick`/`handlePointerUp`): the ids on screen may belong to the
  * spliced-in candidate rather than the committed score, so a click there
  * must never be allowed to drive a selection/edit.
+ *
+ * Re-skinned onto Tailwind (T12 batch 6): the wrapping MUI `Box`es become
+ * plain `div`s, and `renderTheme` (fed to VexFlow's SVG renderer, so it
+ * needs real literal color strings, not CSS custom properties) no longer
+ * reads MUI's `useTheme()` -- it now picks between two literal
+ * `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME` constants keyed off
+ * `resolveColorScheme(themeMode)` (see that constant's doc comment for why
+ * these particular values).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import Box from '@mui/material/Box';
-import { useTheme } from '@mui/material/styles';
 import { applyHighlights, VexFlowScoreRenderer } from '@sudobility/music_lib';
 import type { BBox, RenderResult, RenderTheme } from '@sudobility/music_lib';
 import { boxForMeasureIndex, computeLayout, sameMeasureIndices, visibleSystemMeasureIndices } from '@sudobility/music_lib';
@@ -35,7 +41,7 @@ import type { LayoutPlan } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
-import { prefersReducedMotion } from '@/app/theme';
+import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -66,6 +72,32 @@ const SCROLL_MARGIN = 40;
  */
 const VIRTUALIZATION_OVERSCAN_PX = 400;
 
+/**
+ * VexFlow render colors (spec §7), one set per resolved light/dark color
+ * scheme -- matching MUI's own default `text.primary`/`success.main`/
+ * `warning.main` palette values for each mode (`theme.ts`'s `createAppTheme`
+ * only overrides `primary`/`secondary`, so these two objects are what MUI's
+ * `ThemeProvider` was actually resolving `useTheme()` to before this file's
+ * T12 batch 6 Tailwind pass). VexFlow draws straight to SVG attributes, not
+ * CSS, so this deliberately stays literal color strings rather than reading
+ * the app's `--color-*`/`--primary` custom properties (which jsdom's test
+ * environment doesn't process CSS for anyway, and no test asserts an exact
+ * rendered color -- `render()` itself is mocked/spied in every test that
+ * touches this).
+ */
+const LIGHT_RENDER_THEME: RenderTheme = {
+  foreground: 'rgba(0, 0, 0, 0.87)',
+  selection: '#1565c0',
+  playback: '#2e7d32',
+  preview: '#ed6c02',
+};
+const DARK_RENDER_THEME: RenderTheme = {
+  foreground: '#ffffff',
+  selection: '#90caf9',
+  playback: '#66bb6a',
+  preview: '#ffa726',
+};
+
 /** Every event id (note or rest) referenced by a preview fragment's measures, for `applyHighlights`' `previewIds`. */
 function previewEventIds(fragment: ScoreFragment | null): string[] {
   if (!fragment) return [];
@@ -93,7 +125,6 @@ function currentMeasureId(score: Score, positionTick: number): string | null {
 
 export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
-  const muiTheme = useTheme();
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
@@ -102,6 +133,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const previewFragment = store((s) => s.previewFragment);
   const playbackState = store((s) => s.state);
   const positionTick = store((s) => s.positionTick);
+  const themeMode = store((s) => s.themeMode);
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
@@ -147,13 +179,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const scrollRafIdRef = useRef<number | null>(null);
 
   const renderTheme: RenderTheme = useMemo(
-    () => ({
-      foreground: muiTheme.palette.text.primary,
-      selection: muiTheme.palette.primary.main,
-      playback: muiTheme.palette.success.main,
-      preview: muiTheme.palette.warning.main,
-    }),
-    [muiTheme],
+    () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
+    [themeMode],
   );
 
   const previewIds = useMemo(() => previewEventIds(previewFragment), [previewFragment]);
@@ -500,15 +527,16 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   );
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="flex h-full min-h-0 flex-col">
       <EditorToolbar store={store} layoutMode={layoutMode} onLayoutModeChange={setLayoutMode} />
-      <Box
+      <div
         ref={scrollBoxRef}
         data-testid="score-editor-scroll"
         onScroll={handleScroll}
-        sx={{ position: 'relative', flex: 1, overflow: 'auto', minHeight: CONTAINER_MIN_HEIGHT }}
+        className="relative flex-1 overflow-auto"
+        style={{ minHeight: CONTAINER_MIN_HEIGHT }}
       >
-        <Box
+        <div
           ref={containerRef}
           data-testid="score-editor-canvas"
           role="application"
@@ -518,29 +546,16 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          sx={{
-            width: '100%',
-            height: '100%',
-            '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
-          }}
+          className="h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
         />
         {dragBox && (
-          <Box
+          <div
             data-testid="drag-selection-box"
-            sx={{
-              position: 'absolute',
-              left: dragBox.x,
-              top: dragBox.y,
-              width: dragBox.width,
-              height: dragBox.height,
-              border: '1px dashed',
-              borderColor: 'primary.main',
-              backgroundColor: 'action.selected',
-              pointerEvents: 'none',
-            }}
+            style={{ left: dragBox.x, top: dragBox.y, width: dragBox.width, height: dragBox.height }}
+            className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
           />
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

@@ -32,12 +32,19 @@
  * top level does not, so a playback frame (positionTick changing many
  * times a second) re-renders only the cursor line, not the note/grid
  * layers (`NoteLayer`/`GridLinesLayer`, both `React.memo`'d besides).
+ *
+ * Re-skinned onto Tailwind (T12 batch 6): every MUI `Box`/`Typography`
+ * becomes a plain `div`/`span` -- static colors (`success`/`warning`/
+ * `info`/`divider`/`background.paper`/`background.default`) become Tailwind
+ * classes, per-item dynamic colors (`trackColor(...)`, the selection
+ * outline) stay inline `style` (a literal hex from `geometry.ts`, and a
+ * literal `hsl(var(--primary))` CSS-custom-property reference respectively
+ * -- the latter resolves against the app's real design tokens in any real
+ * browser without needing a `useTheme()`/MUI context read). All absolute
+ * positioning (`style={{ left, top, width, height, ... }}`) is untouched.
  */
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import { useTheme } from '@mui/material/styles';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { UUID } from '@sudobility/music_types';
@@ -118,10 +125,10 @@ function PlaybackCursor({ store, ppq, zoomH, height }: PlaybackCursorProps) {
   const positionTick = store((s) => s.positionTick);
   const x = tickToX(positionTick, ppq, zoomH);
   return (
-    <Box
+    <div
       data-testid="piano-roll-cursor"
       style={{ position: 'absolute', left: x, top: 0, width: 2, height }}
-      sx={{ bgcolor: 'success.main', pointerEvents: 'none' }}
+      className="pointer-events-none bg-success"
     />
   );
 }
@@ -136,10 +143,17 @@ const GridLinesLayer = memo(function GridLinesLayer({ lines, height }: GridLines
   return (
     <>
       {lines.map((line) => (
-        <Box
+        <div
           key={`${line.kind}-${line.tick}`}
-          style={{ position: 'absolute', left: line.x, top: 0, width: line.kind === 'measure' ? 2 : 1, height }}
-          sx={{ bgcolor: 'divider', opacity: GRID_LINE_OPACITY[line.kind] }}
+          style={{
+            position: 'absolute',
+            left: line.x,
+            top: 0,
+            width: line.kind === 'measure' ? 2 : 1,
+            height,
+            opacity: GRID_LINE_OPACITY[line.kind],
+          }}
+          className="bg-theme-border"
         />
       ))}
     </>
@@ -156,12 +170,16 @@ const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionCol
         const selected = selectedIds.has(r.id);
         const velocityFraction = Math.max(0, Math.min(127, r.velocity)) / 127;
         return (
-          <Box
+          <div
             key={r.id}
             data-testid={`pr-note-${r.id}`}
-            style={{ position: 'absolute', left: r.x, top: r.y, width: r.width, height: r.height }}
-            sx={{
-              bgcolor: trackColor(r.trackIndex),
+            style={{
+              position: 'absolute',
+              left: r.x,
+              top: r.y,
+              width: r.width,
+              height: r.height,
+              backgroundColor: trackColor(r.trackIndex),
               opacity: 0.35 + 0.65 * velocityFraction,
               border: selected ? `2px solid ${selectionColor}` : '1px solid rgba(0,0,0,0.35)',
               boxSizing: 'border-box',
@@ -169,11 +187,18 @@ const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionCol
             }}
           >
             {/* inner velocity bar */}
-            <Box
-              style={{ position: 'absolute', bottom: 0, left: 0, width: `${velocityFraction * 100}%` }}
-              sx={{ height: 2, bgcolor: 'rgba(255,255,255,0.85)', pointerEvents: 'none' }}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                width: `${velocityFraction * 100}%`,
+                height: 2,
+                backgroundColor: 'rgba(255,255,255,0.85)',
+              }}
+              className="pointer-events-none"
             />
-          </Box>
+          </div>
         );
       })}
     </>
@@ -181,7 +206,6 @@ const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionCol
 });
 
 export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
-  const muiTheme = useTheme();
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
@@ -575,7 +599,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   }, []);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="flex h-full min-h-0 flex-col">
       <PianoRollToolbar
         store={store}
         zoomH={zoomH}
@@ -585,54 +609,42 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         visibleTrackIds={visibleTrackIds}
         onVisibleTrackIdsChange={setVisibleTrackIds}
       />
-      <Box
+      <div
         ref={scrollRef}
         role="region"
         aria-label="Piano roll"
         data-testid="piano-roll-scroll"
         onScroll={handleScroll}
-        sx={{ flex: 1, overflow: 'auto', minHeight: CONTAINER_MIN_HEIGHT, position: 'relative' }}
+        className="relative flex-1 overflow-auto"
+        style={{ minHeight: CONTAINER_MIN_HEIGHT }}
       >
-        <Box sx={{ display: 'flex', width: KEYBOARD_WIDTH + gridWidth }}>
-          <Box
+        <div className="flex" style={{ width: KEYBOARD_WIDTH + gridWidth }}>
+          <div
             data-testid="piano-roll-keyboard"
-            sx={{
-              position: 'sticky',
-              left: 0,
-              zIndex: 2,
-              flexShrink: 0,
-              width: KEYBOARD_WIDTH,
-              bgcolor: 'background.paper',
-              borderRight: 1,
-              borderColor: 'divider',
-            }}
-            style={{ height: kbHeight }}
+            className="sticky left-0 z-[2] shrink-0 border-r border-theme-border bg-theme-bg-secondary"
+            style={{ width: KEYBOARD_WIDTH, height: kbHeight }}
           >
-            <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div className="relative h-full w-full">
               {keyboardRows.map((row) => (
-                <Box
+                <div
                   key={row.midi}
                   style={{ position: 'absolute', top: row.y, left: 0, width: '100%', height: rowHeight(zoomV) }}
-                  sx={{
-                    bgcolor: row.isBlack ? 'action.selected' : 'background.paper',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                  }}
+                  className={`border-b border-theme-border ${row.isBlack ? 'bg-theme-hover-bg' : 'bg-theme-bg-secondary'}`}
                 >
                   {row.label && (
-                    <Typography
-                      variant="caption"
-                      sx={{ position: 'absolute', right: 4, top: 0, lineHeight: `${rowHeight(zoomV)}px`, fontSize: 9 }}
+                    <span
+                      className="absolute right-1 top-0 text-theme-text-secondary"
+                      style={{ lineHeight: `${rowHeight(zoomV)}px`, fontSize: 9 }}
                     >
                       {row.label}
-                    </Typography>
+                    </span>
                   )}
-                </Box>
+                </div>
               ))}
-            </Box>
-          </Box>
+            </div>
+          </div>
 
-          <Box
+          <div
             ref={gridRef}
             data-testid="piano-roll-grid"
             role="application"
@@ -645,33 +657,27 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             onPointerCancel={handlePointerCancel}
             onLostPointerCapture={handlePointerCancel}
             onDoubleClick={handleDoubleClick}
-            sx={{ '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}
+            className="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           >
             {/* grid lines */}
             <GridLinesLayer lines={gridLines} height={kbHeight} />
 
             {/* loop-region shading */}
             {loopRect && (
-              <Box
+              <div
                 data-testid="piano-roll-loop-region"
                 style={{ position: 'absolute', left: loopRect.x, top: 0, width: loopRect.width, height: totalHeight }}
-                sx={{ bgcolor: 'info.main', opacity: 0.12, pointerEvents: 'none' }}
+                className="pointer-events-none bg-info opacity-[0.12]"
               />
             )}
 
             {/* preview-fragment notes, rendered distinctly (dashed, warning color, non-interactive) */}
             {previewRects.map((r) => (
-              <Box
+              <div
                 key={`preview-${r.id}`}
                 data-testid={`pr-preview-${r.id}`}
                 style={{ position: 'absolute', left: r.x, top: r.y, width: r.width, height: r.height }}
-                sx={{
-                  border: '1px dashed',
-                  borderColor: 'warning.main',
-                  bgcolor: 'warning.main',
-                  opacity: 0.25,
-                  pointerEvents: 'none',
-                }}
+                className="pointer-events-none border border-dashed border-warning bg-warning opacity-25"
               />
             ))}
 
@@ -679,38 +685,36 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             <PlaybackCursor store={store} ppq={ppq} zoomH={zoomH} height={kbHeight} />
 
             {/* notes (culled to the scroll viewport, spec §29) */}
-            <NoteLayer noteRects={visibleNoteRects} selectedIds={selectedIds} selectionColor={muiTheme.palette.primary.main} />
+            <NoteLayer noteRects={visibleNoteRects} selectedIds={selectedIds} selectionColor="hsl(var(--primary))" />
 
             {/* voice-lane strip */}
-            <Box
+            <div
               data-testid="piano-roll-voice-lanes"
               style={{ position: 'absolute', left: 0, top: kbHeight, width: '100%', height: voiceStripHeight }}
             >
               {Array.from({ length: voiceCount }, (_, i) => (
-                <Box
+                <div
                   key={i}
                   data-testid={`voice-lane-${i}`}
                   style={{ position: 'absolute', left: 0, top: i * VOICE_LANE_ROW_HEIGHT, width: '100%', height: VOICE_LANE_ROW_HEIGHT }}
-                  sx={{ borderTop: '1px dashed', borderColor: 'divider', bgcolor: i % 2 === 0 ? 'action.hover' : 'transparent' }}
+                  className={`border-t border-dashed border-theme-border ${i % 2 === 0 ? 'bg-theme-hover-bg' : 'bg-transparent'}`}
                 >
-                  <Typography variant="caption" sx={{ pl: 0.5, opacity: 0.7 }}>
-                    Voice {i + 1}
-                  </Typography>
-                </Box>
+                  <span className="pl-1 text-xs text-theme-text-secondary opacity-70">Voice {i + 1}</span>
+                </div>
               ))}
-            </Box>
+            </div>
 
             {/* velocity lane */}
-            <Box
+            <div
               data-testid="piano-roll-velocity-lane"
               style={{ position: 'absolute', left: 0, top: velocityTop, width: '100%', height: VELOCITY_LANE_HEIGHT }}
-              sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.default' }}
+              className="border-t border-theme-border bg-theme-bg-primary"
             >
               {noteRects.map((r) => {
                 const velocityFraction = Math.max(0, Math.min(127, r.velocity)) / 127;
                 const barHeight = velocityFraction * VELOCITY_LANE_HEIGHT;
                 return (
-                  <Box
+                  <div
                     key={r.id}
                     data-testid={`pr-velocity-${r.id}`}
                     onPointerDown={handleVelocityPointerDown}
@@ -718,28 +722,28 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
                     onPointerCancel={handleVelocityPointerCancel}
                     onLostPointerCapture={handleVelocityPointerCancel}
                     style={{ position: 'absolute', left: r.x, top: 0, width: Math.max(6, Math.min(10, r.width)), height: VELOCITY_LANE_HEIGHT }}
-                    sx={{ cursor: 'ns-resize', touchAction: 'none' }}
+                    className="cursor-ns-resize touch-none"
                   >
-                    <Box
-                      style={{ position: 'absolute', bottom: 0, left: 0, height: barHeight, width: '100%' }}
-                      sx={{ bgcolor: trackColor(r.trackIndex), pointerEvents: 'none' }}
+                    <div
+                      style={{ position: 'absolute', bottom: 0, left: 0, height: barHeight, width: '100%', backgroundColor: trackColor(r.trackIndex) }}
+                      className="pointer-events-none"
                     />
-                  </Box>
+                  </div>
                 );
               })}
-            </Box>
+            </div>
 
             {/* drag-box selection overlay */}
             {dragBox && (
-              <Box
+              <div
                 data-testid="piano-roll-drag-box"
                 style={{ position: 'absolute', left: dragBox.x, top: dragBox.y, width: dragBox.width, height: dragBox.height }}
-                sx={{ border: '1px dashed', borderColor: 'primary.main', bgcolor: 'action.selected', pointerEvents: 'none' }}
+                className="pointer-events-none border border-dashed border-primary bg-theme-hover-bg"
               />
             )}
-          </Box>
-        </Box>
-      </Box>
-    </Box>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

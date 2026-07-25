@@ -10,25 +10,23 @@
  * Rendered by `router.tsx` for the `/project/:id` route, once a project
  * is already open (it does not itself load one) -- see `App.tsx`/
  * `router.tsx` for how a project id gets opened before this mounts.
+ *
+ * Re-skinned onto Tailwind + @sudobility/components (T12 batch 6): the MUI
+ * AppBar/Toolbar becomes a plain Tailwind header bar, the MUI TextField
+ * (title edit) becomes a native `<input>`, the save-state Chip becomes a
+ * Tailwind pill span, every MUI Menu (Import/Export/Theme/Settings) becomes
+ * a button + `role="menu"`/`role="menuitem"` popover (same pattern as
+ * `EditorToolbar`'s articulation menu -- a ref + outside-pointerdown
+ * listener per menu, factored into one local `useMenu` hook since this file
+ * has four of them), the Developer-mode Switch becomes a native checkbox,
+ * and the issues Popover becomes a positioned Tailwind panel -- same
+ * roles/aria-labels/accessible names as before, so no test assertions
+ * changed (see the module-level doc comments on those files for the
+ * general MUI->Tailwind conventions this follows).
  */
-import { useState } from 'react';
-import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
-import AppBar from '@mui/material/AppBar';
-import Badge from '@mui/material/Badge';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Chip from '@mui/material/Chip';
-import Divider from '@mui/material/Divider';
-import IconButton from '@mui/material/IconButton';
-import Menu from '@mui/material/Menu';
-import MenuItem from '@mui/material/MenuItem';
-import Popover from '@mui/material/Popover';
-import Stack from '@mui/material/Stack';
-import Switch from '@mui/material/Switch';
-import TextField from '@mui/material/TextField';
-import Toolbar from '@mui/material/Toolbar';
-import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, KeyboardEvent } from 'react';
+import { Tooltip } from '@sudobility/components';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -64,11 +62,39 @@ export type AppLayoutProps = {
 const SIDE_PANEL_WIDTH = 280;
 
 const SAVE_STATE_LABEL: Record<string, string> = { saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved' };
-const SAVE_STATE_COLOR: Record<string, 'success' | 'info' | 'warning'> = {
-  saved: 'success',
-  saving: 'info',
-  unsaved: 'warning',
+const SAVE_STATE_CLASS: Record<string, string> = {
+  saved: 'bg-success text-success-foreground',
+  saving: 'bg-info text-info-foreground',
+  unsaved: 'bg-warning text-warning-foreground',
 };
+
+const ICON_BUTTON_CLASS =
+  'rounded-md p-1.5 text-sm leading-none text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40';
+
+const TEXT_BUTTON_CLASS = 'rounded-md px-3 py-1.5 text-sm font-medium text-inherit hover:bg-white/10';
+
+const MENU_CLASS =
+  'absolute top-full z-10 mt-1 min-w-[160px] rounded-md border border-theme-border bg-theme-bg-secondary py-1 text-left shadow-lg';
+
+const MENU_ITEM_CLASS =
+  'block w-full whitespace-nowrap px-3 py-1.5 text-left text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+
+/** Open/close + outside-pointerdown-close state for one `role="menu"` popover, factored out since this file owns four of them (Import/Export/Theme/Settings) -- same behavior as `EditorToolbar`'s single articulation menu, just reusable. */
+function useMenu<T extends HTMLElement>() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<T | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  return { open, setOpen, ref };
+}
 
 export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const projectName = store((s) => s.projectName);
@@ -89,11 +115,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const measureBeat = store(selectCurrentMeasureBeat);
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
-  const [importMenuAnchor, setImportMenuAnchor] = useState<HTMLElement | null>(null);
-  const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
-  const [themeMenuAnchor, setThemeMenuAnchor] = useState<HTMLElement | null>(null);
-  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null);
-  const [issuesAnchor, setIssuesAnchor] = useState<HTMLElement | null>(null);
+  const importMenu = useMenu<HTMLDivElement>();
+  const exportMenu = useMenu<HTMLDivElement>();
+  const themeMenu = useMenu<HTMLDivElement>();
+  const settingsMenu = useMenu<HTMLDivElement>();
+  const issuesMenu = useMenu<HTMLDivElement>();
   const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(null);
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
@@ -145,7 +171,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     } catch (err) {
       reportError(err, { context: 'MIDI export failed', store });
     }
-    setExportMenuAnchor(null);
+    exportMenu.setOpen(false);
   };
 
   const handleExportMusicXml = (): void => {
@@ -156,7 +182,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     } catch (err) {
       reportError(err, { context: 'MusicXML export failed', store });
     }
-    setExportMenuAnchor(null);
+    exportMenu.setOpen(false);
   };
 
   const handleExportProjectJson = async (): Promise<void> => {
@@ -174,7 +200,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     } catch (err) {
       reportError(err, { context: 'Project JSON export failed', store });
     }
-    setExportMenuAnchor(null);
+    exportMenu.setOpen(false);
   };
 
   const navigateToIssue = (issue: ValidationIssue): void => {
@@ -186,7 +212,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     } else if (issue.trackId && findTrack(score, issue.trackId)) {
       store.getState().selectTrack(issue.trackId);
     }
-    setIssuesAnchor(null);
+    issuesMenu.setOpen(false);
 
     // Best-effort scroll to the now-selected object's rendered element;
     // jsdom (tests) has no `scrollIntoView`, so this is guarded and never
@@ -201,254 +227,374 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <AppBar position="static" color="primary" enableColorOnDark>
-        <Toolbar sx={{ gap: 1 }}>
-          <IconButton aria-label="Back to dashboard" color="inherit" onClick={() => onNavigate?.('/projects')}>
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="bg-primary text-primary-foreground">
+        <div className="flex items-center gap-1 px-2 py-1.5">
+          <button
+            type="button"
+            aria-label="Back to dashboard"
+            onClick={() => onNavigate?.('/projects')}
+            className={ICON_BUTTON_CLASS}
+          >
             ←
-          </IconButton>
+          </button>
 
           {titleDraft !== null ? (
-            <TextField
-              size="small"
+            <input
               value={titleDraft}
               autoFocus
+              aria-label="Project title"
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={commitTitle}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') commitTitle();
                 else if (e.key === 'Escape') setTitleDraft(null);
               }}
-              slotProps={{ htmlInput: { 'aria-label': 'Project title' } }}
-              sx={{ input: { color: 'inherit' } }}
-              variant="standard"
+              className="border-0 border-b border-current bg-transparent px-1 py-0.5 text-lg font-medium text-inherit outline-none"
             />
           ) : (
-            <Typography
-              variant="h6"
-              component="button"
+            <button
+              type="button"
               onClick={() => setTitleDraft(projectName)}
               aria-label="Edit project title"
-              sx={{ background: 'none', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer' }}
+              className="rounded-md border-none bg-transparent px-1 py-0.5 text-lg font-medium text-inherit hover:bg-white/10"
             >
               {projectName || 'Untitled project'}
-            </Typography>
+            </button>
           )}
 
-          <Chip size="small" label={SAVE_STATE_LABEL[saveState]} color={SAVE_STATE_COLOR[saveState]} aria-label={`Save state: ${SAVE_STATE_LABEL[saveState]}`} />
+          <span
+            aria-label={`Save state: ${SAVE_STATE_LABEL[saveState]}`}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${SAVE_STATE_CLASS[saveState]}`}
+          >
+            {SAVE_STATE_LABEL[saveState]}
+          </span>
 
-          <Tooltip title="Save now">
-            <IconButton aria-label="Save" color="inherit" onClick={() => void store.getState().saveNow()}>
+          <Tooltip content="Save now">
+            <button
+              type="button"
+              aria-label="Save"
+              onClick={() => void store.getState().saveNow()}
+              className={ICON_BUTTON_CLASS}
+            >
               💾
-            </IconButton>
+            </button>
           </Tooltip>
-          <Tooltip title={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}>
-            <span>
-              <IconButton aria-label="Undo" color="inherit" disabled={!canUndo} onClick={() => store.getState().undo()}>
-                ↶
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}>
-            <span>
-              <IconButton aria-label="Redo" color="inherit" disabled={!canRedo} onClick={() => store.getState().redo()}>
-                ↷
-              </IconButton>
-            </span>
-          </Tooltip>
-
-          <Button color="inherit" aria-label="Import menu" onClick={(e: MouseEvent<HTMLElement>) => setImportMenuAnchor(e.currentTarget)}>
-            Import
-          </Button>
-          <Menu anchorEl={importMenuAnchor} open={importMenuAnchor !== null} onClose={() => setImportMenuAnchor(null)}>
-            <MenuItem
-              onClick={() => {
-                setImportMenuAnchor(null);
-                store.getState().openDialog('midiImport');
-              }}
+          <Tooltip content={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}>
+            <button
+              type="button"
+              aria-label="Undo"
+              disabled={!canUndo}
+              onClick={() => store.getState().undo()}
+              className={ICON_BUTTON_CLASS}
             >
-              MIDI…
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                setImportMenuAnchor(null);
-                store.getState().openDialog('musicXmlImport');
-              }}
-            >
-              MusicXML…
-            </MenuItem>
-            <MenuItem component="label">
-              Project JSON…
-              <input type="file" accept="application/json" hidden aria-label="Project JSON file input" onChange={(e) => void handleImportJsonFile(e)} />
-            </MenuItem>
-          </Menu>
-
-          <Button color="inherit" aria-label="Export menu" onClick={(e: MouseEvent<HTMLElement>) => setExportMenuAnchor(e.currentTarget)}>
-            Export
-          </Button>
-          <Menu anchorEl={exportMenuAnchor} open={exportMenuAnchor !== null} onClose={() => setExportMenuAnchor(null)}>
-            <MenuItem onClick={handleExportMidi} disabled={!score}>
-              MIDI
-            </MenuItem>
-            <MenuItem onClick={handleExportMusicXml} disabled={!score}>
-              MusicXML
-            </MenuItem>
-            <MenuItem onClick={() => void handleExportProjectJson()}>Project JSON</MenuItem>
-          </Menu>
-
-          <Box sx={{ flex: 1 }} />
-
-          <Tooltip title="Theme">
-            <IconButton aria-label="Theme menu" color="inherit" onClick={(e: MouseEvent<HTMLElement>) => setThemeMenuAnchor(e.currentTarget)}>
-              🌓
-            </IconButton>
+              ↶
+            </button>
           </Tooltip>
-          <Menu anchorEl={themeMenuAnchor} open={themeMenuAnchor !== null} onClose={() => setThemeMenuAnchor(null)}>
-            {(['light', 'dark', 'system'] as const).map((mode) => (
-              <MenuItem
-                key={mode}
-                selected={themeMode === mode}
-                onClick={() => {
-                  store.getState().setThemeMode(mode);
-                  setThemeMenuAnchor(null);
-                }}
+          <Tooltip content={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}>
+            <button
+              type="button"
+              aria-label="Redo"
+              disabled={!canRedo}
+              onClick={() => store.getState().redo()}
+              className={ICON_BUTTON_CLASS}
+            >
+              ↷
+            </button>
+          </Tooltip>
+
+          <div ref={importMenu.ref} className="relative">
+            <button
+              type="button"
+              aria-label="Import menu"
+              aria-haspopup="menu"
+              aria-expanded={importMenu.open}
+              onClick={() => importMenu.setOpen((v) => !v)}
+              className={TEXT_BUTTON_CLASS}
+            >
+              Import
+            </button>
+            {importMenu.open && (
+              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    importMenu.setOpen(false);
+                    store.getState().openDialog('midiImport');
+                  }}
+                  className={MENU_ITEM_CLASS}
+                >
+                  MIDI…
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    importMenu.setOpen(false);
+                    store.getState().openDialog('musicXmlImport');
+                  }}
+                  className={MENU_ITEM_CLASS}
+                >
+                  MusicXML…
+                </button>
+                <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
+                  Project JSON…
+                  <input
+                    type="file"
+                    accept="application/json"
+                    hidden
+                    aria-label="Project JSON file input"
+                    onChange={(e) => void handleImportJsonFile(e)}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div ref={exportMenu.ref} className="relative">
+            <button
+              type="button"
+              aria-label="Export menu"
+              aria-haspopup="menu"
+              aria-expanded={exportMenu.open}
+              onClick={() => exportMenu.setOpen((v) => !v)}
+              className={TEXT_BUTTON_CLASS}
+            >
+              Export
+            </button>
+            {exportMenu.open && (
+              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
+                <button type="button" role="menuitem" onClick={handleExportMidi} disabled={!score} className={MENU_ITEM_CLASS}>
+                  MIDI
+                </button>
+                <button type="button" role="menuitem" onClick={handleExportMusicXml} disabled={!score} className={MENU_ITEM_CLASS}>
+                  MusicXML
+                </button>
+                <button type="button" role="menuitem" onClick={() => void handleExportProjectJson()} className={MENU_ITEM_CLASS}>
+                  Project JSON
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          <div ref={themeMenu.ref} className="relative">
+            <Tooltip content="Theme">
+              <button
+                type="button"
+                aria-label="Theme menu"
+                aria-haspopup="menu"
+                aria-expanded={themeMenu.open}
+                onClick={() => themeMenu.setOpen((v) => !v)}
+                className={ICON_BUTTON_CLASS}
               >
-                {mode[0].toUpperCase() + mode.slice(1)}
-              </MenuItem>
-            ))}
-          </Menu>
+                🌓
+              </button>
+            </Tooltip>
+            {themeMenu.open && (
+              <div role="menu" className={`right-0 ${MENU_CLASS}`}>
+                {(['light', 'dark', 'system'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      store.getState().setThemeMode(mode);
+                      themeMenu.setOpen(false);
+                    }}
+                    className={`${MENU_ITEM_CLASS} ${themeMode === mode ? 'bg-theme-hover-bg' : ''}`}
+                  >
+                    {mode[0].toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          <Tooltip title="Keyboard shortcuts">
-            <IconButton aria-label="Keyboard shortcuts" color="inherit" onClick={() => store.getState().openDialog('shortcutHelp')}>
+          <Tooltip content="Keyboard shortcuts">
+            <button
+              type="button"
+              aria-label="Keyboard shortcuts"
+              onClick={() => store.getState().openDialog('shortcutHelp')}
+              className={ICON_BUTTON_CLASS}
+            >
               ?
-            </IconButton>
+            </button>
           </Tooltip>
 
-          <Tooltip title="Settings">
-            <IconButton aria-label="Settings menu" color="inherit" onClick={(e: MouseEvent<HTMLElement>) => setSettingsMenuAnchor(e.currentTarget)}>
-              ⚙
-            </IconButton>
-          </Tooltip>
-          <Menu anchorEl={settingsMenuAnchor} open={settingsMenuAnchor !== null} onClose={() => setSettingsMenuAnchor(null)}>
-            <MenuItem
-              onClick={() => store.getState().setDeveloperMode(!developerMode)}
-              sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}
-            >
-              Developer mode
-              <Switch size="small" checked={developerMode} slotProps={{ input: { 'aria-label': 'Developer mode' } }} />
-            </MenuItem>
-            <MenuItem
-              disabled={!developerMode}
-              onClick={() => {
-                setSettingsMenuAnchor(null);
-                store.getState().openDialog('devSettings');
-              }}
-            >
-              Developer settings…
-            </MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
+          <div ref={settingsMenu.ref} className="relative">
+            <Tooltip content="Settings">
+              <button
+                type="button"
+                aria-label="Settings menu"
+                aria-haspopup="menu"
+                aria-expanded={settingsMenu.open}
+                onClick={() => settingsMenu.setOpen((v) => !v)}
+                className={ICON_BUTTON_CLASS}
+              >
+                ⚙
+              </button>
+            </Tooltip>
+            {settingsMenu.open && (
+              <div role="menu" className={`right-0 ${MENU_CLASS}`}>
+                <div
+                  role="menuitem"
+                  tabIndex={0}
+                  onClick={() => store.getState().setDeveloperMode(!developerMode)}
+                  onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      store.getState().setDeveloperMode(!developerMode);
+                    }
+                  }}
+                  className={`${MENU_ITEM_CLASS} flex cursor-pointer items-center justify-between gap-4`}
+                >
+                  Developer mode
+                  <input
+                    type="checkbox"
+                    checked={developerMode}
+                    onChange={() => store.getState().setDeveloperMode(!developerMode)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Developer mode"
+                    className="h-4 w-4"
+                  />
+                </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!developerMode}
+                  onClick={() => {
+                    settingsMenu.setOpen(false);
+                    store.getState().openDialog('devSettings');
+                  }}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Developer settings…
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div className="flex flex-1 min-h-0">
         {trackPanelOpen && (
-          <Box sx={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, borderRight: 1, borderColor: 'divider' }}>
+          <div className="shrink-0 border-r border-theme-border" style={{ width: SIDE_PANEL_WIDTH }}>
             <TrackPanel store={store} />
-          </Box>
+          </div>
         )}
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          <Stack direction="row" sx={{ borderBottom: 1, borderColor: 'divider' }}>
-            <Tooltip title={trackPanelOpen ? 'Hide track panel' : 'Show track panel'}>
-              <IconButton size="small" aria-label="Toggle track panel" onClick={() => setTrackPanelOpen((v) => !v)}>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex border-b border-theme-border">
+            <Tooltip content={trackPanelOpen ? 'Hide track panel' : 'Show track panel'}>
+              <button
+                type="button"
+                aria-label="Toggle track panel"
+                onClick={() => setTrackPanelOpen((v) => !v)}
+                className={ICON_BUTTON_CLASS}
+              >
                 {trackPanelOpen ? '⟨' : '⟩'}
-              </IconButton>
+              </button>
             </Tooltip>
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
-              <IconButton size="small" aria-label="Toggle inspector panel" onClick={() => setInspectorOpen((v) => !v)}>
+            <div className="flex-1" />
+            <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
+              <button
+                type="button"
+                aria-label="Toggle inspector panel"
+                onClick={() => setInspectorOpen((v) => !v)}
+                className={ICON_BUTTON_CLASS}
+              >
                 {inspectorOpen ? '⟩' : '⟨'}
-              </IconButton>
+              </button>
             </Tooltip>
-          </Stack>
+          </div>
 
-          <Box sx={{ flex: 1, minHeight: 0 }}>
+          <div className="min-h-0 flex-1">
             {view === 'notation' ? <ScoreEditorView store={store} /> : <PianoRollView store={store} />}
-          </Box>
+          </div>
 
           <TransportBar store={store} />
-        </Box>
+        </div>
 
         {inspectorOpen && (
-          <Box sx={{ width: SIDE_PANEL_WIDTH, flexShrink: 0, borderLeft: 1, borderColor: 'divider', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div
+            className="flex shrink-0 flex-col overflow-auto border-l border-theme-border"
+            style={{ width: SIDE_PANEL_WIDTH }}
+          >
             <InspectorPanel store={store} />
-            <Divider />
+            <div className="border-t border-theme-border" />
             {generationMode === 'generate' ? <GenerationPanel store={store} /> : <RegenerationPanel store={store} />}
-          </Box>
+          </div>
         )}
-      </Box>
+      </div>
 
-      <Stack
-        direction="row"
-        spacing={2}
+      <div
         role="status"
         aria-label="Status bar"
-        sx={{ px: 2, py: 0.5, borderTop: 1, borderColor: 'divider', alignItems: 'center' }}
+        className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
-        <Typography variant="caption">{selectionSummaryLabel(selection)}</Typography>
-        <Box sx={{ flex: 1 }} />
-        <Button
-          size="small"
-          aria-label="Validation issues"
-          onClick={(e: MouseEvent<HTMLElement>) => setIssuesAnchor(e.currentTarget)}
-          disabled={validationIssues.length === 0}
-        >
-          <Badge badgeContent={validationIssues.length} color={errorIssues.length > 0 ? 'error' : 'warning'} showZero>
+        <span className="text-xs text-theme-text-secondary">{selectionSummaryLabel(selection)}</span>
+        <div className="flex-1" />
+        <div ref={issuesMenu.ref} className="relative">
+          <button
+            type="button"
+            aria-label="Validation issues"
+            onClick={() => issuesMenu.setOpen((v) => !v)}
+            disabled={validationIssues.length === 0}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40"
+          >
             Issues
-          </Badge>
-        </Button>
-        <Popover
-          open={issuesAnchor !== null}
-          anchorEl={issuesAnchor}
-          onClose={() => setIssuesAnchor(null)}
-          anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
-        >
-          <Box sx={{ p: 1, minWidth: 280, maxHeight: 320, overflow: 'auto' }} role="list" aria-label="Validation issues list">
-            {validationIssues.length === 0 && <Typography variant="body2">No issues.</Typography>}
-            {validationIssues.map((issue, i) => (
-              <Box
-                key={`${issue.code}-${issue.objectId ?? issue.measureId ?? issue.trackId ?? i}`}
-                role="listitem"
-                tabIndex={0}
-                onClick={() => navigateToIssue(issue)}
-                onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    navigateToIssue(issue);
-                  }
-                }}
-                sx={{
-                  p: 0.5,
-                  cursor: 'pointer',
-                  '&:hover': { bgcolor: 'action.hover' },
-                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
-                }}
-              >
-                <Chip size="small" label={issue.severity} color={issue.severity === 'error' ? 'error' : 'warning'} sx={{ mr: 1 }} />
-                <Typography variant="body2" component="span">
-                  {issue.message}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        </Popover>
-        <Typography variant="caption" aria-label="Position">
+            <span
+              className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white ${
+                errorIssues.length > 0 ? 'bg-destructive' : 'bg-warning'
+              }`}
+            >
+              {validationIssues.length}
+            </span>
+          </button>
+          {issuesMenu.open && (
+            <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[280px] max-h-[320px] overflow-auto rounded-md border border-theme-border bg-theme-bg-secondary p-1 shadow-lg">
+              <div role="list" aria-label="Validation issues list">
+                {validationIssues.length === 0 && (
+                  <p className="p-1 text-sm text-theme-text-secondary">No issues.</p>
+                )}
+                {validationIssues.map((issue, i) => (
+                  <div
+                    key={`${issue.code}-${issue.objectId ?? issue.measureId ?? issue.trackId ?? i}`}
+                    role="listitem"
+                    tabIndex={0}
+                    onClick={() => navigateToIssue(issue)}
+                    onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigateToIssue(issue);
+                      }
+                    }}
+                    className="cursor-pointer rounded p-1 hover:bg-theme-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+                  >
+                    <span
+                      className={`mr-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium text-white ${
+                        issue.severity === 'error' ? 'bg-destructive' : 'bg-warning'
+                      }`}
+                    >
+                      {issue.severity}
+                    </span>
+                    <span className="text-sm text-theme-text-primary">{issue.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <span aria-label="Position" className="text-xs text-theme-text-secondary">
           {measureBeat ? `Measure ${measureBeat.measureIndex}, beat ${measureBeat.beat}` : '-.-'}
-        </Typography>
-        <Typography variant="caption" aria-label="Zoom level">
+        </span>
+        <span aria-label="Zoom level" className="text-xs text-theme-text-secondary">
           {Math.round(zoom * 100)}%
-        </Typography>
-      </Stack>
+        </span>
+      </div>
 
       <Toasts store={store} />
 
@@ -480,6 +626,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         onCancel={() => setConfirmingImportJson(null)}
         onConfirm={() => void commitImportJson()}
       />
-    </Box>
+    </div>
   );
 }
