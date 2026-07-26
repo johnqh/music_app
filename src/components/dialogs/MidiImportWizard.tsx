@@ -25,7 +25,8 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Dialog } from '@sudobility/components';
+import { Dialog, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { MidiSummary } from '@sudobility/music_lib';
 import { defaultMidiImportOptions } from '@sudobility/music_lib';
 import type { MidiImportOptions } from '@sudobility/music_lib';
@@ -82,13 +83,11 @@ async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
   return file.arrayBuffer();
 }
 
-const TEXT_BUTTON_CLASS = 'rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg';
+const TEXT_BUTTON_CLASS = variants.button.ghost.default();
 
-const PRIMARY_BUTTON_CLASS =
-  'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+const PRIMARY_BUTTON_CLASS = variants.button.primary.default();
 
-const SECONDARY_BUTTON_CLASS =
-  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-50';
+const SECONDARY_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
 
 const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary';
 
@@ -227,7 +226,7 @@ export function MidiImportWizard({
               role="button"
               tabIndex={0}
               aria-label="Choose MIDI file"
-              className="cursor-pointer self-start rounded-md border border-theme-border px-3 py-2 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+              className={cn(variants.button.outline.default(), 'cursor-pointer self-start px-3 py-2')}
             >
               {fileName ?? 'Choose MIDI file...'}
               <input

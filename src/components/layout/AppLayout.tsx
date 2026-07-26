@@ -26,7 +26,8 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip } from '@sudobility/components';
+import { Tooltip, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -68,16 +69,24 @@ const SAVE_STATE_CLASS: Record<string, string> = {
   unsaved: 'bg-warning text-warning-foreground',
 };
 
+// Kept hand-rolled: these sit on the primary-colored app-bar background;
+// ghost's neutral-background skin (text-muted-foreground/hover:bg-muted)
+// isn't designed for an inverted (text-on-primary) toolbar and would lose
+// contrast there.
 const ICON_BUTTON_CLASS =
   'rounded-md p-1.5 text-sm leading-none text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40';
 
 const TEXT_BUTTON_CLASS = 'rounded-md px-3 py-1.5 text-sm font-medium text-inherit hover:bg-white/10';
 
-const MENU_CLASS =
-  'absolute top-full z-10 mt-1 min-w-[160px] rounded-md border border-theme-border bg-theme-bg-secondary py-1 text-left shadow-lg';
+const MENU_CLASS = cn(
+  variants.card.default.base(),
+  'absolute top-full z-10 mt-1 min-w-[160px] rounded-md py-1 text-left shadow-lg',
+);
 
-const MENU_ITEM_CLASS =
-  'block w-full whitespace-nowrap px-3 py-1.5 text-left text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const MENU_ITEM_CLASS = cn(
+  variants.button.ghost.default(),
+  'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left',
+);
 
 /** Open/close + outside-pointerdown-close state for one `role="menu"` popover, factored out since this file owns four of them (Import/Export/Theme/Settings) -- same behavior as `EditorToolbar`'s single articulation menu, just reusable. */
 function useMenu<T extends HTMLElement>() {
@@ -543,7 +552,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             aria-label="Validation issues"
             onClick={() => issuesMenu.setOpen((v) => !v)}
             disabled={validationIssues.length === 0}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(variants.button.ghost.default(), 'gap-1.5 px-2 py-1 text-xs')}
           >
             Issues
             <span
@@ -555,7 +564,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </span>
           </button>
           {issuesMenu.open && (
-            <div className="absolute bottom-full right-0 z-10 mb-1 min-w-[280px] max-h-[320px] overflow-auto rounded-md border border-theme-border bg-theme-bg-secondary p-1 shadow-lg">
+            <div
+              className={cn(
+                variants.card.default.base(),
+                'absolute bottom-full right-0 z-10 mb-1 min-w-[280px] max-h-[320px] overflow-auto rounded-md p-1 shadow-lg',
+              )}
+            >
               <div role="list" aria-label="Validation issues list">
                 {validationIssues.length === 0 && (
                   <p className="p-1 text-sm text-theme-text-secondary">No issues.</p>

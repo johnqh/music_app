@@ -21,6 +21,8 @@
  */
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { RegenerationCandidate } from '@sudobility/music_types';
 import { playbackController } from '@sudobility/music_lib';
 import { scoreWithCandidate, summarizeFragment, previewStartTick } from '@/features/generation/preview';
@@ -38,14 +40,15 @@ function summaryLine(candidate: RegenerationCandidate): string {
   return pitchRangeLabel ? `${noteCount} ${noteWord}, ${pitchRangeLabel}` : `${noteCount} ${noteWord}`;
 }
 
-const TEXT_BUTTON_CLASS =
-  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
 
-const PRIMARY_BUTTON_CLASS =
-  'rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
+const PRIMARY_BUTTON_CLASS = cn(variants.button.primary.default(), 'px-3 py-1.5');
 
-const TOGGLE_BUTTON_CLASS =
-  'rounded-md px-2 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover-bg aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+const TOGGLE_BUTTON_CLASS = cn(
+  variants.button.ghost.default(),
+  'px-2 py-1 text-xs',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 export function CandidateList({ store = useAppStore }: CandidateListProps) {
   const candidates = store((s) => s.candidates);
@@ -139,18 +142,18 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
             key={candidate.id}
             role="group"
             aria-label={`Candidate card: ${candidate.label}`}
-            className="rounded-md border border-theme-border bg-theme-bg-secondary p-4"
+            className={cn(variants.card.default.base(), 'rounded-md p-4')}
           >
             <div className="flex flex-col items-start gap-2">
               <button
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => handleSelect(candidate)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-theme-text-primary hover:bg-theme-hover-bg'
-                }`}
+                className={cn(
+                  variants.button.ghost.default(),
+                  'px-3 py-1.5',
+                  'aria-pressed:bg-primary aria-pressed:text-primary-foreground',
+                )}
               >
                 {candidate.label}
               </button>
@@ -233,7 +236,7 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
         type="button"
         aria-label="Reject all"
         onClick={handleRejectAll}
-        className="self-start rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        className={cn(variants.button.destructive.default(), 'self-start')}
       >
         Reject all
       </button>

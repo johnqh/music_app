@@ -21,7 +21,8 @@
  */
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip } from '@sudobility/components';
+import { Tooltip, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { Clef, Track, UUID } from '@sudobility/music_types';
 import { addTrackCommand, changeClefCommand, changeTrackPropsCommand, deleteTrackCommand } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -35,11 +36,13 @@ export type TrackPanelProps = {
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
 
-const ICON_BUTTON_CLASS =
-  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
 
-const TOGGLE_BUTTON_CLASS =
-  'rounded-md px-2 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+const TOGGLE_BUTTON_CLASS = cn(
+  variants.button.ghost.default(),
+  'px-2 py-1 text-xs',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-xs text-theme-text-primary';
 

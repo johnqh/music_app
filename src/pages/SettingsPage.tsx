@@ -3,7 +3,8 @@
  * via App's persist effect) and developer mode. Tailwind + design tokens.
  */
 import { useTranslation } from 'react-i18next';
-import { Section } from '@sudobility/components';
+import { Section, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -32,11 +33,10 @@ export default function SettingsPage({ store = useAppStore }: SettingsPageProps)
                 type="button"
                 role="radio"
                 aria-checked={themeMode === mode}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
-                  themeMode === mode
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-theme-border text-theme-text-secondary hover:bg-theme-hover-bg'
-                }`}
+                className={cn(
+                  themeMode === mode ? variants.button.primary.small() : variants.button.outline.small(),
+                  'h-auto text-sm',
+                )}
                 onClick={() => store.getState().setThemeMode(mode)}
               >
                 {t(`settings.theme${mode.charAt(0).toUpperCase()}${mode.slice(1)}` as never)}

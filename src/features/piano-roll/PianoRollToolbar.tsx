@@ -24,7 +24,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Tooltip } from '@sudobility/components';
+import { Tooltip, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { DurationName, UUID } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -54,14 +55,15 @@ function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
-const ICON_BUTTON_CLASS =
-  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
 
-const TOGGLE_BUTTON_CLASS =
-  'rounded-md px-2 py-1 text-sm font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+const TOGGLE_BUTTON_CLASS = cn(
+  variants.button.ghost.default(),
+  'px-2 py-1 text-sm',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
-const TEXT_BUTTON_CLASS =
-  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
 
 const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
 

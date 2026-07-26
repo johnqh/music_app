@@ -3,7 +3,8 @@
  * listing the exact shortcut table `useEditorShortcuts.ts` implements
  * (spec §7).
  */
-import { Dialog } from '@sudobility/components';
+import { Dialog, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 
 export type ShortcutHelpDialogProps = {
   open: boolean;
@@ -35,7 +36,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-md p-1 text-theme-text-secondary hover:bg-theme-hover-bg"
+          className={cn(variants.button.ghost.icon(), 'absolute right-4 top-4 h-auto w-auto p-1')}
         >
           &times;
         </button>

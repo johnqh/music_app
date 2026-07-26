@@ -9,7 +9,8 @@
  */
 import { Component, useEffect, useRef, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Spinner } from '@sudobility/components';
+import { Spinner, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { applyDocumentTheme, type ColorSchemeMode, resolveColorScheme } from '@/app/theme';
 import { AppRouter } from '@/app/router';
@@ -49,7 +50,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="self-start rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            className={cn(variants.button.primary.default(), 'self-start')}
           >
             Reload
           </button>

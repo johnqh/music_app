@@ -9,6 +9,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppPageLayout } from '@sudobility/building_blocks';
 import type { AppPageProps, FooterConfig, TopBarConfig } from '@sudobility/building_blocks';
+import { cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { PageConfigContext } from '@/context/pageConfigContextDef';
 import { usePageConfig } from '@/hooks/usePageConfig';
 import { useAuth } from '@/app/AuthContext';
@@ -42,7 +44,7 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
         user ? (
           <button
             type="button"
-            className="rounded-md px-3 py-1.5 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
+            className={cn(variants.button.ghost.default(), 'px-3 py-1.5')}
             aria-label={t('nav.signOut')}
             onClick={() => void signOut()}
           >

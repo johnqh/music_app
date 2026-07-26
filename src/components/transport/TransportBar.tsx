@@ -21,7 +21,8 @@
  */
 import { useMemo, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip } from '@sudobility/components';
+import { Tooltip, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { changeTempoCommand } from '@sudobility/music_lib';
 import { scoreEndTick } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -38,11 +39,13 @@ export type TransportBarProps = {
 /** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const ICON_BUTTON_CLASS =
-  'rounded-md p-1.5 text-sm leading-none text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
 
-const TOGGLE_BUTTON_CLASS =
-  'rounded-md px-2 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90';
+const TOGGLE_BUTTON_CLASS = cn(
+  variants.button.ghost.default(),
+  'px-2 py-1 text-xs',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 function formatMeasureBeat(mb: MeasureBeat | null): string {
   return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
@@ -224,7 +227,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
             aria-label="Tempo (BPM)"
             disabled={!hasScore}
             onClick={beginEditTempo}
-            className="min-w-[64px] rounded-md border-none bg-transparent px-1 py-1 text-sm text-theme-text-primary disabled:cursor-default enabled:cursor-pointer enabled:hover:bg-theme-hover-bg"
+            className={cn(
+              variants.button.ghost.default(),
+              'min-w-[64px] px-1 py-1 disabled:cursor-default enabled:cursor-pointer',
+            )}
           >
             {currentBpm} BPM
           </button>

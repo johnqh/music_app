@@ -6,7 +6,8 @@
  * project database died with the Phase-2 move to server-side AI/storage.)
  */
 import { useState } from 'react';
-import { Dialog } from '@sudobility/components';
+import { Dialog, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
 import { downloadBlob } from '@sudobility/music_lib';
@@ -176,7 +177,7 @@ export function DeveloperSettingsDialog({
             type="button"
             aria-label="Generate stress-test score"
             onClick={handleGenerateStressTest}
-            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
           >
             Generate stress-test score
           </button>
@@ -185,7 +186,7 @@ export function DeveloperSettingsDialog({
             aria-label="Run benchmark"
             onClick={handleRunBenchmark}
             disabled={benchmarkRunning}
-            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:opacity-50"
+            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
           >
             {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
           </button>
@@ -193,7 +194,7 @@ export function DeveloperSettingsDialog({
             type="button"
             aria-label="Export diagnostic JSON"
             onClick={handleExportDiagnostics}
-            className="rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
           >
             Export diagnostic JSON
           </button>
@@ -201,7 +202,7 @@ export function DeveloperSettingsDialog({
             type="button"
             aria-label="Reset local database"
             onClick={() => setConfirmingReset(true)}
-            className="rounded-md border border-red-600 px-3 py-1.5 text-sm text-red-600 hover:bg-red-600/10"
+            className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1.5')}
           >
             Reset local database
           </button>
@@ -218,7 +219,7 @@ export function DeveloperSettingsDialog({
               type="button"
               aria-label="Dismiss benchmark result"
               onClick={() => setBenchmarkReport(null)}
-              className="shrink-0 rounded p-1 hover:bg-theme-hover-bg"
+              className={cn(variants.button.ghost.icon(), 'h-auto w-auto shrink-0 p-1')}
             >
               &times;
             </button>
@@ -232,7 +233,7 @@ export function DeveloperSettingsDialog({
               type="button"
               aria-label="Dismiss reset confirmation"
               onClick={() => setResetDone(false)}
-              className="shrink-0 rounded p-1 hover:bg-theme-hover-bg"
+              className={cn(variants.button.ghost.icon(), 'h-auto w-auto shrink-0 p-1')}
             >
               &times;
             </button>
@@ -243,7 +244,7 @@ export function DeveloperSettingsDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
+            className={variants.button.ghost.default()}
           >
             Close
           </button>

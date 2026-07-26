@@ -8,7 +8,8 @@
  */
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Dialog } from '@sudobility/components';
+import { Dialog, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
@@ -114,7 +115,7 @@ export function MusicXmlImportDialog({
               role="button"
               tabIndex={0}
               aria-label="Choose MusicXML file"
-              className="cursor-pointer rounded-md border border-theme-border px-3 py-2 text-center text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+              className={cn(variants.button.outline.default(), 'cursor-pointer px-3 py-2 text-center')}
             >
               {fileName ?? 'Choose MusicXML file...'}
               <input
@@ -161,11 +162,7 @@ export function MusicXmlImportDialog({
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
-            >
+            <button type="button" onClick={handleClose} className={variants.button.ghost.default()}>
               Cancel
             </button>
             <button
@@ -173,7 +170,7 @@ export function MusicXmlImportDialog({
               aria-label="Import"
               disabled={!result || busy}
               onClick={handleImportClick}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className={variants.button.primary.default()}
             >
               Import
             </button>

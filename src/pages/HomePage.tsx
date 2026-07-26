@@ -3,7 +3,8 @@
  * blocks; the CTA leads to the projects dashboard.
  */
 import { useTranslation } from 'react-i18next';
-import { Section } from '@sudobility/components';
+import { Section, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 
 export default function HomePage() {
@@ -22,7 +23,7 @@ export default function HomePage() {
           </p>
           <button
             type="button"
-            className="mt-8 rounded-lg bg-primary px-6 py-3 text-primary-foreground shadow hover:opacity-90"
+            className={cn(variants.button.primary.large(), 'mt-8 shadow')}
             onClick={() => navigate('/projects')}
           >
             {t('home.cta')}
@@ -38,7 +39,7 @@ export default function HomePage() {
               ['home.featureFormatsTitle', 'home.featureFormatsBody'],
             ] as const
           ).map(([title, body]) => (
-            <div key={title} className="rounded-xl border border-theme-border p-6">
+            <div key={title} className={cn(variants.card.default.base(), 'rounded-xl p-6')}>
               <h2 className="text-lg font-semibold text-theme-text-primary">{t(title)}</h2>
               <p className="mt-2 text-sm text-theme-text-secondary">{t(body)}</p>
             </div>

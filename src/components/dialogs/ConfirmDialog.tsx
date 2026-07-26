@@ -6,6 +6,7 @@
  * primitive (same props/labels as the MUI-era version).
  */
 import { Dialog } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -37,19 +38,13 @@ export function ConfirmDialog({
         </h2>
         <p className="mt-3 text-sm text-theme-text-secondary">{message}</p>
         <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-hover-bg"
-            onClick={onCancel}
-          >
+          <button type="button" className={variants.button.ghost.default()} onClick={onCancel}>
             {cancelLabel}
           </button>
           <button
             type="button"
             autoFocus
-            className={`rounded-md px-4 py-2 text-sm text-white ${
-              destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:opacity-90'
-            }`}
+            className={destructive ? variants.button.destructive.default() : variants.button.primary.default()}
             onClick={onConfirm}
           >
             {confirmLabel}

@@ -17,7 +17,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Tooltip } from '@sudobility/components';
+import { Tooltip, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
 import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
@@ -53,16 +54,14 @@ async function clientAndToken() {
   return { client: musicClient, token };
 }
 
-const TOOLBAR_BUTTON_CLASS =
-  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-50';
+const TOOLBAR_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
 
-const PRIMARY_BUTTON_CLASS =
-  'rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+const PRIMARY_BUTTON_CLASS = cn(variants.button.primary.default(), 'py-1.5');
 
 const TEXT_INPUT_CLASS =
   'rounded-md border border-theme-border bg-theme-bg-primary px-3 py-1.5 text-sm text-theme-text-primary';
 
-const CARD_CLASS = 'flex flex-col overflow-hidden rounded-md border border-theme-border bg-theme-bg-secondary';
+const CARD_CLASS = cn(variants.card.default.base(), 'flex flex-col overflow-hidden rounded-md');
 
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -184,7 +183,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           type="button"
           aria-label={`Duplicate project: ${project.name}`}
           onClick={() => void handleDuplicate(project)}
-          className="rounded-md px-3 py-1 text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+          className={cn(variants.button.ghost.default(), 'px-3 py-1')}
         >
           Duplicate
         </button>
@@ -192,7 +191,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           type="button"
           aria-label={`Delete project: ${project.name}`}
           onClick={() => setPendingDelete(project)}
-          className="rounded-md px-3 py-1 text-sm text-red-600 hover:bg-red-600/10"
+          className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1')}
         >
           Delete
         </button>
@@ -291,7 +290,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
               type="button"
               aria-label={`New from template: ${template.name}`}
               onClick={() => void handleCreateFromTemplate(template.id)}
-              className="flex flex-col gap-1 rounded-md border border-theme-border bg-theme-bg-secondary p-4 text-left hover:bg-theme-hover-bg"
+              className={cn(variants.card.default.interactive(), 'flex flex-col gap-1 rounded-md p-4 text-left')}
             >
               <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
               <span className="text-xs text-theme-text-secondary">{template.description}</span>

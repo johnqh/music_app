@@ -23,6 +23,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { findTrack } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import type { ScoreRange } from '@sudobility/music_lib';
@@ -76,11 +78,9 @@ function trackNamesLabel(score: Score, trackIds: string[]): string {
   return names.length > 0 ? names.join(', ') : 'All tracks';
 }
 
-const TEXT_BUTTON_CLASS =
-  'rounded-md border border-theme-border px-3 py-1.5 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:cursor-not-allowed disabled:opacity-40';
+const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
 
-const PRIMARY_BUTTON_CLASS =
-  'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40';
+const PRIMARY_BUTTON_CLASS = variants.button.primary.default();
 
 const TEXT_INPUT_CLASS =
   'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
@@ -210,7 +210,10 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
           {presetOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md border border-theme-border bg-theme-bg-secondary py-1 shadow-lg"
+              className={cn(
+                variants.card.default.base(),
+                'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
+              )}
             >
               {PRESET_INSTRUCTIONS.map((text) => (
                 <button
@@ -218,7 +221,7 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
                   type="button"
                   role="menuitem"
                   onClick={() => handlePresetSelect(text)}
-                  className="block w-full px-3 py-1.5 text-left text-sm text-theme-text-primary hover:bg-theme-hover-bg"
+                  className={cn(variants.button.ghost.default(), 'block w-full justify-start rounded-none px-3 py-1.5 text-left')}
                 >
                   {text}
                 </button>

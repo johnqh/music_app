@@ -4,7 +4,8 @@
  * the app.
  */
 import { useState } from 'react';
-import { Input } from '@sudobility/components';
+import { Input, cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import { useAuth } from '@/app/AuthContext';
 import { CONSTANTS } from '@/config/constants';
 
@@ -43,7 +44,7 @@ export function SignInScreen() {
 
   return (
     <div className="grid min-h-screen place-items-center bg-theme-bg-primary p-4">
-      <div className="w-[380px] max-w-full rounded-lg border border-theme-border bg-theme-bg-secondary p-8 shadow-sm">
+      <div className={cn(variants.card.default.base(), 'w-[380px] max-w-full p-8 shadow-sm')}>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -86,25 +87,21 @@ export function SignInScreen() {
               required
             />
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
+          <button type="submit" disabled={busy} className={variants.button.primary.default()}>
             {mode === 'sign-in' ? 'Sign in' : 'Create account'}
           </button>
           <button
             type="button"
             onClick={() => void google()}
             disabled={busy}
-            className="rounded-md border border-theme-border px-4 py-2 text-sm text-theme-text-primary hover:bg-theme-hover-bg disabled:opacity-50"
+            className={variants.button.outline.default()}
           >
             Continue with Google
           </button>
           <button
             type="button"
             onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
-            className="text-sm text-theme-text-secondary hover:underline"
+            className={cn(variants.button.link.muted(), 'self-start px-0 py-0')}
           >
             {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
           </button>
