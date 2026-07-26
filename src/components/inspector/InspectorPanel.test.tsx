@@ -33,13 +33,15 @@ describe('InspectorPanel', () => {
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
     render(<InspectorPanel store={store} />);
 
-    // Re-skinned onto a native <select> (T12 batch 3): unlike MUI's Select
-    // (whose closed box renders only the selected MenuItem's label as DOM
-    // text), a native <select>'s textContent concatenates every <option>
-    // regardless of which is selected -- toHaveTextContent would trivially
-    // match any pitch step. toHaveValue reads the select's actual selected
-    // value, which is the real thing being asserted here.
-    expect(screen.getByRole('combobox', { name: 'Pitch step' })).toHaveValue(note.pitch.step);
+    // Library sweep 1: the native <select> becomes @sudobility/components'
+    // Radix-backed Select. Its closed trigger only ever renders the
+    // currently-selected item's own text (unlike a native <select>, whose
+    // textContent concatenates every <option> regardless of selection), and
+    // it isn't a form element `toHaveValue` supports (the trigger is a
+    // <button role="combobox">, not an <input>/<select>) -- so the
+    // faithful equivalent of "what's currently selected" is now the
+    // trigger's rendered text.
+    expect(screen.getByRole('combobox', { name: 'Pitch step' })).toHaveTextContent(note.pitch.step);
     expect(screen.getByLabelText('Velocity')).toHaveValue(note.velocity);
   });
 
@@ -55,14 +57,15 @@ describe('InspectorPanel', () => {
     store.getState().setSelection({ eventIds: [a.id, b.id], measureIds: [], trackIds: [] });
     render(<InspectorPanel store={store} />);
 
-    // Re-skinned onto a native <select> (T12 batch 3): a native select's
-    // textContent always concatenates every <option> (the synthetic
-    // "Mixed" one included), so toHaveTextContent('Mixed') would trivially
-    // pass even for a concrete, non-mixed selection. selectedOptions[0] is
-    // the DOM's own notion of "what's currently shown", so asserting on its
-    // label is the faithful equivalent of the old closed-box check.
-    const select = screen.getByRole('combobox', { name: 'Pitch step' }) as HTMLSelectElement;
-    expect(select.selectedOptions[0]).toHaveTextContent('Mixed');
+    // Library sweep 1: the native <select> becomes @sudobility/components'
+    // Radix-backed Select. Its closed trigger renders only the SelectValue
+    // for whichever item is actually selected (the popover's other options,
+    // "Mixed" included, aren't in the DOM at all while closed) -- unlike a
+    // native <select>'s textContent, which always concatenates every
+    // <option> regardless of selection -- so toHaveTextContent is now the
+    // faithful equivalent of the old selectedOptions[0] check.
+    const select = screen.getByRole('combobox', { name: 'Pitch step' });
+    expect(select).toHaveTextContent('Mixed');
   });
 
   it('editing a mixed field applies the same new value to every selected note', async () => {
@@ -94,9 +97,9 @@ describe('InspectorPanel', () => {
     store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [treble.id, bass.id] });
     render(<InspectorPanel store={store} />);
 
-    // Same native-<select> equivalence as the pitch-step "Mixed" case above.
-    const select = screen.getByRole('combobox', { name: 'Track clef' }) as HTMLSelectElement;
-    expect(select.selectedOptions[0]).toHaveTextContent('Mixed');
+    // Same Radix-Select equivalence as the pitch-step "Mixed" case above.
+    const select = screen.getByRole('combobox', { name: 'Track clef' });
+    expect(select).toHaveTextContent('Mixed');
   });
 
   it('dragging the track-tab volume slider dispatches exactly one command, not one per drag tick', async () => {

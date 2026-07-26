@@ -130,10 +130,12 @@ describe('TrackPanel', () => {
     render(<TrackPanel store={store} />);
     const user = userEvent.setup();
 
-    // Re-skinned onto a native <select> (T12 batch 3): the MUI listbox
-    // open/click choreography becomes a plain testing-library selectOptions
-    // call against the combobox.
-    await user.selectOptions(screen.getByLabelText('Clef select: Treble'), 'alto');
+    // Library sweep 1: the native <select> becomes @sudobility/components'
+    // Radix-backed Select -- its trigger has role="combobox" (not a real
+    // <select>), so `selectOptions` no longer applies; open it and click
+    // the resulting role="option" instead.
+    await user.click(screen.getByLabelText('Clef select: Treble'));
+    await user.click(await screen.findByRole('option', { name: 'alto' }));
 
     expect(store.getState().score!.tracks[0].clef).toBe('alto');
   });

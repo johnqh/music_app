@@ -61,10 +61,12 @@ describe('PianoRollToolbar', () => {
     renderToolbar(store);
     const user = userEvent.setup();
 
-    // Re-skinned onto a native <select> (T12 batch 2): the MUI listbox
-    // open/click choreography becomes a plain testing-library selectOptions
-    // call against the combobox.
-    await user.selectOptions(screen.getByLabelText('Snap grid'), 'eighth');
+    // Library sweep 1: the native <select> becomes @sudobility/components'
+    // Radix-backed Select -- its trigger has role="combobox" (not a real
+    // <select>), so `selectOptions` no longer applies; open it and click
+    // the resulting role="option" instead.
+    await user.click(screen.getByLabelText('Snap grid'));
+    await user.click(await screen.findByRole('option', { name: 'eighth' }));
 
     expect(store.getState().snapGrid).toBe('eighth');
   });

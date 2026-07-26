@@ -11,18 +11,30 @@
  * edit. Routing through the score is also what makes mute/solo undoable
  * and persisted with the project, matching every other track property.
  *
- * Re-skinned onto Tailwind + @sudobility/components (T12 batch 3): the MUI
- * Select becomes a native `<select>`, MUI ToggleButtons become plain
- * buttons with `aria-pressed`, and the MUI Slider becomes a native
- * `<input type="range">` with the same draft/commit semantics -- local
- * state tracks every drag tick, and the real `changeTrackPropsCommand` is
- * dispatched only once, on pointerup or keyup (a native range input's
- * equivalent of MUI's `onChangeCommitted`).
+ * Adopts `@sudobility/components` controls (library sweep 1): the track
+ * name field becomes the library `Input`, the clef `<select>` becomes the
+ * library's Radix-backed `Select`, and volume/pan become the library
+ * `Slider` -- wrapped to keep the exact same draft/commit semantics as
+ * before (local state tracks every drag tick, the real
+ * `changeTrackPropsCommand` is dispatched only once, on pointerup/keyup).
+ * Mute/solo stay `Button`s with `aria-pressed` (not `Checkbox`/`Switch`):
+ * they're toggle *buttons* today (an "M"/"S" glyph, no checkbox semantics),
+ * matching every other toggle in this app (e.g. `TransportBar`'s Loop/
+ * Metronome), so converting them to a checkbox-like control would be a
+ * genuine semantics change, not an adoption of an equivalent control.
+ *
+ * The library `Slider` has no `aria-label`/`id` prop (a closed `SliderProps`,
+ * no HTML-attribute passthrough) and no commit-on-release callback, so
+ * each slider below is wrapped in a `<label>` with a visually-hidden
+ * (`sr-only`) text node for its accessible name (the standard implicit
+ * label-association algorithm gives the same accessible name an explicit
+ * `aria-label` would have), with `onPointerUp`/`onKeyUp` on that same
+ * wrapper doing the commit -- bubbled up from the Slider's own native
+ * `<input type="range">`, same as the commit handlers this replaces.
  */
 import { useEffect, useState } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip, cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Tooltip, cn } from '@sudobility/components';
 import type { Clef, Track, UUID } from '@sudobility/music_types';
 import { addTrackCommand, changeClefCommand, changeTrackPropsCommand, deleteTrackCommand } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -36,15 +48,43 @@ export type TrackPanelProps = {
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
 
-const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
+const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn(
-  variants.button.ghost.default(),
-  'px-2 py-1 text-xs',
-  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
-);
+const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-xs', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
 
-const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-xs text-theme-text-primary';
+/** A library `Slider` wrapped with an accessible name (via a visually-hidden
+ * label, since `Slider` accepts no `aria-label`) and a commit-on-release
+ * handler (since `Slider` exposes only a continuous `onChange`, no
+ * `onValueCommitted`-style callback of its own). */
+function CommitSlider({
+  label,
+  value,
+  onCommit,
+  min,
+  max,
+  step,
+}: {
+  label: string;
+  value: number;
+  onCommit: (value: number) => void;
+  min: number;
+  max: number;
+  step: number;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = (e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>): void => {
+    onCommit(Number((e.target as HTMLInputElement).value));
+  };
+
+  return (
+    <label className="flex-1" onPointerUp={commit} onKeyUp={commit}>
+      <span className="sr-only">{label}</span>
+      <Slider value={draft} onChange={setDraft} min={min} max={max} step={step} />
+    </label>
+  );
+}
 
 function TrackRow({
   track,
@@ -62,20 +102,6 @@ function TrackRow({
   onDelete: () => void;
 }) {
   const [nameDraft, setNameDraft] = useState(track.name);
-  // Local drag drafts (spec §22-adjacent slider convention, also used by
-  // InspectorPanel's track sliders): a native range input's onChange fires
-  // on every drag tick, not just at the end. Dispatching a ScoreCommand per
-  // tick would flood undo history (one drag = dozens of entries) and re-run
-  // validateScore/markDirty that often; the command is dispatched once,
-  // from onPointerUp/onKeyUp (drag-release/keyboard-commit), while these
-  // drafts keep the thumb tracking the drag live. Synced back to the
-  // track's real value on any external change (undo/redo, another client,
-  // the commit itself echoing back).
-  const [volumeDraft, setVolumeDraft] = useState(track.volume);
-  const [panDraft, setPanDraft] = useState(track.pan);
-
-  useEffect(() => setVolumeDraft(track.volume), [track.volume]);
-  useEffect(() => setPanDraft(track.pan), [track.pan]);
 
   const commitName = (): void => {
     if (nameDraft.trim() !== '' && nameDraft !== track.name) onPatch({ name: nameDraft.trim() });
@@ -103,13 +129,13 @@ function TrackRow({
       }`}
     >
       <div className="flex items-center gap-2">
-        <input
+        <Input
           value={nameDraft}
           onClick={(e) => e.stopPropagation()}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
           onBlur={commitName}
           aria-label={`Track name: ${track.name}`}
-          className="flex-1 rounded bg-transparent px-1 py-0.5 font-semibold text-theme-text-primary outline-none hover:bg-theme-hover-bg focus:bg-theme-hover-bg"
+          className="flex-1 border-none bg-transparent px-1 py-0.5 font-semibold text-theme-text-primary hover:bg-theme-hover-bg focus:bg-theme-hover-bg focus:ring-0"
         />
         <span
           aria-label={`Clef: ${track.clef}`}
@@ -118,8 +144,10 @@ function TrackRow({
           {track.clef}
         </span>
         <Tooltip content="Delete track">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label={`Delete track: ${track.name}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -128,73 +156,67 @@ function TrackRow({
             className={ICON_BUTTON_CLASS}
           >
             ✕
-          </button>
+          </Button>
         </Tooltip>
       </div>
 
       <p className="text-xs text-theme-text-secondary">{track.instrumentName}</p>
 
       <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label={`Mute: ${track.name}`}
           aria-pressed={track.muted}
           onClick={() => onPatch({ muted: !track.muted })}
           className={TOGGLE_BUTTON_CLASS}
         >
           M
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
           aria-label={`Solo: ${track.name}`}
           aria-pressed={track.solo}
           onClick={() => onPatch({ solo: !track.solo })}
           className={TOGGLE_BUTTON_CLASS}
         >
           S
-        </button>
-        <select
-          aria-label={`Clef select: ${track.name}`}
-          value={track.clef}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeClef(e.target.value as Clef)}
-          className={`min-w-[90px] ${SELECT_CLASS}`}
-        >
-          {CLEF_OPTIONS.map((clef) => (
-            <option key={clef} value={clef}>
-              {clef}
-            </option>
-          ))}
-        </select>
+        </Button>
+        <Select value={track.clef} onValueChange={(value) => onChangeClef(value as Clef)}>
+          <SelectTrigger aria-label={`Clef select: ${track.name}`} className="h-auto w-auto min-w-[90px] px-2 py-1 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CLEF_OPTIONS.map((clef) => (
+              <SelectItem key={clef} value={clef}>
+                {clef}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <span className="min-w-[30px] text-xs text-theme-text-secondary">Vol</span>
-        <input
-          type="range"
+        <CommitSlider
+          label={`Volume: ${track.name}`}
+          value={track.volume}
+          onCommit={(volume) => onPatch({ volume })}
           min={0}
           max={1}
           step={0.01}
-          value={volumeDraft}
-          aria-label={`Volume: ${track.name}`}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setVolumeDraft(Number(e.target.value))}
-          onPointerUp={(e) => onPatch({ volume: Number(e.currentTarget.value) })}
-          onKeyUp={(e) => onPatch({ volume: Number(e.currentTarget.value) })}
-          className="flex-1"
         />
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <span className="min-w-[30px] text-xs text-theme-text-secondary">Pan</span>
-        <input
-          type="range"
+        <CommitSlider
+          label={`Pan: ${track.name}`}
+          value={track.pan}
+          onCommit={(pan) => onPatch({ pan })}
           min={-1}
           max={1}
           step={0.01}
-          value={panDraft}
-          aria-label={`Pan: ${track.name}`}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setPanDraft(Number(e.target.value))}
-          onPointerUp={(e) => onPatch({ pan: Number(e.currentTarget.value) })}
-          onKeyUp={(e) => onPatch({ pan: Number(e.currentTarget.value) })}
-          className="flex-1"
         />
       </div>
     </div>
@@ -219,9 +241,9 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
       <div className="flex items-center border-b border-theme-border p-2">
         <span className="flex-1 text-sm font-semibold text-theme-text-primary">Tracks</span>
         <Tooltip content="Add track">
-          <button type="button" aria-label="Add track" onClick={handleAddTrack} className={ICON_BUTTON_CLASS}>
+          <Button type="button" variant="ghost" size="icon" aria-label="Add track" onClick={handleAddTrack} className={ICON_BUTTON_CLASS}>
             +
-          </button>
+          </Button>
         </Tooltip>
       </div>
 

@@ -30,3 +30,17 @@ for (const method of ['hasPointerCapture', 'setPointerCapture', 'releasePointerC
     });
   }
 }
+
+// jsdom does not implement Element.scrollIntoView, which @sudobility/
+// components' Radix-backed Select calls unconditionally while positioning
+// the open listbox against the currently-selected item (library sweep 1:
+// TransportBar/EditorToolbar/PianoRollToolbar/TrackPanel/InspectorPanel's
+// selects). Without this, opening any of those selects in a test throws
+// "scrollIntoView is not a function" from inside Radix's own effect.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    value: (): void => {},
+    writable: true,
+    configurable: true,
+  });
+}

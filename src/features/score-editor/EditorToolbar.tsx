@@ -9,15 +9,20 @@
  * an explicit `aria-label` (spec §27: ARIA labels, don't rely on
  * icon/color alone).
  *
- * Re-skinned onto Tailwind + @sudobility/components (T12 batch 2): MUI
- * ToggleButton(Group)s become plain buttons with `aria-pressed`, the MUI
- * Select becomes a native `<select>`, and the MUI Menu becomes a small
- * `role="menu"`/`role="menuitem"` popover built from plain buttons — same
- * roles/accessible names as before, so no test assertions changed.
+ * Adopts `@sudobility/components` controls (library sweep 1): plain
+ * buttons become the library `Button` (`aria-pressed`/`aria-label`/
+ * `disabled` all just work, it forwards `ButtonHTMLAttributes`), and the
+ * quantize-grid `<select>` becomes the library's Radix-backed `Select`.
+ * The articulation menu stays a hand-built `role="menu"`/`role="menuitem"`
+ * popover: neither `src/ui/dropdown.tsx` (its items are plain buttons with
+ * no `menu`/`menuitem` roles at all) nor `src/ui/command.tsx` (a full
+ * modal command-palette `Dialog`, wrong shape for a small inline popover)
+ * reproduce those roles, so a library swap there would be a real semantics
+ * change, not just a skin -- only the trigger/item buttons inside it move
+ * to the library `Button`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
-import { Tooltip, cn } from '@sudobility/components';
+import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
@@ -92,17 +97,11 @@ function defaultInsertPitch(store: EditorStoreApi): Pitch {
   return { step: 'C', accidental: 0, octave: 4 };
 }
 
-const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
+const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn(
-  variants.button.ghost.default(),
-  'px-2 py-1 text-sm',
-  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
-);
+const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-sm', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
 
-const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
-
-const SELECT_CLASS = 'rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+const TEXT_BUTTON_CLASS = 'px-3 py-1.5';
 
 function VerticalDivider() {
   return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
@@ -152,8 +151,8 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
     insertRestAtSelection(store);
   };
 
-  const handleQuantizeGridChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    setQuantizeGrid(event.target.value as DurationName);
+  const handleQuantizeGridChange = (value: string): void => {
+    setQuantizeGrid(value as DurationName);
   };
 
   const handleQuantize = (): void => {
@@ -177,15 +176,16 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
       <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
         {DURATION_OPTIONS.map((option) => (
           <Tooltip key={option.value} content={option.ariaLabel}>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               aria-label={option.ariaLabel}
               aria-pressed={snapGrid === option.value}
               onClick={() => handleDurationClick(option.value)}
               className={TOGGLE_BUTTON_CLASS}
             >
               {option.label}
-            </button>
+            </Button>
           </Tooltip>
         ))}
       </div>
@@ -195,15 +195,16 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
       <div role="group" aria-label="Accidental" className="flex items-center gap-0.5">
         {ACCIDENTAL_OPTIONS.map((option) => (
           <Tooltip key={option.value} content={option.ariaLabel}>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               aria-label={option.ariaLabel}
               disabled={!hasScore}
               onClick={() => handleAccidentalClick(option.value)}
               className={ICON_BUTTON_CLASS}
             >
               {option.label}
-            </button>
+            </Button>
           </Tooltip>
         ))}
       </div>
@@ -211,8 +212,9 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
       <VerticalDivider />
 
       <div ref={articulationRef} className="relative">
-        <button
+        <Button
           type="button"
+          variant="outline"
           aria-label="Articulation"
           aria-haspopup="menu"
           aria-expanded={articulationOpen}
@@ -221,7 +223,7 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
           className={TEXT_BUTTON_CLASS}
         >
           Articulation
-        </button>
+        </Button>
         {articulationOpen ? (
           <div
             role="menu"
@@ -231,143 +233,159 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
             )}
           >
             {ARTICULATION_OPTIONS.map((option) => (
-              <button
+              <Button
                 key={option.label}
                 type="button"
+                variant="ghost"
                 role="menuitem"
                 onClick={() => handleArticulationSelect(option.value)}
-                className={cn(variants.button.ghost.default(), 'block w-full justify-start rounded-none px-3 py-1.5 text-left')}
+                className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
               >
                 {option.label}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
       </div>
 
       <Tooltip content="Toggle tie">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Toggle tie"
           disabled={!hasScore}
           onClick={() => toggleTie(store, 'tieStart')}
           className={ICON_BUTTON_CLASS}
         >
           ⌣
-        </button>
+        </Button>
       </Tooltip>
 
       <VerticalDivider />
 
-      <button
+      <Button
         type="button"
+        variant="outline"
         aria-label="Insert note"
         disabled={!hasScore}
         onClick={handleInsertNote}
         className={TEXT_BUTTON_CLASS}
       >
         Insert note
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="outline"
         aria-label="Insert rest"
         disabled={!hasScore}
         onClick={handleInsertRest}
         className={TEXT_BUTTON_CLASS}
       >
         Insert rest
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="outline"
         aria-label="Select all"
         disabled={!hasScore}
         onClick={() => selectAll(store)}
         className={TEXT_BUTTON_CLASS}
       >
         Select all
-      </button>
+      </Button>
 
       <VerticalDivider />
 
-      <select aria-label="Quantize grid" value={quantizeGrid} onChange={handleQuantizeGridChange} className={SELECT_CLASS}>
-        {QUANTIZE_GRID_OPTIONS.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      <button
+      <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
+        <SelectTrigger aria-label="Quantize grid" className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {QUANTIZE_GRID_OPTIONS.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
         type="button"
+        variant="outline"
         aria-label="Quantize"
         disabled={!hasScore}
         onClick={handleQuantize}
         className={TEXT_BUTTON_CLASS}
       >
         Quantize
-      </button>
+      </Button>
 
       <VerticalDivider />
 
       <div className="flex items-center gap-0.5">
         <Tooltip content="Zoom out">
-          <button type="button" aria-label="Zoom out" onClick={handleZoomOut} className={ICON_BUTTON_CLASS}>
+          <Button type="button" variant="ghost" size="icon" aria-label="Zoom out" onClick={handleZoomOut} className={ICON_BUTTON_CLASS}>
             −
-          </button>
+          </Button>
         </Tooltip>
         <span aria-label="Current zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
           {zoomLabel}
         </span>
         <Tooltip content="Zoom in">
-          <button type="button" aria-label="Zoom in" onClick={handleZoomIn} className={ICON_BUTTON_CLASS}>
+          <Button type="button" variant="ghost" size="icon" aria-label="Zoom in" onClick={handleZoomIn} className={ICON_BUTTON_CLASS}>
             +
-          </button>
+          </Button>
         </Tooltip>
       </div>
 
       <VerticalDivider />
 
       <div role="group" aria-label="Layout mode" className="flex items-center gap-0.5">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Page layout"
           aria-pressed={layoutMode === 'page'}
           onClick={() => onLayoutModeChange('page')}
           className={TOGGLE_BUTTON_CLASS}
         >
           Page
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Continuous layout"
           aria-pressed={layoutMode === 'continuous'}
           onClick={() => onLayoutModeChange('continuous')}
           className={TOGGLE_BUTTON_CLASS}
         >
           Continuous
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1" />
 
       <div role="group" aria-label="Editor view" className="flex items-center gap-0.5">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Notation view"
           aria-pressed={view === 'notation'}
           onClick={() => store.getState().setView('notation')}
           className={TOGGLE_BUTTON_CLASS}
         >
           Notation
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Piano roll view"
           aria-pressed={view === 'piano-roll'}
           onClick={() => store.getState().setView('piano-roll')}
           className={TOGGLE_BUTTON_CLASS}
         >
           Piano roll
-        </button>
+        </Button>
       </div>
     </div>
   );

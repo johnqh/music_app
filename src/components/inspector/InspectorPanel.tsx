@@ -19,17 +19,46 @@
  * (an absolute tick target has no well-defined multi-note meaning without
  * per-note deltas).
  *
- * Re-skinned onto Tailwind + @sudobility/components (T12 batch 3): the MUI
- * Tabs become plain `role="tablist"`/`role="tab"` buttons (`aria-selected`
- * + a `role="tabpanel"` per tab), MUI Selects become native `<select>`s,
- * MUI Sliders become native `<input type="range">`s with the same
- * draft/commit split as `TrackPanel.tsx` (commit on pointerup/keyup, not
- * every drag tick), and MUI Checkboxes become native
- * `<input type="checkbox">`s (indeterminate set imperatively via ref, same
- * as the DOM always required).
+ * Adopts `@sudobility/components` controls (library sweep 1):
+ * - Note/Measure/Track become the library's Radix-backed `Tabs`
+ *   (`TabsList`/`TabsTrigger`/`TabsContent`), which already produce a real
+ *   `tablist`/`tab`/`tabpanel` triad with `aria-selected`/`aria-controls`/
+ *   `aria-labelledby` wired up -- a strict superset of the hand-rolled
+ *   version's roles, so the existing role-based test assertions hold.
+ * - `MixedSelect` becomes the library `Select`.
+ * - `MixedNumberField` becomes the library `Input` (`type="number"`), not
+ *   `NumberInput`: `NumberInput` requires a real numeric `value`/`onChange`
+ *   pair with no way to represent "no value yet" (the empty, `placeholder=
+ *   "Mixed"` box this panel needs while a multi-selection's field values
+ *   differ, committed only on blur/Enter so a partial draft never
+ *   dispatches a command) -- `Input` is a thin styled wrapper around a
+ *   native `<input>` with full attribute passthrough, so it can keep that
+ *   exact string-draft/blur-commit behavior unchanged.
+ * - `MixedCheckbox` becomes the library `Checkbox` (its own `indeterminate`
+ *   prop already does what this file used to do by hand via a ref).
+ * - Track-tab volume/pan sliders become the library `Slider`, wrapped the
+ *   same way as `TrackPanel.tsx`'s identical fields: a `<label>` with a
+ *   visually-hidden accessible name (`Slider` accepts no `aria-label`) and
+ *   an `onPointerUp`/`onKeyUp` commit handler (`Slider` exposes only a
+ *   continuous `onChange`, no commit-on-release callback of its own).
+ * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
-import { useEffect, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import { useEffect, useState } from 'react';
+import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import {
+  Checkbox,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Slider,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@sudobility/components';
 import type { Accidental, Articulation, Clef, KeySignature, NoteEvent, PitchStep, TimeSignature } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -88,12 +117,10 @@ const MIXED_VALUE = '__mixed__';
 type InspectorTab = 'note' | 'measure' | 'track';
 
 const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
-const TEXT_INPUT_CLASS =
-  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
-const SELECT_CLASS =
-  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
+const TEXT_INPUT_CLASS = 'w-full px-2 py-1.5 text-sm';
+const SELECT_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
 
-/** A `<select>` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
+/** A `Select` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
 function MixedSelect<T extends string>({
   value,
   options,
@@ -107,33 +134,43 @@ function MixedSelect<T extends string>({
   onChange: (value: T) => void;
   disabled?: boolean;
 }) {
-  const selectValue = value === MIXED ? MIXED_VALUE : (value ?? '');
+  const selectValue = value === MIXED ? MIXED_VALUE : (value ?? undefined);
   return (
-    <select
-      aria-label={ariaLabel}
+    <Select
       value={selectValue}
       disabled={disabled || value === null}
-      onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-        if (e.target.value === MIXED_VALUE) return;
-        onChange(e.target.value as T);
+      onValueChange={(v) => {
+        if (v === MIXED_VALUE) return;
+        onChange(v as T);
       }}
-      className={SELECT_CLASS}
     >
-      {value === MIXED && (
-        <option value={MIXED_VALUE} disabled>
-          Mixed
-        </option>
-      )}
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger aria-label={ariaLabel} className={SELECT_CLASS}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {value === MIXED && (
+          <SelectItem value={MIXED_VALUE} disabled>
+            Mixed
+          </SelectItem>
+        )}
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
-/** A numeric `<input>` showing an empty value + "Mixed" placeholder when `value` is `MIXED`. Commits on blur/Enter, not on every keystroke, so a partial/invalid draft never dispatches a command. */
+/** A numeric `<input>` (the library `Input`, `type="number"`) showing an empty value + "Mixed" placeholder when `value` is `MIXED`. Commits on blur/Enter, not on every keystroke, so a partial/invalid draft never dispatches a command.
+ *
+ * Kept on the library `Input` rather than `NumberInput`: `NumberInput`'s
+ * `value`/`onChange` pair is a real `number`, with no representation for
+ * "empty, showing a Mixed placeholder" -- exactly the state this field
+ * needs whenever a multi-selection's values differ. `Input` is a thin
+ * styled `<input>` with full attribute passthrough, so it keeps the same
+ * string-draft/blur-commit behavior unchanged. */
 function MixedNumberField({
   label,
   value,
@@ -165,7 +202,7 @@ function MixedNumberField({
   return (
     <label className="flex flex-col gap-1">
       <span className={FIELD_LABEL_CLASS}>{label}</span>
-      <input
+      <Input
         type="number"
         value={draft}
         placeholder={value === MIXED ? 'Mixed' : undefined}
@@ -185,7 +222,7 @@ function MixedNumberField({
   );
 }
 
-/** A checkbox showing an indeterminate visual state when `indeterminate` is true (mirrors MUI's `Checkbox indeterminate` for the "Mixed" tri-state fields) -- the DOM's `indeterminate` flag has no HTML attribute/JSX prop, so it's set imperatively via ref, same as any native checkbox needing it. */
+/** A checkbox showing an indeterminate visual state when `indeterminate` is true (the library `Checkbox`'s own `indeterminate` prop, mirroring MUI's `Checkbox indeterminate` for the "Mixed" tri-state fields -- it manages the DOM's `indeterminate` flag via ref internally, so this file no longer has to). */
 function MixedCheckbox({
   label,
   checked,
@@ -199,23 +236,40 @@ function MixedCheckbox({
   onChange: (checked: boolean) => void;
   disabled?: boolean;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = indeterminate;
-  }, [indeterminate]);
+  return <Checkbox label={label} checked={checked} indeterminate={indeterminate} onChange={onChange} disabled={disabled} />;
+}
+
+/** A library `Slider` wrapped with an accessible name (via a visually-hidden
+ * label, since `Slider` accepts no `aria-label`) and a commit-on-release
+ * handler (since `Slider` exposes only a continuous `onChange`, no
+ * `onValueCommitted`-style callback of its own) -- same pattern as
+ * `TrackPanel.tsx`'s identical volume/pan sliders. */
+function CommitSlider({
+  label,
+  value,
+  onCommit,
+  min,
+  max,
+  step,
+}: {
+  label: string;
+  value: number;
+  onCommit: (value: number) => void;
+  min: number;
+  max: number;
+  step: number;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  const commit = (e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>): void => {
+    onCommit(Number((e.target as HTMLInputElement).value));
+  };
 
   return (
-    <label className="flex items-center gap-2 text-sm text-theme-text-primary">
-      <input
-        ref={ref}
-        type="checkbox"
-        aria-label={label}
-        checked={checked}
-        disabled={disabled}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-theme-border"
-      />
-      {label}
+    <label className="flex-1" onPointerUp={commit} onKeyUp={commit}>
+      <span className="sr-only">{label}</span>
+      <Slider value={draft} onChange={setDraft} min={min} max={max} step={step} />
     </label>
   );
 }
@@ -304,12 +358,13 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>Track</span>
-        <input
+        <Input
           value={trackName === MIXED ? '' : (trackName ?? '')}
           placeholder={trackName === MIXED ? 'Mixed' : undefined}
           disabled
           aria-label="Track (read-only)"
           className={TEXT_INPUT_CLASS}
+          readOnly
         />
       </label>
 
@@ -423,22 +478,6 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const volume = commonValue(tracks.map((t) => t.volume));
   const pan = commonValue(tracks.map((t) => t.pan));
 
-  // Local drag drafts (see TrackPanel.tsx's identical pattern/doc comment):
-  // a native range input's onChange fires on every drag tick; dispatching
-  // a ScoreCommand per tick would flood undo history. The command is
-  // dispatched once, from onPointerUp/onKeyUp, while these drafts keep the
-  // thumb tracking the drag live -- synced back to the selection's real
-  // (possibly "mixed") value on any external change.
-  const [volumeDraft, setVolumeDraft] = useState(volume === MIXED || volume === null ? 1 : volume);
-  const [panDraft, setPanDraft] = useState(pan === MIXED || pan === null ? 0 : pan);
-
-  useEffect(() => {
-    setVolumeDraft(volume === MIXED || volume === null ? 1 : volume);
-  }, [volume]);
-  useEffect(() => {
-    setPanDraft(pan === MIXED || pan === null ? 0 : pan);
-  }, [pan]);
-
   if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
 
   if (tracks.length === 0) {
@@ -463,20 +502,20 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>Name</span>
-        <input
+        <Input
           value={name === MIXED ? '' : name ?? ''}
           placeholder={name === MIXED ? 'Mixed' : undefined}
-          onChange={(e) => patchAll({ name: e.target.value })}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => patchAll({ name: e.target.value })}
           aria-label="Track name"
           className={TEXT_INPUT_CLASS}
         />
       </label>
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>Instrument</span>
-        <input
+        <Input
           value={instrumentName === MIXED ? '' : instrumentName ?? ''}
           placeholder={instrumentName === MIXED ? 'Mixed' : undefined}
-          onChange={(e) => patchAll({ instrumentName: e.target.value })}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => patchAll({ instrumentName: e.target.value })}
           aria-label="Instrument"
           className={TEXT_INPUT_CLASS}
         />
@@ -509,32 +548,24 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
 
       <div className="flex items-center gap-2">
         <span className="min-w-[40px] text-xs text-theme-text-secondary">Volume</span>
-        <input
-          type="range"
+        <CommitSlider
+          label="Track volume"
+          value={volume === MIXED || volume === null ? 1 : volume}
+          onCommit={(v) => patchAll({ volume: v })}
           min={0}
           max={1}
           step={0.01}
-          value={volumeDraft}
-          aria-label="Track volume"
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setVolumeDraft(Number(e.target.value))}
-          onPointerUp={(e) => patchAll({ volume: Number(e.currentTarget.value) })}
-          onKeyUp={(e) => patchAll({ volume: Number(e.currentTarget.value) })}
-          className="flex-1"
         />
       </div>
       <div className="flex items-center gap-2">
         <span className="min-w-[40px] text-xs text-theme-text-secondary">Pan</span>
-        <input
-          type="range"
+        <CommitSlider
+          label="Track pan"
+          value={pan === MIXED || pan === null ? 0 : pan}
+          onCommit={(v) => patchAll({ pan: v })}
           min={-1}
           max={1}
           step={0.01}
-          value={panDraft}
-          aria-label="Track pan"
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setPanDraft(Number(e.target.value))}
-          onPointerUp={(e) => patchAll({ pan: Number(e.currentTarget.value) })}
-          onKeyUp={(e) => patchAll({ pan: Number(e.currentTarget.value) })}
-          className="flex-1"
         />
       </div>
 
@@ -570,9 +601,6 @@ const TABS: Array<{ value: InspectorTab; label: string }> = [
   { value: 'track', label: 'Track' },
 ];
 
-const TAB_BUTTON_CLASS =
-  'border-b-2 border-transparent px-3 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-hover-bg aria-selected:border-primary aria-selected:text-theme-text-primary';
-
 export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
   const selection = store((s) => s.selection);
   const [tab, setTab] = useState<InspectorTab>(() => defaultTabFor(selection));
@@ -587,35 +615,24 @@ export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
 
   return (
     <div className="flex h-full flex-col overflow-auto" aria-label="Inspector panel">
-      <div role="tablist" aria-label="Inspector tabs" className="flex border-b border-theme-border">
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            role="tab"
-            id={`inspector-tab-${t.value}`}
-            aria-selected={tab === t.value}
-            aria-controls={`inspector-tabpanel-${t.value}`}
-            onClick={() => setTab(t.value)}
-            className={TAB_BUTTON_CLASS}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {TABS.map((t) => (
-        <div
-          key={t.value}
-          role="tabpanel"
-          id={`inspector-tabpanel-${t.value}`}
-          aria-labelledby={`inspector-tab-${t.value}`}
-          hidden={tab !== t.value}
-        >
-          {tab === t.value && t.value === 'note' && <NoteTab store={store} />}
-          {tab === t.value && t.value === 'measure' && <MeasureTab store={store} />}
-          {tab === t.value && t.value === 'track' && <TrackTab store={store} />}
-        </div>
-      ))}
+      <Tabs value={tab} onValueChange={(value) => setTab(value as InspectorTab)}>
+        <TabsList aria-label="Inspector tabs">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="note">
+          <NoteTab store={store} />
+        </TabsContent>
+        <TabsContent value="measure">
+          <MeasureTab store={store} />
+        </TabsContent>
+        <TabsContent value="track">
+          <TrackTab store={store} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

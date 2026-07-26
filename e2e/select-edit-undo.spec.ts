@@ -24,18 +24,21 @@ test.describe('note selection, editing, and undo/redo', () => {
     expect(before).not.toBeNull();
     const beforePitch = before!.notes[0].pitch;
 
-    // Change pitch via the inspector (scenario 5). Re-skinned onto a
-    // native <select> (T12 batch 3): the MUI listbox open/click
-    // choreography becomes a plain Playwright `selectOption`, and
-    // `toHaveText` (which reads a native select's *entire* option list,
-    // not just the selected one) becomes `toHaveValue`, the DOM's own
-    // notion of "what's currently selected".
+    // Change pitch via the inspector (scenario 5). Library sweep 1: the
+    // native <select> becomes @sudobility/components' Radix-backed
+    // Select -- its trigger is a <button role="combobox">, not a real
+    // <select>, so `selectOption`/`toHaveValue` no longer apply. Open it
+    // and click the resulting role="option" instead, and assert the
+    // closed trigger's own rendered text (`toHaveText`, an exact match --
+    // it only ever shows the selected item, unlike a native select's
+    // textContent, which concatenates every option).
     const pitchStepSelect = page.getByRole('combobox', { name: 'Pitch step' });
     await expect(pitchStepSelect).toBeVisible();
     const nextStep = beforePitch.step === 'C' ? 'D' : 'C';
-    await pitchStepSelect.selectOption(nextStep);
+    await pitchStepSelect.click();
+    await page.getByRole('option', { name: nextStep }).click();
 
-    await expect(pitchStepSelect).toHaveValue(nextStep);
+    await expect(pitchStepSelect).toHaveText(nextStep);
 
     const afterChange = await readScoreSummary(page);
     expect(afterChange!.notes[0].pitch.step).toBe(nextStep);
@@ -43,13 +46,13 @@ test.describe('note selection, editing, and undo/redo', () => {
 
     // Undo reverts the pitch change (scenario 6 / spec §39 item 15).
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(pitchStepSelect).toHaveValue(beforePitch.step);
+    await expect(pitchStepSelect).toHaveText(beforePitch.step);
     const afterUndo = await readScoreSummary(page);
     expect(afterUndo!.notes[0].pitch.step).toBe(beforePitch.step);
 
     // Redo re-applies it (spec §39 item 15).
     await page.getByRole('button', { name: 'Redo' }).click();
-    await expect(pitchStepSelect).toHaveValue(nextStep);
+    await expect(pitchStepSelect).toHaveText(nextStep);
     const afterRedo = await readScoreSummary(page);
     expect(afterRedo!.notes[0].pitch.step).toBe(nextStep);
 

@@ -96,23 +96,25 @@ test.describe('spec §39 acceptance scenario', () => {
     await clickNoteGroup(page, groups[0]);
     await expect(page.getByText('1 note(s) selected')).toBeVisible();
 
-    // Re-skinned onto a native <select> (T12 batch 3): the MUI listbox
-    // open/click choreography becomes a plain Playwright `selectOption`,
-    // and reading/asserting the selection goes through `inputValue`/
-    // `toHaveValue` (a native select's `textContent` concatenates every
-    // option, not just the selected one, so it can no longer stand in for
-    // "what's currently selected").
+    // Library sweep 1: the native <select> becomes @sudobility/components'
+    // Radix-backed Select -- its trigger is a <button role="combobox">, not
+    // a real <select>, so `selectOption`/`inputValue`/`toHaveValue` no
+    // longer apply. Open it and click the resulting role="option" instead,
+    // and read/assert "what's currently selected" off the closed trigger's
+    // own rendered text (it only ever shows the selected item, unlike a
+    // native select's textContent, which concatenates every option).
     const pitchStepSelect = page.getByRole('combobox', { name: 'Pitch step' });
-    const originalStep = await pitchStepSelect.inputValue();
+    const originalStep = (await pitchStepSelect.textContent())?.trim();
     const nextStep = originalStep === 'C' ? 'D' : 'C';
-    await pitchStepSelect.selectOption(nextStep);
-    await expect(pitchStepSelect).toHaveValue(nextStep);
+    await pitchStepSelect.click();
+    await page.getByRole('option', { name: nextStep }).click();
+    await expect(pitchStepSelect).toHaveText(nextStep);
 
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(pitchStepSelect).toHaveValue(originalStep ?? '');
+    await expect(pitchStepSelect).toHaveText(originalStep ?? '');
 
     await page.getByRole('button', { name: 'Redo' }).click();
-    await expect(pitchStepSelect).toHaveValue(nextStep);
+    await expect(pitchStepSelect).toHaveText(nextStep);
 
     // 16-19. Open the piano roll; the same notes appear; drag one; notation updates.
     await page.getByRole('button', { name: 'Piano roll view' }).click();

@@ -13,16 +13,28 @@
  * the ephemeral playback-speed multiplier), so it goes through
  * `changeTempoCommand`/`dispatchCommand` like any other score mutation.
  *
- * Re-skinned onto Tailwind + @sudobility/components (T12 batch 2): MUI
- * ToggleButtons become plain buttons with `aria-pressed`, the MUI Select
- * becomes a native `<select>`, and the MUI Slider becomes a native
- * `<input type="range">` — all so testing-library's native-control queries
- * (`selectOptions`, `fireEvent.change`) keep working unchanged.
+ * Adopts `@sudobility/components` controls (library sweep 1): plain
+ * buttons become the library `Button` (variant="ghost", `size="icon"` for
+ * icon-only controls; `aria-pressed`/`aria-label`/`disabled` all just work
+ * since it forwards `ButtonHTMLAttributes`), the native `<select>` becomes
+ * the library's Radix-backed `Select`, and master volume becomes the
+ * library `Slider`. The library `Slider` accepts no `aria-label`/`id`
+ * (its props are a closed `SliderProps`, no HTML-attribute passthrough),
+ * so its accessible name is supplied by wrapping it in a `<label>` with a
+ * visually-hidden (`sr-only`) text node -- the same accessible-name result
+ * as an explicit `aria-label`, via the standard implicit label-association
+ * algorithm (`getByRole('slider', {name})`/`getByLabelText` both resolve
+ * it). The visible "Vol" abbreviation stays a plain sibling *outside* that
+ * label so it doesn't also get folded into the accessible name.
+ *
+ * The timeline scrubber stays a native `<input type="range">`: spec-wise
+ * it's the one range control here that isn't a "commit once, not per
+ * tick" control (every intermediate tick genuinely re-seeks playback), so
+ * there's no draft/commit split to preserve and no benefit to wrapping it.
  */
 import { useMemo, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip, cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Tooltip, cn } from '@sudobility/components';
 import { changeTempoCommand } from '@sudobility/music_lib';
 import { scoreEndTick } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -39,13 +51,9 @@ export type TransportBarProps = {
 /** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const ICON_BUTTON_CLASS = cn(variants.button.ghost.icon(), 'h-auto w-auto p-1.5 text-sm leading-none');
+const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn(
-  variants.button.ghost.default(),
-  'px-2 py-1 text-xs',
-  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
-);
+const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-xs', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
 
 function formatMeasureBeat(mb: MeasureBeat | null): string {
   return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
@@ -95,12 +103,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     }
   };
 
-  const handleSpeedChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    playbackController.setTempoMultiplier(Number(event.target.value));
+  const handleSpeedChange = (value: string): void => {
+    playbackController.setTempoMultiplier(Number(value));
   };
 
-  const handleVolumeChange = (event: ChangeEvent<HTMLInputElement>): void => {
-    playbackController.setMasterVolume(Number(event.target.value));
+  const handleVolumeChange = (value: number): void => {
+    playbackController.setMasterVolume(value);
   };
 
   const handleScrub = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -114,41 +122,49 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       className="flex flex-wrap items-center gap-2 border-b border-theme-border px-2 py-1"
     >
       <Tooltip content="Go to start">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Go to start"
           disabled={!hasScore}
           onClick={() => playbackController.goToStart()}
           className={ICON_BUTTON_CLASS}
         >
           ◀◀
-        </button>
+        </Button>
       </Tooltip>
       <Tooltip content="Previous measure">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Previous measure"
           disabled={!hasScore}
           onClick={() => playbackController.previousMeasure()}
           className={ICON_BUTTON_CLASS}
         >
           ◀
-        </button>
+        </Button>
       </Tooltip>
       <Tooltip content={playbackState === 'playing' ? 'Pause' : 'Play'}>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label={playbackState === 'playing' ? 'Pause' : 'Play'}
           disabled={!hasScore}
           onClick={() => playbackController.togglePlay()}
           className={ICON_BUTTON_CLASS}
         >
           {playbackState === 'playing' ? '❚❚' : '▶'}
-        </button>
+        </Button>
       </Tooltip>
       <Tooltip content="Stop">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Stop"
           disabled={!hasScore}
           onClick={() => {
@@ -165,23 +181,26 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           className={ICON_BUTTON_CLASS}
         >
           ■
-        </button>
+        </Button>
       </Tooltip>
       <Tooltip content="Next measure">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Next measure"
           disabled={!hasScore}
           onClick={() => playbackController.nextMeasure()}
           className={ICON_BUTTON_CLASS}
         >
           ▶
-        </button>
+        </Button>
       </Tooltip>
 
       <Tooltip content="Toggle loop">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Toggle loop"
           aria-pressed={loopRange !== null}
           disabled={!hasScore}
@@ -189,12 +208,13 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           className={TOGGLE_BUTTON_CLASS}
         >
           Loop
-        </button>
+        </Button>
       </Tooltip>
 
       <Tooltip content="Toggle metronome">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Toggle metronome"
           aria-pressed={metronome}
           disabled={!hasScore}
@@ -202,7 +222,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           className={TOGGLE_BUTTON_CLASS}
         >
           Metronome
-        </button>
+        </Button>
       </Tooltip>
 
       <span aria-label="Current measure and beat" className="min-w-[40px] text-center text-sm text-theme-text-primary">
@@ -210,58 +230,50 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </span>
 
       {editingTempo ? (
-        <input
+        <Input
           type="number"
           aria-label="Tempo (BPM)"
           value={tempoDraft}
           autoFocus
-          onChange={(event) => setTempoDraft(event.target.value)}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setTempoDraft(event.target.value)}
           onBlur={commitTempo}
           onKeyDown={handleTempoKeyDown}
-          className="w-[84px] rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary"
+          className="w-[84px] px-2 py-1 text-sm"
         />
       ) : (
         <Tooltip content="Edit tempo">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             aria-label="Tempo (BPM)"
             disabled={!hasScore}
             onClick={beginEditTempo}
-            className={cn(
-              variants.button.ghost.default(),
-              'min-w-[64px] px-1 py-1 disabled:cursor-default enabled:cursor-pointer',
-            )}
+            className="min-w-[64px] px-1 py-1 disabled:cursor-default enabled:cursor-pointer"
           >
             {currentBpm} BPM
-          </button>
+          </Button>
         </Tooltip>
       )}
 
-      <select
-        aria-label="Playback speed"
-        value={tempoMultiplier}
-        onChange={handleSpeedChange}
-        className="rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1 text-sm text-theme-text-primary"
-      >
-        {SPEED_OPTIONS.map((speed) => (
-          <option key={speed} value={speed}>
-            {speed}x
-          </option>
-        ))}
-      </select>
+      <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
+        <SelectTrigger aria-label="Playback speed" className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SPEED_OPTIONS.map((speed) => (
+            <SelectItem key={speed} value={String(speed)}>
+              {speed}x
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <div className="flex w-[120px] items-center gap-2">
         <span className="text-sm text-theme-text-primary">Vol</span>
-        <input
-          type="range"
-          aria-label="Master volume"
-          min={0}
-          max={1}
-          step={0.01}
-          value={masterVolume}
-          onChange={handleVolumeChange}
-          className="w-full"
-        />
+        <label className="flex-1">
+          <span className="sr-only">Master volume</span>
+          <Slider value={masterVolume} onChange={handleVolumeChange} min={0} max={1} step={0.01} />
+        </label>
       </div>
 
       <div className="min-w-[120px] flex-1">
