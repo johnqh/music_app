@@ -23,9 +23,24 @@ import {
   type User,
 } from 'firebase/auth';
 import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
+import { configureTheme } from '@sudobility/design';
+import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
 import { initializeAppStore, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
 import { CONSTANTS } from '@/config/constants';
+
+// Activate the design-system theme (Swiss). configureTheme() registers the
+// JS class overrides; the semantic tokens (theme-bg-*, theme-text-*, the
+// component palette) resolve via the CSS custom properties injected below
+// (:root light + .dark) — same pattern as sudojo_app / sider_app. Without
+// this style tag every theme-* utility resolves to an undefined variable.
+configureTheme(swissTheme);
+if (typeof document !== 'undefined' && !document.getElementById('sudobility-design-theme')) {
+  const styleEl = document.createElement('style');
+  styleEl.id = 'sudobility-design-theme';
+  styleEl.textContent = generateThemeCSS(swissTheme);
+  document.head.appendChild(styleEl);
+}
 
 // ---------------------------------------------------------------------------
 // Network
