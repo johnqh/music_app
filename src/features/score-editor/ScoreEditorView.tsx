@@ -138,6 +138,18 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
+  /**
+   * The scroll box's measured client width — REACTIVE state, not an ad-hoc
+   * `ref.current?.clientWidth` read. `layoutPlan` below (caret geometry,
+   * click-to-seek, auto-scroll, spacer height) and `draw()` (the renderer's
+   * own cached plan) must wrap systems at the SAME width: when this memo
+   * read the ref directly it ran before first mount attached it, fell back
+   * to DEFAULT_WIDTH, and never re-measured — the caret then traveled along
+   * a 900px-wrapped layout while the canvas wrapped at the real width,
+   * overshooting each drawn line's end before jumping to the next system.
+   * `sizeCanvases` (mount effect + ResizeObserver) keeps this current.
+   */
+  const [viewWidth, setViewWidth] = useState(DEFAULT_WIDTH);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
@@ -210,9 +222,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
    */
   const layoutPlan = useMemo(() => {
     if (!displayScore) return null;
-    const width = containerRef.current?.clientWidth || DEFAULT_WIDTH;
-    return computeLayout(displayScore, { zoom, layoutMode, width, theme: renderTheme });
-  }, [displayScore, zoom, layoutMode, renderTheme]);
+    return computeLayout(displayScore, { zoom, layoutMode, width: viewWidth, theme: renderTheme });
+  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth]);
 
   /**
    * The playback caret's position (spec follow-up: "caret on the track
@@ -240,6 +251,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     const dpr = window.devicePixelRatio || 1;
     const w = box.clientWidth || DEFAULT_WIDTH;
     const h = box.clientHeight || CONTAINER_MIN_HEIGHT;
+    setViewWidth(w); // keep layoutPlan wrapping at the width the canvas actually draws with
+
     for (const canvas of [scoreCanvasRef.current, overlayCanvasRef.current]) {
       if (!canvas) return false;
       const bw = Math.max(1, Math.floor(w * dpr));
@@ -307,13 +320,15 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     resultRef.current = rendererRef.current!.render(displayScore, ctx, {
       zoom,
       layoutMode,
-      width: box.clientWidth || DEFAULT_WIDTH,
+      // Same width as `layoutPlan` (see `viewWidth`'s doc) — the caret and
+      // the drawn systems must wrap lines at identical points.
+      width: viewWidth,
       theme: renderTheme,
       viewport,
       devicePixelRatio: window.devicePixelRatio || 1,
     });
     drawOverlay();
-  }, [displayScore, zoom, layoutMode, renderTheme, drawOverlay]);
+  }, [displayScore, zoom, layoutMode, renderTheme, drawOverlay, viewWidth]);
 
   /** `onScroll` handler: throttles `draw` to at most once per animation frame; trailing-edge, so a burst of scroll events collapses into one redraw at the frame's final position. */
   const handleScroll = useCallback(() => {

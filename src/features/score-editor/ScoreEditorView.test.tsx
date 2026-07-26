@@ -506,4 +506,26 @@ describe('playback caret and click-to-seek', () => {
     expect(store.getState().selection.eventIds).toEqual([first.id]);
     expect(playbackController.seek).not.toHaveBeenCalled();
   });
+
+  it('wraps the caret/spacer layout at the scroll box measured width, not the 900px fallback', () => {
+    // Regression: layoutPlan once read containerRef.current?.clientWidth
+    // inside a useMemo — null on first render, so it fell back to
+    // DEFAULT_WIDTH (900) and never re-measured, while draw() wrapped at
+    // the real width: the caret overshot each drawn line's end before
+    // jumping to the next system. The spacer height is the observable
+    // proxy for which width the caret's plan wrapped at.
+    const widthSpy = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(500);
+    try {
+      const store = makeStore();
+      render(<ScoreEditorView store={store} />);
+      const score = store.getState().score!;
+      const opts = { zoom: 1, layoutMode: 'page' as const, theme: THEME };
+      const at500 = computeLayout(score, { ...opts, width: 500 }).totalHeight;
+      const at900 = computeLayout(score, { ...opts, width: 900 }).totalHeight;
+      expect(at500).not.toBe(at900); // precondition: the two widths wrap differently
+      expect(interactionSurface().style.height).toBe(`${Math.max(at500, 400)}px`);
+    } finally {
+      widthSpy.mockRestore();
+    }
+  });
 });
