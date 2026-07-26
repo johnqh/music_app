@@ -20,6 +20,7 @@
 ## File Map
 
 music_lib:
+
 - Modify `src/adapters/vexflow/layout.ts` — add `systemAtY`, `measureAtXInSystem` (binary search).
 - Create `src/adapters/vexflow/playhead.ts` — `caretPositionForTick`, `tickForPoint` (moved from app, re-based on the lookups).
 - Modify `src/adapters/vexflow/renderer.ts` — export `buildMeasureContent` (shared with canvas renderer). No behavior change.
@@ -29,6 +30,7 @@ music_lib:
 - Modify `src/index.ts` — export all of the above.
 
 music_app:
+
 - Modify `src/features/score-editor/ScoreEditorView.tsx` — canvas pipeline + geometric interactions.
 - Delete `src/features/score-editor/playhead.ts` + its test (moved to lib; imports switch to `@sudobility/music_lib`).
 - Modify `src/features/score-editor/hit-test.ts` — add `eventIdAtPoint`, `measureIdAtPoint`.
@@ -43,10 +45,12 @@ music_app:
 ### Task 1: Binary-search layout lookups (music_lib)
 
 **Files:**
+
 - Modify: `src/adapters/vexflow/layout.ts`
 - Test: `src/adapters/vexflow/layout.test.ts` (append)
 
 **Interfaces:**
+
 - Produces: `systemAtY(plan: LayoutPlan, y: number): SystemLayout | null` (logical y; null in gaps/outside), `measureAtXInSystem(plan: LayoutPlan, system: SystemLayout, x: number): MeasureLayout | null` (clamps x into the system's measure span; null only if the system has no measures). Both O(log n).
 
 - [ ] **Step 1: Write the failing tests** (append to `layout.test.ts`)
@@ -76,13 +80,15 @@ describe('systemAtY / measureAtXInSystem', () => {
 
   it('finds the measure containing an x, clamping outside the span', () => {
     const system = plan.systems[1];
-    const layouts = system.measureIndices.map(
-      (i) => plan.trackLayouts[0].measures.find((m) => m.measureIndex === i)!,
+    const layouts = system.measureIndices.map((i) =>
+      plan.trackLayouts[0].measures.find((m) => m.measureIndex === i)!,
     );
     const target = layouts[1];
     expect(measureAtXInSystem(plan, system, target.box.x + target.box.width / 2)).toBe(target);
     expect(measureAtXInSystem(plan, system, -9999)!.measureIndex).toBe(layouts[0].measureIndex);
-    expect(measureAtXInSystem(plan, system, 99999)!.measureIndex).toBe(layouts.at(-1)!.measureIndex);
+    expect(measureAtXInSystem(plan, system, 99999)!.measureIndex).toBe(
+      layouts.at(-1)!.measureIndex,
+    );
   });
 });
 ```
@@ -118,7 +124,11 @@ export function systemAtY(plan: LayoutPlan, y: number): SystemLayout | null {
  * Relies on `computeLayout` emitting `system.measureIndices` in ascending
  * x order (it lays measures left-to-right), so indices map to sorted boxes.
  */
-export function measureAtXInSystem(plan: LayoutPlan, system: SystemLayout, x: number): MeasureLayout | null {
+export function measureAtXInSystem(
+  plan: LayoutPlan,
+  system: SystemLayout,
+  x: number,
+): MeasureLayout | null {
   const measures = plan.trackLayouts[0]?.measures;
   if (!measures || system.measureIndices.length === 0) return null;
   const first = measures[system.measureIndices[0]];
@@ -149,11 +159,13 @@ Note: `measures[system.measureIndices[k]]` indexing assumes `trackLayouts[0].mea
 ### Task 2: Move playhead helpers into music_lib
 
 **Files:**
+
 - Create: `src/adapters/vexflow/playhead.ts`
 - Create: `src/adapters/vexflow/playhead.test.ts`
 - Modify: `src/index.ts` (export)
 
 **Interfaces:**
+
 - Consumes: Task 1's `systemAtY`, `measureAtXInSystem`.
 - Produces: `caretPositionForTick(plan: LayoutPlan, score: Score, tick: number): CaretPosition | null` and `tickForPoint(plan: LayoutPlan, score: Score, x: number, y: number): number | null` with `CaretPosition = { x: number; yTop: number; yBottom: number }` — exact same contracts as music_app's current `src/features/score-editor/playhead.ts` (copy that file as the starting point; its doc comments carry over).
 
@@ -178,7 +190,7 @@ function systemForMeasureIndex(plan: LayoutPlan, measureIndex: number): SystemLa
 }
 ```
 
-  - The tick→measure scan in `caretPositionForTick` becomes a binary search over `timings` by `startTick` (ascending); `tickForPoint`'s system/measure resolution uses `systemAtY` + `measureAtXInSystem`.
+- The tick→measure scan in `caretPositionForTick` becomes a binary search over `timings` by `startTick` (ascending); `tickForPoint`'s system/measure resolution uses `systemAtY` + `measureAtXInSystem`.
 - [ ] **Step 4: Export** `caretPositionForTick`, `tickForPoint`, `CaretPosition`, `systemAtY`, `measureAtXInSystem` from `src/index.ts`. Run the test — PASS. Run `bun run verify`.
 - [ ] **Step 5: Commit** — `git commit -m "feat(playhead): caret/seek geometry helpers (moved from music_app, binary-searched)"`
 
@@ -187,11 +199,13 @@ function systemForMeasureIndex(plan: LayoutPlan, measureIndex: number): SystemLa
 ### Task 3: Mock 2D context test double (music_lib)
 
 **Files:**
+
 - Create: `src/test/canvas-stub.ts`
 - Modify: `src/index.ts` (export alongside `testStoreContext`)
 - Test: `src/test/canvas-stub.test.ts`
 
 **Interfaces:**
+
 - Produces: `createMock2DContext(width = 800, height = 600): Mock2DContext` where `Mock2DContext` is a `CanvasRenderingContext2D`-compatible object with `ops: Array<{ method: string; args: unknown[] }>` recording every call, property setters accepted (`fillStyle`, `strokeStyle`, `font`, `lineWidth`, `lineCap`, `globalAlpha`, ...), and a `canvas: { width; height }` back-reference.
 
 - [ ] **Step 1: Failing test**
@@ -271,12 +285,14 @@ export function createMock2DContext(width = 800, height = 600): Mock2DContext {
 ### Task 4: CanvasScoreRenderer (music_lib)
 
 **Files:**
+
 - Modify: `src/adapters/vexflow/renderer.ts` — change `function buildMeasureContent(` to `export function buildMeasureContent(` (no other change).
 - Create: `src/adapters/vexflow/canvas-renderer.ts`
 - Create: `src/adapters/vexflow/canvas-renderer.test.ts`
 - Modify: `src/index.ts` (export `CanvasScoreRenderer`, `CanvasRenderOptions`, `CanvasRenderResult`)
 
 **Interfaces:**
+
 - Consumes: `buildMeasureContent`, `buildTies` (renderer.ts), `computeLayout`, `resolveZoom`, `visibleSystemMeasureIndices` (layout.ts), `NoteMeta` (convert.ts), VexFlow `CanvasContext`, `StaveConnector`, `Formatter`, `Voice`.
 - Produces:
 
@@ -288,19 +304,24 @@ export type CanvasRenderOptions = Omit<RenderOptions, 'visibleMeasureIndices'> &
   devicePixelRatio?: number;
 };
 export type CanvasRenderResult = {
-  idToBBox: Map<string, BBox>;          // zoom-scaled CSS px, content coords
-  measureIdToBBox: Map<string, BBox>;   // same units
+  idToBBox: Map<string, BBox>; // zoom-scaled CSS px, content coords
+  measureIdToBBox: Map<string, BBox>; // same units
   drawnMeasureIndices: Set<number>;
   plan: LayoutPlan;
   theme: RenderTheme;
 };
 export class CanvasScoreRenderer {
-  render(score: Score, ctx: CanvasRenderingContext2D, options: CanvasRenderOptions): CanvasRenderResult;
+  render(
+    score: Score,
+    ctx: CanvasRenderingContext2D,
+    options: CanvasRenderOptions,
+  ): CanvasRenderResult;
   dispose(): void; // clears cached plan
 }
 ```
 
 Behavioral contract:
+
 1. Caches `computeLayout` output; reuses it when `(score, zoom, layoutMode, width, trackIds)` are reference/value-identical to the previous call (viewport changes alone never recompute layout — the O(visible) rule).
 2. Clears the full canvas (`ctx.clearRect` under identity transform), sets `ctx.setTransform(z·dpr, 0, 0, z·dpr, 0, −viewport.top·z·dpr)` where `z = resolveZoom(zoom)`, so all drawing happens in logical units.
 3. Computes visible measures via `visibleSystemMeasureIndices(plan, viewport, 0)` and builds/draws ONLY those, using the exact same per-measure pipeline as the SVG renderer (`buildMeasureContent` → `stave.setContext(vexCtx).format()` → Formatter per measure → draw staves, voices, beams, ties, brace connectors for multi-track systems), with the whole per-system content wrapped in `try { ... } catch { /* log + skip system, keep drawing the rest */ }`.
@@ -319,7 +340,13 @@ import { stressScore, twinkleScore } from '../../test/fixtures.js';
 import { allNotes } from '../../domain/score/queries.js';
 
 const THEME = { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' };
-const OPTS = { zoom: 1, layoutMode: 'page' as const, width: 900, theme: THEME, viewport: { top: 0, bottom: 400 } };
+const OPTS = {
+  zoom: 1,
+  layoutMode: 'page' as const,
+  width: 900,
+  theme: THEME,
+  viewport: { top: 0, bottom: 400 },
+};
 
 describe('CanvasScoreRenderer', () => {
   it('draws only the systems intersecting the viewport', () => {
@@ -337,7 +364,10 @@ describe('CanvasScoreRenderer', () => {
   it('records a bbox for every note event in the drawn window, none outside it', () => {
     const score = twinkleScore();
     const renderer = new CanvasScoreRenderer();
-    const result = renderer.render(score, createMock2DContext(), { ...OPTS, viewport: { top: 0, bottom: 10_000 } });
+    const result = renderer.render(score, createMock2DContext(), {
+      ...OPTS,
+      viewport: { top: 0, bottom: 10_000 },
+    });
     for (const note of allNotes(score)) {
       const box = result.idToBBox.get(note.id);
       expect(box).toBeDefined();
@@ -358,13 +388,21 @@ describe('CanvasScoreRenderer', () => {
     const score = twinkleScore();
     const renderer = new CanvasScoreRenderer();
     const a = renderer.render(score, createMock2DContext(), OPTS);
-    const b = renderer.render(score, createMock2DContext(), { ...OPTS, viewport: { top: 100, bottom: 500 } });
+    const b = renderer.render(score, createMock2DContext(), {
+      ...OPTS,
+      viewport: { top: 100, bottom: 500 },
+    });
     expect(b.plan).toBe(a.plan);
   });
 
   it('applies the dpr+zoom+scroll transform before drawing', () => {
     const ctx = createMock2DContext();
-    new CanvasScoreRenderer().render(twinkleScore(), ctx, { ...OPTS, zoom: 2, devicePixelRatio: 2, viewport: { top: 50, bottom: 450 } });
+    new CanvasScoreRenderer().render(twinkleScore(), ctx, {
+      ...OPTS,
+      zoom: 2,
+      devicePixelRatio: 2,
+      viewport: { top: 50, bottom: 450 },
+    });
     const t = ctx.ops.find((o) => o.method === 'setTransform');
     expect(t?.args).toEqual([4, 0, 0, 4, 0, -200]); // z·dpr = 4; offset = −top·z·dpr = −50·4
   });
@@ -393,14 +431,23 @@ export class CanvasScoreRenderer {
   private cache: { key: string; score: Score; plan: LayoutPlan } | null = null;
 
   private planFor(score: Score, options: CanvasRenderOptions): LayoutPlan {
-    const key = JSON.stringify([options.zoom, options.layoutMode, options.width, options.trackIds ?? null]);
+    const key = JSON.stringify([
+      options.zoom,
+      options.layoutMode,
+      options.width,
+      options.trackIds ?? null,
+    ]);
     if (this.cache && this.cache.score === score && this.cache.key === key) return this.cache.plan;
     const plan = computeLayout(score, options as RenderOptions);
     this.cache = { key, score, plan };
     return plan;
   }
 
-  render(score: Score, ctx: CanvasRenderingContext2D, options: CanvasRenderOptions): CanvasRenderResult {
+  render(
+    score: Score,
+    ctx: CanvasRenderingContext2D,
+    options: CanvasRenderOptions,
+  ): CanvasRenderResult {
     const z = resolveZoom(options.zoom);
     const dpr = options.devicePixelRatio ?? 1;
     const plan = this.planFor(score, options);
@@ -447,18 +494,20 @@ Type note: `StaveNoteLike` = `{ getBoundingBox(): { getX(): number; getY(): numb
 ### Task 5: Highlight overlay painter (music_lib)
 
 **Files:**
+
 - Create: `src/adapters/vexflow/overlay.ts`
 - Create: `src/adapters/vexflow/overlay.test.ts`
 - Modify: `src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `CanvasRenderResult` (Task 4), `HighlightSets` (renderer.ts — reuse the exported type).
 - Produces:
 
 ```ts
 export type OverlayOptions = {
-  viewportTop: number;        // CSS px (zoom-scaled content coords, like the bboxes)
-  devicePixelRatio?: number;  // default 1
+  viewportTop: number; // CSS px (zoom-scaled content coords, like the bboxes)
+  devicePixelRatio?: number; // default 1
 };
 export function paintHighlights(
   ctx: CanvasRenderingContext2D,
@@ -481,6 +530,7 @@ Contract: clears the whole overlay, then for each id present in the bbox maps st
 ### Task 6: Stress fixture + O(visible) benchmark (music_lib)
 
 **Files:**
+
 - Modify: `src/services/benchmark.ts` (or its module layout — read it first) — add a `benchmarkCanvasRender(measures: number)` entry.
 - Test: `src/adapters/vexflow/canvas-renderer.test.ts` (append)
 
@@ -521,16 +571,21 @@ it('windowed render time does not scale with score size (10k-measure stress)', (
 ### Task 8: App test scaffolding for canvas (music_app)
 
 **Files:**
+
 - Modify: `src/test/setup.ts`
 - Modify: `src/features/score-editor/hit-test.ts`
 - Test: `src/features/score-editor/hit-test.test.ts` (append)
 
 **Interfaces:**
+
 - Produces: jsdom `HTMLCanvasElement.prototype.getContext` returns a shared `createMock2DContext()` per canvas; and hit-test helpers used by Task 9/10:
 
 ```ts
-export function eventIdAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point): string | null;   // topmost = last inserted wins
-export function measureIdAtPoint(measureIdToBBox: ReadonlyMap<string, BBox>, point: Point): string | null;
+export function eventIdAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point): string | null; // topmost = last inserted wins
+export function measureIdAtPoint(
+  measureIdToBBox: ReadonlyMap<string, BBox>,
+  point: Point,
+): string | null;
 ```
 
 - [ ] **Step 1: Failing tests** for both helpers: point inside one bbox → its id; overlapping bboxes → the later-inserted id; outside all → null.
@@ -540,7 +595,12 @@ export function measureIdAtPoint(measureIdToBBox: ReadonlyMap<string, BBox>, poi
 export function eventIdAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point): string | null {
   let hit: string | null = null;
   for (const [id, box] of idToBBox) {
-    if (point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height) {
+    if (
+      point.x >= box.x &&
+      point.x <= box.x + box.width &&
+      point.y >= box.y &&
+      point.y <= box.y + box.height
+    ) {
       hit = id; // keep scanning: last inserted (drawn on top) wins
     }
   }
@@ -576,6 +636,7 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
 ### Task 9: ScoreEditorView canvas pipeline (music_app)
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`
 - Modify: `src/features/score-editor/ScoreEditorView.test.tsx`
 - Delete: `src/features/score-editor/playhead.ts`, `src/features/score-editor/playhead.test.ts` (import `caretPositionForTick`/`tickForPoint` from `@sudobility/music_lib` instead)
@@ -619,7 +680,11 @@ const draw = useCallback(() => {
     bottom: (box.scrollTop + (box.clientHeight || CONTAINER_MIN_HEIGHT)) / zoom,
   };
   resultRef.current = rendererRef.current.render(displayScore, ctx, {
-    zoom, layoutMode, width: box.clientWidth || DEFAULT_WIDTH, theme: renderTheme, viewport,
+    zoom,
+    layoutMode,
+    width: box.clientWidth || DEFAULT_WIDTH,
+    theme: renderTheme,
+    viewport,
   });
   drawOverlay();
 }, [displayScore, zoom, layoutMode, renderTheme /* drawOverlay below */]);
@@ -629,9 +694,16 @@ const drawOverlay = useCallback(() => {
   const ctx = overlayCanvasRef.current?.getContext('2d');
   const result = resultRef.current;
   if (!box || !ctx || !result) return;
-  paintHighlights(ctx, result, {
-    selectedIds: selection.eventIds, playingIds: activeNoteIds, previewIds,
-  }, { viewportTop: box.scrollTop, devicePixelRatio: window.devicePixelRatio || 1 });
+  paintHighlights(
+    ctx,
+    result,
+    {
+      selectedIds: selection.eventIds,
+      playingIds: activeNoteIds,
+      previewIds,
+    },
+    { viewportTop: box.scrollTop, devicePixelRatio: window.devicePixelRatio || 1 },
+  );
 }, [selection, activeNoteIds, previewIds]);
 ```
 
@@ -640,20 +712,27 @@ Effects: a draw effect on `[draw]` (which folds in score/zoom/mode/theme) that f
 JSX (replaces the SVG container, spacer math from `layoutPlan`):
 
 ```tsx
-<div ref={scrollBoxRef} data-testid="score-editor-scroll" onScroll={handleScroll}
-     className="relative flex-1 overflow-auto" style={{ minHeight: CONTAINER_MIN_HEIGHT }}>
+<div
+  ref={scrollBoxRef}
+  data-testid="score-editor-scroll"
+  onScroll={handleScroll}
+  className="relative flex-1 overflow-auto"
+  style={{ minHeight: CONTAINER_MIN_HEIGHT }}
+>
   <div className="sticky top-0 z-0 h-0 overflow-visible" aria-hidden="true">
     <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
     <canvas ref={overlayCanvasRef} data-testid="overlay-canvas" className="absolute left-0 top-0" />
   </div>
   <div
     ref={containerRef}
-    data-testid="score-editor-canvas"                 /* interaction surface keeps its testid + aria */
+    data-testid="score-editor-canvas" /* interaction surface keeps its testid + aria */
     role="application"
     aria-label={`Score notation. ${selectionSummaryLabel(selection)}.`}
     tabIndex={0}
-    onClick={handleClick} onPointerDown={handlePointerDown}
-    onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
+    onClick={handleClick}
+    onPointerDown={handlePointerDown}
+    onPointerMove={handlePointerMove}
+    onPointerUp={handlePointerUp}
     className="relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
     style={{ height: Math.max((layoutPlan?.totalHeight ?? 0) * zoom, CONTAINER_MIN_HEIGHT) }}
   />
@@ -664,6 +743,7 @@ JSX (replaces the SVG container, spacer math from `layoutPlan`):
 (The interaction div doubles as the spacer — it spans the full content height, sits above the sticky canvases in paint order, is transparent, and receives all pointer events with document-content coordinates exactly like the old SVG container. `pointFromEvent` needs one change: `container.scrollLeft/scrollTop` → `scrollBoxRef.current.scrollLeft/scrollTop`? No — `getBoundingClientRect` on the spacer already moves with scroll, so DELETE the `+ container.scrollLeft/scrollTop` terms only if they were compensating a non-scrolling container; verify with the drag-box test.)
 
 Test updates in `ScoreEditorView.test.tsx`:
+
 - `noteGroup(container, id)` helper is replaced by `clickAt(container, bbox)`: `fireEvent.click(interactionDiv, { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 })` where `box` comes from rendering `computeLayout`-driven expectations — but simplest and honest: read `resultRef` is private, so instead compute the bbox with a directly-instantiated `CanvasScoreRenderer` + `createMock2DContext` in the test against the same score/options, and click its coordinates (jsdom rects are all zeros, so clientX/clientY ARE content coordinates — same trick the caret tests already use).
 - The virtualization describe-block ("renders every measure before…", "culls the very first draw…", scroll-flip, ResizeObserver re-measure) is rewritten against the new contract: spy on `CanvasScoreRenderer.prototype.render` and assert the `viewport` argument tracks mocked `clientHeight`/`scrollTop`, and that highlight-only changes do NOT call `render` again (overlay-only), replacing the DOM `.vf-stave`-count assertions.
 - Caret tests: unchanged behavior; imports move to lib.
@@ -675,17 +755,23 @@ Test updates in `ScoreEditorView.test.tsx`:
 ### Task 10: Geometric interactions (music_app)
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx` (handleClick / handlePointerUp)
 - Test: `src/features/score-editor/ScoreEditorView.test.tsx` (selection/seek describe blocks)
 
 `handleClick` becomes fully geometric (same precedence as today):
 
 ```ts
-const point = { x: event.clientX - rect.left + scrollBox.scrollLeft, y: event.clientY - rect.top + scrollBox.scrollTop };
+const point = {
+  x: event.clientX - rect.left + scrollBox.scrollLeft,
+  y: event.clientY - rect.top + scrollBox.scrollTop,
+};
 // jsdom note: rect is 0 and scroll is 0, so clientX/Y pass through as content coords.
 const result = resultRef.current;
 const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
-if (noteId) { /* select / shift-toggle — unchanged code */ return; }
+if (noteId) {
+  /* select / shift-toggle — unchanged code */ return;
+}
 const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
 if (measureId) selectMeasure(store, measureId);
 seekToEventPoint(event); // unchanged; uses tickForPoint(plan, displayScore, x/zoom, y/zoom)
@@ -700,6 +786,7 @@ Tests: port every selection/shift/measure/seek/caret test to coordinate clicks (
 ### Task 11: e2e handle + helper rewrite (music_app)
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx` (publish handle)
 - Modify: `e2e/helpers.ts`, plus any spec using `[id^="vf-"]` selectors (`grep -rn 'vf-' e2e/`)
 
@@ -709,11 +796,19 @@ Handle (effect in ScoreEditorView, gated so production builds carry nothing):
 useEffect(() => {
   if (!import.meta.env.DEV && import.meta.env.VITE_E2E !== '1') return;
   (window as unknown as Record<string, unknown>).__scoresmith = {
-    get result() { return resultRef.current; },
-    get zoom() { return zoomRef.current; },        // mirror zoom in a ref for the getter
-    get scrollBox() { return scrollBoxRef.current; },
+    get result() {
+      return resultRef.current;
+    },
+    get zoom() {
+      return zoomRef.current;
+    }, // mirror zoom in a ref for the getter
+    get scrollBox() {
+      return scrollBoxRef.current;
+    },
   };
-  return () => { delete (window as unknown as Record<string, unknown>).__scoresmith; };
+  return () => {
+    delete (window as unknown as Record<string, unknown>).__scoresmith;
+  };
 }, []);
 ```
 
@@ -721,9 +816,21 @@ Helper replacement in `e2e/helpers.ts`:
 
 ```ts
 /** Center of a note's bbox in page (viewport) coordinates, from the app's e2e handle. */
-export async function noteClickPoint(page: Page, noteId: string): Promise<{ x: number; y: number }> {
+export async function noteClickPoint(
+  page: Page,
+  noteId: string,
+): Promise<{ x: number; y: number }> {
   return page.evaluate((id) => {
-    const h = (window as never as { __scoresmith?: { result: { idToBBox: Map<string, { x: number; y: number; width: number; height: number }> } | null; scrollBox: HTMLElement | null } }).__scoresmith;
+    const h = (
+      window as never as {
+        __scoresmith?: {
+          result: {
+            idToBBox: Map<string, { x: number; y: number; width: number; height: number }>;
+          } | null;
+          scrollBox: HTMLElement | null;
+        };
+      }
+    ).__scoresmith;
     const box = h?.result?.idToBBox.get(id);
     const scroll = h?.scrollBox;
     if (!box || !scroll) throw new Error(`no bbox for note ${id}`);

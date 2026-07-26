@@ -305,7 +305,11 @@ describe('ScoreEditorView: candidate preview (spec §13)', () => {
 });
 
 describe('ScoreEditorView: windowed drawing (virtualization)', () => {
-  function mockScrollGeometry(scrollBox: HTMLElement, clientHeight: number, scrollTop: number): void {
+  function mockScrollGeometry(
+    scrollBox: HTMLElement,
+    clientHeight: number,
+    scrollTop: number,
+  ): void {
     Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
     Object.defineProperty(scrollBox, 'scrollTop', {
       value: scrollTop,

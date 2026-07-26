@@ -34,7 +34,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { CanvasScoreRenderer, paintHighlights, playbackController } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
-import { boxForMeasureIndex, caretPositionForTick, computeLayout, tickForPoint } from '@sudobility/music_lib';
+import {
+  boxForMeasureIndex,
+  caretPositionForTick,
+  computeLayout,
+  tickForPoint,
+} from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
@@ -45,7 +50,12 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
-import { boxFromPoints, eventIdAtPoint, eventIdsInBox, measureIdAtPoint } from '@/features/score-editor/hit-test';
+import {
+  boxFromPoints,
+  eventIdAtPoint,
+  eventIdsInBox,
+  measureIdAtPoint,
+} from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
 import { selectMeasure } from '@/features/score-editor/editing';
 
@@ -596,7 +606,11 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
             content and never pin to the top. */}
         <div className="sticky top-0 z-0 h-0 overflow-visible" aria-hidden="true">
           <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
-          <canvas ref={overlayCanvasRef} data-testid="overlay-canvas" className="absolute left-0 top-0" />
+          <canvas
+            ref={overlayCanvasRef}
+            data-testid="overlay-canvas"
+            className="absolute left-0 top-0"
+          />
         </div>
         {/* Interaction surface doubling as the scroll spacer: spans the full
             content height (so the scroll box gets its scrollbar), sits above

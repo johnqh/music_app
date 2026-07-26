@@ -27,7 +27,7 @@
 </div>
 ```
 
-(The sticky wrapper comes *before* the spacer: a sticky element placed after
+(The sticky wrapper comes _before_ the spacer: a sticky element placed after
 it would have its static position below the spacer and never pin to the top.)
 
 Both canvases have CSS size = viewport, backing-store size = viewport × devicePixelRatio, and draw with `ctx.setTransform(zoom·dpr, 0, 0, zoom·dpr, 0, −scrollTop·dpr)` so all drawing stays in the layout's logical units. A ResizeObserver (already present for the culling fix) re-sizes the backing stores; scrolling redraws via the existing rAF-throttled scroll handler.

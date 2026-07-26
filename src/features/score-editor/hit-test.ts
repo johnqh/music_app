@@ -65,7 +65,10 @@ export function eventIdsInBox(idToBBox: ReadonlyMap<string, BBox>, box: BBox): s
 }
 
 /** The measure id whose stave box contains `point`, or `null`. Same window-scoped linear scan as `eventIdAtPoint`. */
-export function measureIdAtPoint(measureIdToBBox: ReadonlyMap<string, BBox>, point: Point): string | null {
+export function measureIdAtPoint(
+  measureIdToBBox: ReadonlyMap<string, BBox>,
+  point: Point,
+): string | null {
   let hit: string | null = null;
   for (const [id, box] of measureIdToBBox) {
     if (pointInBBox(box, point)) hit = id;
