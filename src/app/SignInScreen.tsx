@@ -2,9 +2,13 @@
  * Interim sign-in screen (Tailwind — replaced by @sudobility/auth-components
  * in Phase 3). Email/password + Google. Sign-in is required to use
  * the app.
+ *
+ * Adopts the library `Button` (library sweep 2) for Sign in/Create
+ * account, Continue with Google, and the mode-switch link -- `Input`
+ * (email/password) was already adopted.
  */
 import { useState } from 'react';
-import { Input, cn } from '@sudobility/components';
+import { Button, Input, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { useAuth } from '@/app/AuthContext';
 import { CONSTANTS } from '@/config/constants';
@@ -87,24 +91,20 @@ export function SignInScreen() {
               required
             />
           </div>
-          <button type="submit" disabled={busy} className={variants.button.primary.default()}>
+          <Button type="submit" variant="primary" disabled={busy}>
             {mode === 'sign-in' ? 'Sign in' : 'Create account'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void google()}
-            disabled={busy}
-            className={variants.button.outline.default()}
-          >
+          </Button>
+          <Button type="button" variant="outline" onClick={() => void google()} disabled={busy}>
             Continue with Google
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="link"
             onClick={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')}
             className={cn(variants.button.link.muted(), 'self-start px-0 py-0')}
           >
             {mode === 'sign-in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

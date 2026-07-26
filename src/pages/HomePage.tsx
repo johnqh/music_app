@@ -1,9 +1,11 @@
 /**
  * Home page (APP.md content-page pattern): Section-based hero + feature
  * blocks; the CTA leads to the projects dashboard.
+ *
+ * Adopts the library `Button` (library sweep 2) for the hero CTA.
  */
 import { useTranslation } from 'react-i18next';
-import { Section, cn } from '@sudobility/components';
+import { Button, Section, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 
@@ -21,13 +23,9 @@ export default function HomePage() {
           <p className="mx-auto mt-4 max-w-2xl text-lg text-theme-text-secondary">
             {t('home.heroBody')}
           </p>
-          <button
-            type="button"
-            className={cn(variants.button.primary.large(), 'mt-8 shadow')}
-            onClick={() => navigate('/projects')}
-          >
+          <Button type="button" variant="primary" size="lg" className="mt-8 shadow" onClick={() => navigate('/projects')}>
             {t('home.cta')}
-          </button>
+          </Button>
         </div>
       </Section>
       <Section spacing="3xl">

@@ -20,10 +20,26 @@
  * Checkboxes become native `<input type="checkbox">`s, and MUI
  * LinearProgress becomes a `role="progressbar"` div — same roles/labels/
  * accessible names as before, so no test assertions changed.
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): the
+ * instruction `<textarea>` becomes the library `TextArea`, the preset
+ * trigger/menuitem buttons and Generate alternatives/Cancel become the
+ * library `Button` (popover itself stays hand-built, same reasoning as
+ * `GenerationPanel`/`EditorToolbar`'s menus), and the candidate-count field
+ * becomes the library `Input`. The preservation checkboxes become the
+ * library `Checkbox` -- a real native `<input type="checkbox">`, so no
+ * interaction-style test changes -- but since `Checkbox` has no
+ * `aria-label` prop (only a visible `label` used for both display and
+ * accessible name), preserving "Preserve harmony"/"Preserve melody"/etc as
+ * the accessible name means that full phrase is now visible text too
+ * (previously "Harmony"/"Melody" etc were the only visible text, with
+ * "Preserve ..." only in the aria-label). The `role="progressbar"` div
+ * stays native for the same reason as `GenerationPanel`'s: neither library
+ * `Progress` component accepts an `aria-label`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { cn } from '@sudobility/components';
+import { Button, Checkbox, Input, TextArea, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { findTrack } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
@@ -78,12 +94,7 @@ function trackNamesLabel(score: Score, trackIds: string[]): string {
   return names.length > 0 ? names.join(', ') : 'All tracks';
 }
 
-const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
-
-const PRIMARY_BUTTON_CLASS = variants.button.primary.default();
-
-const TEXT_INPUT_CLASS =
-  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary disabled:cursor-not-allowed disabled:opacity-60';
+const TEXT_INPUT_CLASS = 'w-full px-2 py-1.5 text-sm';
 
 const INFO_BOX_CLASS = 'rounded-md bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary';
 
@@ -186,27 +197,27 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">Regeneration instruction</span>
-          <textarea
-            aria-label="Regeneration instruction"
-            rows={2}
+          <TextArea
             value={instruction}
+            onChange={setInstruction}
+            rows={2}
             disabled={!regenerable}
-            onChange={(e) => setInstruction(e.target.value)}
-            className={TEXT_INPUT_CLASS}
+            textareaProps={{ 'aria-label': 'Regeneration instruction' }}
           />
         </label>
         <div ref={presetRef} className="relative shrink-0">
-          <button
+          <Button
             type="button"
+            variant="outline"
             aria-label="Preset instructions"
             aria-haspopup="menu"
             aria-expanded={presetOpen}
             disabled={!regenerable}
             onClick={() => setPresetOpen((open) => !open)}
-            className={TEXT_BUTTON_CLASS}
+            className="px-3 py-1.5"
           >
             Presets
-          </button>
+          </Button>
           {presetOpen && (
             <div
               role="menu"
@@ -216,15 +227,16 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
               )}
             >
               {PRESET_INSTRUCTIONS.map((text) => (
-                <button
+                <Button
                   key={text}
                   type="button"
+                  variant="ghost"
                   role="menuitem"
                   onClick={() => handlePresetSelect(text)}
-                  className={cn(variants.button.ghost.default(), 'block w-full justify-start rounded-none px-3 py-1.5 text-left')}
+                  className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
                 >
                   {text}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -234,56 +246,21 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
       <div role="group" aria-label="Preservation options" className="flex flex-col gap-2">
         <span className="text-sm text-theme-text-primary">Preserve</span>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
-          <label className="flex items-center gap-2 text-sm text-theme-text-primary">
-            <input
-              type="checkbox"
-              aria-label="Preserve boundary notes"
-              disabled={!regenerable}
-              checked={preserveBoundaryNotes}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPreserveBoundaryNotes(e.target.checked)}
-              className="h-4 w-4 rounded border-theme-border"
-            />
-            Boundary notes
-          </label>
-          <label className="flex items-center gap-2 text-sm text-theme-text-primary">
-            <input
-              type="checkbox"
-              aria-label="Preserve harmony"
-              disabled={!regenerable}
-              checked={preserveHarmony}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPreserveHarmony(e.target.checked)}
-              className="h-4 w-4 rounded border-theme-border"
-            />
-            Harmony
-          </label>
-          <label className="flex items-center gap-2 text-sm text-theme-text-primary">
-            <input
-              type="checkbox"
-              aria-label="Preserve rhythm"
-              disabled={!regenerable}
-              checked={preserveRhythm}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPreserveRhythm(e.target.checked)}
-              className="h-4 w-4 rounded border-theme-border"
-            />
-            Rhythm
-          </label>
-          <label className="flex items-center gap-2 text-sm text-theme-text-primary">
-            <input
-              type="checkbox"
-              aria-label="Preserve melody"
-              disabled={!regenerable}
-              checked={preserveMelody}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setPreserveMelody(e.target.checked)}
-              className="h-4 w-4 rounded border-theme-border"
-            />
-            Melody
-          </label>
+          <Checkbox
+            label="Preserve boundary notes"
+            disabled={!regenerable}
+            checked={preserveBoundaryNotes}
+            onChange={setPreserveBoundaryNotes}
+          />
+          <Checkbox label="Preserve harmony" disabled={!regenerable} checked={preserveHarmony} onChange={setPreserveHarmony} />
+          <Checkbox label="Preserve rhythm" disabled={!regenerable} checked={preserveRhythm} onChange={setPreserveRhythm} />
+          <Checkbox label="Preserve melody" disabled={!regenerable} checked={preserveMelody} onChange={setPreserveMelody} />
         </div>
       </div>
 
       <label className="flex w-40 flex-col gap-1">
         <span className="text-xs text-theme-text-secondary">Candidate count</span>
-        <input
+        <Input
           type="number"
           aria-label="Candidate count"
           value={candidateCount}
@@ -302,19 +279,13 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
       )}
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          aria-label="Generate alternatives"
-          disabled={!canGenerate}
-          onClick={handleGenerate}
-          className={PRIMARY_BUTTON_CLASS}
-        >
+        <Button type="button" variant="primary" aria-label="Generate alternatives" disabled={!canGenerate} onClick={handleGenerate}>
           Generate alternatives
-        </button>
+        </Button>
         {pending && (
-          <button type="button" aria-label="Cancel" onClick={handleCancel} className={TEXT_BUTTON_CLASS}>
+          <Button type="button" variant="outline" aria-label="Cancel" onClick={handleCancel} className="px-3 py-1.5">
             Cancel
-          </button>
+          </Button>
         )}
       </div>
 

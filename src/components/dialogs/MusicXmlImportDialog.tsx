@@ -5,10 +5,18 @@
  * reported, per spec §17, never silently dropped or blocking import).
  * Import lands as one undoable command, via the same new-project-or-
  * confirmed-replace flow `MidiImportWizard` uses.
+ *
+ * Adopts the library `Button` (library sweep 2) for Cancel/Import. The
+ * "Choose MusicXML file" label + hidden file input stay exactly as-is
+ * (same reasoning as `MidiImportWizard`'s file picker): a native `<label>`
+ * wrapping a hidden `<input type="file">` is how the browser's own file
+ * picker gets triggered by a click, and `Button` renders a `<button>`, not
+ * a `<label>`, so it can't reproduce that association without extra
+ * plumbing for no behavioral benefit.
  */
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Dialog, cn } from '@sudobility/components';
+import { Button, Dialog, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
@@ -162,18 +170,12 @@ export function MusicXmlImportDialog({
           </div>
 
           <div className="mt-6 flex justify-end gap-2">
-            <button type="button" onClick={handleClose} className={variants.button.ghost.default()}>
+            <Button type="button" variant="ghost" onClick={handleClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              aria-label="Import"
-              disabled={!result || busy}
-              onClick={handleImportClick}
-              className={variants.button.primary.default()}
-            >
+            </Button>
+            <Button type="button" variant="primary" aria-label="Import" disabled={!result || busy} onClick={handleImportClick}>
               Import
-            </button>
+            </Button>
           </div>
         </div>
       </Dialog>

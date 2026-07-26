@@ -2,9 +2,10 @@
  * Keyboard-shortcut help dialog (spec §6: "keyboard-shortcut help dialog"),
  * listing the exact shortcut table `useEditorShortcuts.ts` implements
  * (spec §7).
+ *
+ * Adopts the library `Button` (library sweep 2) for the Close icon button.
  */
-import { Dialog, cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { Button, Dialog } from '@sudobility/components';
 
 export type ShortcutHelpDialogProps = {
   open: boolean;
@@ -32,14 +33,16 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
         <h2 id="shortcut-help-title" className="text-lg font-semibold text-theme-text-primary">
           Keyboard shortcuts
         </h2>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           aria-label="Close"
           onClick={onClose}
-          className={cn(variants.button.ghost.icon(), 'absolute right-4 top-4 h-auto w-auto p-1')}
+          className="absolute right-4 top-4 h-auto w-auto p-1"
         >
           &times;
-        </button>
+        </Button>
         <table aria-label="Keyboard shortcuts" className="mt-4 w-full border-collapse text-sm">
           <tbody>
             {SHORTCUTS.map((s) => (

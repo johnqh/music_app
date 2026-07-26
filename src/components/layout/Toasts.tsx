@@ -5,6 +5,19 @@
  * message isn't missed) or can be dismissed immediately. A toast with an
  * `action` (spec §28: "retry actions where appropriate") shows a button
  * that runs it and then dismisses.
+ *
+ * Kept hand-rolled (library sweep 2, same contrast reasoning as
+ * `AppLayout`'s app-bar buttons): `SEVERITY_CLASSES` gives each toast an
+ * arbitrary, severity-driven background (red/amber/green/theme-text), and
+ * both buttons here rely on inheriting that background's own text color
+ * (Tailwind's preflight sets `button { color: inherit }`) rather than
+ * setting one themselves. The library `Button`'s own variants (e.g.
+ * `ghost`'s `text-gray-700 dark:text-gray-300`) would override that
+ * inherited color outright, and -- unlike `ConfirmDialog`/`ShortcutHelp
+ * Dialog`'s buttons, which sit on one fixed, known card background --
+ * there's no single className override that's correct for all four
+ * severities at once here, since each needs a different text color to
+ * stay readable against its own background.
  */
 import { useEffect } from 'react';
 import { useAppStore } from '@sudobility/music_lib';

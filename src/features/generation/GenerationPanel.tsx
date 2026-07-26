@@ -21,10 +21,38 @@
  * type="checkbox">`s, and MUI LinearProgress becomes a `role="progressbar"`
  * div — same roles/labels/accessible names as before, so no test
  * assertions changed.
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): the prompt
+ * `<textarea>` becomes the library `TextArea` (its accessible name goes
+ * through `textareaProps={{ 'aria-label': ... }}`, since `TextArea` has no
+ * top-level `aria-label` prop); the Style/Mood/Complexity/Key/Mode/Time-
+ * signature `<select>`s become the library's Radix-backed `Select`
+ * (Style/Mood need a non-empty sentinel value, `NONE_VALUE`, for their "No
+ * style"/"No mood" option -- Radix `Select.Item` rejects an empty-string
+ * value); Measures/Tempo become the library `Input`; the Presets
+ * trigger/menuitem buttons and Generate/Cancel become the library `Button`
+ * (the popover itself stays a hand-built `role="menu"` div, same reasoning
+ * as `EditorToolbar`'s articulation menu: no library Dropdown/Command
+ * reproduces `menu`/`menuitem` roles).
+ *
+ * The instrumentation checklist becomes the library `Checkbox`, which
+ * (unlike `Select`) renders a real native `<input type="checkbox">` with
+ * the same `role="checkbox"` semantics as before, so no interaction-style
+ * test changes are needed there -- but `Checkbox` has no `aria-label` prop
+ * at all (only a visible `label` string used for both display *and* the
+ * native `<label>`-association that supplies its accessible name), so
+ * preserving the exact "Include <Instrument>" accessible name means that
+ * text now shows up on screen too (previously "Include Piano" was an
+ * aria-label with only "Piano" visible).
+ *
+ * The `role="progressbar"` div stays native: neither the library `Progress`
+ * nor `ProgressBar` accepts an `aria-label` (or anything else) on the
+ * element that actually carries `role="progressbar"`, so there's no way to
+ * keep the required "Generating" accessible name on a library swap.
  */
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { cn } from '@sudobility/components';
+import { Button, Checkbox, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, TextArea, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 
 import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
@@ -104,19 +132,16 @@ const TIME_SIGNATURE_OPTIONS: Record<string, TimeSignature> = {
 
 const DEFAULT_MEASURES = 8;
 
+/** Sentinel for Style/Mood's "no selection" option: Radix `Select.Item` rejects an empty-string `value` (it's reserved to mean "cleared"). */
+const NONE_VALUE = '__none__';
+
 function toRequestTrack(option: (typeof INSTRUMENT_OPTIONS)[number]): GenerateScoreRequestTrack {
   return { name: option.label, instrumentName: option.instrumentName, midiProgram: option.midiProgram, clef: option.clef };
 }
 
-const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
+const SELECT_TRIGGER_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
 
-const PRIMARY_BUTTON_CLASS = variants.button.primary.default();
-
-const SELECT_CLASS =
-  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
-
-const TEXT_INPUT_CLASS =
-  'w-full rounded-md border border-theme-border bg-theme-bg-primary px-2 py-1.5 text-sm text-theme-text-primary';
+const TEXT_INPUT_CLASS = 'w-full px-2 py-1.5 text-sm';
 
 function LabeledInput({
   label,
@@ -134,7 +159,7 @@ function LabeledInput({
   return (
     <label className={`flex flex-1 flex-col gap-1 ${className ?? ''}`}>
       <span className="text-xs text-theme-text-secondary">{label}</span>
-      <input
+      <Input
         type="number"
         aria-label={label}
         value={value}
@@ -224,25 +249,25 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">Prompt</span>
-          <textarea
-            aria-label="Prompt"
-            rows={3}
+          <TextArea
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            className={TEXT_INPUT_CLASS}
+            onChange={setPrompt}
+            rows={3}
+            textareaProps={{ 'aria-label': 'Prompt' }}
           />
         </label>
         <div ref={presetRef} className="relative shrink-0">
-          <button
+          <Button
             type="button"
+            variant="outline"
             aria-label="Preset prompts"
             aria-haspopup="menu"
             aria-expanded={presetOpen}
             onClick={() => setPresetOpen((open) => !open)}
-            className={TEXT_BUTTON_CLASS}
+            className="px-3 py-1.5"
           >
             Presets
-          </button>
+          </Button>
           {presetOpen && (
             <div
               role="menu"
@@ -252,15 +277,16 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
               )}
             >
               {PRESET_PROMPTS.map((text) => (
-                <button
+                <Button
                   key={text}
                   type="button"
+                  variant="ghost"
                   role="menuitem"
                   onClick={() => handlePresetSelect(text)}
-                  className={cn(variants.button.ghost.default(), 'block w-full justify-start rounded-none px-3 py-1.5 text-left')}
+                  className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
                 >
                   {text}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -268,62 +294,59 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       </div>
 
       <div className="flex gap-2">
-        <select
-          aria-label="Style"
-          value={style}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setStyle(e.target.value)}
-          className={`${SELECT_CLASS} flex-1`}
-        >
-          <option value="">No style</option>
-          {STYLE_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Mood"
-          value={mood}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setMood(e.target.value)}
-          className={`${SELECT_CLASS} flex-1`}
-        >
-          <option value="">No mood</option>
-          {MOOD_OPTIONS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Complexity"
+        <Select value={style === '' ? NONE_VALUE : style} onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}>
+          <SelectTrigger aria-label="Style" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_VALUE}>No style</SelectItem>
+            {STYLE_OPTIONS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={mood === '' ? NONE_VALUE : mood} onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}>
+          <SelectTrigger aria-label="Mood" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_VALUE}>No mood</SelectItem>
+            {MOOD_OPTIONS.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
           value={complexity}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-            setComplexity(e.target.value as NonNullable<GenerateScoreRequest['complexity']>)
-          }
-          className={`${SELECT_CLASS} flex-1`}
+          onValueChange={(v) => setComplexity(v as NonNullable<GenerateScoreRequest['complexity']>)}
         >
-          {COMPLEXITY_OPTIONS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label="Complexity" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {COMPLEXITY_OPTIONS.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div role="group" aria-label="Instrumentation" className="flex flex-col gap-2">
         <span className="text-sm text-theme-text-primary">Instrumentation</span>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {INSTRUMENT_OPTIONS.map((opt) => (
-            <label key={opt.key} className="flex items-center gap-2 text-sm text-theme-text-primary">
-              <input
-                type="checkbox"
-                aria-label={`Include ${opt.label}`}
-                checked={instruments.has(opt.key)}
-                onChange={() => toggleInstrument(opt.key)}
-                className="h-4 w-4 rounded border-theme-border"
-              />
-              {opt.label}
-            </label>
+            <Checkbox
+              key={opt.key}
+              label={`Include ${opt.label}`}
+              checked={instruments.has(opt.key)}
+              onChange={() => toggleInstrument(opt.key)}
+            />
           ))}
         </div>
       </div>
@@ -334,39 +357,39 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       </div>
 
       <div className="flex gap-2">
-        <select
-          aria-label="Key"
-          value={keyFifths}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setKeyFifths(Number(e.target.value))}
-          className={`${SELECT_CLASS} flex-1`}
-        >
-          {KEY_FIFTHS_OPTIONS.map((opt) => (
-            <option key={opt.fifths} value={opt.fifths}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Mode"
-          value={keyMode}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setKeyMode(e.target.value as KeySignature['mode'])}
-          className={`${SELECT_CLASS} flex-1`}
-        >
-          <option value="major">major</option>
-          <option value="minor">minor</option>
-        </select>
-        <select
-          aria-label="Time signature"
-          value={timeSigPreset}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setTimeSigPreset(e.target.value)}
-          className={`${SELECT_CLASS} flex-1`}
-        >
-          {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
-            <option key={key} value={key}>
-              {key}
-            </option>
-          ))}
-        </select>
+        <Select value={String(keyFifths)} onValueChange={(v) => setKeyFifths(Number(v))}>
+          <SelectTrigger aria-label="Key" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {KEY_FIFTHS_OPTIONS.map((opt) => (
+              <SelectItem key={opt.fifths} value={String(opt.fifths)}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={keyMode} onValueChange={(v) => setKeyMode(v as KeySignature['mode'])}>
+          <SelectTrigger aria-label="Mode" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="major">major</SelectItem>
+            <SelectItem value="minor">minor</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>
+          <SelectTrigger aria-label="Time signature" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
+              <SelectItem key={key} value={key}>
+                {key}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {pending && (
@@ -376,13 +399,13 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       )}
 
       <div className="flex gap-2">
-        <button type="button" aria-label="Generate" disabled={!canGenerate} onClick={handleGenerate} className={PRIMARY_BUTTON_CLASS}>
+        <Button type="button" variant="primary" aria-label="Generate" disabled={!canGenerate} onClick={handleGenerate}>
           Generate
-        </button>
+        </Button>
         {pending && (
-          <button type="button" aria-label="Cancel" onClick={handleCancel} className={TEXT_BUTTON_CLASS}>
+          <Button type="button" variant="outline" aria-label="Cancel" onClick={handleCancel} className="px-3 py-1.5">
             Cancel
-          </button>
+          </Button>
         )}
       </div>
     </div>

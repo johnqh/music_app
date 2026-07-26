@@ -3,14 +3,16 @@
  * @sudobility/building_blocks provides the top bar, content area, and
  * footer; PageConfigProvider lets pages override layout via
  * useSetPageConfig. Mounted once as a layout route — never per page.
+ *
+ * Adopts the library `Button` (library sweep 2) for the sign-out control
+ * rendered into `AppPageLayout`'s top bar.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppPageLayout } from '@sudobility/building_blocks';
 import type { AppPageProps, FooterConfig, TopBarConfig } from '@sudobility/building_blocks';
-import { cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { Button } from '@sudobility/components';
 import { PageConfigContext } from '@/context/pageConfigContextDef';
 import { usePageConfig } from '@/hooks/usePageConfig';
 import { useAuth } from '@/app/AuthContext';
@@ -42,14 +44,9 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
       ariaLabel: 'Main navigation',
       renderAccountSection: () =>
         user ? (
-          <button
-            type="button"
-            className={cn(variants.button.ghost.default(), 'px-3 py-1.5')}
-            aria-label={t('nav.signOut')}
-            onClick={() => void signOut()}
-          >
+          <Button type="button" variant="ghost" className="px-3 py-1.5" aria-label={t('nav.signOut')} onClick={() => void signOut()}>
             {t('nav.signOut')}
-          </button>
+          </Button>
         ) : null,
     }),
     [t, navigate, lang, user, signOut]

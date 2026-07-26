@@ -23,10 +23,33 @@
  * roles/aria-labels/accessible names as before, so no test assertions
  * changed (see the module-level doc comments on those files for the
  * general MUI->Tailwind conventions this follows).
+ *
+ * Library sweep 2: every menu *item* button (Import/Export/Theme's popover
+ * contents, and Developer settings…) becomes the library `Button` -- those
+ * popovers render on a normal card background (`variants.card.default.
+ * base()`), not the app bar, so there's no contrast concern. Toggle track
+ * panel/Toggle inspector panel and the status bar's Validation issues
+ * button (also off the colored bar) become the library `Button` too.
+ *
+ * The app bar's own buttons (Back to dashboard, Save/Undo/Redo, the four
+ * menu *triggers*, Keyboard shortcuts) stay hand-rolled on `ICON_BUTTON_
+ * CLASS`/`TEXT_BUTTON_CLASS`, per this file's pre-existing doc comment
+ * below -- verified, not just assumed, for this sweep: `Button`'s `ghost`
+ * variant's own `dark:text-gray-300`/`dark:hover:bg-gray-800` compile to a
+ * `.dark <class>` selector, which is *more specific* than a plain
+ * `text-inherit`/`hover:bg-white/10` override, so it still wins in dark
+ * mode even after a className override -- only adding matching `dark:`-
+ * prefixed counterparts (`dark:text-inherit`, `dark:hover:bg-white/10`)
+ * actually neutralizes it (tailwind-merge dedupes same-modifier-stack
+ * classes). That's *possible*, but the inverted, "works on any bg-primary"
+ * skin these buttons need has no equivalent in the library variant set,
+ * so it'd only ever be this file's own bespoke override, not a real library
+ * skin -- the honest characterization is still "kept native", just with a
+ * documented, checked reason rather than an assumed one.
  */
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Tooltip, cn } from '@sudobility/components';
+import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
@@ -83,10 +106,11 @@ const MENU_CLASS = cn(
   'absolute top-full z-10 mt-1 min-w-[160px] rounded-md py-1 text-left shadow-lg',
 );
 
-const MENU_ITEM_CLASS = cn(
-  variants.button.ghost.default(),
-  'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left',
-);
+// No longer prefixed with `variants.button.ghost.default()`: every menu-item
+// button below is now the library `Button` with `variant="ghost"`, which
+// already supplies those base classes -- this is just the popover-specific
+// layout override.
+const MENU_ITEM_CLASS = 'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left';
 
 /** Open/close + outside-pointerdown-close state for one `role="menu"` popover, factored out since this file owns four of them (Import/Export/Theme/Settings) -- same behavior as `EditorToolbar`'s single articulation menu, just reusable. */
 function useMenu<T extends HTMLElement>() {
@@ -325,8 +349,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </button>
             {importMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   role="menuitem"
                   onClick={() => {
                     importMenu.setOpen(false);
@@ -335,9 +360,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   className={MENU_ITEM_CLASS}
                 >
                   MIDI…
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   role="menuitem"
                   onClick={() => {
                     importMenu.setOpen(false);
@@ -346,7 +372,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   className={MENU_ITEM_CLASS}
                 >
                   MusicXML…
-                </button>
+                </Button>
                 <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
                   Project JSON…
                   <input
@@ -374,15 +400,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </button>
             {exportMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                <button type="button" role="menuitem" onClick={handleExportMidi} disabled={!score} className={MENU_ITEM_CLASS}>
+                <Button type="button" variant="ghost" role="menuitem" onClick={handleExportMidi} disabled={!score} className={MENU_ITEM_CLASS}>
                   MIDI
-                </button>
-                <button type="button" role="menuitem" onClick={handleExportMusicXml} disabled={!score} className={MENU_ITEM_CLASS}>
+                </Button>
+                <Button type="button" variant="ghost" role="menuitem" onClick={handleExportMusicXml} disabled={!score} className={MENU_ITEM_CLASS}>
                   MusicXML
-                </button>
-                <button type="button" role="menuitem" onClick={() => void handleExportProjectJson()} className={MENU_ITEM_CLASS}>
+                </Button>
+                <Button type="button" variant="ghost" role="menuitem" onClick={() => void handleExportProjectJson()} className={MENU_ITEM_CLASS}>
                   Project JSON
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -405,18 +431,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             {themeMenu.open && (
               <div role="menu" className={`right-0 ${MENU_CLASS}`}>
                 {(['light', 'dark', 'system'] as const).map((mode) => (
-                  <button
+                  <Button
                     key={mode}
                     type="button"
+                    variant="ghost"
                     role="menuitem"
                     onClick={() => {
                       store.getState().setThemeMode(mode);
                       themeMenu.setOpen(false);
                     }}
-                    className={`${MENU_ITEM_CLASS} ${themeMode === mode ? 'bg-theme-hover-bg' : ''}`}
+                    className={cn(MENU_ITEM_CLASS, themeMode === mode && 'bg-theme-hover-bg')}
                   >
                     {mode[0].toUpperCase() + mode.slice(1)}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -470,8 +497,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     className="h-4 w-4"
                   />
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   role="menuitem"
                   disabled={!developerMode}
                   onClick={() => {
@@ -481,7 +509,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   className={MENU_ITEM_CLASS}
                 >
                   Developer settings…
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -498,25 +526,29 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex border-b border-theme-border">
             <Tooltip content={trackPanelOpen ? 'Hide track panel' : 'Show track panel'}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 aria-label="Toggle track panel"
                 onClick={() => setTrackPanelOpen((v) => !v)}
-                className={ICON_BUTTON_CLASS}
+                className="h-auto w-auto p-1.5 text-sm leading-none"
               >
                 {trackPanelOpen ? '⟨' : '⟩'}
-              </button>
+              </Button>
             </Tooltip>
             <div className="flex-1" />
             <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 aria-label="Toggle inspector panel"
                 onClick={() => setInspectorOpen((v) => !v)}
-                className={ICON_BUTTON_CLASS}
+                className="h-auto w-auto p-1.5 text-sm leading-none"
               >
                 {inspectorOpen ? '⟩' : '⟨'}
-              </button>
+              </Button>
             </Tooltip>
           </div>
 
@@ -547,12 +579,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         <span className="text-xs text-theme-text-secondary">{selectionSummaryLabel(selection)}</span>
         <div className="flex-1" />
         <div ref={issuesMenu.ref} className="relative">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             aria-label="Validation issues"
             onClick={() => issuesMenu.setOpen((v) => !v)}
             disabled={validationIssues.length === 0}
-            className={cn(variants.button.ghost.default(), 'gap-1.5 px-2 py-1 text-xs')}
+            className="gap-1.5 px-2 py-1 text-xs"
           >
             Issues
             <span
@@ -562,7 +595,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             >
               {validationIssues.length}
             </span>
-          </button>
+          </Button>
           {issuesMenu.open && (
             <div
               className={cn(

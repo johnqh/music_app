@@ -85,6 +85,9 @@ export type GenerationOptions = {
   tempo?: number;
 };
 
+/** `GenerationPanel.tsx`'s own `KEY_FIFTHS_OPTIONS` order (fifths -7..7), used to reach a given label by keyboard (see `generateWholeScore`'s Key-select doc comment). */
+const KEY_FIFTHS_LABELS = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
+
 /** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
 export async function gotoDashboard(page: Page): Promise<void> {
   await page.goto('/en/projects');
@@ -112,11 +115,32 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
   if (options.measures !== undefined) {
     await page.getByLabel('Measures', { exact: true }).fill(String(options.measures));
   }
+  // Library sweep 2: GenerationPanel's Key/Mode `<select>`s became
+  // @sudobility/components' Radix-backed `Select` -- its trigger is a
+  // `<button role="combobox">`, not a real `<select>`, so `selectOption`
+  // no longer applies. Mode (2 options) is opened and clicked, same as the
+  // Pitch step select this file's callers already drive that way (see
+  // `acceptance.spec.ts`/`select-edit-undo.spec.ts`). Key (15 options,
+  // spanning fifths -7..7 -- GenerationPanel.tsx's own `KEY_FIFTHS_OPTIONS`)
+  // is driven by keyboard instead: the library `SelectContent`'s
+  // `Viewport` is given a fixed `h-[var(--radix-select-trigger-height)]`
+  // (the *trigger's* own height, not the popup's available height -- see
+  // `select.tsx`), so for a list this long, most items genuinely render
+  // outside any scrollable-into-view area a real browser click can reach
+  // -- confirmed by a real Playwright run timing out on exactly that
+  // click. `Home` + `ArrowDown` × index + `Enter` reaches the same item
+  // via Radix's own internally-managed highlight/scroll instead.
   if (options.keyFifths !== undefined) {
-    await page.getByRole('combobox', { name: 'Key', exact: true }).selectOption({ label: options.keyFifths });
+    await page.getByRole('combobox', { name: 'Key', exact: true }).click();
+    const index = KEY_FIFTHS_LABELS.indexOf(options.keyFifths);
+    if (index === -1) throw new Error(`generateWholeScore: unknown keyFifths label "${options.keyFifths}"`);
+    await page.keyboard.press('Home');
+    for (let i = 0; i < index; i++) await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
   }
   if (options.keyMode !== undefined) {
-    await page.getByRole('combobox', { name: 'Mode', exact: true }).selectOption(options.keyMode);
+    await page.getByRole('combobox', { name: 'Mode', exact: true }).click();
+    await page.getByRole('option', { name: options.keyMode, exact: true }).click();
   }
   if (options.tempo !== undefined) {
     await page.getByLabel('Tempo', { exact: true }).fill(String(options.tempo));

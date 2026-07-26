@@ -4,9 +4,16 @@
  * locally-stored device preferences, generating a stress-test score, and
  * exporting a diagnostic JSON dump. (The mock-seed control and local
  * project database died with the Phase-2 move to server-side AI/storage.)
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): every button
+ * becomes the library `Button`, and `DevToggle` becomes a thin wrapper
+ * around the library `Checkbox` -- each toggle's aria-label already
+ * equalled its visible label text (unlike `GenerationPanel`'s
+ * instrumentation checklist), so `Checkbox`'s `label` prop reproduces the
+ * exact same accessible name with no visible-text change.
  */
 import { useState } from 'react';
-import { Dialog, cn } from '@sudobility/components';
+import { Button, Checkbox, Dialog, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
@@ -48,15 +55,9 @@ type DevToggleProps = {
 
 function DevToggle({ label, checked, onChange }: DevToggleProps) {
   return (
-    <label className="flex items-center gap-2 py-1 text-sm text-theme-text-primary">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-theme-border"
-      />
-      {label}
-    </label>
+    <div className="py-1">
+      <Checkbox label={label} checked={checked} onChange={onChange} />
+    </div>
   );
 }
 
@@ -173,39 +174,37 @@ export function DeveloperSettingsDialog({
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            aria-label="Generate stress-test score"
-            onClick={handleGenerateStressTest}
-            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
-          >
+          <Button type="button" variant="outline" aria-label="Generate stress-test score" onClick={handleGenerateStressTest} className="px-3 py-1.5">
             Generate stress-test score
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
             aria-label="Run benchmark"
             onClick={handleRunBenchmark}
             disabled={benchmarkRunning}
-            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
+            className="px-3 py-1.5"
           >
             {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
-          </button>
-          <button
-            type="button"
-            aria-label="Export diagnostic JSON"
-            onClick={handleExportDiagnostics}
-            className={cn(variants.button.outline.default(), 'px-3 py-1.5')}
-          >
+          </Button>
+          <Button type="button" variant="outline" aria-label="Export diagnostic JSON" onClick={handleExportDiagnostics} className="px-3 py-1.5">
             Export diagnostic JSON
-          </button>
-          <button
+          </Button>
+          {/* `variant="ghost"` + an explicit className override, not
+              `variant="destructive-outline"`: that CVA enum value has no
+              matching `@sudobility/design` `v.button['destructive-outline']`
+              entry, so `Button` would silently fall back to its
+              `primary.default()` skin (see `button.tsx`'s `getButtonClass`)
+              -- a real, wrong-looking regression for a destructive action. */}
+          <Button
             type="button"
+            variant="ghost"
             aria-label="Reset local database"
             onClick={() => setConfirmingReset(true)}
             className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1.5')}
           >
             Reset local database
-          </button>
+          </Button>
         </div>
 
         {benchmarkReport && (
@@ -215,39 +214,39 @@ export function DeveloperSettingsDialog({
               {typeof document !== 'undefined' ? '/render' : ''}). Full results logged to the console and included in
               the diagnostic JSON export.
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               aria-label="Dismiss benchmark result"
               onClick={() => setBenchmarkReport(null)}
-              className={cn(variants.button.ghost.icon(), 'h-auto w-auto shrink-0 p-1')}
+              className="h-auto w-auto shrink-0 p-1"
             >
               &times;
-            </button>
+            </Button>
           </div>
         )}
 
         {resetDone && (
           <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700">
             <span>Local database cleared. Reload the app to start fresh.</span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               aria-label="Dismiss reset confirmation"
               onClick={() => setResetDone(false)}
-              className={cn(variants.button.ghost.icon(), 'h-auto w-auto shrink-0 p-1')}
+              className="h-auto w-auto shrink-0 p-1"
             >
               &times;
-            </button>
+            </Button>
           </div>
         )}
 
         <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className={variants.button.ghost.default()}
-          >
+          <Button type="button" variant="ghost" onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -14,10 +14,22 @@
  * Select becomes a native `<select>`, and the import buttons' MUI Tooltips
  * become `@sudobility/components`' Tooltip — same roles/labels/accessible
  * names as before, so no test assertions changed.
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): the sort
+ * `<select>` becomes the library's Radix-backed `Select`; the search field
+ * and new-project-name field become the library `Input` (not
+ * `SearchInput`: it has no top-level `aria-label` prop, and its built-in
+ * icon/clear affordances aren't part of this toolbar's current design, so
+ * plain `Input` -- already used identically for every other text field in
+ * this library sweep -- is the better fit); every button, including the
+ * card actions and the "New from template" cards (already `<button>`
+ * elements), becomes the library `Button`. The "Import Project JSON" label
+ * + hidden file input stays exactly as-is (same reasoning as
+ * `MidiImportWizard`'s file picker).
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Tooltip, cn } from '@sudobility/components';
+import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
@@ -54,12 +66,9 @@ async function clientAndToken() {
   return { client: musicClient, token };
 }
 
-const TOOLBAR_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
+const TEXT_INPUT_CLASS = 'px-3 py-1.5 text-sm';
 
-const PRIMARY_BUTTON_CLASS = cn(variants.button.primary.default(), 'py-1.5');
-
-const TEXT_INPUT_CLASS =
-  'rounded-md border border-theme-border bg-theme-bg-primary px-3 py-1.5 text-sm text-theme-text-primary';
+const SELECT_TRIGGER_CLASS = 'h-auto w-auto px-3 py-1.5 text-sm';
 
 const CARD_CLASS = cn(variants.card.default.base(), 'flex flex-col overflow-hidden rounded-md');
 
@@ -169,32 +178,40 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
   const renderCard = (project: ProjectSummary) => (
     <div key={project.id} className={CARD_CLASS}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-label={`Open project: ${project.name}`}
         onClick={() => void openProject(project.id)}
-        className="flex flex-1 flex-col gap-1 p-4 text-left hover:bg-theme-hover-bg"
+        className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
       >
         <span className="text-sm font-medium text-theme-text-primary">{project.name}</span>
         <span className="text-xs text-theme-text-secondary">Updated {formatDate(project.updatedAt)}</span>
-      </button>
+      </Button>
       <div className="flex gap-1 border-t border-theme-border p-2">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label={`Duplicate project: ${project.name}`}
           onClick={() => void handleDuplicate(project)}
-          className={cn(variants.button.ghost.default(), 'px-3 py-1')}
+          className="px-3 py-1"
         >
           Duplicate
-        </button>
-        <button
+        </Button>
+        {/* `variant="ghost"` + an explicit className override, not
+            `variant="destructive-outline"`: see `DeveloperSettingsDialog`'s
+            "Reset local database" button doc comment -- that CVA enum
+            value has no matching `@sudobility/design` entry, so `Button`
+            would silently fall back to its primary skin. */}
+        <Button
           type="button"
+          variant="ghost"
           aria-label={`Delete project: ${project.name}`}
           onClick={() => setPendingDelete(project)}
           className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1')}
         >
           Delete
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -204,7 +221,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">{CONSTANTS.APP_NAME}</h1>
 
-        <input
+        <Input
           type="text"
           aria-label="Search projects"
           placeholder="Search projects"
@@ -213,19 +230,19 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           className={TEXT_INPUT_CLASS}
         />
 
-        <select
-          aria-label="Sort projects"
-          value={sortBy}
-          onChange={(e: ChangeEvent<HTMLSelectElement>) => setSortBy(e.target.value as SortBy)}
-          className={TOOLBAR_BUTTON_CLASS}
-        >
-          <option value="updatedAt">Last modified</option>
-          <option value="name">Name</option>
-        </select>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+          <SelectTrigger aria-label="Sort projects" className={SELECT_TRIGGER_CLASS}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="updatedAt">Last modified</SelectItem>
+            <SelectItem value="name">Name</SelectItem>
+          </SelectContent>
+        </Select>
 
         {creatingName !== null ? (
           <div className="flex items-center gap-1">
-            <input
+            <Input
               autoFocus
               type="text"
               aria-label="New project name"
@@ -237,38 +254,39 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
               }}
               className={TEXT_INPUT_CLASS}
             />
-            <button type="button" aria-label="Create" onClick={() => void handleCreate()} className={PRIMARY_BUTTON_CLASS}>
+            <Button type="button" variant="primary" aria-label="Create" onClick={() => void handleCreate()}>
               Create
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
-            type="button"
-            aria-label="New project"
-            onClick={() => setCreatingName('Untitled Project')}
-            className={PRIMARY_BUTTON_CLASS}
-          >
+          <Button type="button" variant="primary" aria-label="New project" onClick={() => setCreatingName('Untitled Project')}>
             New Project
-          </button>
+          </Button>
         )}
 
         <Tooltip content="Import MIDI">
-          <button type="button" aria-label="Import MIDI" onClick={() => setMidiImportOpen(true)} className={TOOLBAR_BUTTON_CLASS}>
+          <Button type="button" variant="outline" aria-label="Import MIDI" onClick={() => setMidiImportOpen(true)} className="px-3 py-1.5">
             Import MIDI
-          </button>
+          </Button>
         </Tooltip>
         <Tooltip content="Import MusicXML">
-          <button
+          <Button
             type="button"
+            variant="outline"
             aria-label="Import MusicXML"
             onClick={() => setMusicXmlImportOpen(true)}
-            className={TOOLBAR_BUTTON_CLASS}
+            className="px-3 py-1.5"
           >
             Import MusicXML
-          </button>
+          </Button>
         </Tooltip>
         <Tooltip content="Import project JSON">
-          <label role="button" tabIndex={0} aria-label="Import project JSON" className={`cursor-pointer ${TOOLBAR_BUTTON_CLASS}`}>
+          <label
+            role="button"
+            tabIndex={0}
+            aria-label="Import project JSON"
+            className={cn(variants.button.outline.default(), 'cursor-pointer px-3 py-1.5')}
+          >
             Import Project JSON
             <input
               type="file"
@@ -285,16 +303,17 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">Templates</p>
         <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {projectTemplates.map((template) => (
-            <button
+            <Button
               key={template.id}
               type="button"
+              variant="ghost"
               aria-label={`New from template: ${template.name}`}
               onClick={() => void handleCreateFromTemplate(template.id)}
-              className={cn(variants.card.default.interactive(), 'flex flex-col gap-1 rounded-md p-4 text-left')}
+              className={cn(variants.card.default.interactive(), 'h-auto flex-col items-start gap-1 rounded-md p-4 text-left')}
             >
               <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
               <span className="text-xs text-theme-text-secondary">{template.description}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </div>

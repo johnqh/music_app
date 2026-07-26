@@ -18,10 +18,19 @@
  * become a plain `role="group"` div (same `Candidate card: <label>` name —
  * e2e specs assert on it directly), and the MUI ToggleButtonGroup A/B
  * toggle becomes two plain `aria-pressed` buttons.
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): every button
+ * becomes the library `Button` (`aria-pressed`/`aria-label`/`disabled` all
+ * forward through `ButtonHTMLAttributes`, so the label-select toggle, the
+ * A/B compare toggle, and Play/Stop/Accept/Retry/Reject all keep their
+ * exact roles and pressed-state semantics), and the retry field becomes
+ * the library `Input`. The card itself stays a plain `role="group"` div
+ * (no library card component carries that exact accessible-name
+ * convention e2e specs assert on directly).
  */
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { cn } from '@sudobility/components';
+import { Button, Input, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import type { RegenerationCandidate } from '@sudobility/music_types';
 import { playbackController } from '@sudobility/music_lib';
@@ -40,12 +49,7 @@ function summaryLine(candidate: RegenerationCandidate): string {
   return pitchRangeLabel ? `${noteCount} ${noteWord}, ${pitchRangeLabel}` : `${noteCount} ${noteWord}`;
 }
 
-const TEXT_BUTTON_CLASS = cn(variants.button.outline.default(), 'px-3 py-1.5');
-
-const PRIMARY_BUTTON_CLASS = cn(variants.button.primary.default(), 'px-3 py-1.5');
-
 const TOGGLE_BUTTON_CLASS = cn(
-  variants.button.ghost.default(),
   'px-2 py-1 text-xs',
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
@@ -145,66 +149,61 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
             className={cn(variants.card.default.base(), 'rounded-md p-4')}
           >
             <div className="flex flex-col items-start gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 aria-pressed={isActive}
                 onClick={() => handleSelect(candidate)}
-                className={cn(
-                  variants.button.ghost.default(),
-                  'px-3 py-1.5',
-                  'aria-pressed:bg-primary aria-pressed:text-primary-foreground',
-                )}
+                className="px-3 py-1.5 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
               >
                 {candidate.label}
-              </button>
+              </Button>
               <p className="text-sm text-theme-text-secondary">{summaryLine(candidate)}</p>
               {isActive && (
                 <div role="group" aria-label="Compare candidate and original" className="mt-1 flex gap-0.5">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     aria-label="Show candidate"
                     aria-pressed={!comparingOriginal}
                     onClick={() => handleCompareChange(candidate, false)}
                     className={TOGGLE_BUTTON_CLASS}
                   >
                     Candidate
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
                     aria-label="Show original"
                     aria-pressed={comparingOriginal}
                     onClick={() => handleCompareChange(candidate, true)}
                     className={TOGGLE_BUTTON_CLASS}
                   >
                     Original
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
             <div className="mt-3 flex gap-2">
               {isPlaying ? (
-                <button type="button" aria-label={`Stop preview: ${candidate.label}`} onClick={handleStop} className={TEXT_BUTTON_CLASS}>
+                <Button type="button" variant="outline" aria-label={`Stop preview: ${candidate.label}`} onClick={handleStop} className="px-3 py-1.5">
                   Stop
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   aria-label={`Play in context: ${candidate.label}`}
                   disabled={!score}
                   onClick={() => handlePlay(candidate)}
-                  className={TEXT_BUTTON_CLASS}
+                  className="px-3 py-1.5"
                 >
                   Play in context
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                aria-label={`Accept ${candidate.label}`}
-                onClick={() => handleAccept(candidate)}
-                className={PRIMARY_BUTTON_CLASS}
-              >
+              <Button type="button" variant="primary" aria-label={`Accept ${candidate.label}`} onClick={() => handleAccept(candidate)} className="px-3 py-1.5">
                 Accept
-              </button>
+              </Button>
             </div>
           </div>
         );
@@ -213,33 +212,29 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">Retry with a revised instruction</span>
-          <input
+          <Input
             type="text"
             aria-label="Retry instruction"
             value={retryInstruction}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setRetryInstruction(e.target.value)}
-            className="w-full rounded-md border border-theme-border bg-theme-bg-primary px-3 py-2 text-sm text-theme-text-primary"
+            className="w-full px-3 py-2 text-sm"
           />
         </label>
-        <button
+        <Button
           type="button"
+          variant="outline"
           aria-label="Retry"
           disabled={pending || retryInstruction.trim() === ''}
           onClick={handleRetry}
-          className={TEXT_BUTTON_CLASS}
+          className="px-3 py-1.5"
         >
           Retry
-        </button>
+        </Button>
       </div>
 
-      <button
-        type="button"
-        aria-label="Reject all"
-        onClick={handleRejectAll}
-        className={cn(variants.button.destructive.default(), 'self-start')}
-      >
+      <Button type="button" variant="destructive" aria-label="Reject all" onClick={handleRejectAll} className="self-start">
         Reject all
-      </button>
+      </Button>
     </div>
   );
 }

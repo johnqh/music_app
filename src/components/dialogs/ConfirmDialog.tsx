@@ -4,9 +4,12 @@
  * project, delete track, reset device data, replace a project with a fresh
  * MIDI/MusicXML import. Re-skinned onto @sudobility/components' dialog
  * primitive (same props/labels as the MUI-era version).
+ *
+ * Adopts the library `Button` (library sweep 2) for Cancel/Confirm --
+ * `variant="ghost"`/`"destructive"`/`"primary"` forward `autoFocus` and
+ * every other `ButtonHTMLAttributes` unchanged.
  */
-import { Dialog } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { Button, Dialog } from '@sudobility/components';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -38,17 +41,12 @@ export function ConfirmDialog({
         </h2>
         <p className="mt-3 text-sm text-theme-text-secondary">{message}</p>
         <div className="mt-6 flex justify-end gap-2">
-          <button type="button" className={variants.button.ghost.default()} onClick={onCancel}>
+          <Button type="button" variant="ghost" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            autoFocus
-            className={destructive ? variants.button.destructive.default() : variants.button.primary.default()}
-            onClick={onConfirm}
-          >
+          </Button>
+          <Button type="button" autoFocus variant={destructive ? 'destructive' : 'primary'} onClick={onConfirm}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </Dialog>
