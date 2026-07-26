@@ -222,12 +222,7 @@ export function initializeApp(): AppServices {
   };
 
   const context: StoreContext = {
-    // Cast through unknown: bun currently installs a second copy of
-    // @sudobility/music_client nested under music_lib's node_modules, so
-    // TS sees two nominally-distinct MusicClient declarations (they differ
-    // only by the private `networkClient` brand). Same package, same shape
-    // — safe to bridge until the dep tree is deduped.
-    client: musicClient as unknown as StoreContext['client'],
+    client: musicClient,
     getToken: () => auth.getToken(),
     storage: prefsStorage,
   };

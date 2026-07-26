@@ -5,7 +5,6 @@
  * against in-memory backends. Returns the context so tests can build a
  * matching store (`createAppStore({ context })`).
  */
-import type { MusicClient } from '@sudobility/music_client';
 import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
 import type { NetworkClient } from '@sudobility/types';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
@@ -21,10 +20,7 @@ export function installTestAppServices(
 ): TestStoreContext {
   const services: AppServices = {
     networkClient: {} as NetworkClient,
-    // Cast through unknown: music_lib's nested @sudobility/music_client copy
-    // makes TS treat its MusicClient as nominally distinct from the app's
-    // (private `networkClient` brand). Same package/shape — safe bridge.
-    musicClient: context.client as unknown as MusicClient,
+    musicClient: context.client,
     baseUrl: 'http://test.local',
     prefsStorage: context.storage!,
     auth: {
