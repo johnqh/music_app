@@ -4,6 +4,7 @@ import {
   boxFromPoints,
   eventIdAtPoint,
   eventIdsInBox,
+  measureIdAtPoint,
   pointInBBox,
 } from '@/features/score-editor/hit-test';
 import type { BBox } from '@sudobility/music_lib';
@@ -98,5 +99,26 @@ describe('eventIdsInBox', () => {
   it('returns an empty array when the box misses everything', () => {
     const map = new Map<string, BBox>([['a', { x: 0, y: 0, width: 10, height: 10 }]]);
     expect(eventIdsInBox(map, { x: 100, y: 100, width: 5, height: 5 })).toEqual([]);
+  });
+});
+
+describe('topmost-wins hit-testing and measureIdAtPoint', () => {
+  const boxes = new Map([
+    ['under', { x: 10, y: 10, width: 20, height: 20 }],
+    ['over', { x: 15, y: 15, width: 20, height: 20 }],
+  ]);
+
+  it('returns the id whose bbox contains the point', () => {
+    expect(eventIdAtPoint(boxes, { x: 11, y: 11 })).toBe('under');
+    expect(measureIdAtPoint(boxes, { x: 11, y: 11 })).toBe('under');
+  });
+
+  it('prefers the later-inserted (topmost) id when bboxes overlap', () => {
+    expect(eventIdAtPoint(boxes, { x: 20, y: 20 })).toBe('over');
+  });
+
+  it('returns null outside every bbox', () => {
+    expect(eventIdAtPoint(boxes, { x: 500, y: 500 })).toBeNull();
+    expect(measureIdAtPoint(boxes, { x: 500, y: 500 })).toBeNull();
   });
 });

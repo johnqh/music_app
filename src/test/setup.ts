@@ -54,3 +54,29 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
     configurable: true,
   });
 }
+
+// jsdom has no canvas implementation: `HTMLCanvasElement.getContext('2d')`
+// returns null. The canvas notation renderer (CanvasScoreRenderer +
+// paintHighlights) draws through whatever 2D context the element hands
+// back, so give every canvas a persistent recording mock (music_lib's
+// createMock2DContext — the same double the lib's own renderer tests use).
+// One context per canvas element, matching real browser semantics where
+// repeated getContext('2d') calls return the same object.
+import { createMock2DContext } from '@sudobility/music_lib';
+
+if (typeof HTMLCanvasElement !== 'undefined') {
+  const mockContexts = new WeakMap<HTMLCanvasElement, ReturnType<typeof createMock2DContext>>();
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    configurable: true,
+    writable: true,
+    value(this: HTMLCanvasElement) {
+      let ctx = mockContexts.get(this);
+      if (!ctx) {
+        ctx = createMock2DContext(this.width || 800, this.height || 600);
+        mockContexts.set(this, ctx);
+        Object.defineProperty(ctx, 'canvas', { value: this, configurable: true });
+      }
+      return ctx;
+    },
+  });
+}

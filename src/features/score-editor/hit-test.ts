@@ -40,12 +40,20 @@ export function boxFromPoints(a: Point, b: Point): BBox {
   };
 }
 
-/** The first id (in map iteration order) whose bbox contains `point`, or `null` if none match. */
+/**
+ * The topmost id whose bbox contains `point`, or `null` if none match.
+ * Later map insertions win on overlap — the canvas renderer inserts in
+ * draw order, so "later" is "drawn on top" (for the piano roll's
+ * non-overlapping note rects, first vs. last is indistinguishable).
+ * Linear over the map: the canvas maps only ever hold the drawn window,
+ * so this is O(visible), within the no-O(score) interaction rule.
+ */
 export function eventIdAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point): string | null {
+  let hit: string | null = null;
   for (const [id, box] of idToBBox) {
-    if (pointInBBox(box, point)) return id;
+    if (pointInBBox(box, point)) hit = id; // keep scanning: last inserted wins
   }
-  return null;
+  return hit;
 }
 
 /** Every id whose bbox intersects `box` (drag-box/rubber-band selection), in map iteration order. */
@@ -55,4 +63,13 @@ export function eventIdsInBox(idToBBox: ReadonlyMap<string, BBox>, box: BBox): s
     if (bboxesIntersect(candidate, box)) ids.push(id);
   }
   return ids;
+}
+
+/** The measure id whose stave box contains `point`, or `null`. Same window-scoped linear scan as `eventIdAtPoint`. */
+export function measureIdAtPoint(measureIdToBBox: ReadonlyMap<string, BBox>, point: Point): string | null {
+  let hit: string | null = null;
+  for (const [id, box] of measureIdToBBox) {
+    if (pointInBBox(box, point)) hit = id;
+  }
+  return hit;
 }
