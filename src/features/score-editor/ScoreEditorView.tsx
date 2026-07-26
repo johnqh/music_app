@@ -174,7 +174,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
    * `features/generation/preview.ts`'s `scoreWithCandidate`. Splicing is
    * required, not optional: a fragment's event/measure ids are always
    * freshly generated (`mock-transforms.ts`'s `rng.id(...)`), so they exist
-   * only inside *this* spliced score's `RenderResult` — rendering the
+   * only inside *this* spliced score's render result — rendering the
    * committed score and merely asking the highlight overlay to color
    * `previewIds` (the old, broken behavior — Task 19 review C1) can never
    * find a matching element, since none of those ids appear anywhere in

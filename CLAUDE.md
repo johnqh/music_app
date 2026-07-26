@@ -7,7 +7,7 @@ The ScoreSmith web app: routing, pages, and UI only. One of five repos in the Sc
 - React 19, TypeScript (strict), Vite, React Router
 - **Tailwind CSS** (`@sudobility/design`'s preset, `darkMode: 'class'`) — **no MUI/Emotion** (removed in T13; see Gotchas)
 - `@sudobility/components` / `@sudobility/building_blocks` / `@sudobility/auth-components` for shared UI primitives (buttons, dialogs, spinners, sign-in forms)
-- Zustand app store, VexFlow rendering, Tone.js playback — all via `@sudobility/music_lib`, never imported directly here
+- Zustand app store, VexFlow rendering (windowed **canvas** via `CanvasScoreRenderer` + `paintHighlights` overlay — no per-glyph DOM), Tone.js playback — all via `@sudobility/music_lib`, never imported directly here
 - `@tanstack/react-query` for server-state (dashboard project list) via `@sudobility/music_client`'s hooks
 - Firebase Auth (real backend) / an in-process e2e shim (`VITE_E2E=1`)
 - Bun for scripts; Vitest + Testing Library + jsdom for unit/component tests; Playwright for e2e
@@ -37,6 +37,7 @@ The ScoreSmith web app: routing, pages, and UI only. One of five repos in the Sc
 - **No MUI/Emotion anywhere** (T13) — dark mode is a Tailwind `dark` class on `<html>`, toggled by `applyDocumentTheme()` from an effect in `App.tsx` that also listens for OS `prefers-color-scheme` changes when `themeMode === 'system'`. `ScoreEditorView`'s VexFlow render-theme colors are still literal hex strings (`LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`) — VexFlow draws straight to SVG attributes, not CSS, so this is deliberate, not a leftover.
 - `VITE_E2E=1` swaps Firebase Auth for a fixed-identity in-process shim (`e2eBackend()` in `config/initialize.ts`) — never enable it outside Playwright/dev.
 - No business logic belongs in this repo. If you're about to write score math, a new command, an adapter, or a store slice, it almost certainly belongs in `music_lib` instead.
+- **Canvas notation view**: `ScoreEditorView` draws through music_lib's `CanvasScoreRenderer` into a viewport-pinned canvas pair (notation + highlight overlay) over a full-height interaction/spacer div; drawing only the visible systems per scroll/resize frame IS the virtualization (O(visible), unbounded score sizes). All interactions are geometric (`hit-test.ts` over the drawn window's bbox maps) — there are no `vf-*` DOM elements. jsdom tests stub `HTMLCanvasElement.getContext` with music_lib's `createMock2DContext` (`src/test/setup.ts`); e2e resolves note/measure ids to click coordinates via the dev/e2e-only `window.__scoresmith` handle (`e2e/helpers.ts`).
 - `vite.config.ts` excludes `@sudobility/music_lib` from dev-mode dep pre-bundling (esbuild's prebundler doesn't handle the lib's `new Worker(new URL(...))` calls) — don't "fix" that exclusion without checking the MIDI-import/quantize workers still resolve in dev.
 
 ## Related Projects

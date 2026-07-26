@@ -4,12 +4,11 @@
  * Deliberately free of React/DOM/store imports so it can be unit-tested
  * with plain constructed `BBox` values.
  *
- * Real coordinates come from `RenderResult.idToBBox`
- * (`adapters/vexflow/renderer.ts`, Task 11), which are all-zero in jsdom
- * (no real SVG layout engine) — so `ScoreEditorView`'s component tests
- * exercise *this* module's math separately (with synthetic bboxes) from
- * the DOM click-target-id-based path used for plain point clicks (which
- * works fine in jsdom since it only needs element identity, not geometry).
+ * Real coordinates come from `CanvasRenderResult.idToBBox`/
+ * `measureIdToBBox` (music_lib's canvas renderer) — computed from
+ * VexFlow's own layout math, not the DOM, so they are real values in
+ * jsdom too and every interaction path is exercised geometrically in
+ * component tests.
  */
 import type { BBox } from '@sudobility/music_lib';
 
