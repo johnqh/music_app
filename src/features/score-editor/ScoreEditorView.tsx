@@ -34,7 +34,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { applyHighlights, VexFlowScoreRenderer } from '@sudobility/music_lib';
+import { applyHighlights, playbackController, VexFlowScoreRenderer } from '@sudobility/music_lib';
 import type { BBox, RenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
   boxForMeasureIndex,
@@ -55,6 +55,7 @@ import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
 import { boxFromPoints, eventIdsInBox } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
+import { caretPositionForTick, tickForPoint } from '@/features/score-editor/playhead';
 import { selectMeasure } from '@/features/score-editor/editing';
 
 export type ScoreEditorViewProps = {
@@ -230,6 +231,19 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     const width = containerRef.current?.clientWidth || DEFAULT_WIDTH;
     return computeLayout(displayScore, { zoom, layoutMode, width, theme: renderTheme });
   }, [displayScore, zoom, layoutMode, renderTheme]);
+
+  /**
+   * The playback caret's position (spec follow-up: "caret on the track
+   * view"): a vertical line at `positionTick`, spanning the system that
+   * tick falls in. Present from the very first render (positionTick starts
+   * at 0 — the caret sits at the score's start before playback ever runs)
+   * and follows both live playback and seeks, since the engine reports all
+   * of them back through the store's `positionTick`.
+   */
+  const caret = useMemo(() => {
+    if (!layoutPlan || !displayScore) return null;
+    return caretPositionForTick(layoutPlan, displayScore, positionTick);
+  }, [layoutPlan, displayScore, positionTick]);
 
   /** Which measures of `plan` intersect the scrollable ancestor's current scroll position (grid-local/logical units, padded by `VIRTUALIZATION_OVERSCAN_PX`), or `undefined` if the container isn't measurable right now (`clientHeight <= 0` — jsdom, or not yet laid out). Pure w.r.t. its arguments; reads live DOM geometry off `scrollBoxRef`, not React state, so it's safe to call synchronously from either an effect or a callback without worrying about state staleness. */
   const measureVisibleIndices = useCallback(
@@ -468,38 +482,68 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     };
   }, []);
 
+  /**
+   * Click-to-seek: moves the playback position (and so the caret and the
+   * transport's position scrubber, both driven by the same store
+   * `positionTick` the engine reports back through `seek`) to the tick
+   * under a canvas click. Clicking left of a system's first measure (the
+   * clef/key area) clamps to that system's start; clicks in the dead space
+   * between systems are ignored (`tickForPoint` returns null).
+   */
+  const seekToEventPoint = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const container = containerRef.current;
+      if (!container || !layoutPlan || !displayScore) return;
+      const rect = container.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / zoom;
+      const y = (event.clientY - rect.top) / zoom;
+      const tick = tickForPoint(layoutPlan, displayScore, x, y);
+      if (tick !== null) playbackController.seek(tick);
+    },
+    [layoutPlan, displayScore, zoom],
+  );
+
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (suppressNextClickRef.current) {
         suppressNextClickRef.current = false;
         return;
       }
-      const target = event.target as Element;
-      const group = target.closest('[id^="vf-"]');
-      if (!group?.id) return;
-      const rawId = group.id.slice('vf-'.length);
-      const result = resultRef.current;
-      if (!result) return;
 
       // While a regeneration candidate is being previewed (spec §13),
       // `displayScore` (and so this click's `result`) is the committed
       // score with the candidate spliced in — clicking anywhere in the
       // canvas must not dispatch a selection/edit against ids that may not
       // even exist in the committed score (the fragment's own fresh ids
-      // never do). Simplest safe rule: ignore canvas clicks entirely while
-      // previewing; accepting/rejecting/switching candidates is done from
-      // the generation panel, not by clicking the notation.
+      // never do), and seeking the main transport would fight the preview
+      // playback that currently owns the engine. Simplest safe rule:
+      // ignore canvas clicks entirely while previewing;
+      // accepting/rejecting/switching candidates is done from the
+      // generation panel, not by clicking the notation.
       if (previewFragment) return;
 
-      if (result.idToElement.has(rawId)) {
+      const target = event.target as Element;
+      const group = target.closest('[id^="vf-"]');
+      const result = resultRef.current;
+      const rawId = group?.id ? group.id.slice('vf-'.length) : null;
+
+      if (rawId && result?.idToElement.has(rawId)) {
+        // A note/rest click is an editing gesture: select only, don't yank
+        // the playhead out from under an edit in progress.
         const state = store.getState();
         if (event.shiftKey) state.toggleEvent(rawId);
         else state.setSelection({ eventIds: [rawId], measureIds: [], trackIds: [] });
-      } else if (result.measureIdToBBox.has(rawId)) {
+        return;
+      }
+
+      if (rawId && result?.measureIdToBBox.has(rawId)) {
         selectMeasure(store, rawId);
       }
+      // Any other track click — stave background, barlines, or empty canvas
+      // inside a system — moves the playback position there.
+      seekToEventPoint(event);
     },
-    [store, previewFragment],
+    [store, previewFragment, seekToEventPoint],
   );
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
@@ -605,6 +649,18 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
               height: dragBox.height,
             }}
             className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
+          />
+        )}
+        {caret && (
+          <div
+            data-testid="playback-caret"
+            aria-hidden="true"
+            style={{
+              left: caret.x * zoom,
+              top: caret.yTop * zoom,
+              height: (caret.yBottom - caret.yTop) * zoom,
+            }}
+            className="pointer-events-none absolute w-0.5 -translate-x-1/2 bg-primary"
           />
         )}
       </div>

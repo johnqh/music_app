@@ -8,8 +8,9 @@ import { computeLayout } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { VexFlowScoreRenderer } from '@sudobility/music_lib';
-import { extractFragment } from '@sudobility/music_lib';
+import { extractFragment, playbackController } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
+import { tickForPoint } from '@/features/score-editor/playhead';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
@@ -17,7 +18,7 @@ import type { ScoreFragment } from '@sudobility/music_lib';
 // mocked out here since this suite never exercises the Space shortcut.
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn() },
+  playbackController: { togglePlay: vi.fn(), seek: vi.fn() },
 }));
 
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
@@ -568,5 +569,66 @@ describe('ScoreEditorView', () => {
       expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
       vi.unstubAllGlobals();
     });
+  });
+});
+
+describe('playback caret and click-to-seek', () => {
+  const CARET_THEME = { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' };
+
+  function caretPlan(store: EditorStoreApi) {
+    // Same inputs the component uses in jsdom: zoom 1, page mode, and the
+    // DEFAULT_WIDTH 900 fallback (clientWidth is 0 here).
+    return computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: CARET_THEME,
+    });
+  }
+
+  beforeEach(() => {
+    vi.mocked(playbackController.seek).mockClear();
+  });
+
+  it('shows the caret at the score start (tick 0) before any playback', () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const caret = getByTestId('playback-caret');
+    const firstBox = caretPlan(store).trackLayouts[0].measures[0].box;
+    expect(caret.style.left).toBe(`${firstBox.x}px`);
+  });
+
+  it('moves the caret as positionTick advances', () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const before = getByTestId('playback-caret').style.left;
+
+    const m1 = store.getState().score!.tracks[0].measures[1];
+    act(() => store.getState().setPositionTick(m1.startTick + Math.round(m1.durationTicks / 2)));
+
+    expect(getByTestId('playback-caret').style.left).not.toBe(before);
+  });
+
+  it('clicking the stave seeks playback to the clicked tick', () => {
+    const store = makeStore();
+    const { container } = render(<ScoreEditorView store={store} />);
+    const stave = container.querySelector('.vf-stave')!;
+
+    fireEvent.click(stave, { clientX: 150, clientY: 60 });
+
+    const expected = tickForPoint(caretPlan(store), store.getState().score!, 150, 60);
+    expect(playbackController.seek).toHaveBeenCalledTimes(1);
+    expect(playbackController.seek).toHaveBeenCalledWith(expected);
+  });
+
+  it('clicking a note selects it without moving the playback position', () => {
+    const store = makeStore();
+    const first = allNotes(store.getState().score!)[0];
+    const { container } = render(<ScoreEditorView store={store} />);
+
+    fireEvent.click(noteGroup(container, first.id), { clientX: 150, clientY: 60 });
+
+    expect(store.getState().selection.eventIds).toEqual([first.id]);
+    expect(playbackController.seek).not.toHaveBeenCalled();
   });
 });
