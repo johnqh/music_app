@@ -7,6 +7,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from '../public/locales/en/app.json';
+import { CONSTANTS } from '@/config/constants';
 
 export const supportedLanguages = ['en'] as const;
 export type SupportedLanguage = (typeof supportedLanguages)[number];
@@ -20,7 +21,7 @@ void i18n.use(initReactI18next).init({
   ns: ['app'],
   defaultNS: 'app',
   resources: { en: { app: en } },
-  interpolation: { escapeValue: false },
+  interpolation: { escapeValue: false, defaultVariables: { appName: CONSTANTS.APP_NAME } },
   react: { useSuspense: false },
 });
 

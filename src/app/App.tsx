@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from '@/app/AuthContext';
 import { SignInScreen } from '@/app/SignInScreen';
 import { loadPrefs, savePrefs, useAppStore } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
+import { CONSTANTS } from '@/config/constants';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 type ErrorBoundaryProps = { children: ReactNode };
@@ -31,7 +32,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('[ScoreSmith] Unhandled render error:', error, info.componentStack);
+    console.error(`[${CONSTANTS.APP_NAME}] Unhandled render error:`, error, info.componentStack);
   }
 
   render(): ReactNode {
@@ -40,7 +41,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       <div className="mx-auto max-w-[480px] p-8">
         <div className="flex flex-col gap-4">
           <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
-            Something went wrong and ScoreSmith couldn't continue.
+            Something went wrong and {CONSTANTS.APP_NAME} couldn't continue.
           </div>
           <p className="text-sm text-theme-text-secondary">
             Your work is autosaved as you go, so reloading is usually safe.

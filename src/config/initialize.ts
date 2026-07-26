@@ -25,6 +25,7 @@ import {
 import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
 import { MusicClient } from '@sudobility/music_client';
 import { initializeAppStore, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
+import { CONSTANTS } from '@/config/constants';
 
 // ---------------------------------------------------------------------------
 // Network
@@ -183,7 +184,7 @@ let services: AppServices | null = null;
 export function initializeApp(): AppServices {
   if (services) return services;
 
-  const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8022';
+  const baseUrl = CONSTANTS.API_URL;
   const networkClient = new FetchNetworkClient();
   const musicClient = new MusicClient(networkClient, baseUrl);
   const auth = isE2e ? e2eBackend() : firebaseBackend();

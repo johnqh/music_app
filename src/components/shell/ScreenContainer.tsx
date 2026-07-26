@@ -12,6 +12,7 @@ import type { AppPageProps, FooterConfig, TopBarConfig } from '@sudobility/build
 import { PageConfigContext } from '@/context/pageConfigContextDef';
 import { usePageConfig } from '@/hooks/usePageConfig';
 import { useAuth } from '@/app/AuthContext';
+import { CONSTANTS } from '@/config/constants';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 
 function ScreenContainerInner({ children }: { children: ReactNode }) {
@@ -28,7 +29,7 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
     () => ({
       variant: 'base',
       topBarVariant: 'app',
-      logo: { src: '/favicon.svg', alt: t('appName'), appName: t('appName'), onClick: () => navigate(`/${lang}`) },
+      logo: { src: '/favicon.svg', alt: CONSTANTS.APP_NAME, appName: CONSTANTS.APP_NAME, onClick: () => navigate(`/${lang}`) },
       menuItems: [
         { id: 'projects', label: t('nav.dashboard'), href: `/${lang}/projects` },
         { id: 'settings', label: t('nav.settings'), href: `/${lang}/settings` },
@@ -55,7 +56,7 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
   const footer = useMemo<FooterConfig>(
     () => ({
       variant: 'compact',
-      companyName: 'Sudobility',
+      companyName: CONSTANTS.COMPANY_NAME,
       copyrightYear: '2026',
       rightsText: 'All rights reserved',
     }),

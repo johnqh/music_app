@@ -23,6 +23,7 @@ import { parseScore } from '@sudobility/music_types';
 import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { getAppServices } from '@/config/initialize';
+import { CONSTANTS } from '@/config/constants';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
@@ -202,7 +203,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">ScoreSmith</h1>
+        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">{CONSTANTS.APP_NAME}</h1>
 
         <input
           type="text"

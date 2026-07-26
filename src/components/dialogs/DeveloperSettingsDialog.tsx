@@ -22,8 +22,7 @@ export type DeveloperSettingsDialogProps = {
   onClose: () => void;
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /** The database "reset local database" clears. Required (not defaulted): the store alone has no `ScoreSmithDb` handle (see `project-slice.ts`'s doc comment). */
-  /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
+    /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
   benchmarkSizes?: BenchmarkSize[];
 };
 

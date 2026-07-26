@@ -1,5 +1,5 @@
 {
-  "appName": "ScoreSmith",
+  "appName": "{{appName}}",
   "tagline": "AI-assisted sheet music composition",
   "nav": {
     "dashboard": "Projects",
@@ -8,7 +8,7 @@
   },
   "home": {
     "heroTitle": "Compose with AI, refine by hand",
-    "heroBody": "ScoreSmith pairs a full notation editor and piano roll with AI generation: describe the music you want, then edit every note.",
+    "heroBody": "{{appName}} pairs a full notation editor and piano roll with AI generation: describe the music you want, then edit every note.",
     "cta": "Open your projects",
     "featureEditorTitle": "Real notation editing",
     "featureEditorBody": "Engraved notation and a piano roll over the same score, with full undo history.",

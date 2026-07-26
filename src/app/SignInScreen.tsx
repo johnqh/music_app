@@ -1,11 +1,12 @@
 /**
  * Interim sign-in screen (Tailwind — replaced by @sudobility/auth-components
  * in Phase 3). Email/password + Google. Sign-in is required to use
- * ScoreSmith.
+ * the app.
  */
 import { useState } from 'react';
 import { Input } from '@sudobility/components';
 import { useAuth } from '@/app/AuthContext';
+import { CONSTANTS } from '@/config/constants';
 
 export function SignInScreen() {
   const { signInEmail, signUpEmail, signInGoogle } = useAuth();
@@ -50,7 +51,7 @@ export function SignInScreen() {
             void submit();
           }}
         >
-          <h1 className="text-xl font-semibold text-theme-text-primary">ScoreSmith</h1>
+          <h1 className="text-xl font-semibold text-theme-text-primary">{CONSTANTS.APP_NAME}</h1>
           <p className="text-sm text-theme-text-secondary">
             {mode === 'sign-in' ? 'Sign in to continue.' : 'Create your account.'}
           </p>
