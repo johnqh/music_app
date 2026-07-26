@@ -26,6 +26,8 @@ import {
   readPlaybackState,
   readScoreSummary,
   selectMeasuresByIndex,
+  waitForNotation,
+  expectCanvasPainted,
 } from './helpers';
 
 test.describe('spec §39 acceptance scenario', () => {
@@ -47,9 +49,8 @@ test.describe('spec §39 acceptance scenario', () => {
     const generated = await readScoreSummary(page);
     expect(generated).not.toBeNull();
     expect(generated!.notes.length).toBeGreaterThan(0);
-    await expect(
-      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
-    ).toBeVisible();
+    await waitForNotation(page);
+    await expectCanvasPainted(page); // canvas smoke: the notation actually painted pixels
 
     // 6-7. Play; notes highlight in sync (observed via store playback state --
     // Tone.js audio itself has no observable signal in headless Chromium).
@@ -153,9 +154,7 @@ test.describe('spec §39 acceptance scenario', () => {
     // asserting the dragged note's own element -- like the piano roll, the
     // notation view culls to the scrolled viewport, spec §29).
     await page.getByRole('button', { name: 'Notation view' }).click();
-    await expect(
-      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
-    ).toBeVisible();
+    await waitForNotation(page);
 
     // 20-22. Export MIDI, import it into a new project, substantially equivalent notes.
     const beforeMidi = await readScoreSummary(page);

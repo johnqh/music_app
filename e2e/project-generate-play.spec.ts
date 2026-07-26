@@ -9,6 +9,7 @@ import {
   generateWholeScore,
   gotoDashboard,
   readPlaybackState,
+  waitForNotation,
 } from './helpers';
 
 test.describe('project creation, generation, and playback', () => {
@@ -31,8 +32,7 @@ test.describe('project creation, generation, and playback', () => {
       keyMode: 'minor',
     });
 
-    const noteGroups = page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]');
-    await expect(noteGroups.first()).toBeVisible();
+    await waitForNotation(page);
 
     // Play (spec §39 items 6-7): transport toggles and the store's
     // playback state actually advances (Tone.js audio itself can't be

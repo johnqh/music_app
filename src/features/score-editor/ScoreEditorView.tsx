@@ -414,6 +414,30 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   }, []);
 
   /**
+   * Dev/e2e-only introspection handle: with no per-glyph DOM left to
+   * query, Playwright resolves note/measure ids to click coordinates
+   * through the live render result's bbox maps (e2e/helpers.ts). Gated so
+   * production builds ship nothing; getters keep the handle live without
+   * re-registering per render.
+   */
+  useEffect(() => {
+    if (!import.meta.env.DEV && import.meta.env.VITE_E2E !== '1') return;
+    const handle = {
+      get result() {
+        return resultRef.current;
+      },
+      get scrollBox() {
+        return scrollBoxRef.current;
+      },
+    };
+    const w = window as unknown as Record<string, unknown>;
+    w.__scoresmith = handle;
+    return () => {
+      if (w.__scoresmith === handle) delete w.__scoresmith;
+    };
+  }, []);
+
+  /**
    * Click-to-seek: moves the playback position (and so the caret and the
    * transport's position scrubber, both driven by the same store
    * `positionTick` the engine reports back through `seek`) to the tick

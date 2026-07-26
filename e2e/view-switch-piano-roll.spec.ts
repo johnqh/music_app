@@ -10,6 +10,7 @@ import {
   generateWholeScore,
   gotoDashboard,
   readScoreSummary,
+  waitForNotation,
 } from './helpers';
 
 test.describe('view switching and piano-roll editing', () => {
@@ -76,9 +77,7 @@ test.describe('view switching and piano-roll editing', () => {
     // the piece is not guaranteed to be drawn at the default scroll
     // position).
     await page.getByRole('button', { name: 'Notation view' }).click();
-    await expect(
-      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
-    ).toBeVisible();
+    await waitForNotation(page);
 
     const after = await readScoreSummary(page);
     expect(after).not.toBeNull();

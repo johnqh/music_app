@@ -23,30 +23,19 @@
  *    measure is exercised end to end.
  *
  * 2. **Real pointer interaction for piano-roll dragging** (`view-switch-
- *    piano-roll.spec.ts`): unlike jsdom (the unit/component test
- *    environment), Playwright's Chromium does real DOM layout, so bounding
- *    boxes read via `getBoundingClientRect()` are real screen pixels --
- *    dragging a `[data-testid="pr-note-<id>"]` rect (a single, opaquely-
- *    filled div with no overlapping siblings) via real
- *    `page.mouse.down`/`move`/`up` reliably hits it. Selecting a *notation*
- *    note is deliberately NOT done this way (see `clickNoteGroup`'s doc
- *    comment): VexFlow draws a note's stem/flag/beam as separate,
- *    overlapping elements, so a coordinate click at the notehead's own
- *    bounding-box center often actually hits one of those instead.
+ *    piano-roll.spec.ts`): Playwright's Chromium does real DOM layout, so
+ *    dragging a `[data-testid="pr-note-<id>"]` rect via real
+ *    `page.mouse.down`/`move`/`up` reliably hits it.
  *
- * 3. **A genuine real-coordinate click for measure selection**
- *    (`findMeasureStaveClickPoint`, used once, in
- *    `regeneration.spec.ts`'s "selects a measure via a real click" test):
- *    unlike a note's stem/beam/flag (technique 2's problem), a measure's
- *    stave is drawn as thin painted line strokes, not a filled hit region
- *    covering the whole stave -- most points inside its bounding box hit
- *    nothing at all. This probes a handful of candidate points along the
- *    stave's own vertical middle (empirically, its middle line) via real
- *    `elementFromPoint` hit-testing until one actually resolves to the
- *    measure's own group, then hands that back for a real
- *    `page.mouse.click` -- genuinely exercising `ScoreEditorView`'s click
- *    handler end to end, without guessing at fixed pixel offsets that
- *    would silently drift with engraving changes.
+ * 3. **Coordinate clicks resolved through `window.__scoresmith`** (the
+ *    canvas notation renderer has no per-glyph DOM at all): the app's
+ *    dev/e2e handle exposes the live render result's `idToBBox`/
+ *    `measureIdToBBox` maps and the scroll box. Helpers translate a
+ *    note/measure id -> content bbox -> viewport point and drive a real
+ *    `page.mouse.click`; the app's own click handler resolves that point
+ *    against the very same maps (`hit-test.ts`), so a bbox-center click
+ *    always lands -- the SVG era's "stem/beam wins the hit-test" hazard is
+ *    gone by construction.
  */
 import { expect, type Page } from '@playwright/test';
 
@@ -172,12 +161,76 @@ export async function waitForGenerationSettled(page: Page): Promise<void> {
   await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 15_000 });
 }
 
-/** Waits until the notation view has rendered at least one VexFlow-drawn element. */
+/** Waits until the notation canvas has drawn at least one note (the `__scoresmith` handle's bbox map is non-empty). */
 export async function waitForNotation(page: Page): Promise<void> {
-  await expect(async () => {
-    const count = await page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').count();
-    expect(count).toBeGreaterThan(0);
-  }).toPass({ timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
+      return (h?.result?.idToBBox.size ?? 0) > 0;
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+/** The shape of `window.__scoresmith` (ScoreEditorView's dev/e2e introspection handle). */
+type ScoresmithHandle = {
+  result: {
+    idToBBox: Map<string, { x: number; y: number; width: number; height: number }>;
+    measureIdToBBox: Map<string, { x: number; y: number; width: number; height: number }>;
+  } | null;
+  scrollBox: HTMLElement | null;
+};
+
+/**
+ * Converts a content-coordinate bbox (as stored in the handle's maps) to a
+ * viewport point at the bbox center, scrolling the box into view first if
+ * needed. Runs entirely in-page; returns null when the id isn't in `map`.
+ */
+async function viewportPointForId(
+  page: Page,
+  map: 'idToBBox' | 'measureIdToBBox',
+  id: string,
+  offset?: { x: number; y: number },
+): Promise<{ x: number; y: number } | null> {
+  return page.evaluate(
+    ({ map, id, offset }) => {
+      const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
+      if (!h?.result || !h.scrollBox) {
+        throw new Error('__scoresmith is not present -- dev/e2e build required');
+      }
+      const box = h.result[map].get(id);
+      if (!box) return null;
+      const scroll = h.scrollBox;
+      const targetY = box.y + box.height / 2;
+      if (targetY < scroll.scrollTop || targetY > scroll.scrollTop + scroll.clientHeight) {
+        scroll.scrollTo({ top: Math.max(0, box.y - scroll.clientHeight / 2) });
+      }
+      const rect = scroll.getBoundingClientRect();
+      const cx = offset ? box.x + offset.x : box.x + box.width / 2;
+      const cy = offset ? box.y + offset.y : box.y + box.height / 2;
+      return { x: rect.left + cx - scroll.scrollLeft, y: rect.top + cy - scroll.scrollTop };
+    },
+    { map, id, offset },
+  );
+}
+
+/** Asserts the notation canvas actually painted pixels (canvas smoke check: a broken draw would leave it fully transparent). */
+export async function expectCanvasPainted(page: Page): Promise<void> {
+  const painted = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="score-canvas"]');
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return false;
+    const w = Math.min(canvas.width, 400);
+    const hgt = Math.min(canvas.height, 400);
+    if (w === 0 || hgt === 0) return false;
+    const data = ctx.getImageData(0, 0, w, hgt).data;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > 0) return true; // any non-transparent pixel
+    }
+    return false;
+  });
+  expect(painted).toBe(true);
 }
 
 /** Reads the store's `getState()` and throws a clear error if the e2e hook (`src/app/App.tsx`) isn't present -- e.g. running against a production build instead of `npm run dev`. */
@@ -262,27 +315,13 @@ export async function selectMeasuresByIndex(page: Page, indices: number[]): Prom
 export type MeasureClickPoint = { x: number; y: number };
 
 /**
- * Finds a real, on-screen point that lands on measure `measureIndex`'s own
- * rendered stave (its `[id="vf-<measureId>"]` group), not a note glyph --
- * for exercising `ScoreEditorView`'s real click-based measure-selection
- * path (`target.closest('[id^="vf-"]')` resolving via `measureIdToBBox`)
- * with a genuine `page.mouse.click`, rather than driving `selectMeasures`
- * through the store hook the way `selectMeasuresByIndex` does.
- *
- * VexFlow's stave lines are thin painted strokes, not a filled
- * measure-wide hit region, so not every point inside the stave's
- * bounding box actually lands on painted stave geometry (confirmed by
- * direct hit-test probing while building this helper: empty margins above/
- * below the stave hit nothing at all, and a note's own glyph can locally
- * cover the stave underneath it). This tries a handful of candidate
- * points along the stave's own vertical middle -- empirically always the
- * stave's own middle line -- at different horizontal fractions, and
- * returns the first one real `document.elementFromPoint` hit-testing
- * confirms actually resolves to the measure's own group (via the same
- * `closest('[id^="vf-"]')` walk the app's own click handler does), not a
- * note's. Throws if none of the candidates do (e.g. notes happen to sit
- * under every candidate x for this particular generated score) rather
- * than clicking blind and asserting on a false premise.
+ * Finds a real, on-screen point inside measure `measureIndex`'s stave box
+ * that is NOT inside any note bbox, so a real `page.mouse.click` there
+ * resolves to the measure (not a note) through `ScoreEditorView`'s
+ * geometric hit-testing -- exercising the genuine click-based
+ * measure-selection path end to end. With canvas rendering the whole
+ * stave box is a valid hit region (no "thin painted strokes" problem),
+ * so the only thing to avoid is landing on a drawn note.
  */
 export async function findMeasureStaveClickPoint(
   page: Page,
@@ -297,25 +336,42 @@ export async function findMeasureStaveClickPoint(
     return measure.id;
   }, measureIndex);
 
-  const targetId = `vf-${measureId}`;
   const point = await page.evaluate((id) => {
-    const el = document.getElementById(id);
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    const candidateFractionsX = [0.5, 0.85, 0.15, 0.7, 0.3];
-    for (const fracX of candidateFractionsX) {
-      const x = rect.x + rect.width * fracX;
-      const y = rect.y + rect.height * 0.5;
-      const hit = document.elementFromPoint(x, y);
-      const group = hit?.closest('[id^="vf-"]');
-      if (group && group.id === id) return { x, y };
+    const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
+    if (!h?.result || !h.scrollBox) {
+      throw new Error('__scoresmith is not present -- dev/e2e build required');
+    }
+    const box = h.result.measureIdToBBox.get(id);
+    if (!box) return null;
+    const scroll = h.scrollBox;
+    const rect = scroll.getBoundingClientRect();
+    for (let dx = 2; dx < box.width; dx += 4) {
+      for (let dy = 2; dy < box.height; dy += 4) {
+        const px = box.x + dx;
+        const py = box.y + dy;
+        let insideNote = false;
+        for (const noteBox of h.result.idToBBox.values()) {
+          if (
+            px >= noteBox.x &&
+            px <= noteBox.x + noteBox.width &&
+            py >= noteBox.y &&
+            py <= noteBox.y + noteBox.height
+          ) {
+            insideNote = true;
+            break;
+          }
+        }
+        if (!insideNote) {
+          return { x: rect.left + px - scroll.scrollLeft, y: rect.top + py - scroll.scrollTop };
+        }
+      }
     }
     return null;
-  }, targetId);
+  }, measureId);
 
   if (!point) {
     throw new Error(
-      `findMeasureStaveClickPoint: no candidate point on measure index ${measureIndex} hit its stave (every candidate landed on a note, or nothing)`,
+      `findMeasureStaveClickPoint: measure index ${measureIndex} is not in the drawn window, or every probed point lies on a note`,
     );
   }
   return point;
@@ -347,63 +403,43 @@ export async function readCandidates(page: Page): Promise<Array<{ id: string; la
 export type NoteGroup = { id: string };
 
 /**
- * Every real note event currently rendered inside `containerTestId`
- * (per `readScoreSummary`'s own event ids -- the source of truth for
- * which `[id^="vf-"]` groups are real notes, as opposed to one of
- * VexFlow's own "vf-autoNNN" internal glyph ids for stems/beams/clefs/
- * etc, which share the same prefix but were never registered in
- * `idToElement` -- clicking one is a no-op, silently leaving the
- * selection unchanged), in tick order (`readScoreSummary`'s own note
- * order -- NOT on-screen x position, which only reflects reading order
- * *within* one system: a score wrapping across multiple systems restarts
- * each row back near x=0, so sorting purely by x would interleave notes
- * across rows out of chronological order).
+ * Every real note event currently drawn by the notation canvas (the
+ * `__scoresmith` handle's `idToBBox` keys intersected with
+ * `readScoreSummary`'s event ids), in tick order (`readScoreSummary`'s
+ * own note order -- NOT on-screen x position, which restarts near x=0 on
+ * every wrapped system).
  */
-export async function getNoteGroups(
-  page: Page,
-  containerTestId = 'score-editor-canvas',
-): Promise<NoteGroup[]> {
+export async function getNoteGroups(page: Page): Promise<NoteGroup[]> {
   const summary = await readScoreSummary(page);
   const noteIds = (summary?.notes ?? []).map((n) => n.id);
-  const renderedIds = await page.evaluate((containerTestId) => {
-    const container = document.querySelector(`[data-testid="${containerTestId}"]`);
-    if (!container) return [];
-    return Array.from(container.querySelectorAll('[id^="vf-"]')).map((g) =>
-      g.id.slice('vf-'.length),
-    );
-  }, containerTestId);
+  const renderedIds = await page.evaluate(() => {
+    const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
+    return h?.result ? Array.from(h.result.idToBBox.keys()) : [];
+  });
   const rendered = new Set(renderedIds);
   return noteIds.filter((id) => rendered.has(id)).map((id) => ({ id }));
 }
 
 /**
- * "Clicks" a `NoteGroup` returned by `getNoteGroups` by dispatching a real,
- * bubbling `MouseEvent` directly on its SVG group element (`id="vf-<id>"`)
- * rather than a real-coordinate `page.mouse.click`. `ScoreEditorView`'s
- * click handler (`target.closest('[id^="vf-"]')`) reads `event.target`,
- * not click coordinates, so this exercises the exact same handler -- but a
- * coordinate-based click at the note's own bounding-box center is
- * unreliable here: VexFlow draws a note's stem/flag/beam as separate,
- * overlapping sibling elements (their own "vf-autoNNN" ids, unregistered
- * in `idToElement`), and whichever one happens to be topmost at that exact
- * pixel -- not necessarily the notehead -- silently wins the real
- * browser's hit-test, making the click a no-op more often than not.
+ * Clicks a `NoteGroup` with a real `page.mouse.click` at the center of its
+ * drawn bbox (scrolled into view first if needed). The app's click handler
+ * resolves the point against the same `idToBBox` map this reads, so a
+ * bbox-center click deterministically selects exactly this note -- the SVG
+ * era's overlapping stem/beam hit-test hazard no longer exists.
  */
 export async function clickNoteGroup(
   page: Page,
   group: NoteGroup,
   options?: { shift?: boolean },
 ): Promise<void> {
-  await page.evaluate(
-    ({ id, shift }) => {
-      const element = document.getElementById(`vf-${id}`);
-      if (!element) throw new Error(`clickNoteGroup: no element with id "vf-${id}"`);
-      element.dispatchEvent(
-        new MouseEvent('click', { bubbles: true, cancelable: true, view: window, shiftKey: shift }),
-      );
-    },
-    { id: group.id, shift: options?.shift ?? false },
-  );
+  const point = await viewportPointForId(page, 'idToBBox', group.id);
+  if (!point) throw new Error(`clickNoteGroup: note ${group.id} is not in the drawn window`);
+  if (options?.shift) await page.keyboard.down('Shift');
+  try {
+    await page.mouse.click(point.x, point.y);
+  } finally {
+    if (options?.shift) await page.keyboard.up('Shift');
+  }
 }
 
 /** Collects uncaught page errors and console "error"-level messages for the lifetime of `page` (spec §39 item 25: "All operations complete without uncaught errors"). Call the returned function at the end of a test to assert none occurred. */
