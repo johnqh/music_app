@@ -4,7 +4,13 @@
  * the dashboard and reopening it from the project grid.
  */
 import { expect, test } from '@playwright/test';
-import { collectPageErrors, createNewProject, generateWholeScore, gotoDashboard, readScoreSummary } from './helpers';
+import {
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  gotoDashboard,
+  readScoreSummary,
+} from './helpers';
 
 test.describe('project persistence: save and reopen', () => {
   test('saves a project and reopens it with the score intact', async ({ page }) => {
@@ -27,7 +33,9 @@ test.describe('project persistence: save and reopen', () => {
 
     // Reopen via a hard reload at the same URL.
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Edit project title' })).toHaveText('Persistence Check');
+    await expect(page.getByRole('button', { name: 'Edit project title' })).toHaveText(
+      'Persistence Check',
+    );
     await expect
       .poll(async () => (await readScoreSummary(page))?.notes.length ?? 0, { timeout: 10_000 })
       .toBe(before!.notes.length);
@@ -37,7 +45,9 @@ test.describe('project persistence: save and reopen', () => {
     // Reopen via the dashboard's project grid.
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
     await expect(page).toHaveURL(/\/en\/projects$/);
-    await expect(page.getByRole('button', { name: 'Open project: Persistence Check' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Open project: Persistence Check' }),
+    ).toBeVisible();
 
     await page.getByRole('button', { name: 'Open project: Persistence Check' }).click();
     await expect(page).toHaveURL(projectUrl);

@@ -44,7 +44,9 @@ test.describe('region regeneration: preview and accept', () => {
     expect(getErrors()).toEqual([]);
   });
 
-  test('generates alternatives for measures 3-4, previews them, and accepts one', async ({ page }) => {
+  test('generates alternatives for measures 3-4, previews them, and accepts one', async ({
+    page,
+  }) => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
@@ -82,7 +84,9 @@ test.describe('region regeneration: preview and accept', () => {
     for (const candidate of candidates) {
       const card = page.getByRole('group', { name: `Candidate card: ${candidate.label}` });
       await card.getByRole('button', { name: candidate.label, exact: true }).click();
-      await expect(card.getByRole('button', { name: candidate.label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        card.getByRole('button', { name: candidate.label, exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
     }
 
     // Accept the last-previewed candidate (spec §39 item 12).
@@ -119,7 +123,8 @@ test.describe('region regeneration: preview and accept', () => {
 
     const m3 = before!.measures[2];
     const m4 = before!.measures[3];
-    const inRegen = (tick: number): boolean => tick >= m3.startTick && tick < m4.startTick + m4.durationTicks;
+    const inRegen = (tick: number): boolean =>
+      tick >= m3.startTick && tick < m4.startTick + m4.durationTicks;
 
     const beforeOutside = before!.notes.filter((n) => !inRegen(n.startTick));
     const afterOutside = after!.notes.filter((n) => !inRegen(n.startTick));

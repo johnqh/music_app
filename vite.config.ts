@@ -41,7 +41,9 @@ export default defineConfig({
     // package instead of externalizing it.
     server: {
       deps: {
-        inline: [/@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/],
+        inline: [
+          /@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/,
+        ],
       },
     },
     coverage: {

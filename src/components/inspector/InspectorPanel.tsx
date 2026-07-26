@@ -59,7 +59,15 @@ import {
   TabsList,
   TabsTrigger,
 } from '@sudobility/components';
-import type { Accidental, Articulation, Clef, KeySignature, NoteEvent, PitchStep, TimeSignature } from '@sudobility/music_types';
+import type {
+  Accidental,
+  Articulation,
+  Clef,
+  KeySignature,
+  NoteEvent,
+  PitchStep,
+  TimeSignature,
+} from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import {
@@ -69,7 +77,12 @@ import {
   selectedNoteIds,
   toggleTie as dispatchToggleTie,
 } from '@/features/score-editor/editing';
-import { changePitchCommand, changeVoiceCommand, moveNotesCommand, resizeNotesCommand } from '@sudobility/music_lib';
+import {
+  changePitchCommand,
+  changeVoiceCommand,
+  moveNotesCommand,
+  resizeNotesCommand,
+} from '@sudobility/music_lib';
 import {
   changeClefCommand,
   changeKeySignatureCommand,
@@ -236,7 +249,15 @@ function MixedCheckbox({
   onChange: (checked: boolean) => void;
   disabled?: boolean;
 }) {
-  return <Checkbox label={label} checked={checked} indeterminate={indeterminate} onChange={onChange} disabled={disabled} />;
+  return (
+    <Checkbox
+      label={label}
+      checked={checked}
+      indeterminate={indeterminate}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
 }
 
 /** A library `Slider` wrapped with an accessible name (via a visually-hidden
@@ -262,7 +283,9 @@ function CommitSlider({
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
 
-  const commit = (e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>): void => {
+  const commit = (
+    e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>,
+  ): void => {
     onCommit(Number((e.target as HTMLInputElement).value));
   };
 
@@ -280,10 +303,16 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
 
   if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
   const noteIds = selectedNoteIds(score, selection);
-  const notes = noteIds.map((id) => findEvent(score, id)).filter((e): e is NoteEvent => e !== null && isNoteEvent(e));
+  const notes = noteIds
+    .map((id) => findEvent(score, id))
+    .filter((e): e is NoteEvent => e !== null && isNoteEvent(e));
 
   if (notes.length === 0) {
-    return <p className="p-2 text-sm text-theme-text-secondary">Select a note to inspect its properties.</p>;
+    return (
+      <p className="p-2 text-sm text-theme-text-secondary">
+        Select a note to inspect its properties.
+      </p>
+    );
   }
 
   const step = commonValue(notes.map((n) => n.pitch.step));
@@ -297,7 +326,9 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
   const tieStart = commonValue(notes.map((n) => n.tieStart ?? false));
   const tieStop = commonValue(notes.map((n) => n.tieStop ?? false));
 
-  const applyPitchPatch = (patch: Partial<{ step: PitchStep; accidental: Accidental; octave: number }>): void => {
+  const applyPitchPatch = (
+    patch: Partial<{ step: PitchStep; accidental: Accidental; octave: number }>,
+  ): void => {
     for (const note of notes) {
       store.getState().dispatchCommand(changePitchCommand([note.id], { ...note.pitch, ...patch }));
     }
@@ -305,7 +336,9 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">{notes.length > 1 ? `${notes.length} notes selected` : 'Note'}</p>
+      <p className="text-sm font-semibold text-theme-text-primary">
+        {notes.length > 1 ? `${notes.length} notes selected` : 'Note'}
+      </p>
 
       <div className="flex gap-2">
         <MixedSelect
@@ -320,14 +353,20 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
           options={ACCIDENTALS.map((a) => ({ value: String(a.value), label: a.label }))}
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
-        <MixedNumberField label="Octave" value={octave} onCommit={(v) => applyPitchPatch({ octave: v })} />
+        <MixedNumberField
+          label="Octave"
+          value={octave}
+          onCommit={(v) => applyPitchPatch({ octave: v })}
+        />
       </div>
 
       <MixedNumberField
         label="Duration (ticks)"
         value={durationTicks}
         min={1}
-        onCommit={(v) => store.getState().dispatchCommand(resizeNotesCommand(noteIds, Math.max(1, Math.round(v))))}
+        onCommit={(v) =>
+          store.getState().dispatchCommand(resizeNotesCommand(noteIds, Math.max(1, Math.round(v))))
+        }
       />
 
       <MixedNumberField
@@ -337,7 +376,11 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
         onCommit={(v) => {
           if (notes.length !== 1) return;
           const note = notes[0];
-          store.getState().dispatchCommand(moveNotesCommand([note.id], { deltaTicks: v - note.startTick, deltaSemitones: 0 }));
+          store
+            .getState()
+            .dispatchCommand(
+              moveNotesCommand([note.id], { deltaTicks: v - note.startTick, deltaSemitones: 0 }),
+            );
         }}
       />
 
@@ -372,12 +415,16 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
         label="Voice"
         value={commonValue(
           notes.map((n) => {
-            const measure = score.tracks.flatMap((t) => t.measures).find((m) => m.voices.some((v) => v.id === n.voiceId));
+            const measure = score.tracks
+              .flatMap((t) => t.measures)
+              .find((m) => m.voices.some((v) => v.id === n.voiceId));
             return measure ? measure.voices.findIndex((v) => v.id === n.voiceId) : 0;
           }),
         )}
         min={0}
-        onCommit={(v) => store.getState().dispatchCommand(changeVoiceCommand(noteIds, Math.max(0, Math.round(v))))}
+        onCommit={(v) =>
+          store.getState().dispatchCommand(changeVoiceCommand(noteIds, Math.max(0, Math.round(v))))
+        }
       />
 
       <div className="flex gap-4">
@@ -403,10 +450,16 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
   const selection = store((s) => s.selection);
 
   if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
-  const measures = selection.measureIds.map((id) => findMeasure(score, id)).filter((m) => m !== null);
+  const measures = selection.measureIds
+    .map((id) => findMeasure(score, id))
+    .filter((m) => m !== null);
 
   if (measures.length === 0) {
-    return <p className="p-2 text-sm text-theme-text-secondary">Select a measure to inspect its properties.</p>;
+    return (
+      <p className="p-2 text-sm text-theme-text-secondary">
+        Select a measure to inspect its properties.
+      </p>
+    );
   }
 
   const timeSig = commonValue(measures.map((m) => m.timeSignature));
@@ -414,54 +467,79 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
   const indices = measures.map((m) => m.index + 1);
 
   const applyTimeSignature = (timeSignature: TimeSignature): void => {
-    for (const id of selection.measureIds) store.getState().dispatchCommand(changeTimeSignatureCommand(id, timeSignature));
+    for (const id of selection.measureIds)
+      store.getState().dispatchCommand(changeTimeSignatureCommand(id, timeSignature));
   };
   const applyKeySignature = (keySignature: KeySignature): void => {
-    for (const id of selection.measureIds) store.getState().dispatchCommand(changeKeySignatureCommand(id, keySignature));
+    for (const id of selection.measureIds)
+      store.getState().dispatchCommand(changeKeySignatureCommand(id, keySignature));
   };
 
   return (
     <div className="flex flex-col gap-4 p-2">
       <p className="text-sm font-semibold text-theme-text-primary">
-        {measures.length > 1 ? `Measures ${Math.min(...indices)}–${Math.max(...indices)}` : `Measure ${indices[0]}`}
+        {measures.length > 1
+          ? `Measures ${Math.min(...indices)}–${Math.max(...indices)}`
+          : `Measure ${indices[0]}`}
       </p>
 
       <div className="flex gap-2">
         <MixedNumberField
           label="Time sig. numerator"
-          value={timeSig === MIXED ? MIXED : timeSig?.numerator ?? null}
+          value={timeSig === MIXED ? MIXED : (timeSig?.numerator ?? null)}
           min={1}
-          onCommit={(v) => applyTimeSignature({ numerator: Math.max(1, Math.round(v)), denominator: timeSig !== MIXED ? (timeSig?.denominator ?? 4) : 4 })}
+          onCommit={(v) =>
+            applyTimeSignature({
+              numerator: Math.max(1, Math.round(v)),
+              denominator: timeSig !== MIXED ? (timeSig?.denominator ?? 4) : 4,
+            })
+          }
         />
         <MixedNumberField
           label="Time sig. denominator"
-          value={timeSig === MIXED ? MIXED : timeSig?.denominator ?? null}
+          value={timeSig === MIXED ? MIXED : (timeSig?.denominator ?? null)}
           min={1}
-          onCommit={(v) => applyTimeSignature({ numerator: timeSig !== MIXED ? (timeSig?.numerator ?? 4) : 4, denominator: Math.max(1, Math.round(v)) })}
+          onCommit={(v) =>
+            applyTimeSignature({
+              numerator: timeSig !== MIXED ? (timeSig?.numerator ?? 4) : 4,
+              denominator: Math.max(1, Math.round(v)),
+            })
+          }
         />
       </div>
 
       <div className="flex gap-2">
         <MixedNumberField
           label="Key (fifths)"
-          value={keySig === MIXED ? MIXED : keySig?.fifths ?? null}
+          value={keySig === MIXED ? MIXED : (keySig?.fifths ?? null)}
           min={-7}
           max={7}
-          onCommit={(v) => applyKeySignature({ fifths: Math.round(v), mode: keySig !== MIXED ? (keySig?.mode ?? 'major') : 'major' })}
+          onCommit={(v) =>
+            applyKeySignature({
+              fifths: Math.round(v),
+              mode: keySig !== MIXED ? (keySig?.mode ?? 'major') : 'major',
+            })
+          }
         />
         <MixedSelect
-          value={keySig === MIXED ? MIXED : keySig?.mode ?? null}
+          value={keySig === MIXED ? MIXED : (keySig?.mode ?? null)}
           ariaLabel="Key mode"
           options={[
             { value: 'major', label: 'major' },
             { value: 'minor', label: 'minor' },
           ]}
-          onChange={(value) => applyKeySignature({ fifths: keySig !== MIXED ? (keySig?.fifths ?? 0) : 0, mode: value as KeySignature['mode'] })}
+          onChange={(value) =>
+            applyKeySignature({
+              fifths: keySig !== MIXED ? (keySig?.fifths ?? 0) : 0,
+              mode: value as KeySignature['mode'],
+            })
+          }
         />
       </div>
 
       <p className="text-xs text-theme-text-secondary">
-        This selection also drives the Regenerate panel — use it to generate alternatives for these measures.
+        This selection also drives the Regenerate panel — use it to generate alternatives for these
+        measures.
       </p>
     </div>
   );
@@ -474,14 +552,20 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   // Computed unconditionally (rather than after the "no score"/"no
   // selection" early returns below) so the volume/pan drag-draft hooks
   // just below can be called unconditionally too, per the rules of hooks.
-  const tracks = score ? selection.trackIds.map((id) => findTrack(score, id)).filter((t) => t !== null) : [];
+  const tracks = score
+    ? selection.trackIds.map((id) => findTrack(score, id)).filter((t) => t !== null)
+    : [];
   const volume = commonValue(tracks.map((t) => t.volume));
   const pan = commonValue(tracks.map((t) => t.pan));
 
   if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
 
   if (tracks.length === 0) {
-    return <p className="p-2 text-sm text-theme-text-secondary">Select a track to inspect its properties.</p>;
+    return (
+      <p className="p-2 text-sm text-theme-text-secondary">
+        Select a track to inspect its properties.
+      </p>
+    );
   }
 
   const name = commonValue(tracks.map((t) => t.name));
@@ -493,17 +577,20 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const solo = commonValue(tracks.map((t) => t.solo));
 
   const patchAll = (patch: Record<string, unknown>): void => {
-    for (const id of selection.trackIds) store.getState().dispatchCommand(changeTrackPropsCommand(id, patch));
+    for (const id of selection.trackIds)
+      store.getState().dispatchCommand(changeTrackPropsCommand(id, patch));
   };
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">{tracks.length > 1 ? `${tracks.length} tracks selected` : 'Track'}</p>
+      <p className="text-sm font-semibold text-theme-text-primary">
+        {tracks.length > 1 ? `${tracks.length} tracks selected` : 'Track'}
+      </p>
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>Name</span>
         <Input
-          value={name === MIXED ? '' : name ?? ''}
+          value={name === MIXED ? '' : (name ?? '')}
           placeholder={name === MIXED ? 'Mixed' : undefined}
           onChange={(e: ChangeEvent<HTMLInputElement>) => patchAll({ name: e.target.value })}
           aria-label="Track name"
@@ -513,9 +600,11 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>Instrument</span>
         <Input
-          value={instrumentName === MIXED ? '' : instrumentName ?? ''}
+          value={instrumentName === MIXED ? '' : (instrumentName ?? '')}
           placeholder={instrumentName === MIXED ? 'Mixed' : undefined}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => patchAll({ instrumentName: e.target.value })}
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            patchAll({ instrumentName: e.target.value })
+          }
           aria-label="Instrument"
           className={TEXT_INPUT_CLASS}
         />
@@ -542,7 +631,8 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
         ariaLabel="Track clef"
         options={CLEFS.map((c) => ({ value: c, label: c }))}
         onChange={(value) => {
-          for (const id of selection.trackIds) store.getState().dispatchCommand(changeClefCommand(id, value as Clef));
+          for (const id of selection.trackIds)
+            store.getState().dispatchCommand(changeClefCommand(id, value as Clef));
         }}
       />
 
@@ -588,7 +678,11 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
 }
 
 /** Which tab a fresh selection should default to: notes take priority, then measures, then tracks. */
-function defaultTabFor(selection: { eventIds: string[]; measureIds: string[]; trackIds: string[] }): InspectorTab {
+function defaultTabFor(selection: {
+  eventIds: string[];
+  measureIds: string[];
+  trackIds: string[];
+}): InspectorTab {
   if (selection.eventIds.length > 0) return 'note';
   if (selection.measureIds.length > 0) return 'measure';
   if (selection.trackIds.length > 0) return 'track';

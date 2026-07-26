@@ -36,8 +36,7 @@ function makeStore() {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 describe('resolveInsertTarget', () => {
   it("targets the first selected event's own measure/voice/tick", () => {
@@ -60,15 +59,29 @@ describe('resolveInsertTarget', () => {
     const track = score.tracks[0];
     const thirdMeasure = track.measures[2];
 
-    const target = resolveInsertTarget(score, { eventIds: [], measureIds: [thirdMeasure.id], trackIds: [] });
-    expect(target).toEqual({ trackId: track.id, measureId: thirdMeasure.id, voiceIndex: 0, startTick: thirdMeasure.startTick });
+    const target = resolveInsertTarget(score, {
+      eventIds: [],
+      measureIds: [thirdMeasure.id],
+      trackIds: [],
+    });
+    expect(target).toEqual({
+      trackId: track.id,
+      measureId: thirdMeasure.id,
+      voiceIndex: 0,
+      startTick: thirdMeasure.startTick,
+    });
   });
 
   it("falls back to the score's first measure when nothing is selected", () => {
     const score = twinkleScore();
     const track = score.tracks[0];
     const target = resolveInsertTarget(score, { eventIds: [], measureIds: [], trackIds: [] });
-    expect(target).toEqual({ trackId: track.id, measureId: track.measures[0].id, voiceIndex: 0, startTick: 0 });
+    expect(target).toEqual({
+      trackId: track.id,
+      measureId: track.measures[0].id,
+      voiceIndex: 0,
+      startTick: 0,
+    });
   });
 });
 
@@ -86,7 +99,9 @@ describe('insertNoteAtSelection', () => {
 
   it('is a no-op with no score loaded', () => {
     const store = createAppStore({ context: testStoreContext() });
-    expect(() => insertNoteAtSelection(store, { step: 'C', accidental: 0, octave: 4 })).not.toThrow();
+    expect(() =>
+      insertNoteAtSelection(store, { step: 'C', accidental: 0, octave: 4 }),
+    ).not.toThrow();
     expect(store.getState().score).toBeNull();
   });
 });
@@ -229,14 +244,22 @@ describe('selectAll / selectMeasure / selectTrackAction', () => {
     const store = makeStore();
     const measureId = store.getState().score!.tracks[0].measures[1].id;
     selectMeasure(store, measureId);
-    expect(store.getState().selection).toEqual({ eventIds: [], measureIds: [measureId], trackIds: [] });
+    expect(store.getState().selection).toEqual({
+      eventIds: [],
+      measureIds: [measureId],
+      trackIds: [],
+    });
   });
 
   it('selectTrackAction replaces the selection with the given track', () => {
     const store = makeStore();
     const trackId = store.getState().score!.tracks[0].id;
     selectTrackAction(store, trackId);
-    expect(store.getState().selection).toEqual({ eventIds: [], measureIds: [], trackIds: [trackId] });
+    expect(store.getState().selection).toEqual({
+      eventIds: [],
+      measureIds: [],
+      trackIds: [trackId],
+    });
   });
 });
 
@@ -269,7 +292,9 @@ describe('per-note property changes', () => {
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
 
     changeArticulation(store, 'staccato');
-    expect((findEvent(store.getState().score!, note.id) as NoteEvent).articulation).toBe('staccato');
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).articulation).toBe(
+      'staccato',
+    );
 
     changeArticulation(store, undefined);
     expect((findEvent(store.getState().score!, note.id) as NoteEvent).articulation).toBeUndefined();
@@ -322,7 +347,11 @@ describe('quantizeSelection', () => {
     expect(ids.length).toBeGreaterThan(2000);
     store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
 
-    const options: QuantizeOptions = { grid: big.ppq / 4, quantizeStarts: true, quantizeDurations: true };
+    const options: QuantizeOptions = {
+      grid: big.ppq / 4,
+      quantizeStarts: true,
+      quantizeDurations: true,
+    };
     // No worker in vitest/jsdom, so this exercises QuantizeService's
     // direct-call fallback — still routed through the async worker-path
     // code (not `quantizeCommand` synchronously), which is what this test
@@ -333,8 +362,9 @@ describe('quantizeSelection', () => {
     await quantizeSelection(store, options, service);
 
     expect(store.getState().canUndo).toBe(true);
-    expect(allNotes(store.getState().score!).every((n) => n.startTick % (big.ppq / 4) === 0)).toBe(true);
-
+    expect(allNotes(store.getState().score!).every((n) => n.startTick % (big.ppq / 4) === 0)).toBe(
+      true,
+    );
   });
 });
 
@@ -342,7 +372,11 @@ describe('selectedNoteIds', () => {
   it('keeps only ids that resolve to note events', () => {
     const score = twinkleScore();
     const noteId = allNotes(score)[0].id;
-    const ids = selectedNoteIds(score, { eventIds: [noteId, 'nonexistent'], measureIds: [], trackIds: [] });
+    const ids = selectedNoteIds(score, {
+      eventIds: [noteId, 'nonexistent'],
+      measureIds: [],
+      trackIds: [],
+    });
     expect(ids).toEqual([noteId]);
   });
 

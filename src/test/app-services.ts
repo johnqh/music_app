@@ -10,14 +10,21 @@ import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
 import type { NetworkClient } from '@sudobility/types';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
 
-const TEST_USER: AuthUser = { uid: 'test-user', email: 'test@example.com', displayName: 'Test User' };
+const TEST_USER: AuthUser = {
+  uid: 'test-user',
+  email: 'test@example.com',
+  displayName: 'Test User',
+};
 
 export function installTestAppServices(
-  context: TestStoreContext = testStoreContext()
+  context: TestStoreContext = testStoreContext(),
 ): TestStoreContext {
   const services: AppServices = {
     networkClient: {} as NetworkClient,
-    musicClient: context.client as MusicClient,
+    // Cast through unknown: music_lib's nested @sudobility/music_client copy
+    // makes TS treat its MusicClient as nominally distinct from the app's
+    // (private `networkClient` brand). Same package/shape — safe bridge.
+    musicClient: context.client as unknown as MusicClient,
     baseUrl: 'http://test.local',
     prefsStorage: context.storage!,
     auth: {

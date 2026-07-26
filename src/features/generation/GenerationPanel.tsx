@@ -52,7 +52,18 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Button, Checkbox, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, TextArea, cn } from '@sudobility/components';
+import {
+  Button,
+  Checkbox,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  TextArea,
+  cn,
+} from '@sudobility/components';
 import { variants } from '@sudobility/design';
 
 import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
@@ -80,7 +91,11 @@ const PRESET_PROMPTS: string[] = [
 /** The keyword values `services/generation/prompt-parse.ts`'s `STYLES`/`MOODS` actually branch on — an explicit `style`/`mood` request field only changes generation behavior when it matches one of these. */
 const STYLE_OPTIONS = ['waltz', 'jazz', 'pop', 'cinematic', 'ambient', 'battle'];
 const MOOD_OPTIONS = ['gentle', 'dark', 'upbeat', 'dramatic', 'calm', 'energetic'];
-const COMPLEXITY_OPTIONS: NonNullable<GenerateScoreRequest['complexity']>[] = ['simple', 'moderate', 'complex'];
+const COMPLEXITY_OPTIONS: NonNullable<GenerateScoreRequest['complexity']>[] = [
+  'simple',
+  'moderate',
+  'complex',
+];
 
 type InstrumentKey = 'piano' | 'electric-piano' | 'strings' | 'bass' | 'synth-lead' | 'drums';
 
@@ -93,12 +108,30 @@ type InstrumentKey = 'piano' | 'electric-piano' | 'strings' | 'bass' | 'synth-le
  * "just Piano" (the default selection) gets the melody, matching
  * `DEFAULT_TRACK`'s own single-piano fallback.
  */
-const INSTRUMENT_OPTIONS: Array<{ key: InstrumentKey; label: string; instrumentName: string; midiProgram: number; clef: Clef }> = [
+const INSTRUMENT_OPTIONS: Array<{
+  key: InstrumentKey;
+  label: string;
+  instrumentName: string;
+  midiProgram: number;
+  clef: Clef;
+}> = [
   { key: 'piano', label: 'Piano', instrumentName: 'Piano', midiProgram: 0, clef: 'treble' },
-  { key: 'electric-piano', label: 'Electric Piano', instrumentName: 'Electric Piano', midiProgram: 4, clef: 'treble' },
+  {
+    key: 'electric-piano',
+    label: 'Electric Piano',
+    instrumentName: 'Electric Piano',
+    midiProgram: 4,
+    clef: 'treble',
+  },
   { key: 'strings', label: 'Strings', instrumentName: 'Strings', midiProgram: 48, clef: 'treble' },
   { key: 'bass', label: 'Bass', instrumentName: 'Bass', midiProgram: 32, clef: 'bass' },
-  { key: 'synth-lead', label: 'Synth Lead', instrumentName: 'Synth Lead', midiProgram: 80, clef: 'treble' },
+  {
+    key: 'synth-lead',
+    label: 'Synth Lead',
+    instrumentName: 'Synth Lead',
+    midiProgram: 80,
+    clef: 'treble',
+  },
   { key: 'drums', label: 'Drums', instrumentName: 'Drums', midiProgram: 0, clef: 'percussion' },
 ];
 
@@ -136,7 +169,12 @@ const DEFAULT_MEASURES = 8;
 const NONE_VALUE = '__none__';
 
 function toRequestTrack(option: (typeof INSTRUMENT_OPTIONS)[number]): GenerateScoreRequestTrack {
-  return { name: option.label, instrumentName: option.instrumentName, midiProgram: option.midiProgram, clef: option.clef };
+  return {
+    name: option.label,
+    instrumentName: option.instrumentName,
+    midiProgram: option.midiProgram,
+    clef: option.clef,
+  };
 }
 
 const SELECT_TRIGGER_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
@@ -178,7 +216,8 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
-  const [complexity, setComplexity] = useState<NonNullable<GenerateScoreRequest['complexity']>>('moderate');
+  const [complexity, setComplexity] =
+    useState<NonNullable<GenerateScoreRequest['complexity']>>('moderate');
   const [instruments, setInstruments] = useState<Set<InstrumentKey>>(() => new Set(['piano']));
   const [measures, setMeasures] = useState(String(DEFAULT_MEASURES));
   const [tempo, setTempo] = useState('');
@@ -200,7 +239,11 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const durationMeasures = Number(measures);
   const tracks = INSTRUMENT_OPTIONS.filter((opt) => instruments.has(opt.key)).map(toRequestTrack);
   const canGenerate =
-    !pending && prompt.trim() !== '' && tracks.length > 0 && Number.isFinite(durationMeasures) && durationMeasures > 0;
+    !pending &&
+    prompt.trim() !== '' &&
+    tracks.length > 0 &&
+    Number.isFinite(durationMeasures) &&
+    durationMeasures > 0;
 
   const toggleInstrument = (key: InstrumentKey): void => {
     setInstruments((prev) => {
@@ -294,7 +337,10 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       </div>
 
       <div className="flex gap-2">
-        <Select value={style === '' ? NONE_VALUE : style} onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}>
+        <Select
+          value={style === '' ? NONE_VALUE : style}
+          onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}
+        >
           <SelectTrigger aria-label="Style" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
             <SelectValue />
           </SelectTrigger>
@@ -307,7 +353,10 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
             ))}
           </SelectContent>
         </Select>
-        <Select value={mood === '' ? NONE_VALUE : mood} onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}>
+        <Select
+          value={mood === '' ? NONE_VALUE : mood}
+          onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
+        >
           <SelectTrigger aria-label="Mood" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
             <SelectValue />
           </SelectTrigger>
@@ -393,17 +442,33 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       </div>
 
       {pending && (
-        <div role="progressbar" aria-label="Generating" className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary">
+        <div
+          role="progressbar"
+          aria-label="Generating"
+          className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary"
+        >
           <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
         </div>
       )}
 
       <div className="flex gap-2">
-        <Button type="button" variant="primary" aria-label="Generate" disabled={!canGenerate} onClick={handleGenerate}>
+        <Button
+          type="button"
+          variant="primary"
+          aria-label="Generate"
+          disabled={!canGenerate}
+          onClick={handleGenerate}
+        >
           Generate
         </Button>
         {pending && (
-          <Button type="button" variant="outline" aria-label="Cancel" onClick={handleCancel} className="px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Cancel"
+            onClick={handleCancel}
+            className="px-3 py-1.5"
+          >
             Cancel
           </Button>
         )}

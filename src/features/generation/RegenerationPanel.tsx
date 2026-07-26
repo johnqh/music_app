@@ -170,7 +170,9 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
     <div aria-label="Regeneration panel" className="flex flex-col gap-4 p-4">
       <h3 className="text-sm font-semibold text-theme-text-primary">Regenerate selection</h3>
 
-      {!regenerable && <div className={INFO_BOX_CLASS}>Select a region of the score to regenerate.</div>}
+      {!regenerable && (
+        <div className={INFO_BOX_CLASS}>Select a region of the score to regenerate.</div>
+      )}
       {error && (
         <div role="alert" className="rounded-md bg-red-600 px-3 py-2 text-sm text-white">
           {error}
@@ -184,11 +186,13 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
               Measures {measureRange[0] + 1}–{measureRange[1] + 1}
             </p>
           )}
-          <p className="text-sm text-theme-text-primary">Tracks: {trackNamesLabel(score, prepared.range.trackIds)}</p>
+          <p className="text-sm text-theme-text-primary">
+            Tracks: {trackNamesLabel(score, prepared.range.trackIds)}
+          </p>
           {prepared.expandedToFullMeasures && (
             <div className={`mt-1 ${INFO_BOX_CLASS}`}>
-              The selection didn't fall on measure boundaries, so it was expanded to cover whole measures —
-              regeneration always replaces complete measures.
+              The selection didn't fall on measure boundaries, so it was expanded to cover whole
+              measures — regeneration always replaces complete measures.
             </div>
           )}
         </div>
@@ -252,9 +256,24 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
             checked={preserveBoundaryNotes}
             onChange={setPreserveBoundaryNotes}
           />
-          <Checkbox label="Preserve harmony" disabled={!regenerable} checked={preserveHarmony} onChange={setPreserveHarmony} />
-          <Checkbox label="Preserve rhythm" disabled={!regenerable} checked={preserveRhythm} onChange={setPreserveRhythm} />
-          <Checkbox label="Preserve melody" disabled={!regenerable} checked={preserveMelody} onChange={setPreserveMelody} />
+          <Checkbox
+            label="Preserve harmony"
+            disabled={!regenerable}
+            checked={preserveHarmony}
+            onChange={setPreserveHarmony}
+          />
+          <Checkbox
+            label="Preserve rhythm"
+            disabled={!regenerable}
+            checked={preserveRhythm}
+            onChange={setPreserveRhythm}
+          />
+          <Checkbox
+            label="Preserve melody"
+            disabled={!regenerable}
+            checked={preserveMelody}
+            onChange={setPreserveMelody}
+          />
         </div>
       </div>
 
@@ -273,17 +292,33 @@ export function RegenerationPanel({ store = useAppStore }: RegenerationPanelProp
       </label>
 
       {pending && (
-        <div role="progressbar" aria-label="Regenerating" className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary">
+        <div
+          role="progressbar"
+          aria-label="Regenerating"
+          className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary"
+        >
           <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
         </div>
       )}
 
       <div className="flex gap-2">
-        <Button type="button" variant="primary" aria-label="Generate alternatives" disabled={!canGenerate} onClick={handleGenerate}>
+        <Button
+          type="button"
+          variant="primary"
+          aria-label="Generate alternatives"
+          disabled={!canGenerate}
+          onClick={handleGenerate}
+        >
           Generate alternatives
         </Button>
         {pending && (
-          <Button type="button" variant="outline" aria-label="Cancel" onClick={handleCancel} className="px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Cancel"
+            onClick={handleCancel}
+            className="px-3 py-1.5"
+          >
             Cancel
           </Button>
         )}

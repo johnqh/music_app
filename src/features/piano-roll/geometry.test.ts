@@ -101,7 +101,20 @@ describe('isBlackKey', () => {
     // C4=60 white, C#4=61 black, D4=62 white, D#4=63 black, E4=64 white,
     // F4=65 white, F#4=66 black, G4=67 white, G#4=68 black, A4=69 white,
     // A#4=70 black, B4=71 white.
-    const expected = [false, true, false, true, false, false, true, false, true, false, true, false];
+    const expected = [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+    ];
     for (let i = 0; i < 12; i += 1) {
       expect(isBlackKey(60 + i)).toBe(expected[i]);
     }
@@ -176,7 +189,11 @@ describe('computeNoteRects', () => {
   it('filters to only the visible track ids when given a non-null set', () => {
     const score = twoTrackScore();
     const [treble, bass] = score.tracks;
-    const rects = computeNoteRects(score, { visibleTrackIds: new Set([treble.id]), zoomH: 1, zoomV: 1 });
+    const rects = computeNoteRects(score, {
+      visibleTrackIds: new Set([treble.id]),
+      zoomH: 1,
+      zoomV: 1,
+    });
 
     expect(rects.every((r) => r.trackId === treble.id)).toBe(true);
     expect(rects.some((r) => r.trackId === bass.id)).toBe(false);
@@ -286,7 +303,13 @@ describe('keyboardHeightPx / voiceLaneStripHeight / totalCanvasHeight', () => {
 });
 
 describe('cullToViewport (Task 17, spec §29 virtualization)', () => {
-  const rect = (id: string, x: number, y: number, width = 10, height = 10) => ({ id, x, y, width, height });
+  const rect = (id: string, x: number, y: number, width = 10, height = 10) => ({
+    id,
+    x,
+    y,
+    width,
+    height,
+  });
 
   it('keeps only rects whose box intersects the viewport', () => {
     const rects = [rect('inside', 5, 5), rect('outside', 1000, 1000)];

@@ -34,7 +34,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage store={store} />);
     for (const template of projectTemplates) {
       expect(
-        screen.getByRole('button', { name: `New from template: ${template.name}` })
+        screen.getByRole('button', { name: `New from template: ${template.name}` }),
       ).toBeInTheDocument();
     }
   });
@@ -43,7 +43,7 @@ describe('DashboardPage', () => {
     const { store, context } = setup();
     await context.fakeClient.createProject(
       { name: 'My Existing Song', score: createEmptyScore({ title: 'My Existing Song' }) },
-      'test-token'
+      'test-token',
     );
     render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('My Existing Song')).toBeInTheDocument());
@@ -75,7 +75,7 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
 
     await user.click(
-      screen.getByRole('button', { name: `New from template: ${projectTemplates[0].name}` })
+      screen.getByRole('button', { name: `New from template: ${projectTemplates[0].name}` }),
     );
     await waitFor(() => expect(onNavigate).toHaveBeenCalled());
     expect(store.getState().projectName).toBe(projectTemplates[0].name);
@@ -86,11 +86,11 @@ describe('DashboardPage', () => {
     const { store, context } = setup();
     await context.fakeClient.createProject(
       { name: 'Alpha Song', score: createEmptyScore({ title: 'A' }) },
-      't'
+      't',
     );
     await context.fakeClient.createProject(
       { name: 'Beta Tune', score: createEmptyScore({ title: 'B' }) },
-      't'
+      't',
     );
     render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('Alpha Song')).toBeInTheDocument());
@@ -105,7 +105,7 @@ describe('DashboardPage', () => {
     const { store, context } = setup();
     const record = await context.fakeClient.createProject(
       { name: 'Openable', score: createEmptyScore({ title: 'Openable' }) },
-      't'
+      't',
     );
     const onNavigate = vi.fn();
     render(<DashboardPage store={store} onNavigate={onNavigate} />);
@@ -121,7 +121,7 @@ describe('DashboardPage', () => {
     const { store, context } = setup();
     await context.fakeClient.createProject(
       { name: 'Original', score: createEmptyScore({ title: 'Original' }) },
-      't'
+      't',
     );
     render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());

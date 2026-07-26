@@ -6,10 +6,18 @@
  * `ProjectRoute` keeps the store's open project in sync with the URL.
  */
 import { Suspense, lazy, useEffect, useRef } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/projects/DashboardPage';
-import { reportError, useAppStore } from '@sudobility/music_lib';
+import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
 import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
@@ -76,6 +84,17 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
         navigate(`/${lang}/projects`);
       });
   }, [id, store, navigate, lang]);
+
+  // Leaving the editor (back to dashboard, settings, etc.) unmounts this
+  // route; stop any sounding playback — both a candidate preview and the
+  // main transport — so audio never keeps playing outside the editor.
+  // `stopPreview()` is a no-op when no preview is active.
+  useEffect(() => {
+    return () => {
+      playbackController.stopPreview();
+      playbackController.stop();
+    };
+  }, []);
 
   const localizedNavigate = useLocalizedNavigate();
   return <AppLayout store={store} onNavigate={localizedNavigate} />;

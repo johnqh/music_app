@@ -31,6 +31,7 @@ describe('ShortcutHelpDialog', () => {
   it('every interactive control has an accessible name (spec §27)', () => {
     render(<ShortcutHelpDialog open onClose={vi.fn()} />);
     const dialog = screen.getByRole('dialog');
-    for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
+    for (const button of within(dialog).getAllByRole('button'))
+      expect(button).toHaveAccessibleName();
   });
 });

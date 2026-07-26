@@ -1,6 +1,6 @@
 # ScoreSmith architecture
 
-ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split across **five repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains *how* the codebase satisfies it.
+ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split across **five repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains _how_ the codebase satisfies it.
 
 ## Contents
 
@@ -20,13 +20,13 @@ ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split ac
 
 ## The five repos
 
-| Repo | npm package | Role |
-| --- | --- | --- |
-| [`music_types`](https://github.com/johnqh/music_types) | `@sudobility/music_types` | Shared TypeScript types + Zod schemas: the score model, generation contracts, project API shapes, the `{success,data,error,code}` response envelope. No logic, no I/O — the contract every other repo compiles against. |
-| [`music_client`](https://github.com/johnqh/music_client) | `@sudobility/music_client` | Typed network client (`MusicClient`) + React Query hooks for `music_api`. Zero direct `fetch` calls — takes an injected `NetworkClient` (SudojoClient DI pattern). |
-| [`music_lib`](https://github.com/johnqh/music_lib) | `@sudobility/music_lib` | The entire non-UI application layer: the domain score model, undoable commands, validation/quantization/voicing, VexFlow/Tone.js/MIDI/MusicXML adapters, and the Zustand app store. Calls `music_api` through an injected `MusicClient`, not directly. |
-| [`music_api`](https://github.com/johnqh/music_api) | `music_api` (private, not published) | Backend: Hono + Drizzle ORM + PostgreSQL, Firebase-authenticated. Proxies AI generation through OpenAI (the API key never reaches the browser) and persists per-user projects. |
-| `music_app` (this repo) | `scoresmith` (private) | The web app: routing, page-level React components, Tailwind styling, and the composition root that wires `music_client`/`music_lib` together with real browser services (fetch, Firebase auth, `localStorage`). No business logic lives here — see [Known limitations](#known-limitations) for what that means in practice. |
+| Repo                                                     | npm package                          | Role                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`music_types`](https://github.com/johnqh/music_types)   | `@sudobility/music_types`            | Shared TypeScript types + Zod schemas: the score model, generation contracts, project API shapes, the `{success,data,error,code}` response envelope. No logic, no I/O — the contract every other repo compiles against.                                                                                                     |
+| [`music_client`](https://github.com/johnqh/music_client) | `@sudobility/music_client`           | Typed network client (`MusicClient`) + React Query hooks for `music_api`. Zero direct `fetch` calls — takes an injected `NetworkClient` (SudojoClient DI pattern).                                                                                                                                                          |
+| [`music_lib`](https://github.com/johnqh/music_lib)       | `@sudobility/music_lib`              | The entire non-UI application layer: the domain score model, undoable commands, validation/quantization/voicing, VexFlow/Tone.js/MIDI/MusicXML adapters, and the Zustand app store. Calls `music_api` through an injected `MusicClient`, not directly.                                                                      |
+| [`music_api`](https://github.com/johnqh/music_api)       | `music_api` (private, not published) | Backend: Hono + Drizzle ORM + PostgreSQL, Firebase-authenticated. Proxies AI generation through OpenAI (the API key never reaches the browser) and persists per-user projects.                                                                                                                                              |
+| `music_app` (this repo)                                  | `scoresmith` (private)               | The web app: routing, page-level React components, Tailwind styling, and the composition root that wires `music_client`/`music_lib` together with real browser services (fetch, Firebase auth, `localStorage`). No business logic lives here — see [Known limitations](#known-limitations) for what that means in practice. |
 
 Dependency direction is strictly one-way: `music_app` → `music_lib` → `music_client` → `music_types`, with `music_api` depending only on `music_types`. No package ever depends on something that depends on it.
 
@@ -98,7 +98,7 @@ flowchart TB
 
 ### Project CRUD
 
-`DashboardPage` (via `music_client`'s `useProjects`/`useCreateProject`/`useUpdateProject`/`useDeleteProject` React Query hooks) and the editor's autosave path (via `music_lib`'s project-slice calling `MusicClient` directly, with its own abort/token discipline rather than a hook) both go through the same `GET/POST /projects`, `GET/PUT/DELETE /projects/:id` routes, each user-scoped by the authenticated `userId`. There is no local persistence layer anymore — projects live entirely in `music_api`'s PostgreSQL `projects` table; the app only keeps device-local *preferences* (theme, developer mode, view settings) in `localStorage` via the injected `PrefsStorage`.
+`DashboardPage` (via `music_client`'s `useProjects`/`useCreateProject`/`useUpdateProject`/`useDeleteProject` React Query hooks) and the editor's autosave path (via `music_lib`'s project-slice calling `MusicClient` directly, with its own abort/token discipline rather than a hook) both go through the same `GET/POST /projects`, `GET/PUT/DELETE /projects/:id` routes, each user-scoped by the authenticated `userId`. There is no local persistence layer anymore — projects live entirely in `music_api`'s PostgreSQL `projects` table; the app only keeps device-local _preferences_ (theme, developer mode, view settings) in `localStorage` via the injected `PrefsStorage`.
 
 ### e2e test mode
 
@@ -164,7 +164,7 @@ The piano roll (`music_app`'s `src/features/piano-roll`, geometry math from `mus
 - Because of that, changing playback speed requires actually re-scheduling every already-scheduled event (cancel + reschedule + re-seek to the equivalent position) rather than nudging a single Tone "speed" knob — this keeps one single source of truth for "what second is this" instead of reconciling two independent tick/second systems.
 - Every track gets its own `InstrumentHandle` (`adapters/tone/instruments.ts`), picked by a rough GM-program-number → instrument-category mapping; there is no "stop everything now" escape hatch on an instrument handle, so anywhere playback needs to guarantee silence (pause/stop/seek/a live tempo change) disposes and rebuilds every track's instrument rather than trying to track down and release individual still-sounding notes.
 
-`services/playback/controller.ts` (`PlaybackController`, exposed as the `playbackController` singleton, both in `music_lib`) is the bridge between the engine and the Zustand store, and is deliberately **not** part of the store-action/command pattern: playback is real-time device control (spec §22), not score history, so `music_app`'s `TransportBar` calls `playbackController.togglePlay()`/`.seek()`/`.setTempoMultiplier()` etc. directly rather than dispatching a `ScoreCommand`. Loop range and metronome are likewise plain controller calls (`toggleLoop()`, `setMetronome()`), reflected back into `playback-slice` as data, not undo history. The one exception is the tempo (BPM) *value itself* — editing that is a real, persisted, undoable score edit (`changeTempoCommand`), unlike the ephemeral playback-speed multiplier.
+`services/playback/controller.ts` (`PlaybackController`, exposed as the `playbackController` singleton, both in `music_lib`) is the bridge between the engine and the Zustand store, and is deliberately **not** part of the store-action/command pattern: playback is real-time device control (spec §22), not score history, so `music_app`'s `TransportBar` calls `playbackController.togglePlay()`/`.seek()`/`.setTempoMultiplier()` etc. directly rather than dispatching a `ScoreCommand`. Loop range and metronome are likewise plain controller calls (`toggleLoop()`, `setMetronome()`), reflected back into `playback-slice` as data, not undo history. The one exception is the tempo (BPM) _value itself_ — editing that is a real, persisted, undoable score edit (`changeTempoCommand`), unlike the ephemeral playback-speed multiplier.
 
 ## MIDI import pipeline
 
@@ -183,7 +183,7 @@ MusicXML import/export (`music_lib`'s `adapters/musicxml`) follows the same shap
 
 ## Regeneration workflow
 
-Whole-score generation (`GenerationPanel`) replaces the entire committed score in one step, via `POST /ai/generate` on `music_api`. Regenerating a *passage* (`RegenerationPanel`) is a non-destructive preview-then-accept workflow (spec §12/§13, spec §37.9/10):
+Whole-score generation (`GenerationPanel`) replaces the entire committed score in one step, via `POST /ai/generate` on `music_api`. Regenerating a _passage_ (`RegenerationPanel`) is a non-destructive preview-then-accept workflow (spec §12/§13, spec §37.9/10):
 
 1. **Prepare** (`music_lib`'s `services/regeneration/controller.ts`'s `prepareRegenerationRequest`) turns the current selection into a `ScoreRange` (expanding a partial-measure selection to full measure boundaries — regeneration always replaces whole measures — and reporting that expansion back to the UI to explain it) and extracts three `ScoreFragment`s: the selected region, and its preceding/following context (up to 2 measures each), so the model has surrounding material to stay musically coherent with.
 2. **Request** — a `MusicClient.regenerateRegion(...)` call to `POST /ai/regenerate` returns 1–3 `RegenerationCandidate`s (`{ id, label, fragment }`). Nothing about the committed score changes yet.
@@ -204,8 +204,9 @@ Three layers, matching spec §30 — see also [`docs/parity-checklist.md`](parit
 **Deterministic e2e fixtures**: `AI_TEST_MODE=1` on `music_api` swaps OpenAI for a deterministic fixture transport, so generation/regeneration output is reproducible across runs without real network calls or API costs. MIDI/MusicXML import fixtures aren't checked into the repo as binary files; each test generates one at run time by exporting from the app itself and importing that exact file back in (round-tripping through the real export/import code paths, rather than a fixture that could silently drift from what the app actually produces).
 
 **The `__SCORESMITH_STORE__` test hook**: `music_app`'s `App.tsx` exposes the live Zustand store as `window.__SCORESMITH_STORE__` whenever `import.meta.env.DEV` is true (i.e. always under `bun run dev`, which is what Playwright's `webServer` boots) — gated on that alone, with no query-param opt-in, so it never ships in a production build regardless of the URL it's served at. Two things about the e2e suite specifically lean on it (see `e2e/helpers.ts`'s module doc):
+
 - Real Tone.js audio needs a user gesture and produces no observable signal in headless Chromium, so playback assertions read `state`/`positionTick` off the store instead of listening for sound.
-- The *workflow* tests select an exact multi-measure range (e.g. "measures 3 and 4", for the regeneration flow) by calling `selectMeasures` through the hook rather than pixel-clicking VexFlow's rendered SVG, when the point of the test is what happens *after* selection, not the click gesture itself.
+- The _workflow_ tests select an exact multi-measure range (e.g. "measures 3 and 4", for the regeneration flow) by calling `selectMeasures` through the hook rather than pixel-clicking VexFlow's rendered SVG, when the point of the test is what happens _after_ selection, not the click gesture itself.
 
 That second point has one deliberate exception: `regeneration.spec.ts` also has a small, dedicated test ("selects a measure via a real click on its rendered stave") that exercises `ScoreEditorView`'s actual click-based measure hit-test end to end with a genuine `page.mouse.click`.
 
@@ -217,7 +218,7 @@ lyrics · guitar tablature · percussion notation engraving · complex tuplets �
 
 A few narrower, implementation-level limitations worth calling out explicitly:
 
-- **No cross-track note move in the piano roll (spec §8/§20).** Dragging a note into the voice-lane strip reassigns its *voice* within the same track (there is no "move to a different track" command in `music_lib`'s `domain/commands/note-commands.ts`) — see `features/piano-roll/interactions.ts`'s `commitVoiceChange` doc comment. Spec §8 lists "move notes between tracks" as a piano-roll capability and §20 lists track as an inspector-editable note property; neither is wired up to an actual cross-track move.
+- **No cross-track note move in the piano roll (spec §8/§20).** Dragging a note into the voice-lane strip reassigns its _voice_ within the same track (there is no "move to a different track" command in `music_lib`'s `domain/commands/note-commands.ts`) — see `features/piano-roll/interactions.ts`'s `commitVoiceChange` doc comment. Spec §8 lists "move notes between tracks" as a piano-roll capability and §20 lists track as an inspector-editable note property; neither is wired up to an actual cross-track move.
 - **MusicXML import is single-clef-per-track.** A part with more than one clef in the source file keeps only the first clef encountered; later clef changes are dropped with a warning in the import result, never silently.
 - **The piano uses a synthesizer fallback, not sampled audio.** `adapters/tone/instruments.ts` maps GM program numbers to Tone.js synth voices by category — there are no bundled multi-sampled instrument recordings, so playback is a reasonable approximation of timbre, not a realistic piano recording.
 - **Tempo editing only affects the first tempo event.** `TransportBar`'s tempo field edits `score.tempoMap[0]`; a score with multiple tempo changes (e.g. from a MIDI import with tempo automation) can't have its later tempo events edited from the transport UI.
@@ -229,19 +230,19 @@ A few narrower, implementation-level limitations worth calling out explicitly:
 
 The score editor (`useEditorShortcuts.ts`, in `music_app`) — active whenever focus isn't inside a text input/select/dialog:
 
-| Keys | Action |
-| --- | --- |
-| `Space` | Play / pause |
-| `Escape` | Clear selection |
-| `Delete` | Delete selected notes |
-| `Ctrl/Cmd+Z` | Undo |
-| `Ctrl/Cmd+Shift+Z` | Redo |
-| `Ctrl/Cmd+C` | Copy |
-| `Ctrl/Cmd+X` | Cut |
-| `Ctrl/Cmd+V` | Paste |
-| `ArrowUp` / `ArrowDown` | Move pitch up/down a semitone |
-| `Shift+ArrowUp` / `Shift+ArrowDown` | Move pitch up/down an octave |
-| `ArrowLeft` / `ArrowRight` | Move selection backward/forward |
+| Keys                                | Action                          |
+| ----------------------------------- | ------------------------------- |
+| `Space`                             | Play / pause                    |
+| `Escape`                            | Clear selection                 |
+| `Delete`                            | Delete selected notes           |
+| `Ctrl/Cmd+Z`                        | Undo                            |
+| `Ctrl/Cmd+Shift+Z`                  | Redo                            |
+| `Ctrl/Cmd+C`                        | Copy                            |
+| `Ctrl/Cmd+X`                        | Cut                             |
+| `Ctrl/Cmd+V`                        | Paste                           |
+| `ArrowUp` / `ArrowDown`             | Move pitch up/down a semitone   |
+| `Shift+ArrowUp` / `Shift+ArrowDown` | Move pitch up/down an octave    |
+| `ArrowLeft` / `ArrowRight`          | Move selection backward/forward |
 
 Also shown in-app via the app bar's "Keyboard shortcuts" (`?`) button (`ShortcutHelpDialog`).
 
@@ -257,6 +258,6 @@ Also shown in-app via the app bar's "Keyboard shortcuts" (`?`) button (`Shortcut
 bunx playwright install chromium
 ```
 
-**`bun run test:e2e` hangs, or fails to reach `music_api`.** The e2e suite needs a local Postgres reachable at the `DATABASE_URL` in `playwright.config.ts` (default `postgres://localhost:5432/music_test`) and a sibling `../music_api` checkout — Playwright's `webServer` config boots `bun --cwd ../music_api src/index.ts` itself, so `music_api`'s own dependencies must already be installed (`bun install` there first). If port `5173` or `8023` is already in use by another process, stop it first — Playwright's `reuseExistingServer` will otherwise happily reuse *whatever* is already listening there, which may not be this project.
+**`bun run test:e2e` hangs, or fails to reach `music_api`.** The e2e suite needs a local Postgres reachable at the `DATABASE_URL` in `playwright.config.ts` (default `postgres://localhost:5432/music_test`) and a sibling `../music_api` checkout — Playwright's `webServer` config boots `bun --cwd ../music_api src/index.ts` itself, so `music_api`'s own dependencies must already be installed (`bun install` there first). If port `5173` or `8023` is already in use by another process, stop it first — Playwright's `reuseExistingServer` will otherwise happily reuse _whatever_ is already listening there, which may not be this project.
 
 **Generation/regeneration fails outside e2e.** Real (non-test-mode) `music_api` needs a valid `OPENAI_API_KEY` (and `OPENAI_MODEL`) in its environment, and `music_app` needs real Firebase project config (`VITE_FIREBASE_*`) so `getToken()` returns a real ID token `music_api` can verify — without both, generation calls fail with an auth or upstream-AI error rather than silently falling back to anything local (there is no more offline mock provider post the server-backed rewrite).

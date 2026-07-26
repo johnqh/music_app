@@ -137,7 +137,11 @@ function PlaybackCursor({ store, ppq, zoomH, height }: PlaybackCursorProps) {
 
 type GridLinesLayerProps = { lines: GridLine[]; height: number };
 
-const GRID_LINE_OPACITY: Record<GridLine['kind'], number> = { measure: 0.8, beat: 0.35, subdivision: 0.15 };
+const GRID_LINE_OPACITY: Record<GridLine['kind'], number> = {
+  measure: 0.8,
+  beat: 0.35,
+  subdivision: 0.15,
+};
 
 const GridLinesLayer = memo(function GridLinesLayer({ lines, height }: GridLinesLayerProps) {
   return (
@@ -160,9 +164,17 @@ const GridLinesLayer = memo(function GridLinesLayer({ lines, height }: GridLines
   );
 });
 
-type NoteLayerProps = { noteRects: NoteRect[]; selectedIds: ReadonlySet<UUID>; selectionColor: string };
+type NoteLayerProps = {
+  noteRects: NoteRect[];
+  selectedIds: ReadonlySet<UUID>;
+  selectionColor: string;
+};
 
-const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionColor }: NoteLayerProps) {
+const NoteLayer = memo(function NoteLayer({
+  noteRects,
+  selectedIds,
+  selectionColor,
+}: NoteLayerProps) {
   recordNoteLayerRender();
   return (
     <>
@@ -206,7 +218,6 @@ const NoteLayer = memo(function NoteLayer({ noteRects, selectedIds, selectionCol
 });
 
 export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
-
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const loopRange = store((s) => s.loopRange);
@@ -216,7 +227,12 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   const [zoomH, setZoomH] = useState(1);
   const [zoomV, setZoomV] = useState(1);
   const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
-  const [dragBox, setDragBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [dragBox, setDragBox] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   // The ids of the notes currently within the scroll viewport (spec §29
   // virtualization) — a three-state value, deliberately distinguishing
   // "not yet measured" from "measured, but unusable":
@@ -242,7 +258,9 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
   // out of the state update entirely via `sameIdSet` when a scroll doesn't
   // actually change which notes are visible, without a second value to
   // keep in sync.
-  const [visibleNoteIds, setVisibleNoteIds] = useState<ReadonlySet<UUID> | 'unmeasurable' | undefined>(undefined);
+  const [visibleNoteIds, setVisibleNoteIds] = useState<
+    ReadonlySet<UUID> | 'unmeasurable' | undefined
+  >(undefined);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -406,12 +424,15 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     return { x, width };
   }, [loopRange, ppq, zoomH]);
 
-  const pointFromEvent = useCallback((event: { clientX: number; clientY: number }): Point | null => {
-    const el = gridRef.current;
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  }, []);
+  const pointFromEvent = useCallback(
+    (event: { clientX: number; clientY: number }): Point | null => {
+      const el = gridRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    },
+    [],
+  );
 
   const resetDrag = useCallback(() => {
     dragStateRef.current = null;
@@ -429,7 +450,9 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
       const hitId = eventIdAtPoint(noteRectsById, point);
       if (hitId) {
         const rect = noteRectsById.get(hitId)!;
-        const mode: 'move' | 'resize' = isNearRightEdge(rect, point, RESIZE_HANDLE_PX) ? 'resize' : 'move';
+        const mode: 'move' | 'resize' = isNearRightEdge(rect, point, RESIZE_HANDLE_PX)
+          ? 'resize'
+          : 'move';
         const currentSelection = store.getState().selection;
         const ids = currentSelection.eventIds.includes(hitId) ? currentSelection.eventIds : [hitId];
 
@@ -444,9 +467,22 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
           }
         }
 
-        dragStateRef.current = { mode, start: point, moved: false, additive: event.shiftKey, noteId: hitId, ids, origins };
+        dragStateRef.current = {
+          mode,
+          start: point,
+          moved: false,
+          additive: event.shiftKey,
+          noteId: hitId,
+          ids,
+          origins,
+        };
       } else {
-        dragStateRef.current = { mode: 'select', start: point, moved: false, additive: event.shiftKey };
+        dragStateRef.current = {
+          mode: 'select',
+          start: point,
+          moved: false,
+          additive: event.shiftKey,
+        };
       }
 
       gridRef.current?.setPointerCapture?.(event.pointerId);
@@ -491,7 +527,10 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         // (matches ScoreEditorView's drag-box precedent).
         if (drag.mode !== 'select') {
           if (drag.additive) store.getState().toggleEvent(drag.noteId);
-          else store.getState().setSelection({ eventIds: [drag.noteId], measureIds: [], trackIds: [] });
+          else
+            store
+              .getState()
+              .setSelection({ eventIds: [drag.noteId], measureIds: [], trackIds: [] });
         }
         resetDrag();
         return;
@@ -501,13 +540,18 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         const box = boxFromPoints(drag.start, point);
         const hitIds = eventIdsInBox(noteRectsById, box);
         const current = store.getState().selection;
-        const nextIds = drag.additive ? Array.from(new Set([...current.eventIds, ...hitIds])) : hitIds;
+        const nextIds = drag.additive
+          ? Array.from(new Set([...current.eventIds, ...hitIds]))
+          : hitIds;
         store.getState().setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
       } else if (drag.mode === 'move') {
         const laneTop = kbHeight;
         const laneBottom = kbHeight + voiceStripHeight;
         if (point.y >= laneTop && point.y < laneBottom) {
-          const targetVoiceIndex = Math.max(0, Math.floor((point.y - laneTop) / VOICE_LANE_ROW_HEIGHT));
+          const targetVoiceIndex = Math.max(
+            0,
+            Math.floor((point.y - laneTop) / VOICE_LANE_ROW_HEIGHT),
+          );
           commitVoiceChange(store, drag.ids, targetVoiceIndex);
         } else {
           const origin = drag.origins.get(drag.noteId);
@@ -533,7 +577,17 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
 
       resetDrag();
     },
-    [store, noteRectsById, pointFromEvent, resetDrag, kbHeight, voiceStripHeight, ppq, zoomH, zoomV],
+    [
+      store,
+      noteRectsById,
+      pointFromEvent,
+      resetDrag,
+      kbHeight,
+      voiceStripHeight,
+      ppq,
+      zoomH,
+      zoomV,
+    ],
   );
 
   /**
@@ -569,7 +623,18 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
       if (!trackId) return;
       addNoteAtCell(store, { trackId, tick, midi });
     },
-    [score, selection, visibleTrackIds, noteRectsById, kbHeight, ppq, zoomH, zoomV, pointFromEvent, store],
+    [
+      score,
+      selection,
+      visibleTrackIds,
+      noteRectsById,
+      kbHeight,
+      ppq,
+      zoomH,
+      zoomV,
+      pointFromEvent,
+      store,
+    ],
   );
 
   // ---- velocity lane bar drag ------------------------------------------------------------
@@ -586,7 +651,9 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
       const point = pointFromEvent(event);
       if (!point) return;
       const relativeY = Math.max(0, Math.min(VELOCITY_LANE_HEIGHT, point.y - velocityTop));
-      const velocity = Math.round(((VELOCITY_LANE_HEIGHT - relativeY) / VELOCITY_LANE_HEIGHT) * 127);
+      const velocity = Math.round(
+        ((VELOCITY_LANE_HEIGHT - relativeY) / VELOCITY_LANE_HEIGHT) * 127,
+      );
       commitVelocity(store, [noteId], velocity);
     },
     [pointFromEvent, velocityTop, store],
@@ -628,7 +695,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
               {keyboardRows.map((row) => (
                 <div
                   key={row.midi}
-                  style={{ position: 'absolute', top: row.y, left: 0, width: '100%', height: rowHeight(zoomV) }}
+                  style={{
+                    position: 'absolute',
+                    top: row.y,
+                    left: 0,
+                    width: '100%',
+                    height: rowHeight(zoomV),
+                  }}
                   className={`border-b border-theme-border ${row.isBlack ? 'bg-theme-hover-bg' : 'bg-theme-bg-secondary'}`}
                 >
                   {row.label && (
@@ -666,7 +739,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             {loopRect && (
               <div
                 data-testid="piano-roll-loop-region"
-                style={{ position: 'absolute', left: loopRect.x, top: 0, width: loopRect.width, height: totalHeight }}
+                style={{
+                  position: 'absolute',
+                  left: loopRect.x,
+                  top: 0,
+                  width: loopRect.width,
+                  height: totalHeight,
+                }}
                 className="pointer-events-none bg-info opacity-[0.12]"
               />
             )}
@@ -676,7 +755,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
               <div
                 key={`preview-${r.id}`}
                 data-testid={`pr-preview-${r.id}`}
-                style={{ position: 'absolute', left: r.x, top: r.y, width: r.width, height: r.height }}
+                style={{
+                  position: 'absolute',
+                  left: r.x,
+                  top: r.y,
+                  width: r.width,
+                  height: r.height,
+                }}
                 className="pointer-events-none border border-dashed border-warning bg-warning opacity-25"
               />
             ))}
@@ -685,21 +770,39 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             <PlaybackCursor store={store} ppq={ppq} zoomH={zoomH} height={kbHeight} />
 
             {/* notes (culled to the scroll viewport, spec §29) */}
-            <NoteLayer noteRects={visibleNoteRects} selectedIds={selectedIds} selectionColor="hsl(var(--primary))" />
+            <NoteLayer
+              noteRects={visibleNoteRects}
+              selectedIds={selectedIds}
+              selectionColor="hsl(var(--primary))"
+            />
 
             {/* voice-lane strip */}
             <div
               data-testid="piano-roll-voice-lanes"
-              style={{ position: 'absolute', left: 0, top: kbHeight, width: '100%', height: voiceStripHeight }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: kbHeight,
+                width: '100%',
+                height: voiceStripHeight,
+              }}
             >
               {Array.from({ length: voiceCount }, (_, i) => (
                 <div
                   key={i}
                   data-testid={`voice-lane-${i}`}
-                  style={{ position: 'absolute', left: 0, top: i * VOICE_LANE_ROW_HEIGHT, width: '100%', height: VOICE_LANE_ROW_HEIGHT }}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: i * VOICE_LANE_ROW_HEIGHT,
+                    width: '100%',
+                    height: VOICE_LANE_ROW_HEIGHT,
+                  }}
                   className={`border-t border-dashed border-theme-border ${i % 2 === 0 ? 'bg-theme-hover-bg' : 'bg-transparent'}`}
                 >
-                  <span className="pl-1 text-xs text-theme-text-secondary opacity-70">Voice {i + 1}</span>
+                  <span className="pl-1 text-xs text-theme-text-secondary opacity-70">
+                    Voice {i + 1}
+                  </span>
                 </div>
               ))}
             </div>
@@ -707,7 +810,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             {/* velocity lane */}
             <div
               data-testid="piano-roll-velocity-lane"
-              style={{ position: 'absolute', left: 0, top: velocityTop, width: '100%', height: VELOCITY_LANE_HEIGHT }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: velocityTop,
+                width: '100%',
+                height: VELOCITY_LANE_HEIGHT,
+              }}
               className="border-t border-theme-border bg-theme-bg-primary"
             >
               {noteRects.map((r) => {
@@ -721,11 +830,24 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
                     onPointerUp={(e) => handleVelocityPointerUp(e, r.id)}
                     onPointerCancel={handleVelocityPointerCancel}
                     onLostPointerCapture={handleVelocityPointerCancel}
-                    style={{ position: 'absolute', left: r.x, top: 0, width: Math.max(6, Math.min(10, r.width)), height: VELOCITY_LANE_HEIGHT }}
+                    style={{
+                      position: 'absolute',
+                      left: r.x,
+                      top: 0,
+                      width: Math.max(6, Math.min(10, r.width)),
+                      height: VELOCITY_LANE_HEIGHT,
+                    }}
                     className="cursor-ns-resize touch-none"
                   >
                     <div
-                      style={{ position: 'absolute', bottom: 0, left: 0, height: barHeight, width: '100%', backgroundColor: trackColor(r.trackIndex) }}
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        height: barHeight,
+                        width: '100%',
+                        backgroundColor: trackColor(r.trackIndex),
+                      }}
                       className="pointer-events-none"
                     />
                   </div>
@@ -737,7 +859,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             {dragBox && (
               <div
                 data-testid="piano-roll-drag-box"
-                style={{ position: 'absolute', left: dragBox.x, top: dragBox.y, width: dragBox.width, height: dragBox.height }}
+                style={{
+                  position: 'absolute',
+                  left: dragBox.x,
+                  top: dragBox.y,
+                  width: dragBox.width,
+                  height: dragBox.height,
+                }}
                 className="pointer-events-none border border-dashed border-primary bg-theme-hover-bg"
               />
             )}

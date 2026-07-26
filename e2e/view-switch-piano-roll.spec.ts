@@ -4,10 +4,18 @@
  * verify the notation view reflects the same, synchronized score.
  */
 import { expect, test } from '@playwright/test';
-import { collectPageErrors, createNewProject, generateWholeScore, gotoDashboard, readScoreSummary } from './helpers';
+import {
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  gotoDashboard,
+  readScoreSummary,
+} from './helpers';
 
 test.describe('view switching and piano-roll editing', () => {
-  test('switches to the piano roll, drags a note, and the notation view reflects the change', async ({ page }) => {
+  test('switches to the piano roll, drags a note, and the notation view reflects the change', async ({
+    page,
+  }) => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
@@ -33,7 +41,9 @@ test.describe('view switching and piano-roll editing', () => {
     // of the same notes are present, not an exhaustive count match.
     const noteRects = page.locator('[data-testid^="pr-note-"]');
     await expect(noteRects.first()).toBeVisible();
-    const renderedIds = await noteRects.evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')?.slice('pr-note-'.length)));
+    const renderedIds = await noteRects.evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-testid')?.slice('pr-note-'.length)),
+    );
     for (const id of renderedIds) {
       expect(before!.notes.some((n) => n.id === id)).toBe(true);
     }
@@ -66,7 +76,9 @@ test.describe('view switching and piano-roll editing', () => {
     // the piece is not guaranteed to be drawn at the default scroll
     // position).
     await page.getByRole('button', { name: 'Notation view' }).click();
-    await expect(page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first()).toBeVisible();
+    await expect(
+      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
+    ).toBeVisible();
 
     const after = await readScoreSummary(page);
     expect(after).not.toBeNull();

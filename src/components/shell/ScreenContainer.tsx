@@ -33,7 +33,12 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
     () => ({
       variant: 'base',
       topBarVariant: 'app',
-      logo: { src: '/favicon.svg', alt: CONSTANTS.APP_NAME, appName: CONSTANTS.APP_NAME, onClick: () => navigate(`/${lang}`) },
+      logo: {
+        src: '/favicon.svg',
+        alt: CONSTANTS.APP_NAME,
+        appName: CONSTANTS.APP_NAME,
+        onClick: () => navigate(`/${lang}`),
+      },
       menuItems: [
         { id: 'projects', label: t('nav.dashboard'), href: `/${lang}/projects` },
         { id: 'settings', label: t('nav.settings'), href: `/${lang}/settings` },
@@ -44,12 +49,18 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
       ariaLabel: 'Main navigation',
       renderAccountSection: () =>
         user ? (
-          <Button type="button" variant="ghost" className="px-3 py-1.5" aria-label={t('nav.signOut')} onClick={() => void signOut()}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="px-3 py-1.5"
+            aria-label={t('nav.signOut')}
+            onClick={() => void signOut()}
+          >
             {t('nav.signOut')}
           </Button>
         ) : null,
     }),
-    [t, navigate, lang, user, signOut]
+    [t, navigate, lang, user, signOut],
   );
 
   const footer = useMemo<FooterConfig>(
@@ -59,7 +70,7 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
       copyrightYear: '2026',
       rightsText: 'All rights reserved',
     }),
-    []
+    [],
   );
 
   const pageConfigOverrides = usePageConfig();

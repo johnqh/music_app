@@ -30,7 +30,7 @@ export type DeveloperSettingsDialogProps = {
   onClose: () => void;
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-    /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
+  /** Sizes "Run benchmark" passes to `runBenchmark`. Defaults to `runBenchmark`'s own default (up to a 20-track/500-measure score); tests override with small sizes so the (real, synchronous) benchmark run stays fast. */
   benchmarkSizes?: BenchmarkSize[];
 };
 
@@ -130,7 +130,10 @@ export function DeveloperSettingsDialog({
       // diagnostic export, alongside the existing console.table).
       benchmark: benchmarkReport,
     };
-    downloadBlob('scoresmith-diagnostics.json', new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' }));
+    downloadBlob(
+      'scoresmith-diagnostics.json',
+      new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' }),
+    );
   };
 
   return (
@@ -159,22 +162,34 @@ export function DeveloperSettingsDialog({
           <DevToggle
             label="Show measure boundaries"
             checked={devSettings.showMeasureBoundaries}
-            onChange={(checked) => store.getState().setDevSettings({ showMeasureBoundaries: checked })}
+            onChange={(checked) =>
+              store.getState().setDevSettings({ showMeasureBoundaries: checked })
+            }
           />
           <DevToggle
             label="Show playback scheduling data"
             checked={devSettings.showPlaybackScheduling}
-            onChange={(checked) => store.getState().setDevSettings({ showPlaybackScheduling: checked })}
+            onChange={(checked) =>
+              store.getState().setDevSettings({ showPlaybackScheduling: checked })
+            }
           />
           <DevToggle
             label="Enable validation warnings"
             checked={devSettings.enableValidationWarnings}
-            onChange={(checked) => store.getState().setDevSettings({ enableValidationWarnings: checked })}
+            onChange={(checked) =>
+              store.getState().setDevSettings({ enableValidationWarnings: checked })
+            }
           />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" aria-label="Generate stress-test score" onClick={handleGenerateStressTest} className="px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Generate stress-test score"
+            onClick={handleGenerateStressTest}
+            className="px-3 py-1.5"
+          >
             Generate stress-test score
           </Button>
           <Button
@@ -187,7 +202,13 @@ export function DeveloperSettingsDialog({
           >
             {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
           </Button>
-          <Button type="button" variant="outline" aria-label="Export diagnostic JSON" onClick={handleExportDiagnostics} className="px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Export diagnostic JSON"
+            onClick={handleExportDiagnostics}
+            className="px-3 py-1.5"
+          >
             Export diagnostic JSON
           </Button>
           {/* `variant="ghost"` + an explicit className override, not
@@ -208,11 +229,15 @@ export function DeveloperSettingsDialog({
         </div>
 
         {benchmarkReport && (
-          <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-md bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary">
+          <div
+            role="status"
+            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary"
+          >
             <span>
-              Benchmark complete: {benchmarkReport.sizes.length} size(s) timed (validate/quantize/fragment/MIDI-export
-              {typeof document !== 'undefined' ? '/render' : ''}). Full results logged to the console and included in
-              the diagnostic JSON export.
+              Benchmark complete: {benchmarkReport.sizes.length} size(s) timed
+              (validate/quantize/fragment/MIDI-export
+              {typeof document !== 'undefined' ? '/render' : ''}). Full results logged to the
+              console and included in the diagnostic JSON export.
             </span>
             <Button
               type="button"
@@ -228,7 +253,10 @@ export function DeveloperSettingsDialog({
         )}
 
         {resetDone && (
-          <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700">
+          <div
+            role="status"
+            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
+          >
             <span>Local database cleared. Reload the app to start fresh.</span>
             <Button
               type="button"

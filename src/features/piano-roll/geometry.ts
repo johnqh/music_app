@@ -13,7 +13,13 @@
  */
 import type { BBox } from '@sudobility/music_lib';
 import type { Point } from '@/features/score-editor/hit-test';
-import { boxFromPoints, bboxesIntersect, eventIdAtPoint, eventIdsInBox, pointInBBox } from '@/features/score-editor/hit-test';
+import {
+  boxFromPoints,
+  bboxesIntersect,
+  eventIdAtPoint,
+  eventIdsInBox,
+  pointInBBox,
+} from '@/features/score-editor/hit-test';
 import type { DurationName, NoteEvent, Score, Track, UUID } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { pitchToMidi, midiToPitch, pitchToString } from '@sudobility/music_lib';
@@ -207,13 +213,22 @@ export type GridLine = { tick: number; x: number; kind: 'measure' | 'beat' | 'su
  * appears at most once, at its strongest tier (measure > beat >
  * subdivision), never duplicated across kinds.
  */
-export function computeGridLines(track: Track, ppq: number, zoomH: number, snapGrid: DurationName): GridLine[] {
+export function computeGridLines(
+  track: Track,
+  ppq: number,
+  zoomH: number,
+  snapGrid: DurationName,
+): GridLine[] {
   const lines: GridLine[] = [];
   const subdivisionTicks = ticksFor(snapGrid, ppq);
 
   for (const measure of track.measures) {
     const beatOffsets = new Set(beatBoundaries(measure.timeSignature, ppq));
-    lines.push({ tick: measure.startTick, x: tickToX(measure.startTick, ppq, zoomH), kind: 'measure' });
+    lines.push({
+      tick: measure.startTick,
+      x: tickToX(measure.startTick, ppq, zoomH),
+      kind: 'measure',
+    });
 
     for (const offset of beatOffsets) {
       if (offset === 0) continue; // already covered by the measure line
@@ -245,7 +260,9 @@ export function trackWidthPx(track: Track, ppq: number, zoomH: number): number {
 /** Tick length of one measure on `track` (uses its first measure's time signature; falls back to a 4/4 measure if the track has none). */
 export function firstMeasureDurationTicks(track: Track, ppq: number): number {
   const first = track.measures[0];
-  return first ? measureDurationTicks(first.timeSignature, ppq) : measureDurationTicks({ numerator: 4, denominator: 4 }, ppq);
+  return first
+    ? measureDurationTicks(first.timeSignature, ppq)
+    : measureDurationTicks({ numerator: 4, denominator: 4 }, ppq);
 }
 
 // ---- preview-fragment note rects ---------------------------------------------------

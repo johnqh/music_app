@@ -121,7 +121,10 @@ describe('TransportBar: loop and metronome toggles', () => {
     store.getState().setLoopRange({ startTick: 0, endTick: 480, trackIds: [] });
     renderBar(store);
 
-    expect(screen.getByRole('button', { name: 'Toggle loop' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Toggle loop' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('metronome toggle calls playbackController.setMetronome() with the opposite of the current value', async () => {

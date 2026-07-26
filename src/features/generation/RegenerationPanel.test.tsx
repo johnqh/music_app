@@ -20,15 +20,14 @@ const defaultFakeProvider = new FakeGenerationProvider();
 const delegatingProvider: MusicGenerationProvider = {
   id: 'delegator',
   name: 'Delegator',
-  generateScore: (req, signal) => (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
-  regenerateRegion: (req, signal) => (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
+  generateScore: (req, signal) =>
+    (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
+  regenerateRegion: (req, signal) =>
+    (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
 };
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
-import type {
-  RegenerateRegionRequest,
-  RegenerateRegionResult,
-} from '@sudobility/music_types';
+import type { RegenerateRegionRequest, RegenerateRegionResult } from '@sudobility/music_types';
 import type { GenerateScoreResult } from '@sudobility/music_types';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
@@ -47,16 +46,24 @@ function makeStore(): GenerationStoreApi {
 class ControllableProvider implements MusicGenerationProvider {
   readonly id = 'controllable';
   readonly name = 'Controllable Test Provider';
-  readonly calls: Array<{ request: RegenerateRegionRequest; resolve: (r: RegenerateRegionResult) => void }> = [];
+  readonly calls: Array<{
+    request: RegenerateRegionRequest;
+    resolve: (r: RegenerateRegionResult) => void;
+  }> = [];
 
   generateScore(): Promise<GenerateScoreResult> {
     return new Promise(() => {});
   }
 
-  regenerateRegion(request: RegenerateRegionRequest, signal?: AbortSignal): Promise<RegenerateRegionResult> {
+  regenerateRegion(
+    request: RegenerateRegionRequest,
+    signal?: AbortSignal,
+  ): Promise<RegenerateRegionResult> {
     return new Promise((resolve, reject) => {
       this.calls.push({ request, resolve });
-      signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('The operation was aborted.', 'AbortError')),
+      );
     });
   }
 }
@@ -130,7 +137,9 @@ describe('RegenerationPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Preset instructions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Add harmonic tension' }));
 
-    expect(screen.getByRole('textbox', { name: 'Regeneration instruction' })).toHaveValue('Add harmonic tension');
+    expect(screen.getByRole('textbox', { name: 'Regeneration instruction' })).toHaveValue(
+      'Add harmonic tension',
+    );
   });
 
   it('Generate alternatives calls regenerate() with the instruction, candidate count, and checked preservation constraints', async () => {
@@ -141,7 +150,10 @@ describe('RegenerationPanel', () => {
     renderPanel(store);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox', { name: 'Regeneration instruction' }), 'Simplify this passage');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Regeneration instruction' }),
+      'Simplify this passage',
+    );
     await user.click(screen.getByRole('checkbox', { name: 'Preserve harmony' }));
     await user.click(screen.getByRole('checkbox', { name: 'Preserve melody' }));
 
@@ -152,10 +164,18 @@ describe('RegenerationPanel', () => {
     expect(lastRequest && 'instruction' in lastRequest ? lastRequest.instruction : null).toBe(
       'Simplify this passage',
     );
-    expect(lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveHarmony : null).toBe(true);
-    expect(lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveMelody : null).toBe(true);
-    expect(lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveRhythm : null).toBe(false);
-    expect(lastRequest && 'candidateCount' in lastRequest ? lastRequest.candidateCount : null).toBe(3);
+    expect(
+      lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveHarmony : null,
+    ).toBe(true);
+    expect(
+      lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveMelody : null,
+    ).toBe(true);
+    expect(
+      lastRequest && 'constraints' in lastRequest ? lastRequest.constraints.preserveRhythm : null,
+    ).toBe(false);
+    expect(lastRequest && 'candidateCount' in lastRequest ? lastRequest.candidateCount : null).toBe(
+      3,
+    );
   });
 
   it('renders CandidateList cards once regeneration produces candidates', async () => {
@@ -165,14 +185,19 @@ describe('RegenerationPanel', () => {
     store.getState().selectMeasures([score.tracks[0].measures[0].id]);
     renderPanel(store);
     const user = userEvent.setup();
-    await user.type(screen.getByRole('textbox', { name: 'Regeneration instruction' }), 'Simplify this passage');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Regeneration instruction' }),
+      'Simplify this passage',
+    );
 
     await user.click(screen.getByRole('button', { name: 'Generate alternatives' }));
 
     await vi.waitFor(() => {
       expect(screen.getByLabelText('Regeneration candidates')).toBeInTheDocument();
     });
-    expect(screen.getAllByRole('group', { name: /Candidate card:/ }).length).toBe(store.getState().candidates.length);
+    expect(screen.getAllByRole('group', { name: /Candidate card:/ }).length).toBe(
+      store.getState().candidates.length,
+    );
   });
 
   it('shows Cancel while pending and stops the request when clicked', async () => {
@@ -184,7 +209,10 @@ describe('RegenerationPanel', () => {
     store.getState().selectMeasures([score.tracks[0].measures[0].id]);
     renderPanel(store);
     const user = userEvent.setup();
-    await user.type(screen.getByRole('textbox', { name: 'Regeneration instruction' }), 'Simplify this passage');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Regeneration instruction' }),
+      'Simplify this passage',
+    );
 
     await user.click(screen.getByRole('button', { name: 'Generate alternatives' }));
 

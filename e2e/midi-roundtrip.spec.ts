@@ -6,10 +6,18 @@
  * binary `.mid` file to the repo.
  */
 import { expect, test } from '@playwright/test';
-import { collectPageErrors, createNewProject, generateWholeScore, gotoDashboard, readScoreSummary } from './helpers';
+import {
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  gotoDashboard,
+  readScoreSummary,
+} from './helpers';
 
 test.describe('MIDI export and import round-trip', () => {
-  test('exports a MIDI file and re-imports it into a new project with substantially equivalent notes', async ({ page }) => {
+  test('exports a MIDI file and re-imports it into a new project with substantially equivalent notes', async ({
+    page,
+  }) => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
@@ -53,9 +61,9 @@ test.describe('MIDI export and import round-trip', () => {
     // slightly perturb tick-level timing (quantization/rounding), which is
     // exactly why this doesn't assert exact tick equality.
     expect(imported!.notes.length).toBe(original!.notes.length);
-    expect(imported!.notes.map((n) => `${n.pitch.step}${n.pitch.accidental}${n.pitch.octave}`)).toEqual(
-      original!.notes.map((n) => `${n.pitch.step}${n.pitch.accidental}${n.pitch.octave}`),
-    );
+    expect(
+      imported!.notes.map((n) => `${n.pitch.step}${n.pitch.accidental}${n.pitch.octave}`),
+    ).toEqual(original!.notes.map((n) => `${n.pitch.step}${n.pitch.accidental}${n.pitch.octave}`));
 
     expect(getErrors()).toEqual([]);
   });

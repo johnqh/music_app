@@ -36,7 +36,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { applyHighlights, VexFlowScoreRenderer } from '@sudobility/music_lib';
 import type { BBox, RenderResult, RenderTheme } from '@sudobility/music_lib';
-import { boxForMeasureIndex, computeLayout, sameMeasureIndices, visibleSystemMeasureIndices } from '@sudobility/music_lib';
+import {
+  boxForMeasureIndex,
+  computeLayout,
+  sameMeasureIndices,
+  visibleSystemMeasureIndices,
+} from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
@@ -119,11 +124,11 @@ function currentMeasureId(score: Score, positionTick: number): string | null {
   const track = score.tracks[0];
   if (!track || track.measures.length === 0) return null;
   const measure =
-    track.measures.find((m) => positionTick >= m.startTick && positionTick < m.startTick + m.durationTicks) ??
-    track.measures[track.measures.length - 1];
+    track.measures.find(
+      (m) => positionTick >= m.startTick && positionTick < m.startTick + m.durationTicks,
+    ) ?? track.measures[track.measures.length - 1];
   return measure.id;
 }
-
 
 export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
@@ -150,7 +155,9 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   // out of the state update entirely via `sameMeasureIndices` when a scroll
   // doesn't actually change the visible set, without a stale second value
   // to keep in sync.
-  const [visibleMeasureIndices, setVisibleMeasureIndices] = useState<Set<number> | undefined>(undefined);
+  const [visibleMeasureIndices, setVisibleMeasureIndices] = useState<Set<number> | undefined>(
+    undefined,
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
@@ -289,6 +296,26 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   }, []);
 
   /**
+   * Container-size-driven re-measure (refresh-render fix): the initial
+   * per-plan measurement in the draw effect below is one-shot, taken at
+   * whatever height the scroll box happens to have in that commit. When a
+   * project loads asynchronously (browser refresh directly on
+   * /project/:id), that measurement can land against a not-yet-final (or,
+   * pre-h-screen, never-internally-scrolling) box and cull the sheet to
+   * the first fold — with no scroll event ever arriving to correct it.
+   * Observing the scroll box re-runs `measureViewport` whenever its size
+   * changes; the `sameMeasureIndices` bail-out inside keeps no-op resizes
+   * render-free. Guarded for jsdom, where ResizeObserver doesn't exist.
+   */
+  useEffect(() => {
+    const el = scrollBoxRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureViewport());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measureViewport]);
+
+  /**
    * Which `layoutPlan` the draw effect below has already measured a fresh
    * `visibleMeasureIndices` for (a plain ref, deliberately *not* mirrored
    * into React state — see below). `null` initially (nothing measured
@@ -356,18 +383,34 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       visibleMeasureIndices: effectiveVisibleMeasureIndices,
     });
     resultRef.current = result;
-    applyHighlights(result, { selectedIds: selection.eventIds, playingIds: activeNoteIds, previewIds });
+    applyHighlights(result, {
+      selectedIds: selection.eventIds,
+      playingIds: activeNoteIds,
+      previewIds,
+    });
     // selection/activeNoteIds/previewIds are intentionally excluded here —
     // the effect below re-paints highlights on their own change without
     // triggering this full re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayScore, zoom, layoutMode, renderTheme, layoutPlan, measureVisibleIndices, visibleMeasureIndices]);
+  }, [
+    displayScore,
+    zoom,
+    layoutMode,
+    renderTheme,
+    layoutPlan,
+    measureVisibleIndices,
+    visibleMeasureIndices,
+  ]);
 
   // Highlight-only repaint: selection/playback/preview changes never re-render.
   useEffect(() => {
     const result = resultRef.current;
     if (!result) return;
-    applyHighlights(result, { selectedIds: selection.eventIds, playingIds: activeNoteIds, previewIds });
+    applyHighlights(result, {
+      selectedIds: selection.eventIds,
+      playingIds: activeNoteIds,
+      previewIds,
+    });
   }, [selection, activeNoteIds, previewIds]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
@@ -516,7 +559,9 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
           if (result) {
             const hitIds = eventIdsInBox(result.idToBBox, box);
             const state = store.getState();
-            const nextIds = drag.additive ? Array.from(new Set([...state.selection.eventIds, ...hitIds])) : hitIds;
+            const nextIds = drag.additive
+              ? Array.from(new Set([...state.selection.eventIds, ...hitIds]))
+              : hitIds;
             state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
           }
         }
@@ -553,7 +598,12 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         {dragBox && (
           <div
             data-testid="drag-selection-box"
-            style={{ left: dragBox.x, top: dragBox.y, width: dragBox.width, height: dragBox.height }}
+            style={{
+              left: dragBox.x,
+              top: dragBox.y,
+              width: dragBox.width,
+              height: dragBox.height,
+            }}
             className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
           />
         )}

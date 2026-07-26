@@ -25,8 +25,7 @@ function makeStore(): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 function Harness({ store, controller }: { store: EditorStoreApi; controller?: PlaybackToggle }) {
   useEditorShortcuts(store, controller);
@@ -38,7 +37,7 @@ function Harness({ store, controller }: { store: EditorStoreApi; controller?: Pl
 }
 
 describe('useEditorShortcuts', () => {
-  it('Space calls the playback controller\'s togglePlay() (real play/pause is the controller\'s job, not a store toggle)', async () => {
+  it("Space calls the playback controller's togglePlay() (real play/pause is the controller's job, not a store toggle)", async () => {
     const store = makeStore();
     const controller: PlaybackToggle = { togglePlay: vi.fn() };
     render(<Harness store={store} controller={controller} />);

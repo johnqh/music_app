@@ -79,7 +79,10 @@ export function SignInScreen() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="sign-in-password" className="text-sm font-medium text-theme-text-primary">
+            <label
+              htmlFor="sign-in-password"
+              className="text-sm font-medium text-theme-text-primary"
+            >
               Password
             </label>
             <Input

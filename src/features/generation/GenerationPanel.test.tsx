@@ -19,8 +19,10 @@ const defaultFakeProvider = new FakeGenerationProvider();
 const delegatingProvider: MusicGenerationProvider = {
   id: 'delegator',
   name: 'Delegator',
-  generateScore: (req, signal) => (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
-  regenerateRegion: (req, signal) => (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
+  generateScore: (req, signal) =>
+    (injectedProvider ?? defaultFakeProvider).generateScore(req, signal),
+  regenerateRegion: (req, signal) =>
+    (injectedProvider ?? defaultFakeProvider).regenerateRegion(req, signal),
 };
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import type { GenerationStoreApi } from '@/features/generation/preview';
@@ -46,12 +48,17 @@ function renderPanel(store: GenerationStoreApi) {
 class ControllableProvider implements MusicGenerationProvider {
   readonly id = 'controllable';
   readonly name = 'Controllable Test Provider';
-  readonly calls: Array<{ request: GenerateScoreRequest; resolve: (r: GenerateScoreResult) => void }> = [];
+  readonly calls: Array<{
+    request: GenerateScoreRequest;
+    resolve: (r: GenerateScoreResult) => void;
+  }> = [];
 
   generateScore(request: GenerateScoreRequest, signal?: AbortSignal): Promise<GenerateScoreResult> {
     return new Promise((resolve, reject) => {
       this.calls.push({ request, resolve });
-      signal?.addEventListener('abort', () => reject(new DOMException('The operation was aborted.', 'AbortError')));
+      signal?.addEventListener('abort', () =>
+        reject(new DOMException('The operation was aborted.', 'AbortError')),
+      );
     });
   }
 
@@ -68,7 +75,10 @@ describe('GenerationPanel', () => {
 
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
 
-    await user.type(screen.getByRole('textbox', { name: 'Prompt' }), 'Create a gentle piano melody');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Create a gentle piano melody',
+    );
 
     expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled();
   });
@@ -90,7 +100,10 @@ describe('GenerationPanel', () => {
     const store = makeStore();
     renderPanel(store);
     const user = userEvent.setup();
-    await user.type(screen.getByRole('textbox', { name: 'Prompt' }), 'Create a gentle piano melody');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Create a gentle piano melody',
+    );
 
     await user.click(screen.getByRole('checkbox', { name: 'Include Piano' })); // Piano is checked by default; this unchecks it
 
@@ -103,7 +116,9 @@ describe('GenerationPanel', () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Preset prompts' }));
-    await user.click(await screen.findByRole('menuitem', { name: /gentle eight-measure piano melody/i }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: /gentle eight-measure piano melody/i }),
+    );
 
     expect(screen.getByRole('textbox', { name: 'Prompt' })).toHaveValue(
       'Create a gentle eight-measure piano melody in C major',
@@ -115,7 +130,10 @@ describe('GenerationPanel', () => {
     renderPanel(store);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox', { name: 'Prompt' }), 'Create a gentle piano melody');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Create a gentle piano melody',
+    );
     await user.click(screen.getByRole('checkbox', { name: 'Include Bass' }));
     const measuresField = screen.getByRole('spinbutton', { name: 'Measures' });
     await user.clear(measuresField);
@@ -136,7 +154,10 @@ describe('GenerationPanel', () => {
     renderPanel(store);
     const user = userEvent.setup();
 
-    await user.type(screen.getByRole('textbox', { name: 'Prompt' }), 'Create a gentle piano melody');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Prompt' }),
+      'Create a gentle piano melody',
+    );
     await user.click(screen.getByRole('button', { name: 'Generate' }));
 
     expect(await screen.findByLabelText('Generating')).toBeInTheDocument();

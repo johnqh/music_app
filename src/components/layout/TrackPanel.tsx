@@ -34,9 +34,25 @@
  */
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Tooltip, cn } from '@sudobility/components';
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Slider,
+  Tooltip,
+  cn,
+} from '@sudobility/components';
 import type { Clef, Track, UUID } from '@sudobility/music_types';
-import { addTrackCommand, changeClefCommand, changeTrackPropsCommand, deleteTrackCommand } from '@sudobility/music_lib';
+import {
+  addTrackCommand,
+  changeClefCommand,
+  changeTrackPropsCommand,
+  deleteTrackCommand,
+} from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -50,7 +66,10 @@ const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-xs', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
+const TOGGLE_BUTTON_CLASS = cn(
+  'px-2 py-1 text-xs',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 /** A library `Slider` wrapped with an accessible name (via a visually-hidden
  * label, since `Slider` accepts no `aria-label`) and a commit-on-release
@@ -74,7 +93,9 @@ function CommitSlider({
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
 
-  const commit = (e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>): void => {
+  const commit = (
+    e: ReactPointerEvent<HTMLLabelElement> | KeyboardEvent<HTMLLabelElement>,
+  ): void => {
     onCommit(Number((e.target as HTMLInputElement).value));
   };
 
@@ -97,7 +118,9 @@ function TrackRow({
   track: Track;
   selected: boolean;
   onSelect: () => void;
-  onPatch: (patch: Partial<Pick<Track, 'name' | 'instrumentName' | 'volume' | 'pan' | 'muted' | 'solo'>>) => void;
+  onPatch: (
+    patch: Partial<Pick<Track, 'name' | 'instrumentName' | 'volume' | 'pan' | 'muted' | 'solo'>>,
+  ) => void;
   onChangeClef: (clef: Clef) => void;
   onDelete: () => void;
 }) {
@@ -184,7 +207,10 @@ function TrackRow({
           S
         </Button>
         <Select value={track.clef} onValueChange={(value) => onChangeClef(value as Clef)}>
-          <SelectTrigger aria-label={`Clef select: ${track.name}`} className="h-auto w-auto min-w-[90px] px-2 py-1 text-xs">
+          <SelectTrigger
+            aria-label={`Clef select: ${track.name}`}
+            className="h-auto w-auto min-w-[90px] px-2 py-1 text-xs"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -233,7 +259,9 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
   const pendingDeleteTrack = tracks.find((t) => t.id === pendingDeleteId) ?? null;
 
   const handleAddTrack = (): void => {
-    store.getState().dispatchCommand(addTrackCommand({ name: `Track ${tracks.length + 1}`, clef: 'treble' }));
+    store
+      .getState()
+      .dispatchCommand(addTrackCommand({ name: `Track ${tracks.length + 1}`, clef: 'treble' }));
   };
 
   return (
@@ -241,7 +269,14 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
       <div className="flex items-center border-b border-theme-border p-2">
         <span className="flex-1 text-sm font-semibold text-theme-text-primary">Tracks</span>
         <Tooltip content="Add track">
-          <Button type="button" variant="ghost" size="icon" aria-label="Add track" onClick={handleAddTrack} className={ICON_BUTTON_CLASS}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Add track"
+            onClick={handleAddTrack}
+            className={ICON_BUTTON_CLASS}
+          >
             +
           </Button>
         </Tooltip>
@@ -254,8 +289,12 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
             track={track}
             selected={selectedTrackIds.includes(track.id)}
             onSelect={() => store.getState().selectTrack(track.id)}
-            onPatch={(patch) => store.getState().dispatchCommand(changeTrackPropsCommand(track.id, patch))}
-            onChangeClef={(clef) => store.getState().dispatchCommand(changeClefCommand(track.id, clef))}
+            onPatch={(patch) =>
+              store.getState().dispatchCommand(changeTrackPropsCommand(track.id, patch))
+            }
+            onChangeClef={(clef) =>
+              store.getState().dispatchCommand(changeClefCommand(track.id, clef))
+            }
             onDelete={() => setPendingDeleteId(track.id)}
           />
         ))}
@@ -264,11 +303,16 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
       <ConfirmDialog
         open={pendingDeleteTrack !== null}
         title="Delete track"
-        message={pendingDeleteTrack ? `Delete "${pendingDeleteTrack.name}"? This cannot be undone after saving.` : ''}
+        message={
+          pendingDeleteTrack
+            ? `Delete "${pendingDeleteTrack.name}"? This cannot be undone after saving.`
+            : ''
+        }
         confirmLabel="Delete"
         onCancel={() => setPendingDeleteId(null)}
         onConfirm={() => {
-          if (pendingDeleteId) store.getState().dispatchCommand(deleteTrackCommand(pendingDeleteId));
+          if (pendingDeleteId)
+            store.getState().dispatchCommand(deleteTrackCommand(pendingDeleteId));
           setPendingDeleteId(null);
         }}
       />

@@ -16,8 +16,7 @@ function makeStore(score: ReturnType<typeof twinkleScore> = twinkleScore()): Edi
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 describe('InspectorPanel', () => {
   it('shows a placeholder when nothing is selected', () => {

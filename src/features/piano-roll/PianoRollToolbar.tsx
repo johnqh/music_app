@@ -26,7 +26,17 @@
  * each option does move to the library `Checkbox`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tooltip, cn } from '@sudobility/components';
+import {
+  Button,
+  Checkbox,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tooltip,
+  cn,
+} from '@sudobility/components';
 import type { DurationName, UUID } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -46,7 +56,14 @@ export type PianoRollToolbarProps = {
   onVisibleTrackIdsChange: (ids: Set<UUID> | null) => void;
 };
 
-const SNAP_OPTIONS: DurationName[] = ['whole', 'half', 'quarter', 'eighth', 'sixteenth', 'thirtysecond'];
+const SNAP_OPTIONS: DurationName[] = [
+  'whole',
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtysecond',
+];
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
@@ -58,7 +75,10 @@ function clampZoom(zoom: number): number {
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-sm', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
+const TOGGLE_BUTTON_CLASS = cn(
+  'px-2 py-1 text-sm',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 const TEXT_BUTTON_CLASS = 'px-3 py-1.5';
 
@@ -142,7 +162,10 @@ export function PianoRollToolbar({
             ↔−
           </Button>
         </Tooltip>
-        <span aria-label="Current horizontal zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
+        <span
+          aria-label="Current horizontal zoom level"
+          className="min-w-[40px] text-center text-sm text-theme-text-primary"
+        >
           {Math.round(zoomH * 100)}%
         </span>
         <Tooltip content="Zoom horizontal in">
@@ -172,7 +195,10 @@ export function PianoRollToolbar({
             ↕−
           </Button>
         </Tooltip>
-        <span aria-label="Current vertical zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
+        <span
+          aria-label="Current vertical zoom level"
+          className="min-w-[40px] text-center text-sm text-theme-text-primary"
+        >
           {Math.round(zoomV * 100)}%
         </span>
         <Tooltip content="Zoom vertical in">
@@ -192,7 +218,10 @@ export function PianoRollToolbar({
       <VerticalDivider />
 
       <Select value={snapGrid} onValueChange={handleSnapChange}>
-        <SelectTrigger aria-label="Snap grid" className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm">
+        <SelectTrigger
+          aria-label="Snap grid"
+          className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

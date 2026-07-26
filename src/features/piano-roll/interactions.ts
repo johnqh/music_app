@@ -70,7 +70,11 @@ export function commitVelocity(store: EditorStoreApi, eventIds: UUID[], velocity
  * dragged note's existing track, which is the mechanism actually available
  * — matching the brief's own "changeVoiceCommand/track move" phrasing.
  */
-export function commitVoiceChange(store: EditorStoreApi, eventIds: UUID[], targetVoiceIndex: number): void {
+export function commitVoiceChange(
+  store: EditorStoreApi,
+  eventIds: UUID[],
+  targetVoiceIndex: number,
+): void {
   if (eventIds.length === 0) return;
   dispatchTracked(store, changeVoiceCommand(eventIds, targetVoiceIndex));
 }
@@ -99,10 +103,17 @@ export async function commitQuantize(
 
 /** The measure on `track` whose span covers `tick` (`startTick <= tick < startTick + durationTicks`), or `null` if none does (including exactly at the track's end tick). */
 export function findMeasureAtTick(track: Track, tick: number): Measure | null {
-  return track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ?? null;
+  return (
+    track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ?? null
+  );
 }
 
-export type AddNoteAtCellParams = { trackId: UUID; tick: number; midi: number; voiceIndex?: number };
+export type AddNoteAtCellParams = {
+  trackId: UUID;
+  tick: number;
+  midi: number;
+  voiceIndex?: number;
+};
 
 /**
  * Adds a note on `params.trackId` at the grid cell under `params.tick`/

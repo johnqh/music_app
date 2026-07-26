@@ -34,7 +34,11 @@ import { Button, Input, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import type { RegenerationCandidate } from '@sudobility/music_types';
 import { playbackController } from '@sudobility/music_lib';
-import { scoreWithCandidate, summarizeFragment, previewStartTick } from '@/features/generation/preview';
+import {
+  scoreWithCandidate,
+  summarizeFragment,
+  previewStartTick,
+} from '@/features/generation/preview';
 import type { GenerationStoreApi } from '@/features/generation/preview';
 import { useAppStore } from '@sudobility/music_lib';
 
@@ -46,7 +50,9 @@ export type CandidateListProps = {
 function summaryLine(candidate: RegenerationCandidate): string {
   const { noteCount, pitchRangeLabel } = summarizeFragment(candidate.fragment);
   const noteWord = noteCount === 1 ? 'note' : 'notes';
-  return pitchRangeLabel ? `${noteCount} ${noteWord}, ${pitchRangeLabel}` : `${noteCount} ${noteWord}`;
+  return pitchRangeLabel
+    ? `${noteCount} ${noteWord}, ${pitchRangeLabel}`
+    : `${noteCount} ${noteWord}`;
 }
 
 const TOGGLE_BUTTON_CLASS = cn(
@@ -123,8 +129,10 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
   const handleRetry = (): void => {
     const instruction = retryInstruction.trim();
     if (!instruction) return;
-    const lastConstraints = lastRequest && 'constraints' in lastRequest ? lastRequest.constraints : undefined;
-    const candidateCount = lastRequest && 'candidateCount' in lastRequest ? lastRequest.candidateCount : undefined;
+    const lastConstraints =
+      lastRequest && 'constraints' in lastRequest ? lastRequest.constraints : undefined;
+    const candidateCount =
+      lastRequest && 'candidateCount' in lastRequest ? lastRequest.candidateCount : undefined;
     void store.getState().regenerate(instruction, {
       candidateCount,
       constraints: lastConstraints && {
@@ -160,7 +168,11 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
               </Button>
               <p className="text-sm text-theme-text-secondary">{summaryLine(candidate)}</p>
               {isActive && (
-                <div role="group" aria-label="Compare candidate and original" className="mt-1 flex gap-0.5">
+                <div
+                  role="group"
+                  aria-label="Compare candidate and original"
+                  className="mt-1 flex gap-0.5"
+                >
                   <Button
                     type="button"
                     variant="ghost"
@@ -186,7 +198,13 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
             </div>
             <div className="mt-3 flex gap-2">
               {isPlaying ? (
-                <Button type="button" variant="outline" aria-label={`Stop preview: ${candidate.label}`} onClick={handleStop} className="px-3 py-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label={`Stop preview: ${candidate.label}`}
+                  onClick={handleStop}
+                  className="px-3 py-1.5"
+                >
                   Stop
                 </Button>
               ) : (
@@ -201,7 +219,13 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
                   Play in context
                 </Button>
               )}
-              <Button type="button" variant="primary" aria-label={`Accept ${candidate.label}`} onClick={() => handleAccept(candidate)} className="px-3 py-1.5">
+              <Button
+                type="button"
+                variant="primary"
+                aria-label={`Accept ${candidate.label}`}
+                onClick={() => handleAccept(candidate)}
+                className="px-3 py-1.5"
+              >
                 Accept
               </Button>
             </div>
@@ -211,7 +235,9 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
 
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
-          <span className="text-xs text-theme-text-secondary">Retry with a revised instruction</span>
+          <span className="text-xs text-theme-text-secondary">
+            Retry with a revised instruction
+          </span>
           <Input
             type="text"
             aria-label="Retry instruction"
@@ -232,7 +258,13 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
         </Button>
       </div>
 
-      <Button type="button" variant="destructive" aria-label="Reject all" onClick={handleRejectAll} className="self-start">
+      <Button
+        type="button"
+        variant="destructive"
+        aria-label="Reject all"
+        onClick={handleRejectAll}
+        className="self-start"
+      >
         Reject all
       </Button>
     </div>

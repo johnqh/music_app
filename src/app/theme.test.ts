@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyDocumentTheme, getSystemColorScheme, prefersReducedMotion, resolveColorScheme } from '@/app/theme';
+import {
+  applyDocumentTheme,
+  getSystemColorScheme,
+  prefersReducedMotion,
+  resolveColorScheme,
+} from '@/app/theme';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -27,18 +32,12 @@ describe('prefersReducedMotion (spec §27)', () => {
   });
 
   it('reflects a true "(prefers-reduced-motion: reduce)" match', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn().mockReturnValue({ matches: true } as MediaQueryList),
-    );
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true } as MediaQueryList));
     expect(prefersReducedMotion()).toBe(true);
   });
 
   it('reflects a false match', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn().mockReturnValue({ matches: false } as MediaQueryList),
-    );
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false } as MediaQueryList));
     expect(prefersReducedMotion()).toBe(false);
   });
 

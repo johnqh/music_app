@@ -54,9 +54,7 @@ describe('DeveloperSettingsDialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reset local database' }));
     await user.click(screen.getByRole('button', { name: 'Reset' }));
-    await waitFor(() =>
-      expect(window.localStorage.getItem('scoresmith.prefs.v1')).toBeNull()
-    );
+    await waitFor(() => expect(window.localStorage.getItem('scoresmith.prefs.v1')).toBeNull());
   });
 
   it('every interactive control has an accessible name', () => {

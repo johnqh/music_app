@@ -53,7 +53,10 @@ function isModified(event: KeyboardEvent): boolean {
  * `playbackController` singleton (DI-safe wiring: tests inject a fake so
  * importing this hook never eagerly constructs a real Tone.js engine).
  */
-export function useEditorShortcuts(store: EditorStoreApi, controller: PlaybackToggle = playbackController): void {
+export function useEditorShortcuts(
+  store: EditorStoreApi,
+  controller: PlaybackToggle = playbackController,
+): void {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
       if (isEditableTarget(event.target)) return;

@@ -11,6 +11,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 
 import { AppRouter } from '@/app/router';
 import { AuthProvider } from '@/app/AuthContext';
+import { playbackController } from '@sudobility/music_lib';
 
 let context: TestStoreContext;
 
@@ -30,10 +31,16 @@ afterEach(() => {
 describe('AppRouter', () => {
   it('redirects "/" to the localized home page', async () => {
     const store = makeStore();
-    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
     expect(window.location.pathname).toBe('/en');
   });
@@ -41,20 +48,30 @@ describe('AppRouter', () => {
   it('renders the dashboard at "/en/projects"', async () => {
     const store = makeStore();
     window.history.pushState({}, '', '/en/projects');
-    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument(),
+    );
   });
 
   it('opens the matching project (into the shared store) at "/project/:id"', async () => {
     const store = makeStore();
     const record = await context.fakeClient.createProject(
       { name: 'Router Test Project', score: createEmptyScore({ title: 'Router Test Project' }) },
-      'test-token'
+      'test-token',
     );
     window.history.pushState({}, '', `/en/project/${record.id}`);
 
-    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
@@ -64,21 +81,57 @@ describe('AppRouter', () => {
     const store = makeStore();
     window.history.pushState({}, '', '/nope');
 
-    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
     expect(window.location.pathname).toBe('/en');
+  });
+
+  it('stops playback (main transport and preview) when the project route unmounts', async () => {
+    const store = makeStore();
+    const record = await context.fakeClient.createProject(
+      { name: 'Unmount Test Project', score: createEmptyScore({ title: 'Unmount Test Project' }) },
+      'test-token',
+    );
+    window.history.pushState({}, '', `/en/project/${record.id}`);
+
+    const { unmount } = render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(store.getState().projectId).toBe(record.id));
+    vi.mocked(playbackController.stop).mockClear();
+    vi.mocked(playbackController.stopPreview).mockClear();
+
+    unmount();
+
+    expect(playbackController.stop).toHaveBeenCalledTimes(1);
+    expect(playbackController.stopPreview).toHaveBeenCalledTimes(1);
   });
 
   it('a nonexistent project id falls back to the dashboard with an error toast', async () => {
     const store = makeStore();
     window.history.pushState({}, '', '/en/project/does-not-exist');
 
-    render(<AuthProvider><AppRouter store={store} /></AuthProvider>);
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
 
     await waitFor(() => expect(window.location.pathname).toBe('/en/projects'));
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument(),
+    );
   });
 });

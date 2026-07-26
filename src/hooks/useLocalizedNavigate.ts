@@ -21,6 +21,6 @@ export function useLocalizedNavigate(): (path: string) => void {
     (path: string) => {
       navigate(`/${lang}${path.startsWith('/') ? path : `/${path}`}`);
     },
-    [navigate, lang]
+    [navigate, lang],
   );
 }

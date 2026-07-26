@@ -14,8 +14,7 @@ function makeStore(): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 describe('TrackPanel', () => {
   it('renders a row per track with its name and instrument', () => {

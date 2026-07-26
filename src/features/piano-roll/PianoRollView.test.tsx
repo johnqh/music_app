@@ -26,8 +26,7 @@ function makeStore(): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 function noteRect(container: HTMLElement, id: string): HTMLElement {
   const el = container.querySelector<HTMLElement>(`[data-testid="pr-note-${id}"]`);
@@ -90,8 +89,17 @@ describe('PianoRollView', () => {
     const secondX = tickToX(second.startTick, ppq, 1) + 5;
     const y = midiToY(60, 1) + 7; // both notes are C4 in this fixture measure
 
-    fireEvent.pointerDown(noteRect(container, first.id), { clientX: firstX, clientY: y, button: 0, pointerId: 1 });
-    fireEvent.pointerUp(noteRect(container, first.id), { clientX: firstX, clientY: y, pointerId: 1 });
+    fireEvent.pointerDown(noteRect(container, first.id), {
+      clientX: firstX,
+      clientY: y,
+      button: 0,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(noteRect(container, first.id), {
+      clientX: firstX,
+      clientY: y,
+      pointerId: 1,
+    });
     expect(store.getState().selection.eventIds).toEqual([first.id]);
 
     fireEvent.pointerDown(noteRect(container, second.id), {
@@ -101,7 +109,12 @@ describe('PianoRollView', () => {
       pointerId: 2,
       shiftKey: true,
     });
-    fireEvent.pointerUp(noteRect(container, second.id), { clientX: secondX, clientY: y, pointerId: 2, shiftKey: true });
+    fireEvent.pointerUp(noteRect(container, second.id), {
+      clientX: secondX,
+      clientY: y,
+      pointerId: 2,
+      shiftKey: true,
+    });
     expect(store.getState().selection.eventIds).toEqual([first.id, second.id]);
   });
 
@@ -142,7 +155,12 @@ describe('PianoRollView', () => {
 
     // note[0]: startTick 0, C4 (midi 60), quarter (480 ticks @ ppq 480) ->
     // rect x=0 y=672 w=60 h=14 (see geometry.ts's tickToX/midiToY math).
-    fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 3 });
+    fireEvent.pointerDown(noteRect(container, first.id), {
+      clientX: 5,
+      clientY: 679,
+      button: 0,
+      pointerId: 3,
+    });
     fireEvent.pointerMove(grid, { clientX: 65, clientY: 665, pointerId: 3 });
     fireEvent.pointerUp(grid, { clientX: 65, clientY: 665, pointerId: 3 });
 
@@ -160,7 +178,12 @@ describe('PianoRollView', () => {
     const [first] = allNotes(store.getState().score!) as NoteEvent[];
     const before = store.getState().score;
 
-    fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 4 });
+    fireEvent.pointerDown(noteRect(container, first.id), {
+      clientX: 5,
+      clientY: 679,
+      button: 0,
+      pointerId: 4,
+    });
     fireEvent.pointerUp(noteRect(container, first.id), { clientX: 5, clientY: 679, pointerId: 4 });
 
     expect(store.getState().score).toBe(before);
@@ -177,7 +200,12 @@ describe('PianoRollView', () => {
     // Right edge of note[0]'s rect is at x=60. Drag it to x=30 (-30px =
     // -240 ticks) to shrink from 480 to 240 ticks — a pure shrink, so no
     // overlap-with-neighbor ambiguity.
-    fireEvent.pointerDown(noteRect(container, first.id), { clientX: 60, clientY: 679, button: 0, pointerId: 6 });
+    fireEvent.pointerDown(noteRect(container, first.id), {
+      clientX: 60,
+      clientY: 679,
+      button: 0,
+      pointerId: 6,
+    });
     fireEvent.pointerMove(grid, { clientX: 30, clientY: 679, pointerId: 6 });
     fireEvent.pointerUp(grid, { clientX: 30, clientY: 679, pointerId: 6 });
 
@@ -196,13 +224,20 @@ describe('PianoRollView', () => {
     // 0 would be an observably-inert no-op.
     const targetY = voiceLaneTop + 25;
 
-    fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 7 });
+    fireEvent.pointerDown(noteRect(container, first.id), {
+      clientX: 5,
+      clientY: 679,
+      button: 0,
+      pointerId: 7,
+    });
     fireEvent.pointerMove(grid, { clientX: 5, clientY: targetY, pointerId: 7 });
     fireEvent.pointerUp(grid, { clientX: 5, clientY: targetY, pointerId: 7 });
 
     const score = store.getState().score!;
     const track = score.tracks[0];
-    const measure = track.measures.find((m) => m.voices.some((v) => v.events.some((e) => e.id === first.id)))!;
+    const measure = track.measures.find((m) =>
+      m.voices.some((v) => v.events.some((e) => e.id === first.id)),
+    )!;
     expect(measure.voices[0]?.events.some((e) => e.id === first.id)).toBe(false);
     expect(measure.voices[1]?.events.some((e) => e.id === first.id)).toBe(true);
   });
@@ -216,10 +251,17 @@ describe('PianoRollView', () => {
     const velocityTop = voiceLaneTop + voiceLaneStripHeight(2); // twinkleScore has 1 voice/measure -> floor of 2 lanes
 
     const relativeY = 10; // near the top of the lane -> a high velocity
-    fireEvent.pointerDown(bar, { clientX: 0, clientY: velocityTop + relativeY, button: 0, pointerId: 8 });
+    fireEvent.pointerDown(bar, {
+      clientX: 0,
+      clientY: velocityTop + relativeY,
+      button: 0,
+      pointerId: 8,
+    });
     fireEvent.pointerUp(bar, { clientX: 0, clientY: velocityTop + relativeY, pointerId: 8 });
 
-    const expectedVelocity = Math.round(((VELOCITY_LANE_HEIGHT - relativeY) / VELOCITY_LANE_HEIGHT) * 127);
+    const expectedVelocity = Math.round(
+      ((VELOCITY_LANE_HEIGHT - relativeY) / VELOCITY_LANE_HEIGHT) * 127,
+    );
     const updated = findEvent(store.getState().score!, first.id) as NoteEvent;
     expect(updated.velocity).toBe(expectedVelocity);
   });
@@ -237,7 +279,9 @@ describe('PianoRollView', () => {
     const { container } = render(<PianoRollView store={store} />);
     const firstFragmentNote = track.measures[0].voices[0].events[0];
 
-    expect(container.querySelector(`[data-testid="pr-preview-${firstFragmentNote.id}"]`)).not.toBeNull();
+    expect(
+      container.querySelector(`[data-testid="pr-preview-${firstFragmentNote.id}"]`),
+    ).not.toBeNull();
   });
 
   it('renders a playback cursor line positioned from positionTick', () => {
@@ -271,7 +315,12 @@ describe('PianoRollView', () => {
       const grid = getByTestId('piano-roll-grid');
       const before = store.getState().score;
 
-      fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 20 });
+      fireEvent.pointerDown(noteRect(container, first.id), {
+        clientX: 5,
+        clientY: 679,
+        button: 0,
+        pointerId: 20,
+      });
       fireEvent.pointerMove(grid, { clientX: 65, clientY: 665, pointerId: 20 });
       fireEvent.pointerCancel(grid, { pointerId: 20 });
 
@@ -280,8 +329,17 @@ describe('PianoRollView', () => {
 
       // The cancel must not leave any stale drag state behind: a fresh
       // plain click now behaves like an ordinary (non-dragging) click.
-      fireEvent.pointerDown(noteRect(container, first.id), { clientX: 5, clientY: 679, button: 0, pointerId: 21 });
-      fireEvent.pointerUp(noteRect(container, first.id), { clientX: 5, clientY: 679, pointerId: 21 });
+      fireEvent.pointerDown(noteRect(container, first.id), {
+        clientX: 5,
+        clientY: 679,
+        button: 0,
+        pointerId: 21,
+      });
+      fireEvent.pointerUp(noteRect(container, first.id), {
+        clientX: 5,
+        clientY: 679,
+        pointerId: 21,
+      });
       expect(store.getState().selection.eventIds).toEqual([first.id]);
       expect(store.getState().score).toBe(before);
     });
@@ -350,8 +408,16 @@ describe('PianoRollView', () => {
     ): void {
       Object.defineProperty(scrollBox, 'clientWidth', { value: clientWidth, configurable: true });
       Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
-      Object.defineProperty(scrollBox, 'scrollLeft', { value: scrollLeft, configurable: true, writable: true });
-      Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
+      Object.defineProperty(scrollBox, 'scrollLeft', {
+        value: scrollLeft,
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(scrollBox, 'scrollTop', {
+        value: scrollTop,
+        configurable: true,
+        writable: true,
+      });
     }
 
     // `handleScroll` throttles `measureViewport` via `requestAnimationFrame`
@@ -439,7 +505,9 @@ describe('PianoRollView', () => {
         <>
           <FirstCommitProbe
             onFirstCommit={() => {
-              firstCommitNoteCount = document.body.querySelectorAll('[data-testid^="pr-note-"]').length;
+              firstCommitNoteCount = document.body.querySelectorAll(
+                '[data-testid^="pr-note-"]',
+              ).length;
             }}
           />
           <PianoRollView store={store} />
@@ -482,7 +550,9 @@ describe('PianoRollView', () => {
         <>
           <FirstCommitProbe
             onFirstCommit={() => {
-              firstCommitNoteCount = document.body.querySelectorAll('[data-testid^="pr-note-"]').length;
+              firstCommitNoteCount = document.body.querySelectorAll(
+                '[data-testid^="pr-note-"]',
+              ).length;
             }}
           />
           <PianoRollView store={store} />

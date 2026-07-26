@@ -22,7 +22,16 @@
  * to the library `Button`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tooltip, cn } from '@sudobility/components';
+import {
+  Button,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tooltip,
+  cn,
+} from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
@@ -99,7 +108,10 @@ function defaultInsertPitch(store: EditorStoreApi): Pitch {
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-sm', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
+const TOGGLE_BUTTON_CLASS = cn(
+  'px-2 py-1 text-sm',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 const TEXT_BUTTON_CLASS = 'px-3 py-1.5';
 
@@ -107,7 +119,11 @@ function VerticalDivider() {
   return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
 }
 
-export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeChange }: EditorToolbarProps) {
+export function EditorToolbar({
+  store = useAppStore,
+  layoutMode,
+  onLayoutModeChange,
+}: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
   const view = store((s) => s.view);
@@ -298,7 +314,10 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
       <VerticalDivider />
 
       <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
-        <SelectTrigger aria-label="Quantize grid" className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm">
+        <SelectTrigger
+          aria-label="Quantize grid"
+          className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -324,15 +343,32 @@ export function EditorToolbar({ store = useAppStore, layoutMode, onLayoutModeCha
 
       <div className="flex items-center gap-0.5">
         <Tooltip content="Zoom out">
-          <Button type="button" variant="ghost" size="icon" aria-label="Zoom out" onClick={handleZoomOut} className={ICON_BUTTON_CLASS}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Zoom out"
+            onClick={handleZoomOut}
+            className={ICON_BUTTON_CLASS}
+          >
             −
           </Button>
         </Tooltip>
-        <span aria-label="Current zoom level" className="min-w-[40px] text-center text-sm text-theme-text-primary">
+        <span
+          aria-label="Current zoom level"
+          className="min-w-[40px] text-center text-sm text-theme-text-primary"
+        >
           {zoomLabel}
         </span>
         <Tooltip content="Zoom in">
-          <Button type="button" variant="ghost" size="icon" aria-label="Zoom in" onClick={handleZoomIn} className={ICON_BUTTON_CLASS}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Zoom in"
+            onClick={handleZoomIn}
+            className={ICON_BUTTON_CLASS}
+          >
             +
           </Button>
         </Tooltip>

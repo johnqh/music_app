@@ -86,7 +86,23 @@ export type GenerationOptions = {
 };
 
 /** `GenerationPanel.tsx`'s own `KEY_FIFTHS_OPTIONS` order (fifths -7..7), used to reach a given label by keyboard (see `generateWholeScore`'s Key-select doc comment). */
-const KEY_FIFTHS_LABELS = ['Cb', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#'];
+const KEY_FIFTHS_LABELS = [
+  'Cb',
+  'Gb',
+  'Db',
+  'Ab',
+  'Eb',
+  'Bb',
+  'F',
+  'C',
+  'G',
+  'D',
+  'A',
+  'E',
+  'B',
+  'F#',
+  'C#',
+];
 
 /** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
 export async function gotoDashboard(page: Page): Promise<void> {
@@ -133,7 +149,8 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
   if (options.keyFifths !== undefined) {
     await page.getByRole('combobox', { name: 'Key', exact: true }).click();
     const index = KEY_FIFTHS_LABELS.indexOf(options.keyFifths);
-    if (index === -1) throw new Error(`generateWholeScore: unknown keyFifths label "${options.keyFifths}"`);
+    if (index === -1)
+      throw new Error(`generateWholeScore: unknown keyFifths label "${options.keyFifths}"`);
     await page.keyboard.press('Home');
     for (let i = 0; i < index; i++) await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -165,10 +182,14 @@ export async function waitForNotation(page: Page): Promise<void> {
 
 /** Reads the store's `getState()` and throws a clear error if the e2e hook (`src/app/App.tsx`) isn't present -- e.g. running against a production build instead of `npm run dev`. */
 async function requireStore(page: Page): Promise<void> {
-  const hasHook = await page.evaluate(() => typeof (window as unknown as { __SCORESMITH_STORE__?: unknown }).__SCORESMITH_STORE__ !== 'undefined');
+  const hasHook = await page.evaluate(
+    () =>
+      typeof (window as unknown as { __SCORESMITH_STORE__?: unknown }).__SCORESMITH_STORE__ !==
+      'undefined',
+  );
   if (!hasHook) {
     throw new Error(
-      '__SCORESMITH_STORE__ is not present on window -- the e2e test hook only wires up in dev mode (import.meta.env.DEV). Is Playwright\'s webServer really running `npm run dev`?',
+      "__SCORESMITH_STORE__ is not present on window -- the e2e test hook only wires up in dev mode (import.meta.env.DEV). Is Playwright's webServer really running `npm run dev`?",
     );
   }
 }
@@ -177,13 +198,17 @@ async function requireStore(page: Page): Promise<void> {
 export async function readScoreSummary(page: Page): Promise<ScoreSummary | null> {
   await requireStore(page);
   return page.evaluate(() => {
-    const store = (window as unknown as { __SCORESMITH_STORE__: { getState: () => { score: ScoreLike | null } } }).__SCORESMITH_STORE__;
+    const store = (
+      window as unknown as { __SCORESMITH_STORE__: { getState: () => { score: ScoreLike | null } } }
+    ).__SCORESMITH_STORE__;
     const score = store.getState().score;
     if (!score) return null;
     const notes: NoteEventLike[] = [];
     for (const track of score.tracks) {
       for (const measure of track.measures) {
-        for (const voice of (measure as unknown as { voices: Array<{ events: Array<Record<string, unknown>> }> }).voices) {
+        for (const voice of (
+          measure as unknown as { voices: Array<{ events: Array<Record<string, unknown>> }> }
+        ).voices) {
           for (const event of voice.events) {
             if ('pitch' in event) {
               notes.push({
@@ -218,7 +243,9 @@ export async function readScoreSummary(page: Page): Promise<ScoreSummary | null>
 export async function selectMeasuresByIndex(page: Page, indices: number[]): Promise<void> {
   await requireStore(page);
   await page.evaluate((wantedIndices) => {
-    type Store = { getState: () => { score: ScoreLike | null; selectMeasures: (ids: string[]) => void } };
+    type Store = {
+      getState: () => { score: ScoreLike | null; selectMeasures: (ids: string[]) => void };
+    };
     const store = (window as unknown as { __SCORESMITH_STORE__: Store }).__SCORESMITH_STORE__;
     const score = store.getState().score;
     if (!score) throw new Error('selectMeasuresByIndex: no score is loaded');
@@ -257,7 +284,10 @@ export type MeasureClickPoint = { x: number; y: number };
  * under every candidate x for this particular generated score) rather
  * than clicking blind and asserting on a false premise.
  */
-export async function findMeasureStaveClickPoint(page: Page, measureIndex: number): Promise<MeasureClickPoint> {
+export async function findMeasureStaveClickPoint(
+  page: Page,
+  measureIndex: number,
+): Promise<MeasureClickPoint> {
   await requireStore(page);
   const measureId = await page.evaluate((index) => {
     type Store = { getState: () => { score: ScoreLike | null } };
@@ -292,7 +322,9 @@ export async function findMeasureStaveClickPoint(page: Page, measureIndex: numbe
 }
 
 /** Reads `{ trackId, positionTick, playbackState }` off the store's `playback-slice`. */
-export async function readPlaybackState(page: Page): Promise<{ state: string; positionTick: number }> {
+export async function readPlaybackState(
+  page: Page,
+): Promise<{ state: string; positionTick: number }> {
   await requireStore(page);
   return page.evaluate(() => {
     type Store = { getState: () => { state: string; positionTick: number } };
@@ -327,13 +359,18 @@ export type NoteGroup = { id: string };
  * each row back near x=0, so sorting purely by x would interleave notes
  * across rows out of chronological order).
  */
-export async function getNoteGroups(page: Page, containerTestId = 'score-editor-canvas'): Promise<NoteGroup[]> {
+export async function getNoteGroups(
+  page: Page,
+  containerTestId = 'score-editor-canvas',
+): Promise<NoteGroup[]> {
   const summary = await readScoreSummary(page);
   const noteIds = (summary?.notes ?? []).map((n) => n.id);
   const renderedIds = await page.evaluate((containerTestId) => {
     const container = document.querySelector(`[data-testid="${containerTestId}"]`);
     if (!container) return [];
-    return Array.from(container.querySelectorAll('[id^="vf-"]')).map((g) => g.id.slice('vf-'.length));
+    return Array.from(container.querySelectorAll('[id^="vf-"]')).map((g) =>
+      g.id.slice('vf-'.length),
+    );
   }, containerTestId);
   const rendered = new Set(renderedIds);
   return noteIds.filter((id) => rendered.has(id)).map((id) => ({ id }));
@@ -352,12 +389,18 @@ export async function getNoteGroups(page: Page, containerTestId = 'score-editor-
  * pixel -- not necessarily the notehead -- silently wins the real
  * browser's hit-test, making the click a no-op more often than not.
  */
-export async function clickNoteGroup(page: Page, group: NoteGroup, options?: { shift?: boolean }): Promise<void> {
+export async function clickNoteGroup(
+  page: Page,
+  group: NoteGroup,
+  options?: { shift?: boolean },
+): Promise<void> {
   await page.evaluate(
     ({ id, shift }) => {
       const element = document.getElementById(`vf-${id}`);
       if (!element) throw new Error(`clickNoteGroup: no element with id "vf-${id}"`);
-      element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, shiftKey: shift }));
+      element.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true, view: window, shiftKey: shift }),
+      );
     },
     { id: group.id, shift: options?.shift ?? false },
   );

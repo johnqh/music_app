@@ -49,7 +49,11 @@ function noteGroup(container: HTMLElement, noteId: string): Element {
 function fakePreviewFragment(score: Score): ScoreFragment {
   const track = score.tracks[0];
   const measure = track.measures[0];
-  const range = { startTick: measure.startTick, endTick: measure.startTick + measure.durationTicks, trackIds: [track.id] };
+  const range = {
+    startTick: measure.startTick,
+    endTick: measure.startTick + measure.durationTicks,
+    trackIds: [track.id],
+  };
   const fragment = extractFragment(score, range);
   return {
     ...fragment,
@@ -125,7 +129,11 @@ describe('ScoreEditorView', () => {
 
     fireEvent.click(measureGroup!);
 
-    expect(store.getState().selection).toEqual({ eventIds: [], measureIds: [measureId], trackIds: [] });
+    expect(store.getState().selection).toEqual({
+      eventIds: [],
+      measureIds: [measureId],
+      trackIds: [],
+    });
   });
 
   it('Escape clears the selection (composed with the toolbar and shortcuts hook)', async () => {
@@ -248,8 +256,14 @@ describe('ScoreEditorView', () => {
 
     it('selects every note whose bbox intersects the dragged box', () => {
       const store = makeStore();
-      const divA = document.createElementNS('http://www.w3.org/2000/svg', 'g') as unknown as SVGElement;
-      const divB = document.createElementNS('http://www.w3.org/2000/svg', 'g') as unknown as SVGElement;
+      const divA = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'g',
+      ) as unknown as SVGElement;
+      const divB = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'g',
+      ) as unknown as SVGElement;
       const fakeResult = {
         idToElement: new Map([
           ['a', divA],
@@ -277,7 +291,10 @@ describe('ScoreEditorView', () => {
 
     it('a small pointerdown/up without movement does not clear or replace an existing selection', () => {
       const store = makeStore();
-      const divA = document.createElementNS('http://www.w3.org/2000/svg', 'g') as unknown as SVGElement;
+      const divA = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'g',
+      ) as unknown as SVGElement;
       const fakeResult = {
         idToElement: new Map([['a', divA]]),
         idToBBox: new Map([['a', { x: 0, y: 0, width: 10, height: 10 }]]),
@@ -306,9 +323,17 @@ describe('ScoreEditorView', () => {
     // other test in this file relies on. These tests instead stub
     // `clientHeight`/`scrollTop` on the scrollable ancestor directly so a
     // real (non-zero) viewport measurement flows through `visibleSystemMeasureIndices`.
-    function mockScrollGeometry(scrollBox: HTMLElement, clientHeight: number, scrollTop: number): void {
+    function mockScrollGeometry(
+      scrollBox: HTMLElement,
+      clientHeight: number,
+      scrollTop: number,
+    ): void {
       Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
-      Object.defineProperty(scrollBox, 'scrollTop', { value: scrollTop, configurable: true, writable: true });
+      Object.defineProperty(scrollBox, 'scrollTop', {
+        value: scrollTop,
+        configurable: true,
+        writable: true,
+      });
     }
 
     // `handleScroll` throttles `measureViewport` via `requestAnimationFrame`
@@ -337,136 +362,154 @@ describe('ScoreEditorView', () => {
       return store;
     }
 
-    it(
-      'renders every measure before the viewport has been measured',
-      () => {
-        const store = makeBigStore();
-        const { container } = render(<ScoreEditorView store={store} />);
-        const totalMeasures = store.getState().score!.tracks[0].measures.length;
-        expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
-      },
-      15_000,
-    );
+    it('renders every measure before the viewport has been measured', () => {
+      const store = makeBigStore();
+      const { container } = render(<ScoreEditorView store={store} />);
+      const totalMeasures = store.getState().score!.tracks[0].measures.length;
+      expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
+    }, 15_000);
 
-    it(
-      'culls the very first draw when the viewport is already measurable at mount (Task 17 review finding: no full-then-corrected double render)',
-      () => {
-        const store = makeBigStore();
-        const totalMeasures = store.getState().score!.tracks[0].measures.length;
+    it('culls the very first draw when the viewport is already measurable at mount (Task 17 review finding: no full-then-corrected double render)', () => {
+      const store = makeBigStore();
+      const totalMeasures = store.getState().score!.tracks[0].measures.length;
 
-        // Patches `clientHeight` on every element (a prototype getter, not
-        // per-node) *before* mount, so the draw effect's own inline
-        // fresh-measurement fallback (see `measuredForPlanRef`'s doc
-        // comment) already sees a real, nonzero value on its very first
-        // run, simulating a real browser's first layout pass rather than
-        // jsdom's always-zero one.
-        const clientHeightSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
-        const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+      // Patches `clientHeight` on every element (a prototype getter, not
+      // per-node) *before* mount, so the draw effect's own inline
+      // fresh-measurement fallback (see `measuredForPlanRef`'s doc
+      // comment) already sees a real, nonzero value on its very first
+      // run, simulating a real browser's first layout pass rather than
+      // jsdom's always-zero one.
+      const clientHeightSpy = vi
+        .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+        .mockReturnValue(200);
+      const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
 
-        const { container } = render(<ScoreEditorView store={store} />);
+      const { container } = render(<ScoreEditorView store={store} />);
 
-        // Exactly one render() call for the initial mount - not a full
-        // render immediately followed by a corrective culled one.
-        expect(renderSpy).toHaveBeenCalledTimes(1);
-        // ...and that one call already has a real `visibleMeasureIndices`
-        // (not `undefined`, i.e. not "render everything").
-        const firstCallOptions = renderSpy.mock.calls[0][2];
-        expect(firstCallOptions.visibleMeasureIndices).not.toBeUndefined();
-        expect(container.querySelectorAll('.vf-stave').length).toBeLessThan(totalMeasures);
+      // Exactly one render() call for the initial mount - not a full
+      // render immediately followed by a corrective culled one.
+      expect(renderSpy).toHaveBeenCalledTimes(1);
+      // ...and that one call already has a real `visibleMeasureIndices`
+      // (not `undefined`, i.e. not "render everything").
+      const firstCallOptions = renderSpy.mock.calls[0][2];
+      expect(firstCallOptions.visibleMeasureIndices).not.toBeUndefined();
+      expect(container.querySelectorAll('.vf-stave').length).toBeLessThan(totalMeasures);
 
-        clientHeightSpy.mockRestore();
-      },
-      15_000,
-    );
+      clientHeightSpy.mockRestore();
+    }, 15_000);
 
-    it(
-      'renders only measures near the top of a short viewport, and flips to the bottom set on scroll',
-      () => {
-        const store = makeBigStore();
-        const score = store.getState().score!;
-        const notes = allNotes(score);
-        const firstNoteId = notes[0].id;
-        const lastNoteId = notes[notes.length - 1].id;
-        const totalMeasures = score.tracks[0].measures.length;
+    it('re-measures and culls when the scroll box is resized without any scroll (refresh-render fix)', () => {
+      // Captures the ResizeObserver callback the component registers on the
+      // scroll box, so the test can fire it manually — jsdom has no real
+      // ResizeObserver, and the refresh bug is exactly the case where the
+      // box's size changes (settles) with no scroll event ever arriving.
+      let resizeCallback: (() => void) | null = null;
+      class MockResizeObserver {
+        constructor(cb: ResizeObserverCallback) {
+          resizeCallback = () => cb([], this as unknown as ResizeObserver);
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      }
+      vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
-        // The real total logical-unit height, from the same layout the
-        // component itself computes (page mode, DEFAULT_WIDTH's 900px
-        // fallback since jsdom reports clientWidth 0) — used to pick a
-        // scrollTop genuinely near the bottom of *this* score, rather than
-        // an arbitrary huge number that could overshoot every system.
-        const plan = computeLayout(score, {
-          zoom: 1,
-          layoutMode: 'page',
-          width: 900,
-          theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
-        });
+      const store = makeBigStore();
+      const totalMeasures = store.getState().score!.tracks[0].measures.length;
+      const { container, getByTestId } = render(<ScoreEditorView store={store} />);
 
-        const { container, getByTestId } = render(<ScoreEditorView store={store} />);
-        const scrollBox = getByTestId('score-editor-scroll');
+      // Unmeasurable at mount (jsdom clientHeight 0) => everything drawn.
+      expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
 
-        mockScrollGeometry(scrollBox, 200, 0);
-        fireEvent.scroll(scrollBox);
+      // The box settles to a real 200px viewport; the observer fires.
+      mockScrollGeometry(getByTestId('score-editor-scroll'), 200, 0);
+      act(() => resizeCallback?.());
 
-        const staveCountNearTop = container.querySelectorAll('.vf-stave').length;
-        expect(staveCountNearTop).toBeGreaterThan(0);
-        expect(staveCountNearTop).toBeLessThan(totalMeasures);
-        expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).not.toBeNull();
-        expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).toBeNull();
+      const culledCount = container.querySelectorAll('.vf-stave').length;
+      expect(culledCount).toBeGreaterThan(0);
+      expect(culledCount).toBeLessThan(totalMeasures);
+    }, 15_000);
 
-        mockScrollGeometry(scrollBox, 200, Math.max(0, plan.totalHeight - 200));
-        fireEvent.scroll(scrollBox);
+    it('renders only measures near the top of a short viewport, and flips to the bottom set on scroll', () => {
+      const store = makeBigStore();
+      const score = store.getState().score!;
+      const notes = allNotes(score);
+      const firstNoteId = notes[0].id;
+      const lastNoteId = notes[notes.length - 1].id;
+      const totalMeasures = score.tracks[0].measures.length;
 
-        expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).not.toBeNull();
-        expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).toBeNull();
-      },
-      15_000,
-    );
+      // The real total logical-unit height, from the same layout the
+      // component itself computes (page mode, DEFAULT_WIDTH's 900px
+      // fallback since jsdom reports clientWidth 0) — used to pick a
+      // scrollTop genuinely near the bottom of *this* score, rather than
+      // an arbitrary huge number that could overshoot every system.
+      const plan = computeLayout(score, {
+        zoom: 1,
+        layoutMode: 'page',
+        width: 900,
+        theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
+      });
 
-    it(
-      'does not re-render for repeated scroll positions within the same visible system(s), but does when a scroll crosses into a different one (Task 17 review finding: scroll-throttle equality guard)',
-      () => {
-        const store = makeBigStore();
-        const score = store.getState().score!;
-        const plan = computeLayout(score, {
-          zoom: 1,
-          layoutMode: 'page',
-          width: 900,
-          theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
-        });
-        expect(plan.systems.length).toBeGreaterThan(2);
+      const { container, getByTestId } = render(<ScoreEditorView store={store} />);
+      const scrollBox = getByTestId('score-editor-scroll');
 
-        const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
-        const { getByTestId } = render(<ScoreEditorView store={store} />);
-        const scrollBox = getByTestId('score-editor-scroll');
-        const callsAfterMount = renderSpy.mock.calls.length;
+      mockScrollGeometry(scrollBox, 200, 0);
+      fireEvent.scroll(scrollBox);
 
-        // Establishing the first *real* (non-jsdom-default) measurement is
-        // expected to trigger exactly one render, since it necessarily
-        // differs from the pre-measurement "render everything" state.
-        const firstSystem = plan.systems[0];
-        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 5);
-        fireEvent.scroll(scrollBox);
-        expect(renderSpy.mock.calls.length).toBe(callsAfterMount + 1);
-        const callsAfterFirstScroll = renderSpy.mock.calls.length;
+      const staveCountNearTop = container.querySelectorAll('.vf-stave').length;
+      expect(staveCountNearTop).toBeGreaterThan(0);
+      expect(staveCountNearTop).toBeLessThan(totalMeasures);
+      expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).not.toBeNull();
+      expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).toBeNull();
 
-        // Two more small scrolls, still comfortably inside the first
-        // system's own span (and nowhere near the overscan boundary) -
-        // neither should trigger a re-render.
-        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 10);
-        fireEvent.scroll(scrollBox);
-        mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 15);
-        fireEvent.scroll(scrollBox);
-        expect(renderSpy.mock.calls.length).toBe(callsAfterFirstScroll);
+      mockScrollGeometry(scrollBox, 200, Math.max(0, plan.totalHeight - 200));
+      fireEvent.scroll(scrollBox);
 
-        // Scrolling to the last system (far past the overscan buffer) is a
-        // genuinely different visible set and must trigger a fresh render.
-        const lastSystem = plan.systems[plan.systems.length - 1];
-        mockScrollGeometry(scrollBox, 50, lastSystem.yTop + 5);
-        fireEvent.scroll(scrollBox);
-        expect(renderSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstScroll);
-      },
-      15_000,
-    );
+      expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).not.toBeNull();
+      expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).toBeNull();
+    }, 15_000);
+
+    it('does not re-render for repeated scroll positions within the same visible system(s), but does when a scroll crosses into a different one (Task 17 review finding: scroll-throttle equality guard)', () => {
+      const store = makeBigStore();
+      const score = store.getState().score!;
+      const plan = computeLayout(score, {
+        zoom: 1,
+        layoutMode: 'page',
+        width: 900,
+        theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
+      });
+      expect(plan.systems.length).toBeGreaterThan(2);
+
+      const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+      const { getByTestId } = render(<ScoreEditorView store={store} />);
+      const scrollBox = getByTestId('score-editor-scroll');
+      const callsAfterMount = renderSpy.mock.calls.length;
+
+      // Establishing the first *real* (non-jsdom-default) measurement is
+      // expected to trigger exactly one render, since it necessarily
+      // differs from the pre-measurement "render everything" state.
+      const firstSystem = plan.systems[0];
+      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 5);
+      fireEvent.scroll(scrollBox);
+      expect(renderSpy.mock.calls.length).toBe(callsAfterMount + 1);
+      const callsAfterFirstScroll = renderSpy.mock.calls.length;
+
+      // Two more small scrolls, still comfortably inside the first
+      // system's own span (and nowhere near the overscan boundary) -
+      // neither should trigger a re-render.
+      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 10);
+      fireEvent.scroll(scrollBox);
+      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 15);
+      fireEvent.scroll(scrollBox);
+      expect(renderSpy.mock.calls.length).toBe(callsAfterFirstScroll);
+
+      // Scrolling to the last system (far past the overscan buffer) is a
+      // genuinely different visible set and must trigger a fresh render.
+      const lastSystem = plan.systems[plan.systems.length - 1];
+      mockScrollGeometry(scrollBox, 50, lastSystem.yTop + 5);
+      fireEvent.scroll(scrollBox);
+      expect(renderSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstScroll);
+    }, 15_000);
   });
 
   describe('scroll-into-view during playback', () => {

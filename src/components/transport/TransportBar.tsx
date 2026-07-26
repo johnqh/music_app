@@ -34,7 +34,18 @@
  */
 import { useMemo, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider, Tooltip, cn } from '@sudobility/components';
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Slider,
+  Tooltip,
+  cn,
+} from '@sudobility/components';
 import { changeTempoCommand } from '@sudobility/music_lib';
 import { scoreEndTick } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -53,7 +64,10 @@ const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
-const TOGGLE_BUTTON_CLASS = cn('px-2 py-1 text-xs', 'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90');
+const TOGGLE_BUTTON_CLASS = cn(
+  'px-2 py-1 text-xs',
+  'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
+);
 
 function formatMeasureBeat(mb: MeasureBeat | null): string {
   return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
@@ -89,7 +103,9 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     const firstEvent = score.tempoMap[0];
     store
       .getState()
-      .dispatchCommand(changeTempoCommand({ tempoEventId: firstEvent?.id, tick: firstEvent?.tick ?? 0, bpm }));
+      .dispatchCommand(
+        changeTempoCommand({ tempoEventId: firstEvent?.id, tick: firstEvent?.tick ?? 0, bpm }),
+      );
   };
 
   const handleTempoKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -119,7 +135,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     <div
       role="toolbar"
       aria-label="Playback transport"
-      className="flex flex-wrap items-center gap-2 border-b border-theme-border px-2 py-1"
+      className="flex flex-wrap items-center gap-2 border-t border-theme-border px-2 py-1"
     >
       <Tooltip content="Go to start">
         <Button
@@ -225,7 +241,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Button>
       </Tooltip>
 
-      <span aria-label="Current measure and beat" className="min-w-[40px] text-center text-sm text-theme-text-primary">
+      <span
+        aria-label="Current measure and beat"
+        className="min-w-[40px] text-center text-sm text-theme-text-primary"
+      >
         {formatMeasureBeat(measureBeat)}
       </span>
 
@@ -256,7 +275,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       )}
 
       <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
-        <SelectTrigger aria-label="Playback speed" className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm">
+        <SelectTrigger
+          aria-label="Playback speed"
+          className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

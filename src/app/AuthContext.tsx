@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInGoogle: services.auth.signInGoogle,
       signOut: services.auth.signOut,
     }),
-    [user, token, loading, services]
+    [user, token, loading, services],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

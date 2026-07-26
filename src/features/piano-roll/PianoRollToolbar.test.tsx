@@ -14,10 +14,12 @@ function makeStore(score = twinkleScore()): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
-function renderToolbar(store: EditorStoreApi, overrides: Partial<React.ComponentProps<typeof PianoRollToolbar>> = {}) {
+function renderToolbar(
+  store: EditorStoreApi,
+  overrides: Partial<React.ComponentProps<typeof PianoRollToolbar>> = {},
+) {
   const onZoomHChange = vi.fn();
   const onZoomVChange = vi.fn();
   const onVisibleTrackIdsChange = vi.fn();

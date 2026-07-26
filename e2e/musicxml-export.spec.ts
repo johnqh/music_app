@@ -7,7 +7,13 @@
  */
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
-import { collectPageErrors, createNewProject, generateWholeScore, gotoDashboard, readScoreSummary } from './helpers';
+import {
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  gotoDashboard,
+  readScoreSummary,
+} from './helpers';
 
 test.describe('MusicXML export', () => {
   test('exports a well-formed MusicXML file for the current score', async ({ page }) => {

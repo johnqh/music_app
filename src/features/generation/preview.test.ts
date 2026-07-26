@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyScore } from '@sudobility/music_lib';
 import { extractFragment } from '@sudobility/music_lib';
-import { previewStartTick, scoreWithCandidate, summarizeFragment } from '@/features/generation/preview';
+import {
+  previewStartTick,
+  scoreWithCandidate,
+  summarizeFragment,
+} from '@/features/generation/preview';
 
 describe('scoreWithCandidate', () => {
   it('splices the fragment into a new score without mutating the original', () => {
@@ -93,7 +97,11 @@ describe('summarizeFragment', () => {
 
 describe('previewStartTick', () => {
   it('is the start of the fragment range', () => {
-    const fragment = { range: { startTick: 960, endTick: 1920, trackIds: [] }, ppq: 480, tracks: [] };
+    const fragment = {
+      range: { startTick: 960, endTick: 1920, trackIds: [] },
+      ppq: 480,
+      tracks: [],
+    };
     expect(previewStartTick(fragment)).toBe(960);
   });
 });

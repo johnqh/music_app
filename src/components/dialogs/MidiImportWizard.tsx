@@ -42,7 +42,18 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Button, Checkbox, Dialog, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '@sudobility/components';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn,
+} from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import type { MidiSummary } from '@sudobility/music_lib';
 import { defaultMidiImportOptions } from '@sudobility/music_lib';
@@ -119,7 +130,11 @@ export function MidiImportWizard({
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
   const [summary, setSummary] = useState<MidiSummary | null>(null);
   const [options, setOptions] = useState<MidiImportOptions | null>(null);
-  const [preview, setPreview] = useState<{ noteCount: number; text: string; warnings: string[] } | null>(null);
+  const [preview, setPreview] = useState<{
+    noteCount: number;
+    text: string;
+    warnings: string[];
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReplace, setConfirmingReplace] = useState(false);
@@ -166,8 +181,14 @@ export function MidiImportWizard({
     setError(null);
     try {
       const result = await service.import(fileBuffer, options);
-      const notes = result.score.tracks.flatMap((t) => t.measures.flatMap((m) => m.voices.flatMap((v) => v.events.filter(isNoteEvent))));
-      setPreview({ noteCount: notes.length, text: firstNotesPreview(notes), warnings: result.warnings });
+      const notes = result.score.tracks.flatMap((t) =>
+        t.measures.flatMap((m) => m.voices.flatMap((v) => v.events.filter(isNoteEvent))),
+      );
+      setPreview({
+        noteCount: notes.length,
+        text: firstNotesPreview(notes),
+        warnings: result.warnings,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -186,7 +207,9 @@ export function MidiImportWizard({
         store.getState().dispatchCommand(importScoreCommand(result.score));
         handleClose();
       } else {
-        await store.getState().newProject({ name: fileName ?? result.score.metadata.title, score: result.score });
+        await store
+          .getState()
+          .newProject({ name: fileName ?? result.score.metadata.title, score: result.score });
         const projectId = store.getState().projectId;
         handleClose();
         if (projectId) onImportedNewProject?.(projectId);
@@ -211,12 +234,17 @@ export function MidiImportWizard({
     setOptions((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
-  const patchTrackSelection = (sourceIndex: number, patch: Partial<{ include: boolean; clef: Clef }>): void => {
+  const patchTrackSelection = (
+    sourceIndex: number,
+    patch: Partial<{ include: boolean; clef: Clef }>,
+  ): void => {
     setOptions((prev) =>
       prev
         ? {
             ...prev,
-            trackSelections: prev.trackSelections.map((sel) => (sel.sourceIndex === sourceIndex ? { ...sel, ...patch } : sel)),
+            trackSelections: prev.trackSelections.map((sel) =>
+              sel.sourceIndex === sourceIndex ? { ...sel, ...patch } : sel,
+            ),
           }
         : prev,
     );
@@ -225,7 +253,11 @@ export function MidiImportWizard({
   return (
     <>
       <Dialog isOpen={open} onClose={handleClose} size="lg" showCloseButton={false}>
-        <div role="dialog" aria-labelledby="midi-import-title" className="flex max-h-[85vh] flex-col p-6">
+        <div
+          role="dialog"
+          aria-labelledby="midi-import-title"
+          className="flex max-h-[85vh] flex-col p-6"
+        >
           <h2 id="midi-import-title" className="text-lg font-semibold text-theme-text-primary">
             Import MIDI
           </h2>
@@ -235,7 +267,10 @@ export function MidiImportWizard({
               role="button"
               tabIndex={0}
               aria-label="Choose MIDI file"
-              className={cn(variants.button.outline.default(), 'cursor-pointer self-start px-3 py-2')}
+              className={cn(
+                variants.button.outline.default(),
+                'cursor-pointer self-start px-3 py-2',
+              )}
             >
               {fileName ?? 'Choose MIDI file...'}
               <input
@@ -256,13 +291,18 @@ export function MidiImportWizard({
 
             {summary && options && (
               <>
-                <div role="status" className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700">
-                  MIDI stores performance timing, not complete notation semantics -- imported notation is an
-                  approximation. Review the settings below and preview before importing.
+                <div
+                  role="status"
+                  className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
+                >
+                  MIDI stores performance timing, not complete notation semantics -- imported
+                  notation is an approximation. Review the settings below and preview before
+                  importing.
                 </div>
 
                 <p className="text-sm font-medium text-theme-text-primary">
-                  {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s, {summary.ppq} PPQ
+                  {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s,{' '}
+                  {summary.ppq} PPQ
                 </p>
 
                 <div className="overflow-x-auto rounded-md border border-theme-border">
@@ -279,15 +319,22 @@ export function MidiImportWizard({
                     </thead>
                     <tbody>
                       {summary.tracks.map((track) => {
-                        const selection = options.trackSelections.find((s) => s.sourceIndex === track.index);
+                        const selection = options.trackSelections.find(
+                          (s) => s.sourceIndex === track.index,
+                        );
                         if (!selection) return null;
                         return (
-                          <tr key={track.index} className="border-b border-theme-border text-theme-text-primary last:border-b-0">
+                          <tr
+                            key={track.index}
+                            className="border-b border-theme-border text-theme-text-primary last:border-b-0"
+                          >
                             <td className="px-2 py-1.5">
                               <Checkbox
                                 label={`Include track: ${track.name}`}
                                 checked={selection.include}
-                                onChange={(checked) => patchTrackSelection(track.index, { include: checked })}
+                                onChange={(checked) =>
+                                  patchTrackSelection(track.index, { include: checked })
+                                }
                               />
                             </td>
                             <td className="px-2 py-1.5">{track.name}</td>
@@ -295,8 +342,16 @@ export function MidiImportWizard({
                             <td className="px-2 py-1.5">{track.program}</td>
                             <td className="px-2 py-1.5">{track.noteCount}</td>
                             <td className="px-2 py-1.5">
-                              <Select value={selection.clef} onValueChange={(v) => patchTrackSelection(track.index, { clef: v as Clef })}>
-                                <SelectTrigger aria-label={`Clef: ${track.name}`} className={SELECT_TRIGGER_CLASS}>
+                              <Select
+                                value={selection.clef}
+                                onValueChange={(v) =>
+                                  patchTrackSelection(track.index, { clef: v as Clef })
+                                }
+                              >
+                                <SelectTrigger
+                                  aria-label={`Clef: ${track.name}`}
+                                  className={SELECT_TRIGGER_CLASS}
+                                >
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -320,7 +375,9 @@ export function MidiImportWizard({
                     <span className="text-xs text-theme-text-secondary">Quantize grid</span>
                     <Select
                       value={options.quantizeGrid ?? 'none'}
-                      onValueChange={(v) => patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })}
+                      onValueChange={(v) =>
+                        patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })
+                      }
                     >
                       <SelectTrigger aria-label="Quantize grid" className={SELECT_TRIGGER_CLASS}>
                         <SelectValue />
@@ -342,13 +399,17 @@ export function MidiImportWizard({
                   />
 
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-theme-text-secondary">Min. note duration (ticks)</span>
+                    <span className="text-xs text-theme-text-secondary">
+                      Min. note duration (ticks)
+                    </span>
                     <Input
                       type="number"
                       min={0}
                       aria-label="Minimum note duration (ticks)"
                       value={options.minDurationTicks}
-                      onChange={(e) => patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })}
+                      onChange={(e) =>
+                        patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })
+                      }
                       className={TEXT_INPUT_CLASS}
                     />
                   </label>
@@ -360,9 +421,19 @@ export function MidiImportWizard({
                   />
 
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs text-theme-text-secondary">Sustain pedal handling</span>
-                    <Select value={options.sustainPedal} onValueChange={(v) => patchOptions({ sustainPedal: v as 'extend' | 'ignore' })}>
-                      <SelectTrigger aria-label="Sustain pedal handling" className={SELECT_TRIGGER_CLASS}>
+                    <span className="text-xs text-theme-text-secondary">
+                      Sustain pedal handling
+                    </span>
+                    <Select
+                      value={options.sustainPedal}
+                      onValueChange={(v) =>
+                        patchOptions({ sustainPedal: v as 'extend' | 'ignore' })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label="Sustain pedal handling"
+                        className={SELECT_TRIGGER_CLASS}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -380,32 +451,53 @@ export function MidiImportWizard({
 
                   {options.pianoStaffSplit && (
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs text-theme-text-secondary">Split point (MIDI note)</span>
+                      <span className="text-xs text-theme-text-secondary">
+                        Split point (MIDI note)
+                      </span>
                       <Input
                         type="number"
                         min={0}
                         max={127}
                         aria-label="Split point (MIDI note number)"
                         value={options.splitPointMidi}
-                        onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
+                        onChange={(e) =>
+                          patchOptions({ splitPointMidi: Number(e.target.value) || 60 })
+                        }
                         className={TEXT_INPUT_CLASS}
                       />
                     </label>
                   )}
 
-                  <Checkbox label="Detect key" checked={options.detectKey} onChange={(checked) => patchOptions({ detectKey: checked })} />
+                  <Checkbox
+                    label="Detect key"
+                    checked={options.detectKey}
+                    onChange={(checked) => patchOptions({ detectKey: checked })}
+                  />
                 </div>
 
-                <Button type="button" variant="outline" aria-label="Preview import" disabled={busy} onClick={() => void handlePreview()} className="self-start px-3 py-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  aria-label="Preview import"
+                  disabled={busy}
+                  onClick={() => void handlePreview()}
+                  className="self-start px-3 py-1.5"
+                >
                   Preview
                 </Button>
 
                 {preview && (
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm text-theme-text-primary">{preview.noteCount} notes after import.</p>
+                    <p className="text-sm text-theme-text-primary">
+                      {preview.noteCount} notes after import.
+                    </p>
                     <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
                     {preview.warnings.map((w) => (
-                      <div key={w} role="status" className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700">
+                      <div
+                        key={w}
+                        role="status"
+                        className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
+                      >
                         {w}
                       </div>
                     ))}
@@ -419,7 +511,13 @@ export function MidiImportWizard({
             <Button type="button" variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="button" variant="primary" aria-label="Import" disabled={!summary || !options || busy} onClick={handleImportClick}>
+            <Button
+              type="button"
+              variant="primary"
+              aria-label="Import"
+              disabled={!summary || !options || busy}
+              onClick={handleImportClick}
+            >
               Import
             </Button>
           </div>

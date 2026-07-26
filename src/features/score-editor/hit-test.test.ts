@@ -45,12 +45,27 @@ describe('bboxesIntersect', () => {
 
 describe('boxFromPoints', () => {
   it('normalizes to non-negative width/height regardless of drag direction', () => {
-    expect(boxFromPoints({ x: 5, y: 5 }, { x: 25, y: 15 })).toEqual({ x: 5, y: 5, width: 20, height: 10 });
-    expect(boxFromPoints({ x: 25, y: 15 }, { x: 5, y: 5 })).toEqual({ x: 5, y: 5, width: 20, height: 10 });
+    expect(boxFromPoints({ x: 5, y: 5 }, { x: 25, y: 15 })).toEqual({
+      x: 5,
+      y: 5,
+      width: 20,
+      height: 10,
+    });
+    expect(boxFromPoints({ x: 25, y: 15 }, { x: 5, y: 5 })).toEqual({
+      x: 5,
+      y: 5,
+      width: 20,
+      height: 10,
+    });
   });
 
   it('produces a zero-size box for a click with no drag', () => {
-    expect(boxFromPoints({ x: 5, y: 5 }, { x: 5, y: 5 })).toEqual({ x: 5, y: 5, width: 0, height: 0 });
+    expect(boxFromPoints({ x: 5, y: 5 }, { x: 5, y: 5 })).toEqual({
+      x: 5,
+      y: 5,
+      width: 0,
+      height: 0,
+    });
   });
 });
 

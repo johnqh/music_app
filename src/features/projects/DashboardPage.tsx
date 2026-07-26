@@ -29,7 +29,17 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Tooltip, cn } from '@sudobility/components';
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Tooltip,
+  cn,
+} from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
@@ -166,7 +176,8 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const text = await file.text();
       const parsed = JSON.parse(text) as { name?: unknown; score?: unknown };
       const score = parseScore(parsed.score);
-      const name = typeof parsed.name === 'string' && parsed.name ? parsed.name : score.metadata.title;
+      const name =
+        typeof parsed.name === 'string' && parsed.name ? parsed.name : score.metadata.title;
       const { client, token } = await clientAndToken();
       const record = await client.createProject({ name, score }, token);
       await refresh();
@@ -186,7 +197,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
       >
         <span className="text-sm font-medium text-theme-text-primary">{project.name}</span>
-        <span className="text-xs text-theme-text-secondary">Updated {formatDate(project.updatedAt)}</span>
+        <span className="text-xs text-theme-text-secondary">
+          Updated {formatDate(project.updatedAt)}
+        </span>
       </Button>
       <div className="flex gap-1 border-t border-theme-border p-2">
         <Button
@@ -219,7 +232,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">{CONSTANTS.APP_NAME}</h1>
+        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">
+          {CONSTANTS.APP_NAME}
+        </h1>
 
         <Input
           type="text"
@@ -254,18 +269,34 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
               }}
               className={TEXT_INPUT_CLASS}
             />
-            <Button type="button" variant="primary" aria-label="Create" onClick={() => void handleCreate()}>
+            <Button
+              type="button"
+              variant="primary"
+              aria-label="Create"
+              onClick={() => void handleCreate()}
+            >
               Create
             </Button>
           </div>
         ) : (
-          <Button type="button" variant="primary" aria-label="New project" onClick={() => setCreatingName('Untitled Project')}>
+          <Button
+            type="button"
+            variant="primary"
+            aria-label="New project"
+            onClick={() => setCreatingName('Untitled Project')}
+          >
             New Project
           </Button>
         )}
 
         <Tooltip content="Import MIDI">
-          <Button type="button" variant="outline" aria-label="Import MIDI" onClick={() => setMidiImportOpen(true)} className="px-3 py-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Import MIDI"
+            onClick={() => setMidiImportOpen(true)}
+            className="px-3 py-1.5"
+          >
             Import MIDI
           </Button>
         </Tooltip>
@@ -300,7 +331,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       </div>
 
       <div className="mt-6" aria-label="Templates">
-        <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">Templates</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">
+          Templates
+        </p>
         <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {projectTemplates.map((template) => (
             <Button
@@ -309,7 +342,10 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
               variant="ghost"
               aria-label={`New from template: ${template.name}`}
               onClick={() => void handleCreateFromTemplate(template.id)}
-              className={cn(variants.card.default.interactive(), 'h-auto flex-col items-start gap-1 rounded-md p-4 text-left')}
+              className={cn(
+                variants.card.default.interactive(),
+                'h-auto flex-col items-start gap-1 rounded-md p-4 text-left',
+              )}
             >
               <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
               <span className="text-xs text-theme-text-secondary">{template.description}</span>
@@ -326,8 +362,12 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
       {filtered.length > 0 && (
         <div className="mt-6" aria-label="Your projects">
-          <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">Your projects</p>
-          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">{filtered.map(renderCard)}</div>
+          <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">
+            Your projects
+          </p>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+            {filtered.map(renderCard)}
+          </div>
         </div>
       )}
 

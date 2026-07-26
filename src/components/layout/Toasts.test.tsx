@@ -46,7 +46,11 @@ describe('Toasts', () => {
   it('a toast with a retry action renders and runs it, then dismisses the toast', async () => {
     const store = makeStore();
     const onRetry = vi.fn();
-    store.getState().pushToast({ message: 'Import failed', severity: 'error', action: { label: 'Retry', onClick: onRetry } });
+    store.getState().pushToast({
+      message: 'Import failed',
+      severity: 'error',
+      action: { label: 'Retry', onClick: onRetry },
+    });
     render(<Toasts store={store} />);
     const user = userEvent.setup();
 

@@ -26,8 +26,7 @@ function makeStore(score = twinkleScore()): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 describe('commitMove', () => {
   it('dispatches a moveNotesCommand and moves the note', () => {
@@ -37,7 +36,9 @@ describe('commitMove', () => {
     commitMove(store, [note.id], { deltaTicks: 0, deltaSemitones: 2 });
 
     const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
-    expect(updated.pitch.octave === note.pitch.octave ? updated.pitch : updated).not.toEqual(note.pitch);
+    expect(updated.pitch.octave === note.pitch.octave ? updated.pitch : updated).not.toEqual(
+      note.pitch,
+    );
     expect(store.getState().canUndo).toBe(true);
   });
 
@@ -116,7 +117,9 @@ describe('commitVoiceChange', () => {
     // The note now lives in voice index 1 of its measure.
     const score = store.getState().score!;
     const track = score.tracks.find((t) => t.id === note.trackId)!;
-    const measure = track.measures.find((m) => m.voices.some((v) => v.events.some((e) => e.id === note.id)))!;
+    const measure = track.measures.find((m) =>
+      m.voices.some((v) => v.events.some((e) => e.id === note.id)),
+    )!;
     expect(measure.voices[1]?.events.some((e) => e.id === note.id)).toBe(true);
   });
 });
@@ -147,7 +150,11 @@ describe('commitQuantize', () => {
     const note = allNotes(store.getState().score!)[0];
     const ppq = store.getState().score!.ppq;
 
-    commitQuantize(store, [note.id], { grid: ppq / 4, quantizeStarts: true, quantizeDurations: true });
+    commitQuantize(store, [note.id], {
+      grid: ppq / 4,
+      quantizeStarts: true,
+      quantizeDurations: true,
+    });
 
     expect(store.getState().canUndo).toBe(true);
   });
@@ -159,7 +166,12 @@ describe('commitQuantize', () => {
     expect(ids.length).toBeGreaterThan(2000);
 
     const service = new QuantizeService(); // no worker in vitest/jsdom: exercises the fallback
-    await commitQuantize(store, ids, { grid: big.ppq / 4, quantizeStarts: true, quantizeDurations: true }, service);
+    await commitQuantize(
+      store,
+      ids,
+      { grid: big.ppq / 4, quantizeStarts: true, quantizeDurations: true },
+      service,
+    );
 
     expect(store.getState().canUndo).toBe(true);
   });
@@ -214,7 +226,11 @@ describe('addNoteAtCell', () => {
     const last = track.measures[track.measures.length - 1];
     const before = store.getState().score;
 
-    addNoteAtCell(store, { trackId: track.id, tick: last.startTick + last.durationTicks + 10000, midi: 60 });
+    addNoteAtCell(store, {
+      trackId: track.id,
+      tick: last.startTick + last.durationTicks + 10000,
+      midi: 60,
+    });
 
     expect(store.getState().score).toBe(before);
   });
@@ -224,14 +240,22 @@ describe('resolveActiveTrackId', () => {
   it("prefers the first selected event's track", () => {
     const score = twoTrackScore();
     const bassNote = score.tracks[1].measures[0].voices[0].events[0];
-    const result = resolveActiveTrackId(score, { eventIds: [bassNote.id], measureIds: [], trackIds: [] }, null);
+    const result = resolveActiveTrackId(
+      score,
+      { eventIds: [bassNote.id], measureIds: [], trackIds: [] },
+      null,
+    );
     expect(result).toBe(score.tracks[1].id);
   });
 
   it('falls back to the first visible track when nothing is selected', () => {
     const score = twoTrackScore();
     const visible = new Set([score.tracks[1].id]);
-    const result = resolveActiveTrackId(score, { eventIds: [], measureIds: [], trackIds: [] }, visible);
+    const result = resolveActiveTrackId(
+      score,
+      { eventIds: [], measureIds: [], trackIds: [] },
+      visible,
+    );
     expect(result).toBe(score.tracks[1].id);
   });
 
@@ -239,7 +263,11 @@ describe('resolveActiveTrackId', () => {
     const score = twoTrackScore();
     const trebleNote = score.tracks[0].measures[0].voices[0].events[0];
     const visible = new Set([score.tracks[1].id]);
-    const result = resolveActiveTrackId(score, { eventIds: [trebleNote.id], measureIds: [], trackIds: [] }, visible);
+    const result = resolveActiveTrackId(
+      score,
+      { eventIds: [trebleNote.id], measureIds: [], trackIds: [] },
+      visible,
+    );
     expect(result).toBe(score.tracks[1].id);
   });
 });

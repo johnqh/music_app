@@ -123,7 +123,10 @@ export function MusicXmlImportDialog({
               role="button"
               tabIndex={0}
               aria-label="Choose MusicXML file"
-              className={cn(variants.button.outline.default(), 'cursor-pointer px-3 py-2 text-center')}
+              className={cn(
+                variants.button.outline.default(),
+                'cursor-pointer px-3 py-2 text-center',
+              )}
             >
               {fileName ?? 'Choose MusicXML file...'}
               <input
@@ -150,18 +153,25 @@ export function MusicXmlImportDialog({
                 {result.warnings.length > 0 ? (
                   <>
                     <p className="text-sm text-theme-text-secondary">
-                      Unsupported elements were skipped and are reported below (import still proceeds safely):
+                      Unsupported elements were skipped and are reported below (import still
+                      proceeds safely):
                     </p>
                     <ul aria-label="Import warnings" className="flex flex-col gap-1">
                       {result.warnings.map((warning) => (
-                        <li key={warning} className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary">
+                        <li
+                          key={warning}
+                          className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary"
+                        >
                           {warning}
                         </li>
                       ))}
                     </ul>
                   </>
                 ) : (
-                  <div role="status" className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700">
+                  <div
+                    role="status"
+                    className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
+                  >
                     No unsupported elements were found.
                   </div>
                 )}
@@ -173,7 +183,13 @@ export function MusicXmlImportDialog({
             <Button type="button" variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="button" variant="primary" aria-label="Import" disabled={!result || busy} onClick={handleImportClick}>
+            <Button
+              type="button"
+              variant="primary"
+              aria-label="Import"
+              disabled={!result || busy}
+              onClick={handleImportClick}
+            >
               Import
             </Button>
           </div>

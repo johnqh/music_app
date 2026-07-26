@@ -15,12 +15,13 @@ function makeStore(withScore = true): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 function renderToolbar(store: EditorStoreApi, layoutMode: 'page' | 'continuous' = 'page') {
   const onLayoutModeChange = vi.fn();
-  render(<EditorToolbar store={store} layoutMode={layoutMode} onLayoutModeChange={onLayoutModeChange} />);
+  render(
+    <EditorToolbar store={store} layoutMode={layoutMode} onLayoutModeChange={onLayoutModeChange} />,
+  );
   return { onLayoutModeChange };
 }
 

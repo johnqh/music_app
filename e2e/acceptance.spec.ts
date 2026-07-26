@@ -29,7 +29,9 @@ import {
 } from './helpers';
 
 test.describe('spec §39 acceptance scenario', () => {
-  test('full user session: create, generate, play, regenerate, edit, piano-roll, MIDI, MusicXML, persist', async ({ page }) => {
+  test('full user session: create, generate, play, regenerate, edit, piano-roll, MIDI, MusicXML, persist', async ({
+    page,
+  }) => {
     const getErrors = collectPageErrors(page);
 
     // 1-2. Open the app, create a new project.
@@ -45,19 +47,25 @@ test.describe('spec §39 acceptance scenario', () => {
     const generated = await readScoreSummary(page);
     expect(generated).not.toBeNull();
     expect(generated!.notes.length).toBeGreaterThan(0);
-    await expect(page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first()).toBeVisible();
+    await expect(
+      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
+    ).toBeVisible();
 
     // 6-7. Play; notes highlight in sync (observed via store playback state --
     // Tone.js audio itself has no observable signal in headless Chromium).
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
-    await expect.poll(async () => (await readPlaybackState(page)).state, { timeout: 10_000 }).toBe('playing');
+    await expect
+      .poll(async () => (await readPlaybackState(page)).state, { timeout: 10_000 })
+      .toBe('playing');
     await page.getByRole('button', { name: 'Stop' }).click();
 
     // 8-13. Select measures 3-4, regenerate, preview each alternative, accept one.
     await selectMeasuresByIndex(page, [2, 3]);
     await expect(page.locator('[aria-label="Regeneration panel"]')).toBeVisible();
-    await page.getByLabel('Regeneration instruction').fill('Make this section more dramatic while preserving the melody.');
+    await page
+      .getByLabel('Regeneration instruction')
+      .fill('Make this section more dramatic while preserving the melody.');
     await page.getByRole('button', { name: 'Generate alternatives' }).click();
 
     const candidateCards = page.locator('[role="group"][aria-label^="Candidate card:"]');
@@ -66,7 +74,9 @@ test.describe('spec §39 acceptance scenario', () => {
     for (const candidate of candidates) {
       const card = page.getByRole('group', { name: `Candidate card: ${candidate.label}` });
       await card.getByRole('button', { name: candidate.label, exact: true }).click();
-      await expect(card.getByRole('button', { name: candidate.label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        card.getByRole('button', { name: candidate.label, exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
     }
     const acceptedLabel = candidates[candidates.length - 1].label;
     await page
@@ -79,7 +89,8 @@ test.describe('spec §39 acceptance scenario', () => {
     expect(afterRegen).not.toBeNull();
     const m3 = generated!.measures[2];
     const m4 = generated!.measures[3];
-    const inRegen = (tick: number): boolean => tick >= m3.startTick && tick < m4.startTick + m4.durationTicks;
+    const inRegen = (tick: number): boolean =>
+      tick >= m3.startTick && tick < m4.startTick + m4.durationTicks;
     expect(afterRegen!.notes.filter((n) => inRegen(n.startTick))).not.toEqual(
       generated!.notes.filter((n) => inRegen(n.startTick)),
     );
@@ -133,14 +144,18 @@ test.describe('spec §39 acceptance scenario', () => {
     expect(box).not.toBeNull();
     await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box!.x + box!.width / 2 + 60, box!.y + box!.height / 2 - 28, { steps: 8 });
+    await page.mouse.move(box!.x + box!.width / 2 + 60, box!.y + box!.height / 2 - 28, {
+      steps: 8,
+    });
     await page.mouse.up();
 
     // Notation re-renders against the same, now-updated score (not
     // asserting the dragged note's own element -- like the piano roll, the
     // notation view culls to the scrolled viewport, spec §29).
     await page.getByRole('button', { name: 'Notation view' }).click();
-    await expect(page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first()).toBeVisible();
+    await expect(
+      page.locator('[data-testid="score-editor-canvas"] [id^="vf-"]').first(),
+    ).toBeVisible();
 
     // 20-22. Export MIDI, import it into a new project, substantially equivalent notes.
     const beforeMidi = await readScoreSummary(page);

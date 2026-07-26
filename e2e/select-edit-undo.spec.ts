@@ -3,7 +3,15 @@
  * the change.
  */
 import { expect, test } from '@playwright/test';
-import { clickNoteGroup, collectPageErrors, createNewProject, generateWholeScore, getNoteGroups, gotoDashboard, readScoreSummary } from './helpers';
+import {
+  clickNoteGroup,
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  getNoteGroups,
+  gotoDashboard,
+  readScoreSummary,
+} from './helpers';
 
 test.describe('note selection, editing, and undo/redo', () => {
   test('selects a note, changes its pitch, and undoes/redoes the change', async ({ page }) => {
@@ -11,7 +19,10 @@ test.describe('note selection, editing, and undo/redo', () => {
 
     await gotoDashboard(page);
     await createNewProject(page);
-    await generateWholeScore(page, { prompt: 'Create a simple beginner melody using quarter and half notes', measures: 4 });
+    await generateWholeScore(page, {
+      prompt: 'Create a simple beginner melody using quarter and half notes',
+      measures: 4,
+    });
 
     // Select a note (spec §39 item 14's setup / scenario 4).
     const groups = await getNoteGroups(page);

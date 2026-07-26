@@ -35,7 +35,9 @@ describe('App', () => {
     const { store } = setup();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
   });
 
@@ -56,7 +58,9 @@ describe('App', () => {
     setAppServices(signedOut);
     render(<App store={store} />);
     await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument());
-    expect(screen.queryByRole('heading', { name: 'Compose with AI, refine by hand' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Compose with AI, refine by hand' }),
+    ).not.toBeInTheDocument();
   });
 
   it('bootstraps persisted device prefs (theme + developer mode) into the store', async () => {
@@ -71,7 +75,9 @@ describe('App', () => {
     const { store, context } = setup();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
     act(() => {
       store.getState().setThemeMode('dark');
@@ -87,7 +93,9 @@ describe('App', () => {
     await store.getState().newProject({ name: 'Flush Me' });
     render(<App store={store} />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
 
     const saveNow = vi.fn().mockResolvedValue(undefined);
@@ -103,7 +111,9 @@ describe('App', () => {
     await store.getState().newProject({ name: 'Clean' });
     render(<App store={store} />);
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Compose with AI, refine by hand' })).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
     );
     const saveNow = vi.fn().mockResolvedValue(undefined);
     store.setState({ dirty: false, saveNow } as never);

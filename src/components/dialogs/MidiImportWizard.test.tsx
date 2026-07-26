@@ -14,8 +14,7 @@ function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 /** A real Standard MIDI File, round-tripped from a fixture score via the Task 7 exporter -- the same pattern `analyze.test.ts` uses. */
 function fixtureMidiFile(name = 'fixture.mid'): File {
@@ -36,7 +35,9 @@ describe('MidiImportWizard', () => {
 
     await chooseFile(user, fixtureMidiFile());
 
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
     expect(screen.getByText(/track\(s\)/)).toBeInTheDocument();
     // The performance-timing warning (spec §15) is always shown once a file is loaded.
     expect(screen.getByText(/performance timing/i)).toBeInTheDocument();
@@ -45,11 +46,20 @@ describe('MidiImportWizard', () => {
   it('importing into a fresh store (no project open) creates a new project via a single command, no confirmation needed', async () => {
     const store = makeStore();
     const onImportedNewProject = vi.fn();
-    render(<MidiImportWizard open onClose={vi.fn()} store={store} onImportedNewProject={onImportedNewProject} />);
+    render(
+      <MidiImportWizard
+        open
+        onClose={vi.fn()}
+        store={store}
+        onImportedNewProject={onImportedNewProject}
+      />,
+    );
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
@@ -67,7 +77,9 @@ describe('MidiImportWizard', () => {
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
@@ -90,7 +102,9 @@ describe('MidiImportWizard', () => {
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Preview import' }));
 
@@ -103,7 +117,9 @@ describe('MidiImportWizard', () => {
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Preview import' }));
     await waitFor(() => expect(screen.getByText(/notes after import\./)).toBeInTheDocument());
@@ -113,7 +129,9 @@ describe('MidiImportWizard', () => {
     await user.click(includeCheckboxes[0]);
     await user.click(screen.getByRole('button', { name: 'Preview import' }));
 
-    await waitFor(() => expect(screen.getByText(/notes after import\./).textContent).not.toBe(withAllTracks));
+    await waitFor(() =>
+      expect(screen.getByText(/notes after import\./).textContent).not.toBe(withAllTracks),
+    );
   });
 
   it('a failed import (commit step) shows an error toast, not a silent failure', async () => {
@@ -131,7 +149,9 @@ describe('MidiImportWizard', () => {
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
@@ -140,7 +160,9 @@ describe('MidiImportWizard', () => {
     // top-level element -- including the Toasts Snackbar, mounted as a
     // sibling -- `aria-hidden` while it's open, which role-based queries
     // correctly treat as inaccessible even though it's still visible.
-    await waitFor(() => expect(screen.getByText('MIDI import failed: corrupt track data')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('MIDI import failed: corrupt track data')).toBeInTheDocument(),
+    );
     expect(store.getState().projectId).toBeNull();
   });
 });
@@ -153,15 +175,20 @@ describe('accessibility (spec §27)', () => {
 
     const checkAllControls = () => {
       const dialog = screen.getByRole('dialog');
-      for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
-      for (const checkbox of within(dialog).queryAllByRole('checkbox')) expect(checkbox).toHaveAccessibleName();
-      for (const combobox of within(dialog).queryAllByRole('combobox')) expect(combobox).toHaveAccessibleName();
+      for (const button of within(dialog).getAllByRole('button'))
+        expect(button).toHaveAccessibleName();
+      for (const checkbox of within(dialog).queryAllByRole('checkbox'))
+        expect(checkbox).toHaveAccessibleName();
+      for (const combobox of within(dialog).queryAllByRole('combobox'))
+        expect(combobox).toHaveAccessibleName();
     };
 
     checkAllControls();
 
     await chooseFile(user, fixtureMidiFile());
-    await waitFor(() => expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
 
     checkAllControls();
   });

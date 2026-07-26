@@ -23,7 +23,13 @@ export default function HomePage() {
           <p className="mx-auto mt-4 max-w-2xl text-lg text-theme-text-secondary">
             {t('home.heroBody')}
           </p>
-          <Button type="button" variant="primary" size="lg" className="mt-8 shadow" onClick={() => navigate('/projects')}>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            className="mt-8 shadow"
+            onClick={() => navigate('/projects')}
+          >
             {t('home.cta')}
           </Button>
         </div>

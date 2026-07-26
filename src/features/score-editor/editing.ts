@@ -20,7 +20,15 @@
  * are not re-announced on every subsequent unrelated edit.
  */
 import type { createAppStore } from '@sudobility/music_lib';
-import type { Accidental, Articulation, DurationName, NoteEvent, Pitch, Score, UUID } from '@sudobility/music_types';
+import type {
+  Accidental,
+  Articulation,
+  DurationName,
+  NoteEvent,
+  Pitch,
+  Score,
+  UUID,
+} from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { MusicalEvent } from '@sudobility/music_types';
 import type { ScoreSelection } from '@sudobility/music_lib';
@@ -101,7 +109,12 @@ function locateEvent(
       for (let voiceIndex = 0; voiceIndex < measure.voices.length; voiceIndex += 1) {
         const event = measure.voices[voiceIndex].events.find((e) => e.id === eventId);
         if (event) {
-          return { trackId: track.id, measureId: measure.id, voiceIndex, startTick: event.startTick };
+          return {
+            trackId: track.id,
+            measureId: measure.id,
+            voiceIndex,
+            startTick: event.startTick,
+          };
         }
       }
     }
@@ -133,13 +146,23 @@ export function resolveInsertTarget(score: Score, selection: ScoreSelection): In
   for (const trackId of selection.trackIds) {
     const track = findTrack(score, trackId);
     if (track?.measures[0]) {
-      return { trackId, measureId: track.measures[0].id, voiceIndex: 0, startTick: track.measures[0].startTick };
+      return {
+        trackId,
+        measureId: track.measures[0].id,
+        voiceIndex: 0,
+        startTick: track.measures[0].startTick,
+      };
     }
   }
 
   const track = score.tracks[0];
   if (!track?.measures[0]) return null;
-  return { trackId: track.id, measureId: track.measures[0].id, voiceIndex: 0, startTick: track.measures[0].startTick };
+  return {
+    trackId: track.id,
+    measureId: track.measures[0].id,
+    voiceIndex: 0,
+    startTick: track.measures[0].startTick,
+  };
 }
 
 /**
@@ -147,7 +170,11 @@ export function resolveInsertTarget(score: Score, selection: ScoreSelection): In
  * `resolveInsertTarget`), using the store's current `snapGrid` as the
  * note's duration. No-op if there's no score or no resolvable target.
  */
-export function insertNoteAtSelection(store: EditorStoreApi, pitch: Pitch, articulation?: Articulation): void {
+export function insertNoteAtSelection(
+  store: EditorStoreApi,
+  pitch: Pitch,
+  articulation?: Articulation,
+): void {
   const state = store.getState();
   if (!state.score) return;
   const target = resolveInsertTarget(state.score, state.selection);
@@ -210,9 +237,17 @@ export function transposeOctave(store: EditorStoreApi, direction: 1 | -1): void 
  * track in tick order. Returns `null` at either end of the channel, or if
  * `eventId` doesn't resolve.
  */
-export function findAdjacentEventId(score: Score, eventId: UUID, direction: 'prev' | 'next'): UUID | null {
+export function findAdjacentEventId(
+  score: Score,
+  eventId: UUID,
+  direction: 'prev' | 'next',
+): UUID | null {
   for (const track of score.tracks) {
-    for (let voiceIndex = 0; voiceIndex < (track.measures[0]?.voices.length ?? 0); voiceIndex += 1) {
+    for (
+      let voiceIndex = 0;
+      voiceIndex < (track.measures[0]?.voices.length ?? 0);
+      voiceIndex += 1
+    ) {
       const channel: MusicalEvent[] = [];
       for (const measure of track.measures) {
         const voice = measure.voices[voiceIndex];
@@ -284,7 +319,11 @@ export function duplicateSelected(store: EditorStoreApi): void {
 export function selectAll(store: EditorStoreApi): void {
   const state = store.getState();
   if (!state.score) return;
-  state.setSelection({ eventIds: allNotes(state.score).map((n) => n.id), measureIds: [], trackIds: [] });
+  state.setSelection({
+    eventIds: allNotes(state.score).map((n) => n.id),
+    measureIds: [],
+    trackIds: [],
+  });
 }
 
 /** Thin wrapper for symmetry with `selectAll`/`selectTrackAction` — delegates straight to the store action. */
@@ -318,7 +357,10 @@ export function changeVelocity(store: EditorStoreApi, velocity: number): void {
 }
 
 /** Sets (or clears, with `undefined`) the selected notes' articulation. No-op if no notes are selected. */
-export function changeArticulation(store: EditorStoreApi, articulation: Articulation | undefined): void {
+export function changeArticulation(
+  store: EditorStoreApi,
+  articulation: Articulation | undefined,
+): void {
   const state = store.getState();
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);

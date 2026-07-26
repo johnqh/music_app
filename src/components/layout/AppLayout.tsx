@@ -85,7 +85,11 @@ export type AppLayoutProps = {
 
 const SIDE_PANEL_WIDTH = 280;
 
-const SAVE_STATE_LABEL: Record<string, string> = { saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved' };
+const SAVE_STATE_LABEL: Record<string, string> = {
+  saved: 'Saved',
+  saving: 'Saving…',
+  unsaved: 'Unsaved',
+};
 const SAVE_STATE_CLASS: Record<string, string> = {
   saved: 'bg-success text-success-foreground',
   saving: 'bg-info text-info-foreground',
@@ -99,7 +103,8 @@ const SAVE_STATE_CLASS: Record<string, string> = {
 const ICON_BUTTON_CLASS =
   'rounded-md p-1.5 text-sm leading-none text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40';
 
-const TEXT_BUTTON_CLASS = 'rounded-md px-3 py-1.5 text-sm font-medium text-inherit hover:bg-white/10';
+const TEXT_BUTTON_CLASS =
+  'rounded-md px-3 py-1.5 text-sm font-medium text-inherit hover:bg-white/10';
 
 const MENU_CLASS = cn(
   variants.card.default.base(),
@@ -110,7 +115,8 @@ const MENU_CLASS = cn(
 // button below is now the library `Button` with `variant="ghost"`, which
 // already supplies those base classes -- this is just the popover-specific
 // layout override.
-const MENU_ITEM_CLASS = 'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left';
+const MENU_ITEM_CLASS =
+  'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left';
 
 /** Open/close + outside-pointerdown-close state for one `role="menu"` popover, factored out since this file owns four of them (Import/Export/Theme/Settings) -- same behavior as `EditorToolbar`'s single articulation menu, just reusable. */
 function useMenu<T extends HTMLElement>() {
@@ -153,7 +159,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const themeMenu = useMenu<HTMLDivElement>();
   const settingsMenu = useMenu<HTMLDivElement>();
   const issuesMenu = useMenu<HTMLDivElement>();
-  const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(null);
+  const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -200,7 +208,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     if (!score) return;
     try {
       const bytes = exportMidi(score);
-      downloadBlob(`${midiSafeFilename(score.metadata.title)}.mid`, new Blob([bytes.buffer as ArrayBuffer], { type: 'audio/midi' }));
+      downloadBlob(
+        `${midiSafeFilename(score.metadata.title)}.mid`,
+        new Blob([bytes.buffer as ArrayBuffer], { type: 'audio/midi' }),
+      );
     } catch (err) {
       reportError(err, { context: 'MIDI export failed', store });
     }
@@ -211,7 +222,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     if (!score) return;
     try {
       const xml = exportMusicXml(score);
-      downloadBlob(`${musicXmlSafeFilename(score.metadata.title)}.musicxml`, new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }));
+      downloadBlob(
+        `${musicXmlSafeFilename(score.metadata.title)}.musicxml`,
+        new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }),
+      );
     } catch (err) {
       reportError(err, { context: 'MusicXML export failed', store });
     }
@@ -227,9 +241,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       const payload = JSON.stringify(
         { name: state.projectName, schemaVersion: 1, score: state.score },
         null,
-        2
+        2,
       );
-      downloadBlob(`${projectName || 'project'}.json`, new Blob([payload], { type: 'application/json' }));
+      downloadBlob(
+        `${projectName || 'project'}.json`,
+        new Blob([payload], { type: 'application/json' }),
+      );
     } catch (err) {
       reportError(err, { context: 'Project JSON export failed', store });
     }
@@ -260,7 +277,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // h-screen (not h-full): this route renders straight under `#root`,
+    // which only has `min-height: 100vh` — a percentage height would
+    // resolve to auto and let the whole page scroll. Bounding the editor
+    // to the viewport keeps the transport + status bars pinned at the
+    // bottom while the score area scrolls inside itself.
+    <div className="flex h-screen min-h-0 flex-col">
       <header className="bg-primary text-primary-foreground">
         <div className="flex items-center gap-1 px-2 py-1.5">
           <button
@@ -400,13 +422,33 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </button>
             {exportMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                <Button type="button" variant="ghost" role="menuitem" onClick={handleExportMidi} disabled={!score} className={MENU_ITEM_CLASS}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={handleExportMidi}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
                   MIDI
                 </Button>
-                <Button type="button" variant="ghost" role="menuitem" onClick={handleExportMusicXml} disabled={!score} className={MENU_ITEM_CLASS}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={handleExportMusicXml}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
                   MusicXML
                 </Button>
-                <Button type="button" variant="ghost" role="menuitem" onClick={() => void handleExportProjectJson()} className={MENU_ITEM_CLASS}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => void handleExportProjectJson()}
+                  className={MENU_ITEM_CLASS}
+                >
                   Project JSON
                 </Button>
               </div>
@@ -518,7 +560,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
       <div className="flex flex-1 min-h-0">
         {trackPanelOpen && (
-          <div className="shrink-0 border-r border-theme-border" style={{ width: SIDE_PANEL_WIDTH }}>
+          <div
+            className="shrink-0 overflow-y-auto border-r border-theme-border"
+            style={{ width: SIDE_PANEL_WIDTH }}
+          >
             <TrackPanel store={store} />
           </div>
         )}
@@ -553,30 +598,51 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="min-h-0 flex-1">
-            {view === 'notation' ? <ScoreEditorView store={store} /> : <PianoRollView store={store} />}
+            {view === 'notation' ? (
+              <ScoreEditorView store={store} />
+            ) : (
+              <PianoRollView store={store} />
+            )}
           </div>
-
-          <TransportBar store={store} />
         </div>
 
         {inspectorOpen && (
           <div
-            className="flex shrink-0 flex-col overflow-auto border-l border-theme-border"
+            className="flex shrink-0 flex-col overflow-y-auto border-l border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
-            <InspectorPanel store={store} />
-            <div className="border-t border-theme-border" />
-            {generationMode === 'generate' ? <GenerationPanel store={store} /> : <RegenerationPanel store={store} />}
+            {/* shrink-0 on every child: this column is height-bounded now
+                (h-screen root), and flex children would otherwise compress
+                to fit — visually stacking the panels onto each other —
+                instead of overflowing into the column's own scrollbar. */}
+            <div className="shrink-0">
+              <InspectorPanel store={store} />
+            </div>
+            <div className="shrink-0 border-t border-theme-border" />
+            <div className="shrink-0">
+              {generationMode === 'generate' ? (
+                <GenerationPanel store={store} />
+              ) : (
+                <RegenerationPanel store={store} />
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Pinned bottom bars: the transport sits directly above the status
+          bar, outside the scrolling score region, so neither scrolls away
+          with the sheet. */}
+      <TransportBar store={store} />
 
       <div
         role="status"
         aria-label="Status bar"
         className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
-        <span className="text-xs text-theme-text-secondary">{selectionSummaryLabel(selection)}</span>
+        <span className="text-xs text-theme-text-secondary">
+          {selectionSummaryLabel(selection)}
+        </span>
         <div className="flex-1" />
         <div ref={issuesMenu.ref} className="relative">
           <Button
@@ -655,7 +721,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         onClose={() => store.getState().closeDialog('musicXmlImport')}
         store={store}
       />
-      <ShortcutHelpDialog open={dialogs.shortcutHelp === true} onClose={() => store.getState().closeDialog('shortcutHelp')} />
+      <ShortcutHelpDialog
+        open={dialogs.shortcutHelp === true}
+        onClose={() => store.getState().closeDialog('shortcutHelp')}
+      />
       {developerMode && (
         <DeveloperSettingsDialog
           open={dialogs.devSettings === true}

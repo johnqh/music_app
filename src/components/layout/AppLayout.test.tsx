@@ -41,8 +41,7 @@ async function makeStoreWithProject(score: Score = twinkleScore()): Promise<Edit
   return store;
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 describe('AppLayout', () => {
   it('renders the project title and a save-state chip', async () => {
@@ -105,7 +104,9 @@ describe('AppLayout', () => {
           ...measure,
           voices: measure.voices.map((voice) => ({
             ...voice,
-            events: voice.events.map((event) => (event.id === note.id ? { ...event, velocity: -5 } : event)),
+            events: voice.events.map((event) =>
+              event.id === note.id ? { ...event, velocity: -5 } : event,
+            ),
           })),
         })),
       })),
@@ -129,7 +130,11 @@ describe('AppLayout', () => {
     await user.click(issueRow);
 
     expect(store.getState().selection.eventIds).toEqual([note.id]);
-    await waitFor(() => expect(screen.queryByRole('list', { name: 'Validation issues list' })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('list', { name: 'Validation issues list' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it('"Back to dashboard" calls onNavigate("/projects")', async () => {

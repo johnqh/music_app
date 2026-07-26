@@ -116,7 +116,9 @@ describe('CandidateList', () => {
     const [candidateA, candidateB] = candidates;
 
     await user.click(screen.getByRole('button', { name: `Play in context: ${candidateA.label}` }));
-    expect(screen.getByRole('button', { name: `Stop preview: ${candidateA.label}` })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Stop preview: ${candidateA.label}` }),
+    ).toBeInTheDocument();
 
     // Switch to candidate B by clicking its label while A is still "playing".
     await user.click(screen.getByText(candidateB.label));
@@ -125,9 +127,15 @@ describe('CandidateList', () => {
     expect(store.getState().activeCandidateId).toBe(candidateB.id); // overlay now shows B
     expect(store.getState().previewFragment).toEqual(candidateB.fragment);
     // A's card is back to "Play in context" (playingId cleared), not "Stop".
-    expect(screen.getByRole('button', { name: `Play in context: ${candidateA.label}` })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: `Stop preview: ${candidateA.label}` })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: `Stop preview: ${candidateB.label}` })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Play in context: ${candidateA.label}` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: `Stop preview: ${candidateA.label}` }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: `Stop preview: ${candidateB.label}` }),
+    ).not.toBeInTheDocument();
   });
 
   it('selecting a different candidate while nothing plays does not call stopPreview', async () => {

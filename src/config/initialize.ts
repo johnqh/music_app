@@ -50,7 +50,7 @@ if (typeof document !== 'undefined' && !document.getElementById('sudobility-desi
 class FetchNetworkClient implements NetworkClient {
   async request<T = unknown>(
     url: string,
-    options?: NetworkRequestOptions | null
+    options?: NetworkRequestOptions | null,
   ): Promise<NetworkResponse<T>> {
     const response = await fetch(url, {
       method: options?.method ?? 'GET',
@@ -82,15 +82,26 @@ class FetchNetworkClient implements NetworkClient {
     return this.request<T>(url, { ...options, method: 'GET' });
   }
 
-  post<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+  post<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: Omit<NetworkRequestOptions, 'method'> | null,
+  ) {
     return this.request<T>(url, { ...options, method: 'POST', body: JSON.stringify(body) });
   }
 
-  put<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+  put<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: Omit<NetworkRequestOptions, 'method'> | null,
+  ) {
     return this.request<T>(url, { ...options, method: 'PUT', body: JSON.stringify(body) });
   }
 
-  delete<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+  delete<T = unknown>(
+    url: string,
+    options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null,
+  ) {
     return this.request<T>(url, { ...options, method: 'DELETE' });
   }
 }
@@ -211,7 +222,12 @@ export function initializeApp(): AppServices {
   };
 
   const context: StoreContext = {
-    client: musicClient,
+    // Cast through unknown: bun currently installs a second copy of
+    // @sudobility/music_client nested under music_lib's node_modules, so
+    // TS sees two nominally-distinct MusicClient declarations (they differ
+    // only by the private `networkClient` brand). Same package, same shape
+    // — safe to bridge until the dep tree is deduped.
+    client: musicClient as unknown as StoreContext['client'],
     getToken: () => auth.getToken(),
     storage: prefsStorage,
   };

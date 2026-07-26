@@ -13,8 +13,7 @@ function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });
 }
 
-afterEach(async () => {
-});
+afterEach(async () => {});
 
 function fixtureFile(name = 'fixture.musicxml'): File {
   const xml = exportMusicXml(twinkleScore());
@@ -40,7 +39,14 @@ describe('MusicXmlImportDialog', () => {
   it('importing into a fresh store creates a new project via a single command', async () => {
     const store = makeStore();
     const onImportedNewProject = vi.fn();
-    render(<MusicXmlImportDialog open onClose={vi.fn()} store={store} onImportedNewProject={onImportedNewProject} />);
+    render(
+      <MusicXmlImportDialog
+        open
+        onClose={vi.fn()}
+        store={store}
+        onImportedNewProject={onImportedNewProject}
+      />,
+    );
     const user = userEvent.setup();
 
     await chooseFile(user, fixtureFile());
@@ -83,7 +89,13 @@ describe('MusicXmlImportDialog', () => {
     const onImportedNewProject = vi.fn();
 
     render(
-      <MusicXmlImportDialog open onClose={vi.fn()} store={store} forceNewProject onImportedNewProject={onImportedNewProject} />,
+      <MusicXmlImportDialog
+        open
+        onClose={vi.fn()}
+        store={store}
+        forceNewProject
+        onImportedNewProject={onImportedNewProject}
+      />,
     );
     const user = userEvent.setup();
 
@@ -119,7 +131,9 @@ describe('MusicXmlImportDialog', () => {
     // (nothing to close on failure), and MUI's Modal marks every other
     // top-level element -- including the Toasts Snackbar, mounted as a
     // sibling -- `aria-hidden` while it's open.
-    await waitFor(() => expect(screen.getByText('MusicXML import failed: disk full')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('MusicXML import failed: disk full')).toBeInTheDocument(),
+    );
     expect(store.getState().projectId).toBeNull();
   });
 });
@@ -132,7 +146,8 @@ describe('accessibility (spec §27)', () => {
 
     const checkAllControls = () => {
       const dialog = screen.getByRole('dialog');
-      for (const button of within(dialog).getAllByRole('button')) expect(button).toHaveAccessibleName();
+      for (const button of within(dialog).getAllByRole('button'))
+        expect(button).toHaveAccessibleName();
     };
 
     checkAllControls();

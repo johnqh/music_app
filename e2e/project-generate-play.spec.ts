@@ -3,7 +3,13 @@
  * composition from the mock provider, and play it back.
  */
 import { expect, test } from '@playwright/test';
-import { collectPageErrors, createNewProject, generateWholeScore, gotoDashboard, readPlaybackState } from './helpers';
+import {
+  collectPageErrors,
+  createNewProject,
+  generateWholeScore,
+  gotoDashboard,
+  readPlaybackState,
+} from './helpers';
 
 test.describe('project creation, generation, and playback', () => {
   test('creates a new project, generates a composition, and plays it', async ({ page }) => {
@@ -13,7 +19,9 @@ test.describe('project creation, generation, and playback', () => {
     await createNewProject(page, 'Gentle Piano Piece');
 
     // Editable title reflects the project's name.
-    await expect(page.getByRole('button', { name: 'Edit project title' })).toHaveText('Gentle Piano Piece');
+    await expect(page.getByRole('button', { name: 'Edit project title' })).toHaveText(
+      'Gentle Piano Piece',
+    );
 
     // Generate (spec §39 items 3-5): a valid score appears as readable notation.
     await generateWholeScore(page, {

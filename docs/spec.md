@@ -52,32 +52,70 @@ Base types (improve where appropriate):
 ```ts
 type UUID = string;
 type Fraction = { numerator: number; denominator: number };
-type PitchStep = "C" | "D" | "E" | "F" | "G" | "A" | "B";
+type PitchStep = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 type Accidental = -2 | -1 | 0 | 1 | 2;
 type Pitch = { step: PitchStep; accidental: Accidental; octave: number };
 type TimeSignature = { numerator: number; denominator: number };
-type KeySignature = { fifths: number; mode: "major" | "minor" };
+type KeySignature = { fifths: number; mode: 'major' | 'minor' };
 type TempoEvent = { id: UUID; tick: number; bpm: number };
 type NoteEvent = {
-  id: UUID; pitch: Pitch; startTick: number; durationTicks: number;
-  velocity: number; voiceId: UUID; trackId: UUID;
-  tieStart?: boolean; tieStop?: boolean;
-  articulation?: "staccato" | "accent" | "tenuto" | "marcato";
+  id: UUID;
+  pitch: Pitch;
+  startTick: number;
+  durationTicks: number;
+  velocity: number;
+  voiceId: UUID;
+  trackId: UUID;
+  tieStart?: boolean;
+  tieStop?: boolean;
+  articulation?: 'staccato' | 'accent' | 'tenuto' | 'marcato';
 };
-type RestEvent = { id: UUID; startTick: number; durationTicks: number; voiceId: UUID; trackId: UUID };
+type RestEvent = {
+  id: UUID;
+  startTick: number;
+  durationTicks: number;
+  voiceId: UUID;
+  trackId: UUID;
+};
 type MusicalEvent = NoteEvent | RestEvent;
 type Voice = { id: UUID; name: string; events: MusicalEvent[] };
 type Measure = {
-  id: UUID; index: number; startTick: number; durationTicks: number;
-  timeSignature: TimeSignature; keySignature: KeySignature; voices: Voice[];
+  id: UUID;
+  index: number;
+  startTick: number;
+  durationTicks: number;
+  timeSignature: TimeSignature;
+  keySignature: KeySignature;
+  voices: Voice[];
 };
 type Track = {
-  id: UUID; name: string; instrumentName: string; midiProgram: number; midiChannel: number;
-  clef: "treble" | "bass" | "alto" | "tenor" | "percussion";
-  volume: number; pan: number; muted: boolean; solo: boolean; measures: Measure[];
+  id: UUID;
+  name: string;
+  instrumentName: string;
+  midiProgram: number;
+  midiChannel: number;
+  clef: 'treble' | 'bass' | 'alto' | 'tenor' | 'percussion';
+  volume: number;
+  pan: number;
+  muted: boolean;
+  solo: boolean;
+  measures: Measure[];
 };
-type ScoreMetadata = { title: string; composer?: string; description?: string; createdAt: string; updatedAt: string };
-type Score = { id: UUID; version: number; ppq: number; metadata: ScoreMetadata; tempoMap: TempoEvent[]; tracks: Track[] };
+type ScoreMetadata = {
+  title: string;
+  composer?: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+type Score = {
+  id: UUID;
+  version: number;
+  ppq: number;
+  metadata: ScoreMetadata;
+  tempoMap: TempoEvent[];
+  tracks: Track[];
+};
 ```
 
 Utility functions required: fraction normalization; fraction addition/subtraction; tick conversion; measure length calculation; pitch-to-MIDI conversion; MIDI-to-pitch conversion; enharmonic spelling; note range validation; transposition; duration decomposition; splitting notes across measure boundaries; joining tied notes; determining beat boundaries; determining measure boundaries; locating a note at a score position; converting ticks to seconds; converting seconds to ticks.
@@ -153,7 +191,12 @@ Centralized selection system supporting: notes, rests, measures, tick ranges, tr
 
 ```ts
 type ScoreRange = { startTick: number; endTick: number; trackIds: string[] };
-type ScoreSelection = { eventIds: string[]; measureIds: string[]; trackIds: string[]; range?: ScoreRange };
+type ScoreSelection = {
+  eventIds: string[];
+  measureIds: string[];
+  trackIds: string[];
+  range?: ScoreRange;
+};
 ```
 
 Shared by: sheet editor, piano roll, inspector, regeneration panel, playback loop controls, copy/paste, delete, quantization.
@@ -191,7 +234,10 @@ interface MusicGenerationProvider {
   id: string;
   name: string;
   generateScore(request: GenerateScoreRequest, signal?: AbortSignal): Promise<GenerateScoreResult>;
-  regenerateRegion(request: RegenerateRegionRequest, signal?: AbortSignal): Promise<RegenerateRegionResult>;
+  regenerateRegion(
+    request: RegenerateRegionRequest,
+    signal?: AbortSignal,
+  ): Promise<RegenerateRegionResult>;
 }
 ```
 
@@ -199,23 +245,40 @@ Zod schemas for all requests and responses.
 
 ```ts
 type GenerateScoreRequest = {
-  prompt: string; title?: string; style?: string; mood?: string;
-  durationMeasures: number; tempo?: number;
-  timeSignature?: TimeSignature; keySignature?: KeySignature;
+  prompt: string;
+  title?: string;
+  style?: string;
+  mood?: string;
+  durationMeasures: number;
+  tempo?: number;
+  timeSignature?: TimeSignature;
+  keySignature?: KeySignature;
   tracks: Array<{
-    name: string; instrumentName: string; midiProgram: number; clef: Track["clef"];
+    name: string;
+    instrumentName: string;
+    midiProgram: number;
+    clef: Track['clef'];
     range?: { lowestMidi: number; highestMidi: number };
     maximumPolyphony?: number;
   }>;
-  complexity?: "simple" | "moderate" | "complex";
+  complexity?: 'simple' | 'moderate' | 'complex';
 };
 
 type RegenerateRegionRequest = {
-  scoreId: string; instruction: string; range: ScoreRange;
-  precedingContext: ScoreFragment; selectedFragment: ScoreFragment; followingContext: ScoreFragment;
+  scoreId: string;
+  instruction: string;
+  range: ScoreRange;
+  precedingContext: ScoreFragment;
+  selectedFragment: ScoreFragment;
+  followingContext: ScoreFragment;
   constraints: {
-    preserveMeasureCount: true; preserveTimeSignatures: true; preserveTempoEvents: true;
-    preserveBoundaryNotes?: boolean; preserveHarmony?: boolean; preserveRhythm?: boolean; preserveMelody?: boolean;
+    preserveMeasureCount: true;
+    preserveTimeSignatures: true;
+    preserveTempoEvents: true;
+    preserveBoundaryNotes?: boolean;
+    preserveHarmony?: boolean;
+    preserveRhythm?: boolean;
+    preserveMelody?: boolean;
     maximumPolyphony?: number;
     allowedPitchRangeByTrack?: Record<string, { lowestMidi: number; highestMidi: number }>;
   };
@@ -245,7 +308,9 @@ Command-based history:
 
 ```ts
 interface ScoreCommand {
-  id: string; label: string; timestamp: number;
+  id: string;
+  label: string;
+  timestamp: number;
   execute(score: Score): Score;
   undo(score: Score): Score;
 }
@@ -305,8 +370,12 @@ Score-validation engine validating: unique IDs; valid pitch ranges; positive dur
 
 ```ts
 type ValidationIssue = {
-  severity: "error" | "warning"; code: string; message: string;
-  objectId?: string; trackId?: string; measureId?: string;
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+  objectId?: string;
+  trackId?: string;
+  measureId?: string;
 };
 ```
 
@@ -325,7 +394,12 @@ Basic voice allocation: group simultaneous notes as chords; separate overlapping
 ```ts
 interface ScoreRenderer {
   render(score: Score, container: HTMLElement, options: RenderOptions): RenderResult;
-  update(score: Score, changes: ScoreChangeSet, container: HTMLElement, previous: RenderResult): RenderResult;
+  update(
+    score: Score,
+    changes: ScoreChangeSet,
+    container: HTMLElement,
+    previous: RenderResult,
+  ): RenderResult;
   dispose(): void;
 }
 ```
