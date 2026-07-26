@@ -1,19 +1,19 @@
 /**
- * The interactive sheet-music editor (spec §7): owns the `VexFlowScoreRenderer`
- * instance (kept in a React ref, per spec §37.2 — never stored in Zustand),
- * renders the score into a container `<div>`, wires click/shift-click and
- * drag-box selection, re-paints selection/playback/preview highlights
- * without a full re-render (`applyHighlights`), and scrolls the active
- * playback measure into view.
+ * The interactive sheet-music editor (spec §7 + the canvas-notation-renderer
+ * design): owns the `CanvasScoreRenderer` instance (kept in a React ref,
+ * per spec §37.2 — never stored in Zustand), draws the visible window of
+ * the score into a viewport-pinned canvas pair (notation + highlight
+ * overlay) over a full-height interaction/spacer div, wires
+ * click/shift-click, drag-box selection, click-to-seek and the playback
+ * caret, and scrolls the active playback measure into view.
  *
- * Click/shift-click hit-testing resolves the clicked DOM element's nearest
- * `id^="vf-"` ancestor (VexFlow's own id-prefixing convention — see
- * `adapters/vexflow/id-map.ts`) rather than bbox math: this works
- * correctly in jsdom (no real SVG layout) as well as real browsers, since
- * it only needs DOM element identity, not geometry. Drag-box selection
- * genuinely needs geometry (`idToBBox` intersection, `hit-test.ts`), which
- * jsdom cannot lay out — that logic is exercised via `hit-test.test.ts`'s
- * pure-math tests and this component wires it straightforwardly.
+ * There is no per-glyph DOM: ALL hit-testing is geometric, against the
+ * drawn window's `idToBBox`/`measureIdToBBox` maps (`hit-test.ts`), which
+ * works identically in jsdom (bboxes are computed from VexFlow's own
+ * layout math, not the DOM) and real browsers. Drawing is the
+ * virtualization: every scroll/resize frame re-renders exactly the
+ * visible systems (O(visible)), so there is no visible-set state to
+ * invalidate.
  *
  * Candidate preview (spec §13): while `generation-slice.previewFragment` is
  * set, the component draws `scoreWithCandidate(score, previewFragment)`
@@ -24,25 +24,17 @@
  * spliced-in candidate rather than the committed score, so a click there
  * must never be allowed to drive a selection/edit.
  *
- * Re-skinned onto Tailwind (T12 batch 6): the wrapping MUI `Box`es become
- * plain `div`s, and `renderTheme` (fed to VexFlow's SVG renderer, so it
- * needs real literal color strings, not CSS custom properties) no longer
- * reads MUI's `useTheme()` -- it now picks between two literal
+ * `renderTheme` (fed to VexFlow's canvas draw, so it needs real literal
+ * color strings, not CSS custom properties) picks between two literal
  * `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME` constants keyed off
  * `resolveColorScheme(themeMode)` (see that constant's doc comment for why
  * these particular values).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { applyHighlights, playbackController, VexFlowScoreRenderer } from '@sudobility/music_lib';
-import type { BBox, RenderResult, RenderTheme } from '@sudobility/music_lib';
-import {
-  boxForMeasureIndex,
-  computeLayout,
-  sameMeasureIndices,
-  visibleSystemMeasureIndices,
-} from '@sudobility/music_lib';
-import type { LayoutPlan } from '@sudobility/music_lib';
+import { CanvasScoreRenderer, paintHighlights, playbackController } from '@sudobility/music_lib';
+import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
+import { boxForMeasureIndex, caretPositionForTick, computeLayout, tickForPoint } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
@@ -53,9 +45,8 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
-import { boxFromPoints, eventIdsInBox } from '@/features/score-editor/hit-test';
+import { boxFromPoints, eventIdAtPoint, eventIdsInBox, measureIdAtPoint } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
-import { caretPositionForTick, tickForPoint } from '@/features/score-editor/playhead';
 import { selectMeasure } from '@/features/score-editor/editing';
 
 export type ScoreEditorViewProps = {
@@ -69,14 +60,6 @@ const CONTAINER_MIN_HEIGHT = 400;
 const DRAG_THRESHOLD = 3;
 /** Padding (px) kept between the scrolled-to measure and the viewport edge. */
 const SCROLL_MARGIN = 40;
-/**
- * Screen-pixel buffer (pre-zoom) added on both sides of the measured
- * scroll viewport before culling systems (spec §26/§29 virtualization):
- * lets one extra system's worth of content stay rendered just off-screen
- * so a small scroll doesn't flash blank staves before the next render
- * pass catches up.
- */
-const VIRTUALIZATION_OVERSCAN_PX = 400;
 
 /**
  * VexFlow render colors (spec §7), one set per resolved light/dark color
@@ -106,7 +89,7 @@ const DARK_RENDER_THEME: RenderTheme = {
   preview: '#ffa726',
 };
 
-/** Every event id (note or rest) referenced by a preview fragment's measures, for `applyHighlights`' `previewIds`. */
+/** Every event id (note or rest) referenced by a preview fragment's measures, for the highlight overlay's `previewIds`. */
 function previewEventIds(fragment: ScoreFragment | null): string[] {
   if (!fragment) return [];
   const ids: string[] = [];
@@ -145,26 +128,15 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
-  // Which measures to actually draw (spec §26 "Render only visible systems
-  // where practical"; §29 virtualization for long scores): `undefined`
-  // (render every measure) until the viewport has been measured at least
-  // once (or is unmeasurable, e.g. jsdom's `clientHeight` is always 0),
-  // then every measure belonging to a system whose logical-unit span
-  // intersects the scrolled viewport (plus overscan) — see
-  // `measureViewport`. Held directly as state (rather than a separate
-  // `{top, bottom}` viewport + derived memo) so `measureViewport` can bail
-  // out of the state update entirely via `sameMeasureIndices` when a scroll
-  // doesn't actually change the visible set, without a stale second value
-  // to keep in sync.
-  const [visibleMeasureIndices, setVisibleMeasureIndices] = useState<Set<number> | undefined>(
-    undefined,
-  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
-  const rendererRef = useRef<VexFlowScoreRenderer | null>(null);
-  if (!rendererRef.current) rendererRef.current = new VexFlowScoreRenderer();
-  const resultRef = useRef<RenderResult | null>(null);
+  /** The two viewport-sized drawing surfaces (spec: canvas-notation-renderer): notation glyphs, and the highlight/caret-free overlay painted by `paintHighlights`. */
+  const scoreCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rendererRef = useRef<CanvasScoreRenderer | null>(null);
+  if (!rendererRef.current) rendererRef.current = new CanvasScoreRenderer();
+  const resultRef = useRef<CanvasRenderResult | null>(null);
   const dragStateRef = useRef<{ start: Point; moved: boolean; additive: boolean } | null>(null);
   const suppressNextClickRef = useRef(false);
   const lastScrolledMeasureRef = useRef<string | null>(null);
@@ -203,7 +175,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
    * required, not optional: a fragment's event/measure ids are always
    * freshly generated (`mock-transforms.ts`'s `rng.id(...)`), so they exist
    * only inside *this* spliced score's `RenderResult` — rendering the
-   * committed score and merely asking `applyHighlights` to color
+   * committed score and merely asking the highlight overlay to color
    * `previewIds` (the old, broken behavior — Task 19 review C1) can never
    * find a matching element, since none of those ids appear anywhere in
    * the committed score to begin with. Memoized on exactly `score`/
@@ -245,59 +217,104 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     return caretPositionForTick(layoutPlan, displayScore, positionTick);
   }, [layoutPlan, displayScore, positionTick]);
 
-  /** Which measures of `plan` intersect the scrollable ancestor's current scroll position (grid-local/logical units, padded by `VIRTUALIZATION_OVERSCAN_PX`), or `undefined` if the container isn't measurable right now (`clientHeight <= 0` — jsdom, or not yet laid out). Pure w.r.t. its arguments; reads live DOM geometry off `scrollBoxRef`, not React state, so it's safe to call synchronously from either an effect or a callback without worrying about state staleness. */
-  const measureVisibleIndices = useCallback(
-    (plan: LayoutPlan): Set<number> | undefined => {
-      const el = scrollBoxRef.current;
-      if (!el || el.clientHeight <= 0) return undefined;
-      const overscan = VIRTUALIZATION_OVERSCAN_PX / zoom;
-      return visibleSystemMeasureIndices(
-        plan,
-        { top: el.scrollTop / zoom, bottom: (el.scrollTop + el.clientHeight) / zoom },
-        overscan,
-      );
-    },
-    [zoom],
-  );
+  /**
+   * Sizes both canvas backing stores to the scroll box's client size x the
+   * devicePixelRatio (CSS size via style), so glyphs stay crisp on retina
+   * displays at any zoom. Returns false when the box is unmeasurable
+   * (jsdom's clientWidth/Height are 0 -- the DEFAULT_WIDTH /
+   * CONTAINER_MIN_HEIGHT fallbacks keep tests deterministic).
+   */
+  const sizeCanvases = useCallback((): boolean => {
+    const box = scrollBoxRef.current;
+    if (!box) return false;
+    const dpr = window.devicePixelRatio || 1;
+    const w = box.clientWidth || DEFAULT_WIDTH;
+    const h = box.clientHeight || CONTAINER_MIN_HEIGHT;
+    for (const canvas of [scoreCanvasRef.current, overlayCanvasRef.current]) {
+      if (!canvas) return false;
+      const bw = Math.max(1, Math.floor(w * dpr));
+      const bh = Math.max(1, Math.floor(h * dpr));
+      if (canvas.width !== bw) canvas.width = bw;
+      if (canvas.height !== bh) canvas.height = bh;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+    }
+    return true;
+  }, []);
 
   /**
-   * Re-measures the viewport against `layoutPlan` and updates
-   * `visibleMeasureIndices` — but only when the freshly-computed
-   * visible-measure set actually differs (by value, via `sameMeasureIndices`)
-   * from the currently-applied one. Returning the *same* object reference
-   * from a state updater is a standard React bail-out: no re-render (and so
-   * no re-run of the draw effect below) happens for a scroll that stays
-   * within the same system(s) plus overscan (Task 17 review finding).
-   * Used by `handleScroll` (below) for scroll-driven updates; the *initial*
-   * measurement for a brand-new `layoutPlan` (mount, or a score/zoom/
-   * layoutMode/theme change) is instead handled inline by the draw effect
-   * itself — see `measuredForPlanRef`'s doc comment for why a separate
-   * "measure on mount" effect can't reliably avoid a wasted first draw.
+   * Repaints the highlight overlay (selection / playback active notes /
+   * preview) for the current drawn window. Cheap: strokes a handful of
+   * rects on the viewport-sized overlay canvas -- never touches the
+   * notation canvas, preserving the SVG era's "highlight changes don't
+   * re-render notation" property via layering instead of DOM styles.
    */
-  const measureViewport = useCallback(() => {
-    if (!layoutPlan) return;
-    const next = measureVisibleIndices(layoutPlan);
-    if (next === undefined) return;
-    setVisibleMeasureIndices((prev) => (prev && sameMeasureIndices(prev, next) ? prev : next));
-  }, [layoutPlan, measureVisibleIndices]);
+  const drawOverlay = useCallback(() => {
+    const box = scrollBoxRef.current;
+    const ctx = overlayCanvasRef.current?.getContext('2d');
+    const result = resultRef.current;
+    if (!box || !ctx || !result) return;
+    // Highlight state is read from the store at call time (not closed
+    // over): this keeps `drawOverlay`'s identity stable across selection/
+    // playback changes, so `draw` (which depends on it) doesn't get a new
+    // identity — and the notation canvas doesn't redraw — every time a
+    // highlight changes. The overlay effect below subscribes to the
+    // reactive values and re-invokes this on each change.
+    const state = store.getState();
+    paintHighlights(
+      ctx,
+      result,
+      {
+        selectedIds: state.selection.eventIds,
+        playingIds: state.activeNoteIds,
+        previewIds: previewEventIds(state.previewFragment),
+      },
+      { viewportTop: box.scrollTop, devicePixelRatio: window.devicePixelRatio || 1 },
+    );
+  }, [store]);
 
   /**
-   * `onScroll` handler: throttles `measureViewport` to at most once per
-   * animation frame (Task 17 review finding — every raw scroll event would
-   * otherwise trigger a measurement, and potentially a re-render, per
-   * event rather than per frame). Trailing-edge: multiple scroll events
-   * within one frame collapse into a single measurement using the
-   * position at the time the frame actually fires.
+   * Draws the visible window of `displayScore` into the score canvas, then
+   * repaints the overlay. Drawing IS the virtualization now: each call
+   * renders exactly the systems intersecting the live scroll position
+   * (`CanvasScoreRenderer` is O(visible) per call and caches the
+   * full-score layout, so a viewport change never recomputes layout) --
+   * there is no visible-set state machine to keep in sync; the scroll
+   * handler and ResizeObserver simply call this again. `displayScore`
+   * (committed score, or committed+candidate while previewing) is what's
+   * actually drawn, so the preview fragment's ids land in this result and
+   * `previewIds` has something to highlight (spec S13 -- see
+   * `displayScore`'s doc comment).
    */
+  const draw = useCallback(() => {
+    const box = scrollBoxRef.current;
+    const ctx = scoreCanvasRef.current?.getContext('2d');
+    if (!box || !ctx || !displayScore) return;
+    const viewport = {
+      top: box.scrollTop / zoom,
+      bottom: (box.scrollTop + (box.clientHeight || CONTAINER_MIN_HEIGHT)) / zoom,
+    };
+    resultRef.current = rendererRef.current!.render(displayScore, ctx, {
+      zoom,
+      layoutMode,
+      width: box.clientWidth || DEFAULT_WIDTH,
+      theme: renderTheme,
+      viewport,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    });
+    drawOverlay();
+  }, [displayScore, zoom, layoutMode, renderTheme, drawOverlay]);
+
+  /** `onScroll` handler: throttles `draw` to at most once per animation frame; trailing-edge, so a burst of scroll events collapses into one redraw at the frame's final position. */
   const handleScroll = useCallback(() => {
     if (scrollFrameScheduledRef.current) return;
     scrollFrameScheduledRef.current = true;
     scrollRafIdRef.current = requestAnimationFrame(() => {
       scrollFrameScheduledRef.current = false;
       scrollRafIdRef.current = null;
-      measureViewport();
+      draw();
     });
-  }, [measureViewport]);
+  }, [draw]);
 
   useEffect(() => {
     return () => {
@@ -309,123 +326,37 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     };
   }, []);
 
+  // Full draw on score/zoom/layoutMode/theme changes -- sizing first, so
+  // the first draw after mount (or a layout settle) has real backing stores.
+  useEffect(() => {
+    sizeCanvases();
+    draw();
+  }, [sizeCanvases, draw]);
+
   /**
-   * Container-size-driven re-measure (refresh-render fix): the initial
-   * per-plan measurement in the draw effect below is one-shot, taken at
-   * whatever height the scroll box happens to have in that commit. When a
-   * project loads asynchronously (browser refresh directly on
-   * /project/:id), that measurement can land against a not-yet-final (or,
-   * pre-h-screen, never-internally-scrolling) box and cull the sheet to
-   * the first fold — with no scroll event ever arriving to correct it.
-   * Observing the scroll box re-runs `measureViewport` whenever its size
-   * changes; the `sameMeasureIndices` bail-out inside keeps no-op resizes
-   * render-free. Guarded for jsdom, where ResizeObserver doesn't exist.
+   * Container-size-driven redraw (successor of the refresh-render fix):
+   * when the scroll box settles to its real size after an async project
+   * load -- or the window/panels resize -- re-size the backing stores and
+   * redraw the (now different) visible window. Guarded for jsdom, where
+   * ResizeObserver doesn't exist.
    */
   useEffect(() => {
     const el = scrollBoxRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measureViewport());
+    const observer = new ResizeObserver(() => {
+      sizeCanvases();
+      draw();
+    });
     observer.observe(el);
     return () => observer.disconnect();
-  }, [measureViewport]);
+  }, [sizeCanvases, draw]);
 
-  /**
-   * Which `layoutPlan` the draw effect below has already measured a fresh
-   * `visibleMeasureIndices` for (a plain ref, deliberately *not* mirrored
-   * into React state — see below). `null` initially (nothing measured
-   * yet).
-   *
-   * Why this exists: a naive separate "measure on mount/layout-change"
-   * `useLayoutEffect` calling `setVisibleMeasureIndices` does *not*
-   * actually prevent the draw effect's first invocation from running with
-   * the pre-measurement value — React runs a commit's own passive effects
-   * (`useEffect`, including the draw effect) using *that commit's*
-   * committed state, even when an earlier `useLayoutEffect` in the same
-   * commit already queued a state update; the update only takes effect on
-   * the *next* commit's effects, so the draw effect still fires once with
-   * `undefined` (i.e. "render everything") before a second, corrected
-   * commit's draw effect run catches up (confirmed empirically while
-   * building this fix — the two effects do not coalesce). The fix is for
-   * the draw effect to measure *itself*, inline, synchronously, whenever
-   * it notices `layoutPlan` changed since the last measurement — so its
-   * very first `render()` call for a new plan already uses a fresh,
-   * correct value instead of a stale or absent one.
-   *
-   * Critically, this inline measurement is tracked only via this ref, not
-   * by also calling `setVisibleMeasureIndices` (which — since
-   * `visibleMeasureIndices` is itself one of this effect's own
-   * dependencies — would schedule a second commit whose draw effect run
-   * (now satisfying `measuredForPlanRef.current === layoutPlan`) draws
-   * again with the *same* value: correct, but a second wasted `render()`
-   * call, the exact per-mount waste this fix exists to eliminate).
-   * `visibleMeasureIndices` state remains reserved for exactly one thing:
-   * `measureViewport`'s scroll-driven updates (Task 17 review finding 2)
-   * — a genuine visible-set change from scrolling should trigger a redraw
-   * via state changing, but the effect's own first-run-per-plan
-   * measurement should not roundtrip through state to render correctly.
-   */
-  const measuredForPlanRef = useRef<LayoutPlan | null>(null);
-
-  // Full render: only on score/zoom/layoutMode/theme/visible-window changes.
+  // Overlay-only repaint: selection/playback/preview changes never redraw
+  // notation (drawOverlay is store-stable; these subscribed values are the
+  // reactive triggers).
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !displayScore) return;
-
-    // See `measuredForPlanRef`'s doc comment: if `layoutPlan` changed since
-    // the last measurement (mount, or a score/zoom/layoutMode/theme
-    // change), `visibleMeasureIndices` state is either stale (measured
-    // against a *previous* plan) or was never set at all — measure fresh,
-    // right here (ref-only, not persisted to state), so this draw call
-    // already reflects a real viewport whenever one is measurable, without
-    // waiting for a second, corrective render.
-    let effectiveVisibleMeasureIndices = visibleMeasureIndices;
-    if (layoutPlan && measuredForPlanRef.current !== layoutPlan) {
-      effectiveVisibleMeasureIndices = measureVisibleIndices(layoutPlan);
-      measuredForPlanRef.current = layoutPlan;
-    }
-
-    const width = container.clientWidth || DEFAULT_WIDTH;
-    // `displayScore` (committed score, or committed+candidate while
-    // previewing) is what's actually drawn, so the preview fragment's ids
-    // land in this `RenderResult` and `previewIds` below has something to
-    // highlight (spec §13 — see `displayScore`'s doc comment).
-    const result = rendererRef.current!.render(displayScore, container, {
-      zoom,
-      layoutMode,
-      width,
-      theme: renderTheme,
-      visibleMeasureIndices: effectiveVisibleMeasureIndices,
-    });
-    resultRef.current = result;
-    applyHighlights(result, {
-      selectedIds: selection.eventIds,
-      playingIds: activeNoteIds,
-      previewIds,
-    });
-    // selection/activeNoteIds/previewIds are intentionally excluded here —
-    // the effect below re-paints highlights on their own change without
-    // triggering this full re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    displayScore,
-    zoom,
-    layoutMode,
-    renderTheme,
-    layoutPlan,
-    measureVisibleIndices,
-    visibleMeasureIndices,
-  ]);
-
-  // Highlight-only repaint: selection/playback/preview changes never re-render.
-  useEffect(() => {
-    const result = resultRef.current;
-    if (!result) return;
-    applyHighlights(result, {
-      selectedIds: selection.eventIds,
-      playingIds: activeNoteIds,
-      previewIds,
-    });
-  }, [selection, activeNoteIds, previewIds]);
+    drawOverlay();
+  }, [drawOverlay, selection, activeNoteIds, previewIds]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
   //
@@ -448,26 +379,26 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       return;
     }
 
-    const container = containerRef.current;
-    if (!container || !score) return;
+    const scrollBox = scrollBoxRef.current;
+    if (!scrollBox || !score) return;
     const measureId = currentMeasureId(score, positionTick);
     if (!measureId || measureId === lastScrolledMeasureRef.current) return;
 
     // Computed straight from the memoized `layoutPlan` (not
     // `resultRef.current.measureIdToBBox`) so this still finds the target
-    // measure's position even when virtualization (spec §26/§29) hasn't
-    // rendered it yet — e.g. jumping to a measure several systems below the
-    // current scroll position. Scrolling there will itself fire `onScroll`
-    // (`handleScroll` -> `measureViewport`), which brings that measure into
-    // the rendered/culled window on the next pass.
+    // measure's position even when it lies outside the currently-drawn
+    // window — e.g. jumping to a measure several systems below the current
+    // scroll position. Scrolling there fires `onScroll` -> `draw()`, which
+    // renders that measure's window. The scroll target is the scroll box
+    // (the element that actually owns the scrollbar).
     const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
     if (measureIndex === -1 || !layoutPlan) return;
     const bbox = boxForMeasureIndex(layoutPlan, 0, measureIndex);
     if (!bbox) return;
 
     lastScrolledMeasureRef.current = measureId;
-    if (typeof container.scrollTo === 'function') {
-      container.scrollTo({
+    if (typeof scrollBox.scrollTo === 'function') {
+      scrollBox.scrollTo({
         left: Math.max(0, bbox.x * zoom - SCROLL_MARGIN),
         top: Math.max(0, bbox.y * zoom - SCROLL_MARGIN),
         behavior: prefersReducedMotion() ? 'auto' : 'smooth',
@@ -522,22 +453,28 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       // generation panel, not by clicking the notation.
       if (previewFragment) return;
 
-      const target = event.target as Element;
-      const group = target.closest('[id^="vf-"]');
+      // Geometric hit-testing (canvas has no per-glyph DOM): resolve the
+      // click point in content coordinates against the drawn window's bbox
+      // maps — note first (topmost wins), then measure stave, then seek.
+      const container = containerRef.current;
       const result = resultRef.current;
-      const rawId = group?.id ? group.id.slice('vf-'.length) : null;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const point: Point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
 
-      if (rawId && result?.idToElement.has(rawId)) {
+      const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
+      if (noteId) {
         // A note/rest click is an editing gesture: select only, don't yank
         // the playhead out from under an edit in progress.
         const state = store.getState();
-        if (event.shiftKey) state.toggleEvent(rawId);
-        else state.setSelection({ eventIds: [rawId], measureIds: [], trackIds: [] });
+        if (event.shiftKey) state.toggleEvent(noteId);
+        else state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
         return;
       }
 
-      if (rawId && result?.measureIdToBBox.has(rawId)) {
-        selectMeasure(store, rawId);
+      const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
+      if (measureId) {
+        selectMeasure(store, measureId);
       }
       // Any other track click — stave background, barlines, or empty canvas
       // inside a system — moves the playback position there.
@@ -559,8 +496,10 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
-      const target = event.target as Element;
-      if (target.closest('[id^="vf-"]')) return; // a direct note/measure click; handleClick owns it
+      // Every left press starts drag-tracking (no per-glyph DOM to exclude
+      // any more): a press that never crosses DRAG_THRESHOLD stays a plain
+      // click (handleClick runs; `suppressNextClickRef` is only set for
+      // real drags), so note/measure clicks behave exactly as before.
       const point = pointFromEvent(event);
       if (!point) return;
       dragStateRef.current = { start: point, moved: false, additive: event.shiftKey };
@@ -627,6 +566,19 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         className="relative flex-1 overflow-auto"
         style={{ minHeight: CONTAINER_MIN_HEIGHT }}
       >
+        {/* Viewport-pinned drawing surfaces. The zero-height sticky wrapper
+            must come BEFORE the full-height interaction div: a sticky
+            element placed after it would take its static position below the
+            content and never pin to the top. */}
+        <div className="sticky top-0 z-0 h-0 overflow-visible" aria-hidden="true">
+          <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
+          <canvas ref={overlayCanvasRef} data-testid="overlay-canvas" className="absolute left-0 top-0" />
+        </div>
+        {/* Interaction surface doubling as the scroll spacer: spans the full
+            content height (so the scroll box gets its scrollbar), sits above
+            the pinned canvases in paint order, is transparent, and receives
+            all pointer events in document-content coordinates — exactly the
+            role the SVG container played. Keeps its testid + aria contract. */}
         <div
           ref={containerRef}
           data-testid="score-editor-canvas"
@@ -637,7 +589,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          className="h-full w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          className="relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          style={{ height: Math.max((layoutPlan?.totalHeight ?? 0) * zoom, CONTAINER_MIN_HEIGHT) }}
         />
         {dragBox && (
           <div

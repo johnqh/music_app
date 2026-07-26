@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { stressScore, twinkleScore } from '@sudobility/music_lib';
-import { computeLayout } from '@sudobility/music_lib';
+import { computeLayout, caretPositionForTick, tickForPoint } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { VexFlowScoreRenderer } from '@sudobility/music_lib';
+import type { BBox, RenderTheme } from '@sudobility/music_lib';
+import { CanvasScoreRenderer, createMock2DContext } from '@sudobility/music_lib';
 import { extractFragment, playbackController } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
-import { tickForPoint } from '@/features/score-editor/playhead';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
@@ -24,28 +25,84 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
+const THEME: RenderTheme = {
+  foreground: 'rgba(0, 0, 0, 0.87)',
+  selection: '#1565c0',
+  playback: '#2e7d32',
+  preview: '#ed6c02',
+};
+
 function makeStore(): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twinkleScore());
   return store;
 }
 
-afterEach(async () => {
-  vi.restoreAllMocks();
-});
+/**
+ * A reference render with an independent CanvasScoreRenderer against the
+ * exact inputs the component uses in jsdom (zoom 1, page mode, the
+ * DEFAULT_WIDTH 900 fallback since clientWidth is 0, and a tall viewport
+ * so everything draws) — giving tests the same bbox maps the component
+ * holds in its private resultRef. jsdom reports every DOM rect as 0, so a
+ * click's clientX/clientY pass through as content coordinates directly.
+ */
+function referenceRender(score: Score) {
+  return new CanvasScoreRenderer().render(score, createMock2DContext(), {
+    zoom: 1,
+    layoutMode: 'page',
+    width: 900,
+    theme: THEME,
+    viewport: { top: 0, bottom: 1_000_000 },
+  });
+}
 
-function noteGroup(container: HTMLElement, noteId: string): Element {
-  const el = container.querySelector(`[id="vf-${noteId}"]`);
-  if (!el) throw new Error(`No rendered element for note ${noteId}`);
-  return el;
+function center(box: BBox): { clientX: number; clientY: number } {
+  return { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+}
+
+function interactionSurface(): HTMLElement {
+  return screen.getByTestId('score-editor-canvas');
+}
+
+/** Clicks the interaction surface at the center of `noteId`'s drawn bbox. */
+function clickNote(score: Score, noteId: string, init: MouseEventInit = {}): void {
+  const box = referenceRender(score).idToBBox.get(noteId);
+  if (!box) throw new Error(`no bbox for note ${noteId}`);
+  fireEvent.click(interactionSurface(), { ...center(box), ...init });
+}
+
+/** A point inside `measureId`'s stave box that is NOT inside any note bbox (so the click resolves to the measure, not a note). */
+function measureFreePoint(score: Score, measureId: string): { clientX: number; clientY: number } {
+  const result = referenceRender(score);
+  const box = result.measureIdToBBox.get(measureId);
+  if (!box) throw new Error(`no bbox for measure ${measureId}`);
+  for (let dx = 1; dx < box.width; dx += 3) {
+    for (let dy = 1; dy < box.height; dy += 3) {
+      const p = { x: box.x + dx, y: box.y + dy };
+      let insideNote = false;
+      for (const noteBox of result.idToBBox.values()) {
+        if (
+          p.x >= noteBox.x &&
+          p.x <= noteBox.x + noteBox.width &&
+          p.y >= noteBox.y &&
+          p.y <= noteBox.y + noteBox.height
+        ) {
+          insideNote = true;
+          break;
+        }
+      }
+      if (!insideNote) return { clientX: p.x, clientY: p.y };
+    }
+  }
+  throw new Error(`no note-free point found in measure ${measureId}`);
 }
 
 /**
  * A regeneration-candidate-shaped `ScoreFragment` for the first measure of
  * `score`'s first track, with every id (measure/voice/event) rewritten to a
- * fresh value — mirroring what `mock-transforms.ts`'s seeded `rng.id(...)`
- * actually does to a real candidate (C1 regression coverage: a candidate's
- * ids never coincide with the committed score's).
+ * fresh value — mirroring what a real candidate's freshly-generated ids do
+ * (C1 regression coverage: a candidate's ids never coincide with the
+ * committed score's).
  */
 function fakePreviewFragment(score: Score): ScoreFragment {
   const track = score.tracks[0];
@@ -73,75 +130,85 @@ function fakePreviewFragment(score: Score): ScoreFragment {
   };
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+beforeEach(() => {
+  vi.mocked(playbackController.seek).mockClear();
+});
+
 describe('ScoreEditorView', () => {
   it('renders without a score loaded (empty state)', () => {
     const store = createAppStore({ context: testStoreContext() });
     expect(() => render(<ScoreEditorView store={store} />)).not.toThrow();
   });
 
-  it('renders a clickable SVG group for every note in the score', () => {
+  it('draws the score through CanvasScoreRenderer and records a bbox per note', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
-    const notes = allNotes(store.getState().score!);
-    for (const note of notes) {
-      expect(container.querySelector(`[id="vf-${note.id}"]`)).not.toBeNull();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    expect(renderSpy).toHaveBeenCalled();
+    const result = renderSpy.mock.results.at(-1)!.value;
+    for (const note of allNotes(store.getState().score!)) {
+      expect(result.idToBBox.get(note.id)).toBeDefined();
     }
   });
 
   it('clicking a note selects it', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first] = allNotes(store.getState().score!);
 
-    fireEvent.click(noteGroup(container, first.id));
+    clickNote(store.getState().score!, first.id);
 
     expect(store.getState().selection.eventIds).toEqual([first.id]);
   });
 
   it('shift-clicking a second note adds it to the selection', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first, second] = allNotes(store.getState().score!);
 
-    fireEvent.click(noteGroup(container, first.id));
-    fireEvent.click(noteGroup(container, second.id), { shiftKey: true });
+    clickNote(store.getState().score!, first.id);
+    clickNote(store.getState().score!, second.id, { shiftKey: true });
 
     expect(store.getState().selection.eventIds).toEqual([first.id, second.id]);
   });
 
   it('shift-clicking an already-selected note removes it (toggle)', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first, second] = allNotes(store.getState().score!);
 
-    fireEvent.click(noteGroup(container, first.id));
-    fireEvent.click(noteGroup(container, second.id), { shiftKey: true });
-    fireEvent.click(noteGroup(container, second.id), { shiftKey: true });
+    clickNote(store.getState().score!, first.id);
+    clickNote(store.getState().score!, second.id, { shiftKey: true });
+    clickNote(store.getState().score!, second.id, { shiftKey: true });
 
     expect(store.getState().selection.eventIds).toEqual([first.id]);
   });
 
-  it('clicking a measure stave selects that measure', () => {
+  it('clicking a note-free spot on a stave selects that measure (and seeks)', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
-    const measureId = store.getState().score!.tracks[0].measures[0].id;
-    const measureGroup = container.querySelector(`[id="vf-${measureId}"]`);
-    expect(measureGroup).not.toBeNull();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const measureId = score.tracks[0].measures[0].id;
 
-    fireEvent.click(measureGroup!);
+    fireEvent.click(interactionSurface(), measureFreePoint(score, measureId));
 
     expect(store.getState().selection).toEqual({
       eventIds: [],
       measureIds: [measureId],
       trackIds: [],
     });
+    expect(playbackController.seek).toHaveBeenCalledTimes(1);
   });
 
   it('Escape clears the selection (composed with the toolbar and shortcuts hook)', async () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first] = allNotes(store.getState().score!);
-    fireEvent.click(noteGroup(container, first.id));
+    clickNote(store.getState().score!, first.id);
     expect(store.getState().selection.eventIds).toEqual([first.id]);
 
     await userEvent.setup().keyboard('{Escape}');
@@ -151,9 +218,9 @@ describe('ScoreEditorView', () => {
 
   it('Delete removes the selected note end-to-end', async () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first] = allNotes(store.getState().score!);
-    fireEvent.click(noteGroup(container, first.id));
+    clickNote(store.getState().score!, first.id);
 
     await userEvent.setup().keyboard('{Delete}');
 
@@ -162,9 +229,9 @@ describe('ScoreEditorView', () => {
 
   it('ArrowUp transposes the selected note up a semitone end-to-end', async () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first] = allNotes(store.getState().score!) as NoteEvent[];
-    fireEvent.click(noteGroup(container, first.id));
+    clickNote(store.getState().score!, first.id);
 
     await userEvent.setup().keyboard('{ArrowUp}');
 
@@ -174,9 +241,9 @@ describe('ScoreEditorView', () => {
 
   it('the toolbar duration control dispatches a duration change for the selected note', async () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
+    render(<ScoreEditorView store={store} />);
     const [first] = allNotes(store.getState().score!);
-    fireEvent.click(noteGroup(container, first.id));
+    clickNote(store.getState().score!, first.id);
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Eighth note' }));
 
@@ -184,397 +251,204 @@ describe('ScoreEditorView', () => {
     expect(updated?.durationTicks).toBe(store.getState().score!.ppq / 2);
   });
 
-  it('re-renders on score change but only re-paints highlights (not a full re-render) on selection change', () => {
+  it('redraws notation on score change, but only repaints the overlay on selection change', () => {
     const store = makeStore();
-    const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
-    const callsAfterMount = renderSpy.mock.calls.length;
-    expect(callsAfterMount).toBeGreaterThan(0);
+    const rendersAfterMount = renderSpy.mock.calls.length;
 
     const [first] = allNotes(store.getState().score!);
-    store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    });
+    expect(renderSpy.mock.calls.length).toBe(rendersAfterMount); // overlay-only
 
-    expect(renderSpy.mock.calls.length).toBe(callsAfterMount);
+    act(() => {
+      store.getState().setScore(twinkleScore());
+    });
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(rendersAfterMount); // notation redraw
+  });
+});
+
+describe('ScoreEditorView: candidate preview (spec §13)', () => {
+  it('draws the spliced preview score, so the fragment ids have bboxes', () => {
+    const store = makeStore();
+    const fragment = fakePreviewFragment(store.getState().score!);
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+
+    act(() => {
+      store.getState().setPreviewFragment(fragment);
+    });
+
+    const result = renderSpy.mock.results.at(-1)!.value;
+    const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
+    expect(result.idToBBox.get(previewEventId)).toBeDefined();
   });
 
-  describe('candidate preview rendering (spec §13 — Task 19 review finding C1)', () => {
-    it('draws the spliced-in candidate fragment and highlights it with the preview theme; A/B toggle back to null re-renders the committed score', () => {
-      const store = makeStore();
-      const score = store.getState().score!;
-      const fragment = fakePreviewFragment(score);
-      const originalEventId = score.tracks[0].measures[0].voices[0].events[0].id;
-      const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
-
-      const { container } = render(<ScoreEditorView store={store} />);
-      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).not.toBeNull();
-
-      act(() => store.getState().setPreviewFragment(fragment));
-
-      // The renderer received a score containing the fragment's own ids...
-      const previewEl = container.querySelector(`[id="vf-${previewEventId}"]`);
-      expect(previewEl).not.toBeNull();
-      // ...and applyHighlights painted that very element with the preview
-      // class (i.e. previewIds and the rendered RenderResult's ids
-      // actually intersect — the bug this regression covers is that they
-      // never did).
-      expect(previewEl!.classList.contains('preview')).toBe(true);
-      // The measure's original (committed) content is no longer drawn
-      // while previewing -- it was spliced out, not just overlaid.
-      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).toBeNull();
-
-      // A/B toggle back to "original" (spec §13): clearing the overlay
-      // re-renders the committed score.
-      act(() => store.getState().setPreviewFragment(null));
-      expect(container.querySelector(`[id="vf-${originalEventId}"]`)).not.toBeNull();
-      expect(container.querySelector(`[id="vf-${previewEventId}"]`)).toBeNull();
+  it('ignores canvas clicks entirely while previewing (no selection, no seek)', () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    const fragment = fakePreviewFragment(score);
+    render(<ScoreEditorView store={store} />);
+    act(() => {
+      store.getState().setPreviewFragment(fragment);
     });
 
-    it('ignores a click on a previewed (candidate-only) note instead of dispatching a selection change', () => {
-      const store = makeStore();
-      const score = store.getState().score!;
-      const fragment = fakePreviewFragment(score);
-      const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
+    const [first] = allNotes(score);
+    clickNote(score, first.id);
+    fireEvent.click(interactionSurface(), { clientX: 150, clientY: 60 });
 
-      const { container } = render(<ScoreEditorView store={store} />);
-      act(() => store.getState().setPreviewFragment(fragment));
+    expect(store.getState().selection.eventIds).toEqual([]);
+    expect(playbackController.seek).not.toHaveBeenCalled();
+  });
+});
 
-      fireEvent.click(noteGroup(container, previewEventId));
-
-      expect(store.getState().selection).toEqual({ eventIds: [], measureIds: [], trackIds: [] });
+describe('ScoreEditorView: windowed drawing (virtualization)', () => {
+  function mockScrollGeometry(scrollBox: HTMLElement, clientHeight: number, scrollTop: number): void {
+    Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
+    Object.defineProperty(scrollBox, 'scrollTop', {
+      value: scrollTop,
+      configurable: true,
+      writable: true,
     });
+  }
+
+  // The scroll handler throttles `draw` via requestAnimationFrame; stubbing
+  // rAF to run synchronously keeps these tests deterministic while still
+  // exercising the real scroll -> draw code path.
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
   });
 
-  describe('drag-box selection', () => {
-    // jsdom has no real layout engine, so `RenderResult.idToBBox` from a
-    // genuine VexFlow render is all-zero (see hit-test.test.ts's doc
-    // comment) — coordinates here come from a mocked `render()` returning
-    // synthetic, non-zero bboxes, so the drag-box math itself
-    // (`eventIdsInBox`, exercised for real by `handlePointerUp`) is under
-    // test end-to-end rather than only at the pure-function level.
-    function fakeTheme() {
-      return { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' };
-    }
-
-    it('selects every note whose bbox intersects the dragged box', () => {
-      const store = makeStore();
-      const divA = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'g',
-      ) as unknown as SVGElement;
-      const divB = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'g',
-      ) as unknown as SVGElement;
-      const fakeResult = {
-        idToElement: new Map([
-          ['a', divA],
-          ['b', divB],
-        ]),
-        idToBBox: new Map([
-          ['a', { x: 0, y: 0, width: 10, height: 10 }],
-          ['b', { x: 50, y: 0, width: 10, height: 10 }],
-        ]),
-        measureIdToBBox: new Map(),
-        height: 100,
-        theme: fakeTheme(),
-      };
-      vi.spyOn(VexFlowScoreRenderer.prototype, 'render').mockReturnValue(fakeResult);
-
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const canvas = getByTestId('score-editor-canvas');
-
-      fireEvent.pointerDown(canvas, { clientX: 0, clientY: 0, button: 0, pointerId: 1 });
-      fireEvent.pointerMove(canvas, { clientX: 60, clientY: 10, pointerId: 1 });
-      fireEvent.pointerUp(canvas, { clientX: 60, clientY: 10, pointerId: 1 });
-
-      expect(new Set(store.getState().selection.eventIds)).toEqual(new Set(['a', 'b']));
-    });
-
-    it('a small pointerdown/up without movement does not clear or replace an existing selection', () => {
-      const store = makeStore();
-      const divA = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'g',
-      ) as unknown as SVGElement;
-      const fakeResult = {
-        idToElement: new Map([['a', divA]]),
-        idToBBox: new Map([['a', { x: 0, y: 0, width: 10, height: 10 }]]),
-        measureIdToBBox: new Map(),
-        height: 100,
-        theme: fakeTheme(),
-      };
-      vi.spyOn(VexFlowScoreRenderer.prototype, 'render').mockReturnValue(fakeResult);
-      const [note] = allNotes(store.getState().score!);
-      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
-
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const canvas = getByTestId('score-editor-canvas');
-
-      fireEvent.pointerDown(canvas, { clientX: 200, clientY: 200, button: 0, pointerId: 2 });
-      fireEvent.pointerUp(canvas, { clientX: 200, clientY: 200, pointerId: 2 });
-
-      expect(store.getState().selection.eventIds).toEqual([note.id]);
-    });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  describe('virtualization (spec §26/§29): culls systems outside the scroll viewport', () => {
-    // jsdom never lays anything out (`clientHeight` is always 0), which
-    // ScoreEditorView treats as "viewport not measurable yet" and renders
-    // everything (see `measureViewport`'s doc comment) - exactly what every
-    // other test in this file relies on. These tests instead stub
-    // `clientHeight`/`scrollTop` on the scrollable ancestor directly so a
-    // real (non-zero) viewport measurement flows through `visibleSystemMeasureIndices`.
-    function mockScrollGeometry(
-      scrollBox: HTMLElement,
-      clientHeight: number,
-      scrollTop: number,
-    ): void {
-      Object.defineProperty(scrollBox, 'clientHeight', { value: clientHeight, configurable: true });
-      Object.defineProperty(scrollBox, 'scrollTop', {
-        value: scrollTop,
-        configurable: true,
-        writable: true,
-      });
-    }
+  const BIG_MEASURE_COUNT = 80;
 
-    // `handleScroll` throttles `measureViewport` via `requestAnimationFrame`
-    // (Task 17 review finding), so `fireEvent.scroll` alone wouldn't
-    // synchronously apply a new measurement in these tests. Stubbing rAF to
-    // invoke its callback immediately keeps the tests synchronous while
-    // still exercising the real scroll -> measure -> cull code path (only
-    // the "wait for the next frame" part is short-circuited).
-    beforeEach(() => {
-      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-        cb(0);
-        return 0;
-      });
-      vi.stubGlobal('cancelAnimationFrame', () => {});
-    });
+  function makeBigStore(): EditorStoreApi {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(stressScore(1, BIG_MEASURE_COUNT)); // wraps into many systems at the default render width
+    return store;
+  }
 
-    afterEach(() => {
-      vi.unstubAllGlobals();
-    });
+  it('draws only the systems intersecting a short viewport', () => {
+    const store = makeBigStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    const clientHeightSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockReturnValue(200);
 
-    const BIG_MEASURE_COUNT = 80;
+    render(<ScoreEditorView store={store} />);
 
-    function makeBigStore(): EditorStoreApi {
-      const store = createAppStore({ context: testStoreContext() });
-      store.getState().setScore(stressScore(1, BIG_MEASURE_COUNT)); // wraps into many systems at the default render width
-      return store;
-    }
+    const result = renderSpy.mock.results.at(-1)!.value;
+    expect(result.drawnMeasureIndices.size).toBeGreaterThan(0);
+    expect(result.drawnMeasureIndices.size).toBeLessThan(BIG_MEASURE_COUNT);
 
-    it('renders every measure before the viewport has been measured', () => {
-      const store = makeBigStore();
-      const { container } = render(<ScoreEditorView store={store} />);
-      const totalMeasures = store.getState().score!.tracks[0].measures.length;
-      expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
-    }, 15_000);
+    clientHeightSpy.mockRestore();
+  }, 15_000);
 
-    it('culls the very first draw when the viewport is already measurable at mount (Task 17 review finding: no full-then-corrected double render)', () => {
-      const store = makeBigStore();
-      const totalMeasures = store.getState().score!.tracks[0].measures.length;
+  it('redraws the new window when the box scrolls (drawing IS the culling)', () => {
+    const store = makeBigStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const scrollBox = getByTestId('score-editor-scroll');
 
-      // Patches `clientHeight` on every element (a prototype getter, not
-      // per-node) *before* mount, so the draw effect's own inline
-      // fresh-measurement fallback (see `measuredForPlanRef`'s doc
-      // comment) already sees a real, nonzero value on its very first
-      // run, simulating a real browser's first layout pass rather than
-      // jsdom's always-zero one.
-      const clientHeightSpy = vi
-        .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
-        .mockReturnValue(200);
-      const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
+    mockScrollGeometry(scrollBox, 200, 0);
+    fireEvent.scroll(scrollBox);
+    const topResult = renderSpy.mock.results.at(-1)!.value;
 
-      const { container } = render(<ScoreEditorView store={store} />);
+    mockScrollGeometry(scrollBox, 200, 5_000);
+    fireEvent.scroll(scrollBox);
+    const bottomResult = renderSpy.mock.results.at(-1)!.value;
 
-      // Exactly one render() call for the initial mount - not a full
-      // render immediately followed by a corrective culled one.
-      expect(renderSpy).toHaveBeenCalledTimes(1);
-      // ...and that one call already has a real `visibleMeasureIndices`
-      // (not `undefined`, i.e. not "render everything").
-      const firstCallOptions = renderSpy.mock.calls[0][2];
-      expect(firstCallOptions.visibleMeasureIndices).not.toBeUndefined();
-      expect(container.querySelectorAll('.vf-stave').length).toBeLessThan(totalMeasures);
+    const topIndices = [...topResult.drawnMeasureIndices];
+    const bottomIndices = [...bottomResult.drawnMeasureIndices];
+    expect(Math.min(...bottomIndices)).toBeGreaterThan(Math.max(...topIndices) - topIndices.length);
+    expect(bottomIndices).not.toEqual(topIndices);
 
-      clientHeightSpy.mockRestore();
-    }, 15_000);
+    // The renderer receives the live scrolled viewport, in logical units.
+    const lastOptions = renderSpy.mock.calls.at(-1)![2];
+    expect(lastOptions.viewport.top).toBeCloseTo(5_000, 5);
+  }, 15_000);
 
-    it('re-measures and culls when the scroll box is resized without any scroll (refresh-render fix)', () => {
-      // Captures the ResizeObserver callback the component registers on the
-      // scroll box, so the test can fire it manually — jsdom has no real
-      // ResizeObserver, and the refresh bug is exactly the case where the
-      // box's size changes (settles) with no scroll event ever arriving.
-      let resizeCallback: (() => void) | null = null;
-      class MockResizeObserver {
-        constructor(cb: ResizeObserverCallback) {
-          resizeCallback = () => cb([], this as unknown as ResizeObserver);
-        }
-        observe(): void {}
-        unobserve(): void {}
-        disconnect(): void {}
+  it('re-sizes and redraws when the scroll box is resized without any scroll (refresh-render fix)', () => {
+    let resizeCallback: (() => void) | null = null;
+    class MockResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        resizeCallback = () => cb([], this as unknown as ResizeObserver);
       }
-      vi.stubGlobal('ResizeObserver', MockResizeObserver);
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
-      const store = makeBigStore();
-      const totalMeasures = store.getState().score!.tracks[0].measures.length;
-      const { container, getByTestId } = render(<ScoreEditorView store={store} />);
+    const store = makeBigStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const rendersBefore = renderSpy.mock.calls.length;
 
-      // Unmeasurable at mount (jsdom clientHeight 0) => everything drawn.
-      expect(container.querySelectorAll('.vf-stave').length).toBe(totalMeasures);
+    mockScrollGeometry(getByTestId('score-editor-scroll'), 200, 0);
+    act(() => resizeCallback?.());
 
-      // The box settles to a real 200px viewport; the observer fires.
-      mockScrollGeometry(getByTestId('score-editor-scroll'), 200, 0);
-      act(() => resizeCallback?.());
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(rendersBefore);
+    const result = renderSpy.mock.results.at(-1)!.value;
+    expect(result.drawnMeasureIndices.size).toBeLessThan(BIG_MEASURE_COUNT);
+  }, 15_000);
+});
 
-      const culledCount = container.querySelectorAll('.vf-stave').length;
-      expect(culledCount).toBeGreaterThan(0);
-      expect(culledCount).toBeLessThan(totalMeasures);
-    }, 15_000);
+describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
+  function mockScrollTo(el: HTMLElement) {
+    const spy = vi.fn();
+    Object.defineProperty(el, 'scrollTo', { value: spy, configurable: true, writable: true });
+    return spy;
+  }
 
-    it('renders only measures near the top of a short viewport, and flips to the bottom set on scroll', () => {
-      const store = makeBigStore();
-      const score = store.getState().score!;
-      const notes = allNotes(score);
-      const firstNoteId = notes[0].id;
-      const lastNoteId = notes[notes.length - 1].id;
-      const totalMeasures = score.tracks[0].measures.length;
+  it('scrolls the scroll box to the active measure when playing', () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
 
-      // The real total logical-unit height, from the same layout the
-      // component itself computes (page mode, DEFAULT_WIDTH's 900px
-      // fallback since jsdom reports clientWidth 0) — used to pick a
-      // scrollTop genuinely near the bottom of *this* score, rather than
-      // an arbitrary huge number that could overshoot every system.
-      const plan = computeLayout(score, {
-        zoom: 1,
-        layoutMode: 'page',
-        width: 900,
-        theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
-      });
+    act(() => store.getState().setPlaybackState('playing'));
 
-      const { container, getByTestId } = render(<ScoreEditorView store={store} />);
-      const scrollBox = getByTestId('score-editor-scroll');
-
-      mockScrollGeometry(scrollBox, 200, 0);
-      fireEvent.scroll(scrollBox);
-
-      const staveCountNearTop = container.querySelectorAll('.vf-stave').length;
-      expect(staveCountNearTop).toBeGreaterThan(0);
-      expect(staveCountNearTop).toBeLessThan(totalMeasures);
-      expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).not.toBeNull();
-      expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).toBeNull();
-
-      mockScrollGeometry(scrollBox, 200, Math.max(0, plan.totalHeight - 200));
-      fireEvent.scroll(scrollBox);
-
-      expect(container.querySelector(`[id="vf-${lastNoteId}"]`)).not.toBeNull();
-      expect(container.querySelector(`[id="vf-${firstNoteId}"]`)).toBeNull();
-    }, 15_000);
-
-    it('does not re-render for repeated scroll positions within the same visible system(s), but does when a scroll crosses into a different one (Task 17 review finding: scroll-throttle equality guard)', () => {
-      const store = makeBigStore();
-      const score = store.getState().score!;
-      const plan = computeLayout(score, {
-        zoom: 1,
-        layoutMode: 'page',
-        width: 900,
-        theme: { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' },
-      });
-      expect(plan.systems.length).toBeGreaterThan(2);
-
-      const renderSpy = vi.spyOn(VexFlowScoreRenderer.prototype, 'render');
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const scrollBox = getByTestId('score-editor-scroll');
-      const callsAfterMount = renderSpy.mock.calls.length;
-
-      // Establishing the first *real* (non-jsdom-default) measurement is
-      // expected to trigger exactly one render, since it necessarily
-      // differs from the pre-measurement "render everything" state.
-      const firstSystem = plan.systems[0];
-      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 5);
-      fireEvent.scroll(scrollBox);
-      expect(renderSpy.mock.calls.length).toBe(callsAfterMount + 1);
-      const callsAfterFirstScroll = renderSpy.mock.calls.length;
-
-      // Two more small scrolls, still comfortably inside the first
-      // system's own span (and nowhere near the overscan boundary) -
-      // neither should trigger a re-render.
-      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 10);
-      fireEvent.scroll(scrollBox);
-      mockScrollGeometry(scrollBox, 50, firstSystem.yTop + 15);
-      fireEvent.scroll(scrollBox);
-      expect(renderSpy.mock.calls.length).toBe(callsAfterFirstScroll);
-
-      // Scrolling to the last system (far past the overscan buffer) is a
-      // genuinely different visible set and must trigger a fresh render.
-      const lastSystem = plan.systems[plan.systems.length - 1];
-      mockScrollGeometry(scrollBox, 50, lastSystem.yTop + 5);
-      fireEvent.scroll(scrollBox);
-      expect(renderSpy.mock.calls.length).toBeGreaterThan(callsAfterFirstScroll);
-    }, 15_000);
+    expect(scrollToSpy).toHaveBeenCalled();
   });
 
-  describe('scroll-into-view during playback', () => {
-    // jsdom doesn't implement Element.prototype.scrollTo (see
-    // ScoreEditorView.tsx's `typeof container.scrollTo === 'function'`
-    // guard), so these tests install their own mock on the rendered canvas
-    // element directly, after the initial render has populated a real
-    // `measureIdToBBox` for the fixture's measures.
-    function mockScrollTo(canvas: HTMLElement): ReturnType<typeof vi.fn> {
-      const scrollToSpy = vi.fn();
-      Object.assign(canvas, { scrollTo: scrollToSpy });
-      return scrollToSpy;
-    }
+  it('does not re-scroll for position changes within the same measure', () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
 
-    it('re-fires the scroll on the same measure after a stop/restart (regression: lastScrolledMeasureRef must reset on stop)', () => {
-      const store = makeStore();
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
+    act(() => store.getState().setPlaybackState('playing'));
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
 
-      // positionTick stays at its default (0) throughout -> always the same
-      // first measure, so any second scroll call can only be explained by
-      // the reset, not by a genuinely different measureId.
-      act(() => store.getState().setPlaybackState('playing'));
-      expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    // A small tick advance that's still within the same (first) measure.
+    act(() => store.getState().setPositionTick(10));
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+  });
 
-      act(() => store.getState().setPlaybackState('stopped'));
-      expect(scrollToSpy).toHaveBeenCalledTimes(1); // stopping alone must not itself scroll
+  it('uses instant ("auto") scroll behavior when the user prefers reduced motion', () => {
+    const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
+    vi.stubGlobal('matchMedia', matchMediaSpy);
 
-      act(() => store.getState().setPlaybackState('playing'));
-      expect(scrollToSpy).toHaveBeenCalledTimes(2); // same measure, but must re-fire after the stop
-    });
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
 
-    it('does not re-fire while positionTick moves within the same measure during one playback run', () => {
-      const store = makeStore();
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
+    act(() => store.getState().setPlaybackState('playing'));
 
-      act(() => store.getState().setPlaybackState('playing'));
-      expect(scrollToSpy).toHaveBeenCalledTimes(1);
-
-      // A small tick advance that's still within the same (first) measure.
-      act(() => store.getState().setPositionTick(10));
-      expect(scrollToSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it('uses instant ("auto") scroll behavior when the user prefers reduced motion', () => {
-      const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
-      vi.stubGlobal('matchMedia', matchMediaSpy);
-
-      const store = makeStore();
-      const { getByTestId } = render(<ScoreEditorView store={store} />);
-      const scrollToSpy = mockScrollTo(getByTestId('score-editor-canvas'));
-
-      act(() => store.getState().setPlaybackState('playing'));
-
-      expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
-      vi.unstubAllGlobals();
-    });
+    expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
+    vi.unstubAllGlobals();
   });
 });
 
 describe('playback caret and click-to-seek', () => {
-  const CARET_THEME = { foreground: '#000', selection: '#00f', playback: '#f00', preview: '#999' };
-
   function caretPlan(store: EditorStoreApi) {
     // Same inputs the component uses in jsdom: zoom 1, page mode, and the
     // DEFAULT_WIDTH 900 fallback (clientWidth is 0 here).
@@ -582,20 +456,16 @@ describe('playback caret and click-to-seek', () => {
       zoom: 1,
       layoutMode: 'page',
       width: 900,
-      theme: CARET_THEME,
+      theme: THEME,
     });
   }
-
-  beforeEach(() => {
-    vi.mocked(playbackController.seek).mockClear();
-  });
 
   it('shows the caret at the score start (tick 0) before any playback', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const caret = getByTestId('playback-caret');
-    const firstBox = caretPlan(store).trackLayouts[0].measures[0].box;
-    expect(caret.style.left).toBe(`${firstBox.x}px`);
+    const expected = caretPositionForTick(caretPlan(store), store.getState().score!, 0)!;
+    expect(caret.style.left).toBe(`${expected.x}px`);
   });
 
   it('moves the caret as positionTick advances', () => {
@@ -609,24 +479,25 @@ describe('playback caret and click-to-seek', () => {
     expect(getByTestId('playback-caret').style.left).not.toBe(before);
   });
 
-  it('clicking the stave seeks playback to the clicked tick', () => {
+  it('clicking empty space inside a system seeks playback to the clicked tick', () => {
     const store = makeStore();
-    const { container } = render(<ScoreEditorView store={store} />);
-    const stave = container.querySelector('.vf-stave')!;
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const measureId = score.tracks[0].measures[1].id;
+    const point = measureFreePoint(score, measureId);
 
-    fireEvent.click(stave, { clientX: 150, clientY: 60 });
+    fireEvent.click(interactionSurface(), point);
 
-    const expected = tickForPoint(caretPlan(store), store.getState().score!, 150, 60);
-    expect(playbackController.seek).toHaveBeenCalledTimes(1);
+    const expected = tickForPoint(caretPlan(store), score, point.clientX, point.clientY);
     expect(playbackController.seek).toHaveBeenCalledWith(expected);
   });
 
   it('clicking a note selects it without moving the playback position', () => {
     const store = makeStore();
+    render(<ScoreEditorView store={store} />);
     const first = allNotes(store.getState().score!)[0];
-    const { container } = render(<ScoreEditorView store={store} />);
 
-    fireEvent.click(noteGroup(container, first.id), { clientX: 150, clientY: 60 });
+    clickNote(store.getState().score!, first.id);
 
     expect(store.getState().selection.eventIds).toEqual([first.id]);
     expect(playbackController.seek).not.toHaveBeenCalled();
