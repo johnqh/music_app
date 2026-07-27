@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
@@ -254,5 +254,19 @@ describe('TransportBar: accessibility', () => {
     for (const button of buttons) {
       expect(button).toHaveAccessibleName();
     }
+  });
+});
+
+describe('TransportBar: timecode', () => {
+  it('shows score-time position and total from the tempo map (twinkle: 120bpm, 8 measures = 16s)', () => {
+    const store = makeStore();
+    act(() => store.getState().setPositionTick(1920)); // one 4/4 measure at 120bpm = 2s
+    renderBar(store);
+    expect(screen.getByTestId('playback-timecode').textContent).toBe('0:02.0 / 0:16.0');
+  });
+
+  it('shows zeros with no score loaded', () => {
+    renderBar(makeStore(false));
+    expect(screen.getByTestId('playback-timecode').textContent).toBe('0:00.0 / 0:00.0');
   });
 });

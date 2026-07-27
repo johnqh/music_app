@@ -47,7 +47,7 @@ import {
   cn,
 } from '@sudobility/components';
 import { changeTempoCommand } from '@sudobility/music_lib';
-import { scoreEndTick } from '@sudobility/music_lib';
+import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
@@ -73,6 +73,16 @@ function formatMeasureBeat(mb: MeasureBeat | null): string {
   return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
 }
 
+/** `M:SS.d` (minutes, zero-padded seconds, tenths) — tenths update ~3x/sec during playback, making the actual playback rate visible against a wall clock. */
+function formatTimecode(seconds: number): string {
+  const clamped = Math.max(0, seconds);
+  const minutes = Math.floor(clamped / 60);
+  const rest = clamped - minutes * 60;
+  const whole = Math.floor(rest);
+  const tenths = Math.floor((rest - whole) * 10);
+  return `${minutes}:${String(whole).padStart(2, '0')}.${tenths}`;
+}
+
 export function TransportBar({ store = useAppStore }: TransportBarProps) {
   const score = store((s) => s.score);
   const playbackState = store((s) => s.state);
@@ -86,6 +96,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
   const hasScore = score !== null;
   const currentBpm = score?.tempoMap[0]?.bpm ?? 120;
   const maxTick = useMemo(() => (score ? Math.max(1, scoreEndTick(score)) : 1), [score]);
+  // Score-time seconds via the same TempoMap the playback engine schedules
+  // with, so this readout advances exactly 1 second per wall-clock second at
+  // 1x speed — a live check that playback runs at the score's real tempo.
+  const tempoMap = useMemo(() => (score ? new TempoMap(score.tempoMap, score.ppq) : null), [score]);
+  const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
+  const totalSeconds = tempoMap ? tempoMap.ticksToSeconds(maxTick) : 0;
 
   const [tempoDraft, setTempoDraft] = useState('');
   const [editingTempo, setEditingTempo] = useState(false);
@@ -310,6 +326,14 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           className="w-full"
         />
       </div>
+
+      <span
+        data-testid="playback-timecode"
+        aria-label="Playback time"
+        className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
+      >
+        {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
+      </span>
     </div>
   );
 }

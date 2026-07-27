@@ -543,6 +543,13 @@ describe('ScoreEditorView: continuous-mode horizontal scrolling', () => {
     vi.unstubAllGlobals();
   });
 
+  it('nests the sticky canvas anchor inside the full-size interaction div (horizontal sticking needs a full-width containing block)', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const canvas = screen.getByTestId('score-canvas');
+    expect(canvas.closest('[data-testid="score-editor-canvas"]')).not.toBeNull();
+  });
+
   it('gives the spacer the full continuous-layout width so the box scrolls horizontally', () => {
     const store = makeStore();
     render(<ScoreEditorView store={store} />);

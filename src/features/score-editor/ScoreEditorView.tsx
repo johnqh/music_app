@@ -624,23 +624,15 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         className="relative flex-1 overflow-auto"
         style={{ minHeight: CONTAINER_MIN_HEIGHT }}
       >
-        {/* Viewport-pinned drawing surfaces. The zero-height sticky wrapper
-            must come BEFORE the full-height interaction div: a sticky
-            element placed after it would take its static position below the
-            content and never pin to the top. */}
-        <div className="sticky top-0 z-0 h-0 overflow-visible" aria-hidden="true">
-          <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
-          <canvas
-            ref={overlayCanvasRef}
-            data-testid="overlay-canvas"
-            className="absolute left-0 top-0"
-          />
-        </div>
         {/* Interaction surface doubling as the scroll spacer: spans the full
-            content height (so the scroll box gets its scrollbar), sits above
-            the pinned canvases in paint order, is transparent, and receives
-            all pointer events in document-content coordinates — exactly the
-            role the SVG container played. Keeps its testid + aria contract. */}
+            content size (so the scroll box gets both scrollbars), is
+            transparent, and receives all pointer events in document-content
+            coordinates — exactly the role the SVG container played. Keeps
+            its testid + aria contract. It also HOSTS the sticky canvas
+            wrapper: a sticky element can only stick within its containing
+            block, so `left-0` sticking (continuous mode's horizontal
+            scrolling) requires a parent that spans the full scrollable
+            width — this div — not the viewport-wide scroll box. */}
         <div
           ref={containerRef}
           data-testid="score-editor-canvas"
@@ -661,7 +653,24 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
             // a no-op there.
             minWidth: (layoutPlan?.totalWidth ?? 0) * zoom,
           }}
-        />
+        >
+          {/* Viewport-pinned drawing surfaces: a ZERO-SIZED sticky anchor
+              (first child, so its static position is the content origin)
+              that pins to the scrollport's top-left corner in BOTH axes;
+              the canvases hang off it via overflow. `pointer-events-none`
+              keeps every click landing on the interaction div itself. */}
+          <div
+            className="pointer-events-none sticky left-0 top-0 z-0 h-0 w-0 overflow-visible"
+            aria-hidden="true"
+          >
+            <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
+            <canvas
+              ref={overlayCanvasRef}
+              data-testid="overlay-canvas"
+              className="absolute left-0 top-0"
+            />
+          </div>
+        </div>
         {dragBox && (
           <div
             data-testid="drag-selection-box"
