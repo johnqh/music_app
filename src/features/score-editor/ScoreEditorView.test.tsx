@@ -529,3 +529,58 @@ describe('playback caret and click-to-seek', () => {
     }
   });
 });
+
+describe('ScoreEditorView: continuous-mode horizontal scrolling', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('gives the spacer the full continuous-layout width so the box scrolls horizontally', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    fireEvent.click(screen.getByLabelText('Continuous layout'));
+
+    const plan = computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'continuous',
+      width: 900,
+      theme: THEME,
+    });
+    expect(plan.totalWidth).toBeGreaterThan(900); // precondition: wider than any viewport
+    expect(interactionSurface().style.minWidth).toBe(`${plan.totalWidth}px`);
+  });
+
+  it('windows the draw horizontally from scrollLeft and redraws on horizontal scroll', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(stressScore(1, 80));
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    fireEvent.click(screen.getByLabelText('Continuous layout'));
+
+    const scrollBox = screen.getByTestId('score-editor-scroll');
+    Object.defineProperty(scrollBox, 'clientWidth', { value: 900, configurable: true });
+    Object.defineProperty(scrollBox, 'scrollLeft', {
+      value: 3000,
+      configurable: true,
+      writable: true,
+    });
+    fireEvent.scroll(scrollBox);
+
+    const lastOptions = renderSpy.mock.calls.at(-1)![2];
+    expect(lastOptions.viewport.left).toBe(3000);
+    expect(lastOptions.viewport.right).toBe(3900);
+
+    const result = renderSpy.mock.results.at(-1)!.value;
+    expect(result.drawnMeasureIndices.size).toBeGreaterThan(0);
+    expect(result.drawnMeasureIndices.size).toBeLessThan(80); // horizontal window, not the whole score
+    expect(result.drawnMeasureIndices.has(0)).toBe(false); // measure 0 is far left of scrollLeft 3000
+  });
+});

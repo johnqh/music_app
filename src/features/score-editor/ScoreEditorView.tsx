@@ -292,7 +292,11 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         playingIds: state.activeNoteIds,
         previewIds: previewEventIds(state.previewFragment),
       },
-      { viewportTop: box.scrollTop, devicePixelRatio: window.devicePixelRatio || 1 },
+      {
+        viewportTop: box.scrollTop,
+        viewportLeft: box.scrollLeft,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      },
     );
   }, [store]);
 
@@ -313,9 +317,14 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     const box = scrollBoxRef.current;
     const ctx = scoreCanvasRef.current?.getContext('2d');
     if (!box || !ctx || !displayScore) return;
+    // left/right window the draw horizontally — continuous mode is one giant
+    // system, so without them every frame would draw the whole score (and
+    // horizontal scrolling would show blank canvas past the first window).
     const viewport = {
       top: box.scrollTop / zoom,
       bottom: (box.scrollTop + (box.clientHeight || CONTAINER_MIN_HEIGHT)) / zoom,
+      left: box.scrollLeft / zoom,
+      right: (box.scrollLeft + (box.clientWidth || DEFAULT_WIDTH)) / zoom,
     };
     resultRef.current = rendererRef.current!.render(displayScore, ctx, {
       zoom,
@@ -643,7 +652,15 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           className="relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
-          style={{ height: Math.max((layoutPlan?.totalHeight ?? 0) * zoom, CONTAINER_MIN_HEIGHT) }}
+          style={{
+            height: Math.max((layoutPlan?.totalHeight ?? 0) * zoom, CONTAINER_MIN_HEIGHT),
+            // Horizontal scroll extent: continuous mode's single system is
+            // (much) wider than the viewport — the spacer must span it so
+            // the scroll box scrolls horizontally (trackpad swipe included).
+            // In page mode totalWidth ≈ the measured view width, so this is
+            // a no-op there.
+            minWidth: (layoutPlan?.totalWidth ?? 0) * zoom,
+          }}
         />
         {dragBox && (
           <div
