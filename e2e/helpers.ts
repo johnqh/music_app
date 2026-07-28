@@ -174,10 +174,16 @@ export async function waitForNotation(page: Page): Promise<void> {
 }
 
 /** The shape of `window.__scoresmith` (ScoreEditorView's dev/e2e introspection handle). */
+type BoxLike = { x: number; y: number; width: number; height: number };
 type ScoresmithHandle = {
   result: {
-    idToBBox: Map<string, { x: number; y: number; width: number; height: number }>;
-    measureIdToBBox: Map<string, { x: number; y: number; width: number; height: number }>;
+    idToBBox: Map<string, BoxLike>;
+    measureIdToBBox: Map<string, BoxLike>;
+    /** The cached layout the frame drew against — the gutter band lives here, not in the bbox maps. */
+    plan: {
+      systems: Array<{ measureIndices: number[]; gutterTop: number; yTop: number }>;
+      trackLayouts: Array<{ measures: Array<{ measureIndex: number; box: BoxLike }> }>;
+    };
   } | null;
   scrollBox: HTMLElement | null;
 };
@@ -315,63 +321,64 @@ export async function selectMeasuresByIndex(page: Page, indices: number[]): Prom
 export type MeasureClickPoint = { x: number; y: number };
 
 /**
- * Finds a real, on-screen point inside measure `measureIndex`'s stave box
- * that is NOT inside any note bbox, so a real `page.mouse.click` there
- * resolves to the measure (not a note) through `ScoreEditorView`'s
- * geometric hit-testing -- exercising the genuine click-based
- * measure-selection path end to end. With canvas rendering the whole
- * stave box is a valid hit region (no "thin painted strokes" problem),
- * so the only thing to avoid is landing on a drawn note.
+ * A real, on-screen point inside measure `measureIndex`'s **gutter cell** --
+ * the measure-number band above its system, which is where measure selection
+ * lives now. A click on the stave body itself places the caret instead, so
+ * this deliberately targets the band between `system.gutterTop` and
+ * `system.yTop`.
+ *
+ * Geometry comes from the same `LayoutPlan` the app hit-tests against
+ * (`measureIndexAtGutterPoint`), so a band-center click always lands.
  */
-export async function findMeasureStaveClickPoint(
+export async function findMeasureGutterClickPoint(
   page: Page,
   measureIndex: number,
 ): Promise<MeasureClickPoint> {
   await requireStore(page);
-  const measureId = await page.evaluate((index) => {
-    type Store = { getState: () => { score: ScoreLike | null } };
-    const store = (window as unknown as { __SCORESMITH_STORE__: Store }).__SCORESMITH_STORE__;
-    const measure = store.getState().score?.tracks[0]?.measures.find((m) => m.index === index);
-    if (!measure) throw new Error(`findMeasureStaveClickPoint: no measure at index ${index}`);
-    return measure.id;
-  }, measureIndex);
 
-  const point = await page.evaluate((id) => {
+  // Scroll the band into view first, in its own step: the notation viewport
+  // is short (the piano-roll panel takes a fixed slice of the window), so a
+  // measure a system or two down is below the fold, and a point computed
+  // against the unscrolled box would land on whatever sits underneath.
+  await page.evaluate((index) => {
     const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
     if (!h?.result || !h.scrollBox) {
       throw new Error('__scoresmith is not present -- dev/e2e build required');
     }
-    const box = h.result.measureIdToBBox.get(id);
-    if (!box) return null;
+    const system = h.result.plan.systems.find((sys) => sys.measureIndices.includes(index));
+    if (!system) return;
+    const scroll = h.scrollBox;
+    // Leave a little headroom above the band so it isn't flush with the edge.
+    scroll.scrollTop = Math.max(0, system.gutterTop - 8);
+  }, measureIndex);
+  // One frame for the scroll to apply and the redraw to run.
+  await page.waitForTimeout(100);
+
+  const point = await page.evaluate((index) => {
+    const h = (window as unknown as { __scoresmith?: ScoresmithHandle }).__scoresmith;
+    if (!h?.result || !h.scrollBox) {
+      throw new Error('__scoresmith is not present -- dev/e2e build required');
+    }
+    const plan = h.result.plan;
+    const system = plan.systems.find((sys) => sys.measureIndices.includes(index));
+    const box = plan.trackLayouts[0]?.measures.find((m) => m.measureIndex === index)?.box;
+    if (!system || !box) return null;
+
     const scroll = h.scrollBox;
     const rect = scroll.getBoundingClientRect();
-    for (let dx = 2; dx < box.width; dx += 4) {
-      for (let dy = 2; dy < box.height; dy += 4) {
-        const px = box.x + dx;
-        const py = box.y + dy;
-        let insideNote = false;
-        for (const noteBox of h.result.idToBBox.values()) {
-          if (
-            px >= noteBox.x &&
-            px <= noteBox.x + noteBox.width &&
-            py >= noteBox.y &&
-            py <= noteBox.y + noteBox.height
-          ) {
-            insideNote = true;
-            break;
-          }
-        }
-        if (!insideNote) {
-          return { x: rect.left + px - scroll.scrollLeft, y: rect.top + py - scroll.scrollTop };
-        }
-      }
-    }
-    return null;
-  }, measureId);
+    const px = box.x + box.width / 2;
+    const py = (system.gutterTop + system.yTop) / 2;
+    const x = rect.left + px - scroll.scrollLeft;
+    const y = rect.top + py - scroll.scrollTop;
+    // Refuse to return a point outside the visible box rather than silently
+    // clicking through to whatever is behind it.
+    if (y < rect.top || y > rect.bottom || x < rect.left || x > rect.right) return null;
+    return { x, y };
+  }, measureIndex);
 
   if (!point) {
     throw new Error(
-      `findMeasureStaveClickPoint: measure index ${measureIndex} is not in the drawn window, or every probed point lies on a note`,
+      `findMeasureGutterClickPoint: measure index ${measureIndex} is not in the drawn window, or its gutter band could not be scrolled into view`,
     );
   }
   return point;
@@ -430,15 +437,20 @@ export async function getNoteGroups(page: Page): Promise<NoteGroup[]> {
 export async function clickNoteGroup(
   page: Page,
   group: NoteGroup,
-  options?: { shift?: boolean },
+  options?: { shift?: boolean; meta?: boolean },
 ): Promise<void> {
   const point = await viewportPointForId(page, 'idToBBox', group.id);
   if (!point) throw new Error(`clickNoteGroup: note ${group.id} is not in the drawn window`);
+  // Meta (not Control): the app treats either as the range modifier, but
+  // Playwright's Meta maps to the platform accelerator the user actually
+  // presses on macOS, where this suite runs.
+  if (options?.meta) await page.keyboard.down('Meta');
   if (options?.shift) await page.keyboard.down('Shift');
   try {
     await page.mouse.click(point.x, point.y);
   } finally {
     if (options?.shift) await page.keyboard.up('Shift');
+    if (options?.meta) await page.keyboard.up('Meta');
   }
 }
 

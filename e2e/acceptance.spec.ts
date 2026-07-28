@@ -128,8 +128,8 @@ test.describe('spec §39 acceptance scenario', () => {
     await page.getByRole('button', { name: 'Redo' }).click();
     await expect(pitchStepSelect).toHaveText(nextStep);
 
-    // 16-19. Open the piano roll; the same notes appear; drag one; notation updates.
-    await page.getByRole('button', { name: 'Piano roll view' }).click();
+    // 16-19. The piano roll is always on screen alongside the notation; the
+    // same notes appear there; drag one; notation updates.
     await expect(page.getByRole('region', { name: 'Piano roll' })).toBeVisible();
     // The piano roll culls notes to the scrolled viewport (spec §29), same
     // as the notation view, so this just asserts some notes render there.
@@ -152,8 +152,8 @@ test.describe('spec §39 acceptance scenario', () => {
 
     // Notation re-renders against the same, now-updated score (not
     // asserting the dragged note's own element -- like the piano roll, the
-    // notation view culls to the scrolled viewport, spec §29).
-    await page.getByRole('button', { name: 'Notation view' }).click();
+    // notation view culls to the scrolled viewport, spec §29). No view
+    // switch needed: it never left the screen.
     await waitForNotation(page);
 
     // 20-22. Export MIDI, import it into a new project, substantially equivalent notes.

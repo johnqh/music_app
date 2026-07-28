@@ -108,7 +108,6 @@ export type PianoRollViewProps = {
   onToggleCollapsed?: () => void;
 };
 
-const CONTAINER_MIN_HEIGHT = 400;
 /** Pixels of pointer movement before a pointerdown-drag counts as a real drag rather than a plain click. */
 const DRAG_THRESHOLD = 3;
 /** Screen-pixel buffer added on every side of the measured scroll viewport before culling notes (spec §29 virtualization), so a small scroll doesn't flash a blank grid before the next render pass catches up. */
@@ -511,6 +510,43 @@ export function PianoRollView({
     measureViewport();
   }, [measureViewport]);
 
+  /**
+   * Scrolls the active track's pitch range into view.
+   *
+   * The keyboard spans all 88 keys (~1230px at zoom 1) but the panel is a
+   * fixed, much shorter slice of the window, so an unscrolled roll opens on
+   * the empty top octaves and reads as broken — the notes are simply
+   * hundreds of pixels below the fold. Centering the track's own range is
+   * what makes the panel useful the moment it appears.
+   *
+   * Only re-runs when the track being shown (or the vertical zoom) changes,
+   * never on edits: re-centering under the user while they work would fight
+   * their own scrolling.
+   */
+  const centeredForRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || noteRects.length === 0) return;
+    const key = `${activeTrackId ?? ''}:${zoomV}`;
+    if (centeredForRef.current === key) return;
+    centeredForRef.current = key;
+
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (const r of noteRects) {
+      top = Math.min(top, r.y);
+      bottom = Math.max(bottom, r.y + r.height);
+    }
+    if (!Number.isFinite(top) || !Number.isFinite(bottom)) return;
+
+    const viewport = el.clientHeight;
+    // jsdom reports 0 here; nothing to center against, and the tests that
+    // care assert on `scrollTop` being left alone.
+    if (viewport <= 0) return;
+    el.scrollTop = Math.max(0, (top + bottom) / 2 - viewport / 2);
+    measureViewport();
+  }, [activeTrackId, zoomV, noteRects, measureViewport]);
+
   const previewRects = useMemo(
     () => computePreviewNoteRects(previewFragment, { zoomH, zoomV }),
     [previewFragment, zoomH, zoomV],
@@ -801,8 +837,9 @@ export function PianoRollView({
         aria-label="Piano roll"
         data-testid="piano-roll-scroll"
         onScroll={handleScroll}
-        className="relative flex-1 overflow-auto"
-        style={{ minHeight: CONTAINER_MIN_HEIGHT }}
+        // No min-height: the panel's own fixed height bounds this box, and a
+        // hard floor here would overflow it.
+        className="relative min-h-0 flex-1 overflow-auto"
       >
         <div className="flex" style={{ width: KEYBOARD_WIDTH + gridWidth }}>
           <KeyboardColumn store={store} rows={keyboardRows} height={kbHeight} zoomV={zoomV} theme={theme} />

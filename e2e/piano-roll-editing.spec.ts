@@ -1,7 +1,7 @@
 /**
- * Spec §30 scenario 15 / spec §39 items 16-19: switch between the
- * notation and piano-roll views, drag a note in the piano roll, and
- * verify the notation view reflects the same, synchronized score.
+ * Spec §30 scenario 15 / spec §39 items 16-19: drag a note in the piano roll
+ * and verify the notation view -- on screen at the same time, not behind a
+ * view switch -- reflects the same, synchronized score.
  */
 import { expect, test } from '@playwright/test';
 import {
@@ -13,8 +13,8 @@ import {
   waitForNotation,
 } from './helpers';
 
-test.describe('view switching and piano-roll editing', () => {
-  test('switches to the piano roll, drags a note, and the notation view reflects the change', async ({
+test.describe('piano-roll editing alongside notation', () => {
+  test('drags a note in the piano roll and the notation view reflects the change', async ({
     page,
   }) => {
     const getErrors = collectPageErrors(page);
@@ -31,9 +31,9 @@ test.describe('view switching and piano-roll editing', () => {
     const noteCount = before!.notes.length;
     expect(noteCount).toBeGreaterThan(0);
 
-    // Switch to the piano roll (spec §39 item 16).
-    await page.getByRole('button', { name: 'Piano roll view' }).click();
+    // The piano roll is always visible below the notation (spec §39 item 16).
     await expect(page.getByRole('region', { name: 'Piano roll' })).toBeVisible();
+    await expect(page.getByTestId('score-editor-canvas')).toBeVisible();
 
     // The same notes appear there (spec §39 item 17). The piano roll (like
     // the notation view) culls notes to the scrolled viewport (spec §29
@@ -70,13 +70,12 @@ test.describe('view switching and piano-roll editing', () => {
     await page.mouse.move(startX + 60, startY - 28, { steps: 8 });
     await page.mouse.up();
 
-    // Switch back to notation (spec §39 item 19): it re-renders against the
-    // same, now-updated score (not asserting the dragged note's own
-    // element specifically -- like the piano roll, the notation view culls
-    // to the scrolled viewport, spec §29, so a note that moved later in
-    // the piece is not guaranteed to be drawn at the default scroll
-    // position).
-    await page.getByRole('button', { name: 'Notation view' }).click();
+    // Notation (spec §39 item 19) re-renders against the same, now-updated
+    // score -- no switch needed, it never left the screen. Not asserting the
+    // dragged note's own element: like the piano roll, the notation view
+    // culls to the scrolled viewport (spec §29), so a note that moved later
+    // in the piece is not guaranteed to be drawn at the default scroll
+    // position.
     await waitForNotation(page);
 
     const after = await readScoreSummary(page);

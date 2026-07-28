@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import {
   collectPageErrors,
   createNewProject,
-  findMeasureStaveClickPoint,
+  findMeasureGutterClickPoint,
   generateWholeScore,
   gotoDashboard,
   readCandidates,
@@ -24,8 +24,9 @@ test.describe('region regeneration: preview and accept', () => {
   // that a genuine `page.mouse.click` on a measure's own rendered stave
   // (found via real hit-testing, not guessed pixels) selects it, so
   // `ScoreEditorView`'s click-based measure hit-test path itself is
-  // covered by a real browser gesture at least once.
-  test('selects a measure via a real click on its rendered stave', async ({ page }) => {
+  // covered by a real browser gesture at least once. Measure selection lives
+  // in the measure-number gutter now -- a stave click places the caret.
+  test('selects a measure via a real click on its number in the gutter', async ({ page }) => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
@@ -35,7 +36,7 @@ test.describe('region regeneration: preview and accept', () => {
       measures: 8,
     });
 
-    const point = await findMeasureStaveClickPoint(page, 2); // measure 3 (0-based index 2)
+    const point = await findMeasureGutterClickPoint(page, 2); // measure 3 (0-based index 2)
     await page.mouse.click(point.x, point.y);
 
     await expect(page.getByText('1 measure(s) selected')).toBeVisible();
@@ -99,12 +100,15 @@ test.describe('region regeneration: preview and accept', () => {
 
     // Regression coverage (Task 19 review finding I2): accepting a
     // candidate must not strand the selection on the measures it just
-    // replaced -- the status bar should still report the same region
-    // selected, the regeneration panel should still be showing it (not
-    // fallen back to "nothing selected"), and regenerating that same,
-    // now-live region again must work immediately, with no manual
+    // replaced -- the regeneration panel should still be showing the same
+    // region (not fallen back to "nothing selected"), and regenerating that
+    // same, now-live region again must work immediately, with no manual
     // reselect in between.
-    await expect(page.getByText('2 measure(s) selected')).toBeVisible();
+    //
+    // The accepted notes themselves become the selection, and the status bar
+    // marks it as regenerated -- that is what renders them brown until the
+    // user selects something else.
+    await expect(page.getByText(/note\(s\) selected, regenerated/)).toBeVisible();
     await expect(regenerationPanel).toBeVisible();
     await expect(regenerationPanel.getByText(/Measures 3.4/)).toBeVisible();
 
