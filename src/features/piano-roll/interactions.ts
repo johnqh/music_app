@@ -14,7 +14,8 @@
 import type { UUID, Measure, Score, Track } from '@sudobility/music_types';
 import type { ScoreSelection } from '@sudobility/music_lib';
 import { findEvent, findTrack } from '@sudobility/music_lib';
-import { selectionToRange } from '@sudobility/music_lib';
+import { playbackController, selectionToRange } from '@sudobility/music_lib';
+import type { PlaybackController } from '@sudobility/music_lib';
 import { ticksFor } from '@sudobility/music_lib';
 import { midiToPitch } from '@sudobility/music_lib';
 import {
@@ -189,22 +190,33 @@ export function maxVoiceCount(score: Score, visibleTrackIds: ReadonlySet<UUID> |
 
 // ---- loop from selection ----------------------------------------------------------------
 
+/** The slice of `PlaybackController` this module drives; `loopFromSelection` defaults to the app-wide singleton and tests inject a fake (same DI convention as `useEditorShortcuts`). */
+export type LoopController = Pick<PlaybackController, 'setLoopFromSelection'>;
+
 /**
  * Sets the transport's loop range to the current selection's tick/track
  * span (spec §8's "loop selected regions", via the shared selection model
  * — spec §9). Pushes a warning toast instead if the selection has no
  * resolvable tick extent.
+ *
+ * Routed through the playback controller rather than `store.setLoopRange`:
+ * the store field only drives the UI (the transport's Loop button and the
+ * roll's shaded region). Writing it alone made the app *look* like it was
+ * looping while the engine's Transport had no loop points set at all —
+ * `PlaybackController.setLoopFromSelection` updates both.
  */
-export function loopFromSelection(store: EditorStoreApi): void {
+export function loopFromSelection(
+  store: EditorStoreApi,
+  controller: LoopController = playbackController,
+): void {
   const state = store.getState();
   if (!state.score) return;
-  const range = selectionToRange(state.score, state.selection);
-  if (!range) {
+  if (!selectionToRange(state.score, state.selection)) {
     state.pushToast({
       message: 'Select notes, measures, or a range before looping.',
       severity: 'warning',
     });
     return;
   }
-  state.setLoopRange(range);
+  controller.setLoopFromSelection();
 }

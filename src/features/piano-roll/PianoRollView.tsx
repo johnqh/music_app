@@ -53,10 +53,7 @@ import { selectionSummaryLabel } from '@sudobility/music_lib';
 import { noteColorFor, resolveNoteColorRole, selectActiveTrackId } from '@sudobility/music_lib';
 import type { NoteColorRole, RenderTheme } from '@sudobility/music_lib';
 import { resolveColorScheme } from '@/app/theme';
-import {
-  DARK_RENDER_THEME,
-  LIGHT_RENDER_THEME,
-} from '@/features/score-editor/ScoreEditorView';
+import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
 import { playingPitchesForTrack } from '@/features/piano-roll/playing-pitches';
 import { useAppStore } from '@sudobility/music_lib';
@@ -275,7 +272,15 @@ const NoteLayer = memo(function NoteLayer({ noteRects, noteColors, theme }: Note
               // Floor raised from 0.35: the state colors carry meaning now, so
               // a quiet note must stay identifiable rather than washing out.
               opacity: 0.45 + 0.55 * velocityFraction,
-              border: '1px solid rgba(0,0,0,0.35)',
+              // Border weight is the non-color half of the state cue (spec
+              // §27), mirroring the notation view's lineWidth/shadow: a
+              // grayscale reader still sees which notes are affected. It
+              // thickens the note's own edge rather than drawing anything
+              // around it, so no highlight rectangle comes back.
+              border:
+                role === 'normal'
+                  ? '1px solid rgba(0,0,0,0.35)'
+                  : '2px solid rgba(0,0,0,0.75)',
               boxSizing: 'border-box',
               cursor: 'grab',
             }}

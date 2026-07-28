@@ -2,10 +2,10 @@
  * The interactive sheet-music editor (spec §7 + the canvas-notation-renderer
  * design): owns the `CanvasScoreRenderer` instance (kept in a React ref,
  * per spec §37.2 — never stored in Zustand), draws the visible window of
- * the score into a viewport-pinned canvas pair (notation + highlight
- * overlay) over a full-height interaction/spacer div, wires
- * click/shift-click, drag-box selection, click-to-seek and the playback
- * caret, and scrolls the active playback measure into view.
+ * the score into a single viewport-pinned canvas over a full-height
+ * interaction/spacer div, wires the caret-anchored click model (click,
+ * shift-click, cmd-click range, measure gutter), drag-box selection with
+ * edge autoscroll, and scrolls the active playback measure into view.
  *
  * There is no per-glyph DOM: ALL hit-testing is geometric, against the
  * drawn window's `idToBBox`/`measureIdToBBox` maps (`hit-test.ts`), which
@@ -24,11 +24,8 @@
  * spliced-in candidate rather than the committed score, so a click there
  * must never be allowed to drive a selection/edit.
  *
- * `renderTheme` (fed to VexFlow's canvas draw, so it needs real literal
- * color strings, not CSS custom properties) picks between two literal
- * `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME` constants keyed off
- * `resolveColorScheme(themeMode)` (see that constant's doc comment for why
- * these particular values).
+ * `renderTheme` picks between `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`
+ * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
@@ -59,6 +56,7 @@ import {
 } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
+import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 
@@ -74,42 +72,6 @@ const DRAG_THRESHOLD = 3;
 /** Padding (px) kept between the scrolled-to measure and the viewport edge. */
 const SCROLL_MARGIN = 40;
 
-/**
- * VexFlow render colors, one set per resolved light/dark color scheme.
- *
- * Literal color strings, not CSS custom properties: VexFlow draws straight
- * to canvas fill/stroke, which never resolves `var(--...)` (and jsdom
- * doesn't process CSS for tests anyway).
- *
- * Note *state* is carried by these colors now — the highlight overlay and
- * its second canvas are gone, so `noteNormal`/`noteSelected`/
- * `noteRegenerated`/`notePlaying` are what the user actually reads state
- * from. Each value clears 4.5:1 against its mode's stave background.
- *
- * Exported because `PianoRollView` draws from the same palette: one shared
- * set of state colors across both views, so a note doesn't change meaning
- * when you look at it in the other one.
- */
-export const LIGHT_RENDER_THEME: RenderTheme = {
-  foreground: '#3f3f46',
-  noteNormal: '#3f3f46',
-  noteSelected: '#000000',
-  noteRegenerated: '#8b5a2b',
-  notePlaying: '#1565c0',
-  staveActive: '#000000',
-  staveInactive: '#71717a',
-  caret: '#d32f2f',
-};
-export const DARK_RENDER_THEME: RenderTheme = {
-  foreground: '#d4d4d8',
-  noteNormal: '#d4d4d8',
-  noteSelected: '#ffffff',
-  noteRegenerated: '#d9a066',
-  notePlaying: '#64b5f6',
-  staveActive: '#ffffff',
-  staveInactive: '#8a8a93',
-  caret: '#ef5350',
-};
 
 /** Every event id (note or rest) referenced by a preview fragment's measures, for the highlight overlay's `previewIds`. */
 function previewEventIds(fragment: ScoreFragment | null): string[] {

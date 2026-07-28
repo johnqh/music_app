@@ -22,7 +22,8 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   playbackController: { togglePlay: vi.fn(), seek: vi.fn() },
 }));
 
-import { LIGHT_RENDER_THEME, ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
+import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
+import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 // The component's own light theme, not a stand-in: reference renders below

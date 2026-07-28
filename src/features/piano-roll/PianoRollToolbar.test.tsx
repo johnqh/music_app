@@ -6,6 +6,16 @@ import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
+
+// The toolbar's Loop button routes through the app-wide playbackController
+// singleton, which eagerly builds a real Tone.js engine on import -- mocked
+// here, same as ScoreEditorView's and AppLayout's suites do.
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  playbackController: { setLoopFromSelection: vi.fn() },
+}));
+
+import { playbackController } from '@sudobility/music_lib';
 import { PianoRollToolbar } from '@/features/piano-roll/PianoRollToolbar';
 
 function makeStore(score = twinkleScore()): EditorStoreApi {
@@ -14,7 +24,9 @@ function makeStore(score = twinkleScore()): EditorStoreApi {
   return store;
 }
 
-afterEach(async () => {});
+afterEach(() => {
+  vi.mocked(playbackController.setLoopFromSelection).mockClear();
+});
 
 function renderToolbar(
   store: EditorStoreApi,
@@ -83,7 +95,12 @@ describe('PianoRollToolbar', () => {
     expect(store.getState().canUndo).toBe(true);
   });
 
-  it('loop-from-selection button sets the loop range from the current selection', async () => {
+  it('loop-from-selection drives the playback controller, not just the store', async () => {
+    // Asserting the controller call rather than `store.loopRange`: looping
+    // has to reach the engine, and writing the store alone was the bug this
+    // replaced (the Loop button lit up while playback didn't loop). The
+    // controller owns both halves and is bound to the app-wide store, so an
+    // isolated test store would never see the write anyway.
     const store = makeStore();
     const note = allNotes(store.getState().score!)[0];
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
@@ -91,7 +108,7 @@ describe('PianoRollToolbar', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Loop selection' }));
 
-    expect(store.getState().loopRange).not.toBeNull();
+    expect(playbackController.setLoopFromSelection).toHaveBeenCalledTimes(1);
   });
 
   it('has no track filter: the roll always follows the active track', () => {

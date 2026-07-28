@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -280,22 +280,42 @@ describe('maxVoiceCount', () => {
 });
 
 describe('loopFromSelection', () => {
-  it('sets the loop range from the current selection', () => {
+  function fakeController() {
+    return { setLoopFromSelection: vi.fn() };
+  }
+
+  it('loops through the playback controller, so the engine actually loops', () => {
+    // Regression: this used to call `store.setLoopRange` directly, which set
+    // the store (lighting up the transport's Loop button) but never told the
+    // engine -- so the transport looked like it was looping and wasn't.
     const store = makeStore();
     const note = allNotes(store.getState().score!)[0];
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    const controller = fakeController();
 
-    loopFromSelection(store);
+    loopFromSelection(store, controller);
 
-    expect(store.getState().loopRange).not.toBeNull();
+    expect(controller.setLoopFromSelection).toHaveBeenCalledTimes(1);
   });
 
-  it('pushes a warning toast and leaves loopRange unset when nothing is selected', () => {
+  it('pushes a warning toast and does not loop when nothing is selected', () => {
     const store = makeStore();
+    const controller = fakeController();
 
-    loopFromSelection(store);
+    loopFromSelection(store, controller);
 
+    expect(controller.setLoopFromSelection).not.toHaveBeenCalled();
     expect(store.getState().loopRange).toBeNull();
     expect(store.getState().toasts.length).toBeGreaterThan(0);
+  });
+
+  it('is a no-op with no score', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    const controller = fakeController();
+
+    loopFromSelection(store, controller);
+
+    expect(controller.setLoopFromSelection).not.toHaveBeenCalled();
+    expect(store.getState().toasts).toEqual([]);
   });
 });

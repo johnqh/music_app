@@ -770,3 +770,30 @@ describe('PianoRollView: collapse', () => {
     expect(container.querySelector('[data-testid="piano-roll-grid"]')).not.toBeNull();
   });
 });
+
+describe('PianoRollView: non-color state redundancy (spec §27)', () => {
+  it('gives a stated note a heavier border than a normal one', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const [first, second] = allNotes(store.getState().score!);
+    expect(noteRect(container, first.id).style.borderWidth).toBe('1px');
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    });
+
+    // Selected note thickens; its untouched neighbour does not.
+    expect(noteRect(container, first.id).style.borderWidth).toBe('2px');
+    expect(noteRect(container, second.id).style.borderWidth).toBe('1px');
+  });
+
+  it('applies the same weight to playing notes', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+
+    act(() => store.getState().setActiveNoteIds([note.id]));
+
+    expect(noteRect(container, note.id).style.borderWidth).toBe('2px');
+  });
+});

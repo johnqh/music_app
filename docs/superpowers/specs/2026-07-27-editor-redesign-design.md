@@ -91,12 +91,26 @@ while playback is running; there, blue wins so playback stays followable.
 ### Non-color redundancy
 
 The deleted overlay encoded state redundantly through stroke patterns (solid /
-dashed / dotted) to satisfy spec §27 "do not rely on color alone". Color alone
-now carries note state on the canvas. The redundant channel moves to the status
-bar and the existing SR-only summary (`selectionSummaryLabel`), which already
-announce selection count and are extended to announce the regenerated state.
-This is a deliberate accessibility trade-off, recorded here so it is not
-mistaken for an oversight.
+dashed / dotted) to satisfy spec §27 "do not rely on color alone". That channel
+is preserved, moved onto the glyph itself rather than onto a rectangle around
+it (`noteEmphasisFor`):
+
+- **Notation** — a non-normal note draws with a thicker `lineWidth` (stems,
+  flags, beams) and a `shadowBlur` halo tinted with its own color. The halo is
+  what reaches a *stemless* whole note, whose filled notehead no stroke width
+  can thicken; without it that one case would have had no non-color cue.
+- **Piano roll** — a non-normal note's own border goes from 1px to 2px and
+  darkens. It thickens the note's edge rather than drawing anything around it,
+  so no highlight rectangle returns.
+- **Text** — the status bar and the SR-only summary
+  (`selectionSummaryLabel`) additionally announce the regenerated state.
+
+One emphasis level covers every non-normal state rather than three
+distinguishable ones. The perceptually important distinction is "is this note
+affected" versus "is it not"; *which* state comes from hue plus the announced
+summary. `selected` and `regenerated` are mutually exclusive (regenerated is a
+property of the whole selection), and `playing` is transient and accompanied by
+the moving caret.
 
 ### Breaking change
 
