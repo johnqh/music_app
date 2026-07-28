@@ -83,15 +83,84 @@ function formatTimecode(seconds: number): string {
   return `${minutes}:${String(whole).padStart(2, '0')}.${tenths}`;
 }
 
+/**
+ * The three position-driven readouts, each isolated as its own subscriber.
+ *
+ * The engine reports position 30 times a second. Read at `TransportBar`'s top
+ * level, every one of those re-rendered the whole bar — a dozen Buttons, two
+ * Radix Selects, a Slider and their Tooltips, all `forwardRef` components that
+ * showed up as `updateForwardRef` when the playback profile was taken. Split
+ * out, a position update touches one span, one input and one span.
+ */
+function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
+  const measureBeat = store(selectCurrentMeasureBeat);
+  return (
+    <span
+      aria-label="Current measure and beat"
+      className="min-w-[40px] text-center text-sm text-theme-text-primary"
+    >
+      {formatMeasureBeat(measureBeat)}
+    </span>
+  );
+}
+
+function PositionScrubber({
+  store,
+  maxTick,
+  disabled,
+  onScrub,
+}: {
+  store: PlaybackStoreApi;
+  maxTick: number;
+  disabled: boolean;
+  onScrub: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const positionTick = store((s) => s.positionTick);
+  return (
+    <input
+      type="range"
+      aria-label="Playback position"
+      min={0}
+      max={maxTick}
+      value={Math.min(positionTick, maxTick)}
+      disabled={disabled}
+      onChange={onScrub}
+      className="w-full"
+    />
+  );
+}
+
+function Timecode({
+  store,
+  maxTick,
+  tempoMap,
+  totalSeconds,
+}: {
+  store: PlaybackStoreApi;
+  maxTick: number;
+  tempoMap: TempoMap | null;
+  totalSeconds: number;
+}) {
+  const positionTick = store((s) => s.positionTick);
+  const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
+  return (
+    <span
+      data-testid="playback-timecode"
+      aria-label="Playback time"
+      className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
+    >
+      {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
+    </span>
+  );
+}
+
 export function TransportBar({ store = useAppStore }: TransportBarProps) {
   const score = store((s) => s.score);
   const playbackState = store((s) => s.state);
-  const positionTick = store((s) => s.positionTick);
   const loopRange = store((s) => s.loopRange);
   const metronome = store((s) => s.metronome);
   const tempoMultiplier = store((s) => s.tempoMultiplier);
   const masterVolume = store((s) => s.masterVolume);
-  const measureBeat = store(selectCurrentMeasureBeat);
 
   const hasScore = score !== null;
   const currentBpm = score?.tempoMap[0]?.bpm ?? 120;
@@ -100,7 +169,6 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
   // with, so this readout advances exactly 1 second per wall-clock second at
   // 1x speed — a live check that playback runs at the score's real tempo.
   const tempoMap = useMemo(() => (score ? new TempoMap(score.tempoMap, score.ppq) : null), [score]);
-  const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
   const totalSeconds = tempoMap ? tempoMap.ticksToSeconds(maxTick) : 0;
 
   const [tempoDraft, setTempoDraft] = useState('');
@@ -257,12 +325,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Button>
       </Tooltip>
 
-      <span
-        aria-label="Current measure and beat"
-        className="min-w-[40px] text-center text-sm text-theme-text-primary"
-      >
-        {formatMeasureBeat(measureBeat)}
-      </span>
+      <MeasureBeatReadout store={store} />
 
       {editingTempo ? (
         <Input
@@ -315,25 +378,15 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </div>
 
       <div className="min-w-[120px] flex-1">
-        <input
-          type="range"
-          aria-label="Playback position"
-          min={0}
-          max={maxTick}
-          value={Math.min(positionTick, maxTick)}
+        <PositionScrubber
+          store={store}
+          maxTick={maxTick}
           disabled={!hasScore}
-          onChange={handleScrub}
-          className="w-full"
+          onScrub={handleScrub}
         />
       </div>
 
-      <span
-        data-testid="playback-timecode"
-        aria-label="Playback time"
-        className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
-      >
-        {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
-      </span>
+      <Timecode store={store} maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
     </div>
   );
 }

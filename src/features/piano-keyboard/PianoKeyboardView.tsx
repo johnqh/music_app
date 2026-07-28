@@ -10,12 +10,13 @@
  * out trivially, each gets a testid for free, and the canvas renderer exists
  * for notation because VexFlow requires it — not as a house style.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@sudobility/components';
 import { findTrack, selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
+import type { PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
 import {
   MIN_WHITE_KEY_WIDTH,
   WHITE_KEY_COUNT,
@@ -23,6 +24,56 @@ import {
   keyboardWidth,
 } from '@/features/piano-keyboard/keyboard-geometry';
 import { playingPitchesForTrack } from '@/features/piano-keyboard/playing-pitches';
+
+/**
+ * One key. `React.memo` on primitive props matters here: a note boundary
+ * changes the lit state of one or two keys, and without this React re-applied
+ * inline styles to all 88 on every one — `setValueForStyles` was visible in
+ * the playback profile.
+ */
+const PianoKeyDiv = memo(function PianoKeyDiv({
+  midi,
+  isBlack,
+  x,
+  width,
+  height,
+  label,
+  isLit,
+  litColor,
+}: PianoKey & { isLit: boolean; litColor: string }) {
+  return (
+    <div
+      data-testid={`piano-key-${midi}`}
+      data-playing={isLit ? 'true' : 'false'}
+      style={{
+        position: 'absolute',
+        left: x,
+        top: 0,
+        width,
+        height,
+        backgroundColor: isLit ? litColor : isBlack ? '#1f1f23' : '#fbfbfd',
+        border: '1px solid rgba(0,0,0,0.45)',
+        borderTop: 'none',
+        borderRadius: '0 0 3px 3px',
+        boxSizing: 'border-box',
+        // The non-color half of the cue (spec §27): a lit key is drawn
+        // *pressed*. That reads in grayscale, and it is the physically right
+        // metaphor for a struck key.
+        transform: isLit ? 'translateY(2px)' : undefined,
+        boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
+      }}
+    >
+      {label && (
+        <span
+          className="pointer-events-none absolute left-0 w-full text-center text-[9px] text-theme-text-secondary"
+          style={{ top: height + 1 }}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+});
 
 export type PianoKeyboardViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -134,46 +185,14 @@ export function PianoKeyboardView({
           className="relative"
           style={{ width: keyboardWidth(whiteKeyWidth), height: box.height + LABEL_GUTTER }}
         >
-          {keys.map((key) => {
-            const isLit = lit.has(key.midi);
-            return (
-              <div
-                key={key.midi}
-                data-testid={`piano-key-${key.midi}`}
-                data-playing={isLit ? 'true' : 'false'}
-                style={{
-                  position: 'absolute',
-                  left: key.x,
-                  top: 0,
-                  width: key.width,
-                  height: key.height,
-                  backgroundColor: isLit
-                    ? theme.notePlaying
-                    : key.isBlack
-                      ? '#1f1f23'
-                      : '#fbfbfd',
-                  border: '1px solid rgba(0,0,0,0.45)',
-                  borderTop: 'none',
-                  borderRadius: '0 0 3px 3px',
-                  boxSizing: 'border-box',
-                  // The non-color half of the cue (spec §27): a lit key is
-                  // drawn *pressed*. That reads in grayscale, and it is the
-                  // physically right metaphor for a struck key.
-                  transform: isLit ? 'translateY(2px)' : undefined,
-                  boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
-                }}
-              >
-                {key.label && (
-                  <span
-                    className="pointer-events-none absolute left-0 w-full text-center text-[9px] text-theme-text-secondary"
-                    style={{ top: key.height + 1 }}
-                  >
-                    {key.label}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+          {keys.map((key) => (
+            <PianoKeyDiv
+              key={key.midi}
+              {...key}
+              isLit={lit.has(key.midi)}
+              litColor={theme.notePlaying}
+            />
+          ))}
         </div>
       </div>
     </div>

@@ -141,6 +141,24 @@ function useMenu<T extends HTMLElement>() {
   return { open, setOpen, ref };
 }
 
+/**
+ * The status bar's measure/beat readout, isolated as its own subscriber.
+ *
+ * `selectCurrentMeasureBeat` is memoized on `positionTick`, so it hands back a
+ * fresh object on every one of the engine's 30 reports a second. Read at
+ * `AppLayout`'s top level that re-rendered the entire app tree — notation,
+ * keyboard and all — 30 times a second during playback. Down here only this
+ * span re-renders.
+ */
+function StatusPosition({ store }: { store: EditorStoreApi }) {
+  const measureBeat = store(selectCurrentMeasureBeat);
+  return (
+    <span aria-label="Position" className="text-xs text-theme-text-secondary">
+      {measureBeat ? `Measure ${measureBeat.measureIndex}, beat ${measureBeat.beat}` : '-.-'}
+    </span>
+  );
+}
+
 export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const projectName = store((s) => s.projectName);
   const saveState = store((s) => s.saveState);
@@ -157,7 +175,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const score = store((s) => s.score);
   const validationIssues = store((s) => s.validationIssues);
   const generationMode = store((s) => s.mode);
-  const measureBeat = store(selectCurrentMeasureBeat);
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const importMenu = useMenu<HTMLDivElement>();
@@ -719,9 +736,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </div>
           )}
         </div>
-        <span aria-label="Position" className="text-xs text-theme-text-secondary">
-          {measureBeat ? `Measure ${measureBeat.measureIndex}, beat ${measureBeat.beat}` : '-.-'}
-        </span>
+        <StatusPosition store={store} />
         <span aria-label="Zoom level" className="text-xs text-theme-text-secondary">
           {Math.round(zoom * 100)}%
         </span>
