@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twoTrackScore } from '@sudobility/music_lib';
@@ -137,5 +137,56 @@ describe('TrackPanel', () => {
     await user.click(await screen.findByRole('option', { name: 'alto' }));
 
     expect(store.getState().score!.tracks[0].clef).toBe('alto');
+  });
+});
+
+describe('active track', () => {
+  it('marks the first track active by default', () => {
+    const store = makeStore();
+    const { container } = render(<TrackPanel store={store} />);
+    const score = store.getState().score!;
+    expect(
+      container.querySelector(`[data-testid="track-row-${score.tracks[0].id}"]`),
+    ).toHaveAttribute('aria-current', 'true');
+    expect(
+      container.querySelector(`[data-testid="track-row-${score.tracks[1].id}"]`),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks the explicitly-active track', () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[1].id));
+
+    const { container } = render(<TrackPanel store={store} />);
+
+    expect(
+      container.querySelector(`[data-testid="track-row-${score.tracks[1].id}"]`),
+    ).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('clicking a row makes that track active', async () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    const { container } = render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(container.querySelector(`[data-testid="track-row-${score.tracks[1].id}"]`)!);
+
+    expect(store.getState().activeTrackId).toBe(score.tracks[1].id);
+    // Still selects too — one gesture, both meanings, as before.
+    expect(store.getState().selection.trackIds).toEqual([score.tracks[1].id]);
+  });
+
+  it('adjusting mute does not change the active track', async () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText(`Mute: ${score.tracks[1].name}`));
+
+    expect(store.getState().activeTrackId).toBe(score.tracks[0].id);
   });
 });

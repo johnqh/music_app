@@ -7,6 +7,12 @@ const stub = (name: string) => fileURLToPath(new URL(`./src/stubs/${name}.ts`, i
 export default defineConfig({
   plugins: [react()],
   resolve: {
+    // Single instance of each of these regardless of how @sudobility/music_lib
+    // is resolved. Normally it comes from the registry with no nested copies,
+    // but a local `bun link` during cross-repo development exposes music_lib's
+    // own dev-installed react/zustand — two React instances then break every
+    // hook ("Cannot read properties of null (reading 'useCallback')").
+    dedupe: ['react', 'react-dom', 'zustand'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // Stub out @sudobility/building_blocks' optional peer deps we don't

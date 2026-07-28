@@ -10,7 +10,7 @@
  * jsdom too and every interaction path is exercised geometrically in
  * component tests.
  */
-import type { BBox } from '@sudobility/music_lib';
+import type { BBox, LayoutPlan } from '@sudobility/music_lib';
 
 export type Point = { x: number; y: number };
 
@@ -74,4 +74,33 @@ export function measureIdAtPoint(
     if (pointInBBox(box, point)) hit = id;
   }
   return hit;
+}
+
+/**
+ * The measure index under `point` when it falls in a system's
+ * measure-number gutter band, or `null` anywhere else. Logical (unzoomed)
+ * content coordinates — the caller divides by zoom, same as `tickForPoint`.
+ *
+ * Measure geometry is read off track 0: every track shares one measure grid
+ * (see `rebuildMeasureTicks`), which is exactly why one gutter can serve the
+ * whole system rather than needing one band per stave.
+ *
+ * The band is half-open at the bottom (`y < system.yTop`) so a click landing
+ * exactly on the stave's top line belongs to the stave, not the gutter —
+ * otherwise the two hit zones would both claim that row of pixels.
+ */
+export function measureIndexAtGutterPoint(plan: LayoutPlan, point: Point): number | null {
+  const measures = plan.trackLayouts[0]?.measures;
+  if (!measures) return null;
+
+  for (const system of plan.systems) {
+    if (point.y < system.gutterTop || point.y >= system.yTop) continue;
+    for (const measureIndex of system.measureIndices) {
+      const box = measures.find((m) => m.measureIndex === measureIndex)?.box;
+      if (!box) continue;
+      if (point.x >= box.x && point.x < box.x + box.width) return measureIndex;
+    }
+    return null; // inside this system's band, but past its measures
+  }
+  return null;
 }

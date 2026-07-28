@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
@@ -160,5 +160,71 @@ describe('AppLayout', () => {
 
     await user.click(screen.getByLabelText('Toggle track panel'));
     expect(screen.getByLabelText('Track list')).toBeInTheDocument();
+  });
+});
+
+describe('AppLayout: simultaneous notation and piano roll', () => {
+  function makeStore() {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    return store;
+  }
+
+  it('renders both editors at once', () => {
+    render(<AppLayout store={makeStore()} />);
+    expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('piano-roll-grid')).toBeInTheDocument();
+  });
+
+  it('has no view-mode toggle anywhere', () => {
+    render(<AppLayout store={makeStore()} />);
+    expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
+  });
+
+  it('collapses and re-expands the piano-roll panel', async () => {
+    render(<AppLayout store={makeStore()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Collapse piano roll' }));
+    expect(screen.queryByTestId('piano-roll-grid')).not.toBeInTheDocument();
+    // The notation view is unaffected — collapsing the roll is not a mode switch.
+    expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Expand piano roll' }));
+    expect(screen.getByTestId('piano-roll-grid')).toBeInTheDocument();
+  });
+
+  it('announces a regenerated selection in the status bar', () => {
+    const store = makeStore();
+    const noteId = allNotes(store.getState().score!)[0].id;
+    render(<AppLayout store={store} />);
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+      store.setState({ selectionRegenerated: true });
+    });
+
+    expect(screen.getByRole('status', { name: 'Status bar' })).toHaveTextContent(
+      '1 note(s) selected, regenerated',
+    );
+  });
+
+  it('drops the ", regenerated" suffix once the selection changes', () => {
+    const store = makeStore();
+    const [first, second] = allNotes(store.getState().score!);
+    render(<AppLayout store={store} />);
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+      store.setState({ selectionRegenerated: true });
+    });
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [second.id], measureIds: [], trackIds: [] });
+    });
+
+    expect(screen.getByRole('status', { name: 'Status bar' })).toHaveTextContent(
+      '1 note(s) selected',
+    );
+    expect(screen.getByRole('status', { name: 'Status bar' })).not.toHaveTextContent('regenerated');
   });
 });

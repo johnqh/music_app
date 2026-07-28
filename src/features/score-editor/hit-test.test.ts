@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   bboxesIntersect,
+  measureIndexAtGutterPoint,
   boxFromPoints,
   eventIdAtPoint,
   eventIdsInBox,
   measureIdAtPoint,
   pointInBBox,
 } from '@/features/score-editor/hit-test';
-import type { BBox } from '@sudobility/music_lib';
+import type { BBox, LayoutPlan } from '@sudobility/music_lib';
 
 const box: BBox = { x: 10, y: 10, width: 20, height: 10 };
 
@@ -120,5 +121,56 @@ describe('topmost-wins hit-testing and measureIdAtPoint', () => {
   it('returns null outside every bbox', () => {
     expect(eventIdAtPoint(boxes, { x: 500, y: 500 })).toBeNull();
     expect(measureIdAtPoint(boxes, { x: 500, y: 500 })).toBeNull();
+  });
+});
+
+describe('measureIndexAtGutterPoint', () => {
+  // A hand-built two-measure, one-system plan: only the fields the hit test
+  // reads, so the expectations stay readable.
+  const plan = {
+    systems: [
+      {
+        measureIndices: [0, 1],
+        xLeft: 10,
+        xRight: 410,
+        gutterTop: 10,
+        yTop: 28,
+        yBottom: 128,
+      },
+    ],
+    trackLayouts: [
+      {
+        measures: [
+          { measureIndex: 0, isFirstInSystem: true, box: { x: 10, y: 28, width: 200, height: 100 } },
+          { measureIndex: 1, isFirstInSystem: false, box: { x: 210, y: 28, width: 200, height: 100 } },
+        ],
+      },
+    ],
+  } as unknown as LayoutPlan;
+
+  it('finds the measure under a point inside the gutter band', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 50, y: 20 })).toBe(0);
+    expect(measureIndexAtGutterPoint(plan, { x: 250, y: 20 })).toBe(1);
+  });
+
+  it('returns null below the band, where the stave itself starts', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 50, y: 60 })).toBeNull();
+  });
+
+  it('returns null above the band', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 50, y: 2 })).toBeNull();
+  });
+
+  it('returns null horizontally past the last measure', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 500, y: 20 })).toBeNull();
+  });
+
+  it('returns null left of the first measure', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 2, y: 20 })).toBeNull();
+  });
+
+  it('treats the band as half-open at the stave top, so yTop belongs to the stave', () => {
+    expect(measureIndexAtGutterPoint(plan, { x: 50, y: 28 })).toBeNull();
+    expect(measureIndexAtGutterPoint(plan, { x: 50, y: 27 })).toBe(0);
   });
 });

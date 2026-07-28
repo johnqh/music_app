@@ -50,6 +50,15 @@ import { isNoteEvent } from '@sudobility/music_types';
 import type { UUID } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
+import { noteColorFor, resolveNoteColorRole, selectActiveTrackId } from '@sudobility/music_lib';
+import type { NoteColorRole, RenderTheme } from '@sudobility/music_lib';
+import { resolveColorScheme } from '@/app/theme';
+import {
+  DARK_RENDER_THEME,
+  LIGHT_RENDER_THEME,
+} from '@/features/score-editor/ScoreEditorView';
+import { buildNoteColors } from '@/features/score-editor/note-colors';
+import { playingPitchesForTrack } from '@/features/piano-roll/playing-pitches';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import {
@@ -78,7 +87,7 @@ import {
   xToTick,
   yToMidi,
 } from '@/features/piano-roll/geometry';
-import type { GridLine, NoteRect, Point } from '@/features/piano-roll/geometry';
+import type { GridLine, KeyboardRow, NoteRect, Point } from '@/features/piano-roll/geometry';
 import {
   addNoteAtCell,
   commitMove,
@@ -94,6 +103,9 @@ import { recordNoteLayerRender } from '@/features/piano-roll/render-counters';
 export type PianoRollViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
+  /** When true, only the toolbar strip renders. Owned by `AppLayout`, which also persists it. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
 const CONTAINER_MIN_HEIGHT = 400;
@@ -133,6 +145,73 @@ function PlaybackCursor({ store, ppq, zoomH, height }: PlaybackCursorProps) {
   );
 }
 
+type KeyboardColumnProps = {
+  store: EditorStoreApi;
+  rows: KeyboardRow[];
+  height: number;
+  zoomV: number;
+  theme: RenderTheme;
+};
+
+/**
+ * The sticky left keyboard, and the only place that subscribes to
+ * `activeNoteIds` — same isolation rationale as `PlaybackCursor` above: a
+ * note boundary must repaint the keys without re-rendering the memoized note
+ * and grid layers, which is the whole point of their virtualization.
+ */
+function KeyboardColumn({ store, rows, height, zoomV, theme }: KeyboardColumnProps) {
+  const score = store((s) => s.score);
+  const activeNoteIds = store((s) => s.activeNoteIds);
+  const activeTrackId = store(selectActiveTrackId);
+  const playing = useMemo(
+    () => (score ? playingPitchesForTrack(score, activeNoteIds, activeTrackId) : new Set<number>()),
+    [score, activeNoteIds, activeTrackId],
+  );
+
+  return (
+    <div
+      data-testid="piano-roll-keyboard"
+      className="sticky left-0 z-[2] shrink-0 border-r border-theme-border bg-theme-bg-secondary"
+      style={{ width: KEYBOARD_WIDTH, height }}
+    >
+      <div className="relative h-full w-full">
+        {rows.map((row) => {
+          const isPlaying = playing.has(row.midi);
+          return (
+            <div
+              key={row.midi}
+              data-testid={`pr-key-${row.midi}`}
+              data-playing={isPlaying ? 'true' : 'false'}
+              style={{
+                position: 'absolute',
+                top: row.y,
+                left: 0,
+                width: '100%',
+                height: rowHeight(zoomV),
+                ...(isPlaying ? { backgroundColor: theme.notePlaying } : {}),
+              }}
+              className={
+                isPlaying
+                  ? 'border-b border-theme-border'
+                  : `border-b border-theme-border ${row.isBlack ? 'bg-theme-hover-bg' : 'bg-theme-bg-secondary'}`
+              }
+            >
+              {row.label && (
+                <span
+                  className="absolute right-1 top-0 text-theme-text-secondary"
+                  style={{ lineHeight: `${rowHeight(zoomV)}px`, fontSize: 9 }}
+                >
+                  {row.label}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---- isolated, memoized grid-line and note layers ------------------------------------------
 
 type GridLinesLayerProps = { lines: GridLine[]; height: number };
@@ -166,21 +245,23 @@ const GridLinesLayer = memo(function GridLinesLayer({ lines, height }: GridLines
 
 type NoteLayerProps = {
   noteRects: NoteRect[];
-  selectedIds: ReadonlySet<UUID>;
-  selectionColor: string;
+  noteColors: ReadonlyMap<string, NoteColorRole>;
+  theme: RenderTheme;
 };
 
-const NoteLayer = memo(function NoteLayer({
-  noteRects,
-  selectedIds,
-  selectionColor,
-}: NoteLayerProps) {
+/**
+ * Notes are colored by state, from the same four-role palette the notation
+ * view uses — not by track. With only the active track on screen there are no
+ * tracks to tell apart, so `trackColor` would just be a second, conflicting
+ * encoding of something the notation already says with color.
+ */
+const NoteLayer = memo(function NoteLayer({ noteRects, noteColors, theme }: NoteLayerProps) {
   recordNoteLayerRender();
   return (
     <>
       {noteRects.map((r) => {
-        const selected = selectedIds.has(r.id);
         const velocityFraction = Math.max(0, Math.min(127, r.velocity)) / 127;
+        const role = resolveNoteColorRole([r.id], noteColors);
         return (
           <div
             key={r.id}
@@ -191,9 +272,11 @@ const NoteLayer = memo(function NoteLayer({
               top: r.y,
               width: r.width,
               height: r.height,
-              backgroundColor: trackColor(r.trackIndex),
-              opacity: 0.35 + 0.65 * velocityFraction,
-              border: selected ? `2px solid ${selectionColor}` : '1px solid rgba(0,0,0,0.35)',
+              backgroundColor: noteColorFor(role, theme),
+              // Floor raised from 0.35: the state colors carry meaning now, so
+              // a quiet note must stay identifiable rather than washing out.
+              opacity: 0.45 + 0.55 * velocityFraction,
+              border: '1px solid rgba(0,0,0,0.35)',
               boxSizing: 'border-box',
               cursor: 'grab',
             }}
@@ -217,7 +300,11 @@ const NoteLayer = memo(function NoteLayer({
   );
 });
 
-export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
+export function PianoRollView({
+  store = useAppStore,
+  collapsed = false,
+  onToggleCollapsed = () => undefined,
+}: PianoRollViewProps) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const loopRange = store((s) => s.loopRange);
@@ -226,7 +313,34 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
 
   const [zoomH, setZoomH] = useState(1);
   const [zoomV, setZoomV] = useState(1);
-  const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
+  const activeTrackId = store(selectActiveTrackId);
+  const selectionRegenerated = store((s) => s.selectionRegenerated);
+  const activeNoteIds = store((s) => s.activeNoteIds);
+  const themeMode = store((s) => s.themeMode);
+  /** The same palette the notation view draws with, so a note means the same thing in both. */
+  const theme = useMemo(
+    () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
+    [themeMode],
+  );
+  const noteColors = useMemo(
+    () =>
+      buildNoteColors({
+        selectedIds: selection.eventIds,
+        playingIds: activeNoteIds,
+        regenerated: selectionRegenerated,
+      }),
+    [selection.eventIds, activeNoteIds, selectionRegenerated],
+  );
+  /**
+   * The piano roll is the active track's detail view — one keyboard, one set
+   * of rows. That is what makes the four state colors unambiguous here
+   * (there are no per-track colors left to collide with) and what gives the
+   * playback key highlighting a single track to mean.
+   */
+  const visibleTrackIds = useMemo(
+    () => (activeTrackId ? new Set<UUID>([activeTrackId]) : null),
+    [activeTrackId],
+  );
   const [dragBox, setDragBox] = useState<{
     x: number;
     y: number;
@@ -327,8 +441,6 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     if (visibleNoteIds === 'unmeasurable') return noteRects;
     return noteRects.filter((r) => visibleNoteIds.has(r.id));
   }, [noteRects, visibleNoteIds]);
-
-  const selectedIds = useMemo(() => new Set(selection.eventIds), [selection.eventIds]);
 
   /**
    * Re-measures `scrollRef`'s scroll position/size and updates
@@ -665,17 +777,24 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
     (event.currentTarget as Element).releasePointerCapture?.(event.pointerId);
   }, []);
 
+  const toolbar = (
+    <PianoRollToolbar
+      store={store}
+      zoomH={zoomH}
+      zoomV={zoomV}
+      onZoomHChange={setZoomH}
+      onZoomVChange={setZoomV}
+      collapsed={collapsed}
+      onToggleCollapsed={onToggleCollapsed}
+    />
+  );
+
+  // Collapsed: the toolbar strip alone, so the expand control survives.
+  if (collapsed) return <div className="flex flex-col">{toolbar}</div>;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PianoRollToolbar
-        store={store}
-        zoomH={zoomH}
-        zoomV={zoomV}
-        onZoomHChange={setZoomH}
-        onZoomVChange={setZoomV}
-        visibleTrackIds={visibleTrackIds}
-        onVisibleTrackIdsChange={setVisibleTrackIds}
-      />
+      {toolbar}
       <div
         ref={scrollRef}
         role="region"
@@ -686,42 +805,13 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
         style={{ minHeight: CONTAINER_MIN_HEIGHT }}
       >
         <div className="flex" style={{ width: KEYBOARD_WIDTH + gridWidth }}>
-          <div
-            data-testid="piano-roll-keyboard"
-            className="sticky left-0 z-[2] shrink-0 border-r border-theme-border bg-theme-bg-secondary"
-            style={{ width: KEYBOARD_WIDTH, height: kbHeight }}
-          >
-            <div className="relative h-full w-full">
-              {keyboardRows.map((row) => (
-                <div
-                  key={row.midi}
-                  style={{
-                    position: 'absolute',
-                    top: row.y,
-                    left: 0,
-                    width: '100%',
-                    height: rowHeight(zoomV),
-                  }}
-                  className={`border-b border-theme-border ${row.isBlack ? 'bg-theme-hover-bg' : 'bg-theme-bg-secondary'}`}
-                >
-                  {row.label && (
-                    <span
-                      className="absolute right-1 top-0 text-theme-text-secondary"
-                      style={{ lineHeight: `${rowHeight(zoomV)}px`, fontSize: 9 }}
-                    >
-                      {row.label}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <KeyboardColumn store={store} rows={keyboardRows} height={kbHeight} zoomV={zoomV} theme={theme} />
 
           <div
             ref={gridRef}
             data-testid="piano-roll-grid"
             role="application"
-            aria-label={`Piano roll grid. ${selectionSummaryLabel(selection)}.`}
+            aria-label={`Piano roll grid. ${selectionSummaryLabel(selection, selectionRegenerated)}.`}
             tabIndex={0}
             style={{ position: 'relative', width: gridWidth, height: totalHeight, flexShrink: 0 }}
             onPointerDown={handlePointerDown}
@@ -770,11 +860,7 @@ export function PianoRollView({ store = useAppStore }: PianoRollViewProps) {
             <PlaybackCursor store={store} ppq={ppq} zoomH={zoomH} height={kbHeight} />
 
             {/* notes (culled to the scroll viewport, spec §29) */}
-            <NoteLayer
-              noteRects={visibleNoteRects}
-              selectedIds={selectedIds}
-              selectionColor="hsl(var(--primary))"
-            />
+            <NoteLayer noteRects={visibleNoteRects} noteColors={noteColors} theme={theme} />
 
             {/* voice-lane strip */}
             <div

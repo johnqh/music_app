@@ -84,6 +84,8 @@ export type AppLayoutProps = {
 };
 
 const SIDE_PANEL_WIDTH = 280;
+/** Fixed height of the piano-roll panel. Not resizable — collapse is the only size control. */
+const PIANO_ROLL_PANEL_HEIGHT = 280;
 
 const SAVE_STATE_LABEL: Record<string, string> = {
   saved: 'Saved',
@@ -142,12 +144,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const canRedo = store((s) => s.canRedo);
   const undoLabel = store((s) => s.undoLabel);
   const redoLabel = store((s) => s.redoLabel);
-  const view = store((s) => s.view);
   const zoom = store((s) => s.zoom);
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
   const dialogs = store((s) => s.dialogs);
   const selection = store((s) => s.selection);
+  const selectionRegenerated = store((s) => s.selectionRegenerated);
   const score = store((s) => s.score);
   const validationIssues = store((s) => s.validationIssues);
   const generationMode = store((s) => s.mode);
@@ -162,6 +164,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(
     null,
   );
+  const [pianoRollCollapsed, setPianoRollCollapsed] = useState(false);
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -598,11 +601,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="min-h-0 flex-1">
-            {view === 'notation' ? (
-              <ScoreEditorView store={store} />
-            ) : (
-              <PianoRollView store={store} />
-            )}
+            <ScoreEditorView store={store} />
           </div>
         </div>
 
@@ -630,6 +629,21 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         )}
       </div>
 
+      {/* Full-width piano roll: a sibling of the transport rather than a
+          child of the centre column, so it spans the whole window beneath the
+          track and inspector panels. Fixed height, collapsible, and its own
+          horizontal scroll across the full score. */}
+      <div
+        className="shrink-0 overflow-hidden border-t border-theme-border"
+        style={pianoRollCollapsed ? undefined : { height: PIANO_ROLL_PANEL_HEIGHT }}
+      >
+        <PianoRollView
+          store={store}
+          collapsed={pianoRollCollapsed}
+          onToggleCollapsed={() => setPianoRollCollapsed((v) => !v)}
+        />
+      </div>
+
       {/* Pinned bottom bars: the transport sits directly above the status
           bar, outside the scrolling score region, so neither scrolls away
           with the sheet. */}
@@ -641,7 +655,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
         <span className="text-xs text-theme-text-secondary">
-          {selectionSummaryLabel(selection)}
+          {selectionSummaryLabel(selection, selectionRegenerated)}
         </span>
         <div className="flex-1" />
         <div ref={issuesMenu.ref} className="relative">

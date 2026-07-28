@@ -53,7 +53,7 @@ import {
   changeTrackPropsCommand,
   deleteTrackCommand,
 } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
+import { selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
@@ -110,6 +110,7 @@ function CommitSlider({
 function TrackRow({
   track,
   selected,
+  active,
   onSelect,
   onPatch,
   onChangeClef,
@@ -117,6 +118,8 @@ function TrackRow({
 }: {
   track: Track;
   selected: boolean;
+  /** The track the caret, the piano roll, and the notation's stave coloring follow. Distinct from `selected`, which is a score selection. */
+  active: boolean;
   onSelect: () => void;
   onPatch: (
     patch: Partial<Pick<Track, 'name' | 'instrumentName' | 'volume' | 'pan' | 'muted' | 'solo'>>,
@@ -134,7 +137,9 @@ function TrackRow({
   return (
     <div
       role="listitem"
+      data-testid={`track-row-${track.id}`}
       aria-label={`Track: ${track.name}`}
+      aria-current={active ? 'true' : undefined}
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e: KeyboardEvent<HTMLDivElement>) => {
@@ -147,9 +152,13 @@ function TrackRow({
           onSelect();
         }
       }}
-      className={`cursor-pointer border-b border-theme-border p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${
-        selected ? 'bg-theme-bg-secondary' : ''
-      }`}
+      className={cn(
+        'cursor-pointer border-b border-theme-border p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary',
+        selected && 'bg-theme-bg-secondary',
+        // The active track gets a left rail rather than another background
+        // tint, so "active" stays readable on top of "selected".
+        active && 'border-l-2 border-l-primary',
+      )}
     >
       <div className="flex items-center gap-2">
         <Input
@@ -252,6 +261,7 @@ function TrackRow({
 export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
   const score = store((s) => s.score);
   const selectedTrackIds = store((s) => s.selection.trackIds);
+  const activeTrackId = store(selectActiveTrackId);
   const [pendingDeleteId, setPendingDeleteId] = useState<UUID | null>(null);
 
   if (!score) return null;
@@ -288,7 +298,15 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
             key={track.id}
             track={track}
             selected={selectedTrackIds.includes(track.id)}
-            onSelect={() => store.getState().selectTrack(track.id)}
+            active={track.id === activeTrackId}
+            onSelect={() => {
+              // Both: selecting a track in the panel is also how you choose
+              // which track the piano roll shows, since the roll displays the
+              // active track alone and the notation may not have that stave
+              // conveniently on screen.
+              store.getState().setActiveTrack(track.id);
+              store.getState().selectTrack(track.id);
+            }}
             onPatch={(patch) =>
               store.getState().dispatchCommand(changeTrackPropsCommand(track.id, patch))
             }

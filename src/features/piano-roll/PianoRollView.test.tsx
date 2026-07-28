@@ -4,7 +4,7 @@ import { useLayoutEffect } from 'react';
 import { act, render, fireEvent } from '@testing-library/react';
 import { createAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { pitchToMidi, stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { extractFragment } from '@sudobility/music_lib';
@@ -626,5 +626,147 @@ describe('PianoRollView', () => {
 
       expect(store.getState().selection.eventIds).toEqual([lastNote.id]);
     });
+  });
+});
+
+describe('PianoRollView: active track only', () => {
+  it('renders notes from the active track and no others', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[1].id));
+
+    const { container } = render(<PianoRollView store={store} />);
+
+    const trackOne = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
+    const trackZero = allNotes(score).find((n) => n.trackId === score.tracks[0].id)!;
+    expect(container.querySelector(`[data-testid="pr-note-${trackOne.id}"]`)).not.toBeNull();
+    expect(container.querySelector(`[data-testid="pr-note-${trackZero.id}"]`)).toBeNull();
+  });
+
+  it('defaults to the first track when none is explicitly active', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twoTrackScore());
+    const score = store.getState().score!;
+
+    const { container } = render(<PianoRollView store={store} />);
+
+    const trackZero = allNotes(score).find((n) => n.trackId === score.tracks[0].id)!;
+    expect(container.querySelector(`[data-testid="pr-note-${trackZero.id}"]`)).not.toBeNull();
+  });
+
+  it('follows the active track when it changes', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    const { container } = render(<PianoRollView store={store} />);
+    const trackZero = allNotes(score).find((n) => n.trackId === score.tracks[0].id)!;
+    expect(container.querySelector(`[data-testid="pr-note-${trackZero.id}"]`)).not.toBeNull();
+
+    act(() => store.getState().setActiveTrack(score.tracks[1].id));
+
+    expect(container.querySelector(`[data-testid="pr-note-${trackZero.id}"]`)).toBeNull();
+  });
+});
+
+describe('PianoRollView: note state colors', () => {
+  it('colors an unselected note with the normal color', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+    expect(noteRect(container, note.id).style.backgroundColor).toBe('rgb(63, 63, 70)');
+  });
+
+  it('colors a selected note black', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    });
+
+    expect(noteRect(container, note.id).style.backgroundColor).toBe('rgb(0, 0, 0)');
+  });
+
+  it('colors a regenerated selection brown', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      store.setState({ selectionRegenerated: true });
+    });
+
+    expect(noteRect(container, note.id).style.backgroundColor).toBe('rgb(139, 90, 43)');
+  });
+
+  it('colors a sounding note blue', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+
+    act(() => store.getState().setActiveNoteIds([note.id]));
+
+    expect(noteRect(container, note.id).style.backgroundColor).toBe('rgb(21, 101, 192)');
+  });
+});
+
+describe('PianoRollView: playback key highlighting', () => {
+  function key(container: HTMLElement, midi: number): HTMLElement {
+    const el = container.querySelector<HTMLElement>(`[data-testid="pr-key-${midi}"]`);
+    if (!el) throw new Error(`no keyboard row for midi ${midi}`);
+    return el;
+  }
+
+  it('highlights the key of a sounding note on the active track', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+
+    act(() => store.getState().setActiveNoteIds([note.id]));
+
+    expect(key(container, pitchToMidi(note.pitch)).dataset.playing).toBe('true');
+  });
+
+  it('clears the highlight when the note stops', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    const note = allNotes(store.getState().score!)[0];
+    act(() => store.getState().setActiveNoteIds([note.id]));
+
+    act(() => store.getState().setActiveNoteIds([]));
+
+    expect(key(container, pitchToMidi(note.pitch)).dataset.playing).toBe('false');
+  });
+
+  it('does not highlight keys for notes sounding on another track', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    const { container } = render(<PianoRollView store={store} />);
+    const other = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
+
+    act(() => store.getState().setActiveNoteIds([other.id]));
+
+    expect(key(container, pitchToMidi(other.pitch)).dataset.playing).toBe('false');
+  });
+});
+
+describe('PianoRollView: collapse', () => {
+  it('renders only the toolbar when collapsed', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} collapsed />);
+    expect(container.querySelector('[role="toolbar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="piano-roll-grid"]')).toBeNull();
+  });
+
+  it('renders the grid when expanded', () => {
+    const store = makeStore();
+    const { container } = render(<PianoRollView store={store} />);
+    expect(container.querySelector('[data-testid="piano-roll-grid"]')).not.toBeNull();
   });
 });

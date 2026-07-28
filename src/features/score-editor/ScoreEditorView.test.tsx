@@ -4,7 +4,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { computeLayout, caretPositionForTick, tickForPoint } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
@@ -22,15 +22,12 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   playbackController: { togglePlay: vi.fn(), seek: vi.fn() },
 }));
 
-import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
+import { LIGHT_RENDER_THEME, ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-const THEME: RenderTheme = {
-  foreground: 'rgba(0, 0, 0, 0.87)',
-  selection: '#1565c0',
-  playback: '#2e7d32',
-  preview: '#ed6c02',
-};
+// The component's own light theme, not a stand-in: reference renders below
+// must wrap and color identically to what the component draws.
+const THEME: RenderTheme = LIGHT_RENDER_THEME;
 
 function makeStore(): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });
@@ -188,20 +185,37 @@ describe('ScoreEditorView', () => {
     expect(store.getState().selection.eventIds).toEqual([first.id]);
   });
 
-  it('clicking a note-free spot on a stave selects that measure (and seeks)', () => {
+  it('clicking a note-free spot on a stave sets the caret and clears the selection', () => {
     const store = makeStore();
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     const measureId = score.tracks[0].measures[0].id;
+    act(() => {
+      store.getState().setSelection({
+        eventIds: [allNotes(score)[0].id],
+        measureIds: [],
+        trackIds: [],
+      });
+    });
 
     fireEvent.click(interactionSurface(), measureFreePoint(score, measureId));
 
-    expect(store.getState().selection).toEqual({
-      eventIds: [],
-      measureIds: [measureId],
-      trackIds: [],
-    });
+    // Measure selection moved to the gutter; a stave click is now a caret
+    // placement, and clearing makes that caret the next cmd-click's anchor.
+    expect(store.getState().selection.eventIds).toEqual([]);
+    expect(store.getState().selection.measureIds).toEqual([]);
     expect(playbackController.seek).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking a stave makes that track active', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), measureFreePoint(score, score.tracks[1].measures[0].id));
+
+    expect(store.getState().activeTrackId).toBe(score.tracks[1].id);
   });
 
   it('Escape clears the selection (composed with the toolbar and shortcuts hook)', async () => {
@@ -251,7 +265,11 @@ describe('ScoreEditorView', () => {
     expect(updated?.durationTicks).toBe(store.getState().score!.ppq / 2);
   });
 
-  it('redraws notation on score change, but only repaints the overlay on selection change', () => {
+  it('redraws notation on a selection change, because note state is the glyph color now', () => {
+    // The highlight overlay is gone, so there is no "repaint highlights
+    // without touching notation" path any more. This is cheap by design:
+    // computeLayout is cached and NOT invalidated by a color change, so the
+    // redraw is just the visible window.
     const store = makeStore();
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
@@ -261,12 +279,63 @@ describe('ScoreEditorView', () => {
     act(() => {
       store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
     });
-    expect(renderSpy.mock.calls.length).toBe(rendersAfterMount); // overlay-only
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(rendersAfterMount);
+  });
+
+  it('passes the selected note to the renderer as `selected`', () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const [first] = allNotes(store.getState().score!);
 
     act(() => {
-      store.getState().setScore(twinkleScore());
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
     });
-    expect(renderSpy.mock.calls.length).toBeGreaterThan(rendersAfterMount); // notation redraw
+
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('selected');
+  });
+
+  it('passes a regenerated selection to the renderer as `regenerated`', () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const [first] = allNotes(store.getState().score!);
+
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+      store.setState({ selectionRegenerated: true });
+    });
+
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('regenerated');
+  });
+
+  it('passes sounding notes to the renderer as `playing`', () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const [first] = allNotes(store.getState().score!);
+
+    act(() => {
+      store.getState().setActiveNoteIds([first.id]);
+    });
+
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('playing');
+  });
+
+  it('passes the active track and selected measures to the renderer', () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const measureId = score.tracks[0].measures[0].id;
+
+    act(() => {
+      store.getState().selectMeasures([measureId]);
+    });
+
+    const opts = renderSpy.mock.calls.at(-1)![2];
+    expect(opts.activeTrackId).toBe(score.tracks[0].id);
+    expect(opts.selectedMeasureIds?.has(measureId)).toBe(true);
   });
 });
 
@@ -496,7 +565,7 @@ describe('playback caret and click-to-seek', () => {
     expect(playbackController.seek).toHaveBeenCalledWith(expected);
   });
 
-  it('clicking a note selects it without moving the playback position', () => {
+  it('clicking a note selects it and moves the caret to its start', () => {
     const store = makeStore();
     render(<ScoreEditorView store={store} />);
     const first = allNotes(store.getState().score!)[0];
@@ -504,7 +573,7 @@ describe('playback caret and click-to-seek', () => {
     clickNote(store.getState().score!, first.id);
 
     expect(store.getState().selection.eventIds).toEqual([first.id]);
-    expect(playbackController.seek).not.toHaveBeenCalled();
+    expect(playbackController.seek).toHaveBeenCalledWith(first.startTick);
   });
 
   it('wraps the caret/spacer layout at the scroll box measured width, not the 900px fallback', () => {
@@ -589,5 +658,160 @@ describe('ScoreEditorView: continuous-mode horizontal scrolling', () => {
     expect(result.drawnMeasureIndices.size).toBeGreaterThan(0);
     expect(result.drawnMeasureIndices.size).toBeLessThan(80); // horizontal window, not the whole score
     expect(result.drawnMeasureIndices.has(0)).toBe(false); // measure 0 is far left of scrollLeft 3000
+  });
+});
+
+describe('caret-anchored range selection (cmd-click)', () => {
+  /** A point inside measure `index`'s gutter band, in client coordinates (jsdom rects are all zero, so content coords pass through). */
+  function gutterPoint(score: Score, index: number): { clientX: number; clientY: number } {
+    const plan = computeLayout(score, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: THEME,
+    });
+    const system = plan.systems.find((sys) => sys.measureIndices.includes(index));
+    const box = plan.trackLayouts[0].measures.find((m) => m.measureIndex === index)?.box;
+    if (!system || !box) throw new Error(`no gutter geometry for measure ${index}`);
+    return {
+      clientX: box.x + box.width / 2,
+      clientY: (system.gutterTop + system.yTop) / 2,
+    };
+  }
+
+  it('selects the notes between the caret and the click on the active track', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const notes = allNotes(score);
+    act(() => {
+      store.getState().setPositionTick(notes[0].startTick);
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+
+    clickNote(score, notes[2].id, { metaKey: true });
+
+    const selected = store.getState().selection.eventIds;
+    expect(selected).toContain(notes[0].id);
+    expect(selected).toContain(notes[1].id);
+    // The range ends at the clicked *tick*, not the clicked note: clicking a
+    // notehead's center lands slightly past that note's startTick, so it is
+    // included. (The half-open boundary itself is covered against exact tick
+    // values in range-select.test.ts.)
+    expect(selected).toContain(notes[2].id);
+    // ...and nothing beyond the click.
+    expect(selected).not.toContain(notes[3].id);
+  });
+
+  it('does not move the caret, so the anchor can be extended repeatedly', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const notes = allNotes(score);
+    act(() => {
+      store.getState().setPositionTick(notes[0].startTick);
+    });
+    vi.mocked(playbackController.seek).mockClear();
+
+    clickNote(score, notes[2].id, { metaKey: true });
+
+    expect(playbackController.seek).not.toHaveBeenCalled();
+  });
+
+  it('records an explicit range, so an empty span can still be regenerated', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    act(() => {
+      store.getState().setPositionTick(0);
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+
+    clickNote(score, allNotes(score)[2].id, { metaKey: true });
+
+    const range = store.getState().selection.range;
+    expect(range).toBeDefined();
+    expect(range!.startTick).toBe(0);
+    expect(range!.trackIds).toEqual([score.tracks[0].id]);
+  });
+
+  it('stays on the active track by default', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    act(() => {
+      store.getState().setPositionTick(0);
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+
+    clickNote(score, allNotes(score).filter((n) => n.trackId === score.tracks[0].id)[2].id, {
+      metaKey: true,
+    });
+
+    for (const id of store.getState().selection.eventIds) {
+      expect(findEvent(score, id)!.trackId).toBe(score.tracks[0].id);
+    }
+  });
+
+  it('widens to every track with cmd-shift-click', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    act(() => {
+      store.getState().setPositionTick(0);
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+
+    const target = allNotes(score).filter((n) => n.trackId === score.tracks[0].id).at(-1)!;
+    clickNote(score, target.id, { metaKey: true, shiftKey: true });
+
+    const tracksHit = new Set(
+      store.getState().selection.eventIds.map((id) => findEvent(score, id)!.trackId),
+    );
+    expect(tracksHit.has(score.tracks[1].id)).toBe(true);
+  });
+
+  it('clicking the measure gutter selects that measure on the active track', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    act(() => {
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 0));
+
+    expect(store.getState().selection.measureIds).toEqual([score.tracks[0].measures[0].id]);
+  });
+
+  it('cmd-shift-clicking the gutter selects that measure on every track', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), {
+      ...gutterPoint(score, 0),
+      metaKey: true,
+      shiftKey: true,
+    });
+
+    expect(store.getState().selection.measureIds).toEqual([
+      score.tracks[0].measures[0].id,
+      score.tracks[1].measures[0].id,
+    ]);
+  });
+
+  it('gutter clicks do not move the caret', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    vi.mocked(playbackController.seek).mockClear();
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 0));
+
+    expect(playbackController.seek).not.toHaveBeenCalled();
   });
 });

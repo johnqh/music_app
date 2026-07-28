@@ -22,7 +22,6 @@ function renderToolbar(
 ) {
   const onZoomHChange = vi.fn();
   const onZoomVChange = vi.fn();
-  const onVisibleTrackIdsChange = vi.fn();
   const utils = render(
     <PianoRollToolbar
       store={store}
@@ -30,12 +29,12 @@ function renderToolbar(
       zoomV={1}
       onZoomHChange={onZoomHChange}
       onZoomVChange={onZoomVChange}
-      visibleTrackIds={null}
-      onVisibleTrackIdsChange={onVisibleTrackIdsChange}
+      collapsed={false}
+      onToggleCollapsed={() => undefined}
       {...overrides}
     />,
   );
-  return { ...utils, onZoomHChange, onZoomVChange, onVisibleTrackIdsChange };
+  return { ...utils, onZoomHChange, onZoomVChange };
 }
 
 describe('PianoRollToolbar', () => {
@@ -95,26 +94,29 @@ describe('PianoRollToolbar', () => {
     expect(store.getState().loopRange).not.toBeNull();
   });
 
-  it('lists every track in the track filter and reports a full re-selection as "show all" (null)', async () => {
-    const store = makeStore(twoTrackScore());
-    const { onVisibleTrackIdsChange } = renderToolbar(store);
+  it('has no track filter: the roll always follows the active track', () => {
+    renderToolbar(makeStore(twoTrackScore()));
+    expect(screen.queryByLabelText('Track filter')).not.toBeInTheDocument();
+  });
+
+  it('has no view switch: notation and piano roll are shown at the same time', () => {
+    renderToolbar(makeStore());
+    expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
+  });
+
+  it('the collapse control toggles and renames itself', async () => {
+    const onToggleCollapsed = vi.fn();
+    renderToolbar(makeStore(), { onToggleCollapsed });
     const user = userEvent.setup();
 
-    await user.click(screen.getByLabelText('Track filter'));
-    // Substring match: the option's computed accessible name now includes
-    // its checkbox's own `aria-label` ("Show track: Treble") ahead of the
-    // visible "Treble" text, per the accname "name from content"
-    // algorithm — see the checkbox's own doc comment.
-    expect(await screen.findByRole('option', { name: /Treble/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Bass/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Collapse piano roll' }));
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+  });
 
-    // All tracks start implicitly selected (visibleTrackIds === null); with
-    // both already checked, clicking "Treble" deselects it, leaving Bass as
-    // the sole remaining checked track.
-    await user.click(screen.getByRole('option', { name: /Treble/ }));
-
-    const bassId = store.getState().score!.tracks[1].id;
-    expect(onVisibleTrackIdsChange).toHaveBeenCalledWith(new Set([bassId]));
+  it('offers Expand while collapsed, so the panel is never unreachable', () => {
+    renderToolbar(makeStore(), { collapsed: true });
+    expect(screen.getByRole('button', { name: 'Expand piano roll' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Collapse piano roll' })).not.toBeInTheDocument();
   });
 });
 

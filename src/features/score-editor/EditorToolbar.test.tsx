@@ -168,14 +168,9 @@ describe('EditorToolbar', () => {
     expect(onLayoutModeChange).toHaveBeenCalledWith('continuous');
   });
 
-  it('view switch calls store.setView', async () => {
-    const store = makeStore();
-    renderToolbar(store);
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole('button', { name: 'Piano roll view' }));
-
-    expect(store.getState().view).toBe('piano-roll');
+  it('has no view switch: notation and piano roll are shown at the same time', () => {
+    renderToolbar(makeStore());
+    expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
   });
 
   it('disables editing controls when no score is loaded', () => {

@@ -32,7 +32,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { CanvasScoreRenderer, paintHighlights, playbackController } from '@sudobility/music_lib';
+import { CanvasScoreRenderer, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
   boxForMeasureIndex,
@@ -42,7 +42,7 @@ import {
 } from '@sudobility/music_lib';
 import type { ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
-import { selectionSummaryLabel } from '@sudobility/music_lib';
+import { findEvent, selectionSummaryLabel } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
 import { useAppStore } from '@sudobility/music_lib';
@@ -55,9 +55,12 @@ import {
   eventIdAtPoint,
   eventIdsInBox,
   measureIdAtPoint,
+  measureIndexAtGutterPoint,
 } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
-import { selectMeasure } from '@/features/score-editor/editing';
+import { buildNoteColors } from '@/features/score-editor/note-colors';
+import { noteIdsInTickRange } from '@/features/score-editor/range-select';
+import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -72,31 +75,40 @@ const DRAG_THRESHOLD = 3;
 const SCROLL_MARGIN = 40;
 
 /**
- * VexFlow render colors (spec §7), one set per resolved light/dark color
- * scheme -- matching MUI's own former default `text.primary`/`success.main`/
- * `warning.main` palette values for each mode (the pre-T13 `theme.ts`'s
- * `createAppTheme` only overrode `primary`/`secondary`, so these two objects
- * are what MUI's `ThemeProvider` was actually resolving `useTheme()` to
- * before this file's T12 batch 6 Tailwind pass; kept as literals post-T13
- * MUI removal since VexFlow still needs real color strings, not CSS
- * variables). VexFlow draws straight to SVG attributes, not
- * CSS, so this deliberately stays literal color strings rather than reading
- * the app's `--color-*`/`--primary` custom properties (which jsdom's test
- * environment doesn't process CSS for anyway, and no test asserts an exact
- * rendered color -- `render()` itself is mocked/spied in every test that
- * touches this).
+ * VexFlow render colors, one set per resolved light/dark color scheme.
+ *
+ * Literal color strings, not CSS custom properties: VexFlow draws straight
+ * to canvas fill/stroke, which never resolves `var(--...)` (and jsdom
+ * doesn't process CSS for tests anyway).
+ *
+ * Note *state* is carried by these colors now — the highlight overlay and
+ * its second canvas are gone, so `noteNormal`/`noteSelected`/
+ * `noteRegenerated`/`notePlaying` are what the user actually reads state
+ * from. Each value clears 4.5:1 against its mode's stave background.
+ *
+ * Exported because `PianoRollView` draws from the same palette: one shared
+ * set of state colors across both views, so a note doesn't change meaning
+ * when you look at it in the other one.
  */
-const LIGHT_RENDER_THEME: RenderTheme = {
-  foreground: 'rgba(0, 0, 0, 0.87)',
-  selection: '#1565c0',
-  playback: '#2e7d32',
-  preview: '#ed6c02',
+export const LIGHT_RENDER_THEME: RenderTheme = {
+  foreground: '#3f3f46',
+  noteNormal: '#3f3f46',
+  noteSelected: '#000000',
+  noteRegenerated: '#8b5a2b',
+  notePlaying: '#1565c0',
+  staveActive: '#000000',
+  staveInactive: '#71717a',
+  caret: '#d32f2f',
 };
-const DARK_RENDER_THEME: RenderTheme = {
-  foreground: '#ffffff',
-  selection: '#90caf9',
-  playback: '#66bb6a',
-  preview: '#ffa726',
+export const DARK_RENDER_THEME: RenderTheme = {
+  foreground: '#d4d4d8',
+  noteNormal: '#d4d4d8',
+  noteSelected: '#ffffff',
+  noteRegenerated: '#d9a066',
+  notePlaying: '#64b5f6',
+  staveActive: '#ffffff',
+  staveInactive: '#8a8a93',
+  caret: '#ef5350',
 };
 
 /** Every event id (note or rest) referenced by a preview fragment's measures, for the highlight overlay's `previewIds`. */
@@ -135,6 +147,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const playbackState = store((s) => s.state);
   const positionTick = store((s) => s.positionTick);
   const themeMode = store((s) => s.themeMode);
+  const selectionRegenerated = store((s) => s.selectionRegenerated);
+  const activeTrackId = store(selectActiveTrackId);
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
@@ -153,9 +167,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
-  /** The two viewport-sized drawing surfaces (spec: canvas-notation-renderer): notation glyphs, and the highlight/caret-free overlay painted by `paintHighlights`. */
+  /** The single viewport-sized drawing surface. There used to be a second, overlay canvas for selection/playback rectangles; notes carry their own color now, and the caret and drag box are DOM divs, so one canvas is enough. */
   const scoreCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<CanvasScoreRenderer | null>(null);
   if (!rendererRef.current) rendererRef.current = new CanvasScoreRenderer();
   const resultRef = useRef<CanvasRenderResult | null>(null);
@@ -181,6 +194,9 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
    */
   const scrollFrameScheduledRef = useRef(false);
   const scrollRafIdRef = useRef<number | null>(null);
+  /** Live rAF id for drag autoscroll, and the last pointer position in scroll-box coordinates. */
+  const autoscrollRafRef = useRef<number | null>(null);
+  const autoscrollPointRef = useRef<{ x: number; y: number } | null>(null);
 
   const renderTheme: RenderTheme = useMemo(
     () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
@@ -188,6 +204,25 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   );
 
   const previewIds = useMemo(() => previewEventIds(previewFragment), [previewFragment]);
+
+  /**
+   * Per-note colors for this frame. Preview-candidate ids color as
+   * `regenerated` alongside a genuinely-regenerated selection: an unaccepted
+   * candidate is the same "this is generated material" signal, and without
+   * it a preview would be indistinguishable from committed notes (the old
+   * dotted overlay stroke used to carry that).
+   */
+  const noteColors = useMemo(
+    () =>
+      buildNoteColors({
+        selectedIds: [...selection.eventIds, ...previewIds],
+        playingIds: activeNoteIds,
+        regenerated: selectionRegenerated || previewIds.length > 0,
+      }),
+    [selection.eventIds, previewIds, activeNoteIds, selectionRegenerated],
+  );
+
+  const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
 
   /**
    * The score actually drawn: the committed score, or — while a
@@ -253,56 +288,20 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     const h = box.clientHeight || CONTAINER_MIN_HEIGHT;
     setViewWidth(w); // keep layoutPlan wrapping at the width the canvas actually draws with
 
-    for (const canvas of [scoreCanvasRef.current, overlayCanvasRef.current]) {
-      if (!canvas) return false;
-      const bw = Math.max(1, Math.floor(w * dpr));
-      const bh = Math.max(1, Math.floor(h * dpr));
-      if (canvas.width !== bw) canvas.width = bw;
-      if (canvas.height !== bh) canvas.height = bh;
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-    }
+    const canvas = scoreCanvasRef.current;
+    if (!canvas) return false;
+    const bw = Math.max(1, Math.floor(w * dpr));
+    const bh = Math.max(1, Math.floor(h * dpr));
+    if (canvas.width !== bw) canvas.width = bw;
+    if (canvas.height !== bh) canvas.height = bh;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
     return true;
   }, []);
 
   /**
-   * Repaints the highlight overlay (selection / playback active notes /
-   * preview) for the current drawn window. Cheap: strokes a handful of
-   * rects on the viewport-sized overlay canvas -- never touches the
-   * notation canvas, preserving the SVG era's "highlight changes don't
-   * re-render notation" property via layering instead of DOM styles.
-   */
-  const drawOverlay = useCallback(() => {
-    const box = scrollBoxRef.current;
-    const ctx = overlayCanvasRef.current?.getContext('2d');
-    const result = resultRef.current;
-    if (!box || !ctx || !result) return;
-    // Highlight state is read from the store at call time (not closed
-    // over): this keeps `drawOverlay`'s identity stable across selection/
-    // playback changes, so `draw` (which depends on it) doesn't get a new
-    // identity — and the notation canvas doesn't redraw — every time a
-    // highlight changes. The overlay effect below subscribes to the
-    // reactive values and re-invokes this on each change.
-    const state = store.getState();
-    paintHighlights(
-      ctx,
-      result,
-      {
-        selectedIds: state.selection.eventIds,
-        playingIds: state.activeNoteIds,
-        previewIds: previewEventIds(state.previewFragment),
-      },
-      {
-        viewportTop: box.scrollTop,
-        viewportLeft: box.scrollLeft,
-        devicePixelRatio: window.devicePixelRatio || 1,
-      },
-    );
-  }, [store]);
-
-  /**
-   * Draws the visible window of `displayScore` into the score canvas, then
-   * repaints the overlay. Drawing IS the virtualization now: each call
+   * Draws the visible window of `displayScore` into the score canvas.
+   * Drawing IS the virtualization now: each call
    * renders exactly the systems intersecting the live scroll position
    * (`CanvasScoreRenderer` is O(visible) per call and caches the
    * full-score layout, so a viewport change never recomputes layout) --
@@ -335,9 +334,59 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       theme: renderTheme,
       viewport,
       devicePixelRatio: window.devicePixelRatio || 1,
+      noteColors,
+      activeTrackId,
+      selectedMeasureIds,
     });
-    drawOverlay();
-  }, [displayScore, zoom, layoutMode, renderTheme, drawOverlay, viewWidth]);
+  }, [
+    displayScore,
+    zoom,
+    layoutMode,
+    renderTheme,
+    viewWidth,
+    noteColors,
+    activeTrackId,
+    selectedMeasureIds,
+  ]);
+
+  const stopAutoscroll = useCallback(() => {
+    if (autoscrollRafRef.current !== null) {
+      cancelAnimationFrame(autoscrollRafRef.current);
+      autoscrollRafRef.current = null;
+    }
+    autoscrollPointRef.current = null;
+  }, []);
+
+  /**
+   * Runs while a drag-box selection is in flight: each frame, nudges the
+   * scroll box if the pointer sits inside an edge band, so a selection can
+   * extend past what's currently on screen.
+   *
+   * The scroll itself fires `onScroll` -> `draw()`, so the newly-exposed
+   * window repaints with no extra wiring here, and the drag box keeps
+   * extending correctly because `pointFromEvent` already tracks content
+   * (not viewport) coordinates.
+   */
+  const stepAutoscroll = useCallback(() => {
+    const box = scrollBoxRef.current;
+    const point = autoscrollPointRef.current;
+    if (!box || !point) {
+      autoscrollRafRef.current = null;
+      return;
+    }
+    const { dx, dy } = autoscrollDelta({
+      x: point.x,
+      y: point.y,
+      box: {
+        width: box.clientWidth || DEFAULT_WIDTH,
+        height: box.clientHeight || CONTAINER_MIN_HEIGHT,
+      },
+      layoutMode,
+    });
+    if (dx !== 0) box.scrollLeft += dx;
+    if (dy !== 0) box.scrollTop += dy;
+    autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
+  }, [layoutMode]);
 
   /** `onScroll` handler: throttles `draw` to at most once per animation frame; trailing-edge, so a burst of scroll events collapses into one redraw at the frame's final position. */
   const handleScroll = useCallback(() => {
@@ -357,6 +406,11 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         scrollRafIdRef.current = null;
       }
       scrollFrameScheduledRef.current = false;
+      if (autoscrollRafRef.current !== null) {
+        cancelAnimationFrame(autoscrollRafRef.current);
+        autoscrollRafRef.current = null;
+      }
+      autoscrollPointRef.current = null;
     };
   }, []);
 
@@ -385,12 +439,15 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     return () => observer.disconnect();
   }, [sizeCanvases, draw]);
 
-  // Overlay-only repaint: selection/playback/preview changes never redraw
-  // notation (drawOverlay is store-stable; these subscribed values are the
-  // reactive triggers).
-  useEffect(() => {
-    drawOverlay();
-  }, [drawOverlay, selection, activeNoteIds, previewIds]);
+  // A selection/playback/preview change now redraws notation, because the
+  // color lives on the glyphs themselves. That is cheap and deliberate:
+  // `computeLayout` is cached and NOT invalidated by a color change, so a
+  // redraw is just the visible window — the same work a scroll frame already
+  // does at 60fps. `activeNoteIds` also changes only on note boundaries, not
+  // per frame; the 30Hz `positionTick` moves the caret div, not the canvas.
+  //
+  // (The dedicated `draw` effect above already depends on `noteColors` /
+  // `activeTrackId` / `selectedMeasureIds`, so no separate effect is needed.)
 
   // Scroll the active playback measure into view (spec §7 item 13).
   //
@@ -511,34 +568,99 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       // generation panel, not by clicking the notation.
       if (previewFragment) return;
 
-      // Geometric hit-testing (canvas has no per-glyph DOM): resolve the
-      // click point in content coordinates against the drawn window's bbox
-      // maps — note first (topmost wins), then measure stave, then seek.
+      // Geometric hit-testing (canvas has no per-glyph DOM): everything below
+      // resolves the click point in content coordinates against the drawn
+      // window's bbox maps and the layout plan.
       const container = containerRef.current;
       const result = resultRef.current;
-      if (!container) return;
+      const state = store.getState();
+      if (!container || !state.score) return;
       const rect = container.getBoundingClientRect();
       const point: Point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const logical = { x: point.x / zoom, y: point.y / zoom };
+      const rangeModifier = event.metaKey || event.ctrlKey;
 
-      const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
-      if (noteId) {
-        // A note/rest click is an editing gesture: select only, don't yank
-        // the playhead out from under an edit in progress.
-        const state = store.getState();
-        if (event.shiftKey) state.toggleEvent(noteId);
-        else state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+      // ---- measure gutter: the one gesture that still selects measures,
+      // which is what keeps regeneration's "select bars 3-4" workflow alive
+      // now that a stave click sets the caret. Never moves the caret.
+      if (layoutPlan) {
+        const gutterIndex = measureIndexAtGutterPoint(layoutPlan, logical);
+        if (gutterIndex !== null) {
+          const tracks =
+            rangeModifier && event.shiftKey
+              ? state.score.tracks
+              : state.score.tracks.filter((t) => t.id === activeTrackId);
+          const measureIds = tracks
+            .map((t) => t.measures[gutterIndex]?.id)
+            .filter((id): id is string => id !== undefined);
+          if (measureIds.length > 0) state.selectMeasures(measureIds);
+          return;
+        }
+      }
+
+      // ---- cmd-click: select from the caret to here. Deliberately does NOT
+      // move the caret, so the same anchor can be extended repeatedly.
+      if (rangeModifier) {
+        if (!layoutPlan || !displayScore) return;
+        const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
+        if (clickedTick === null) return;
+
+        const scopeTrackIds = event.shiftKey
+          ? state.score.tracks.map((t) => t.id)
+          : activeTrackId
+            ? [activeTrackId]
+            : [];
+        state.setSelection({
+          eventIds: noteIdsInTickRange(state.score, state.positionTick, clickedTick, scopeTrackIds),
+          measureIds: [],
+          trackIds: [],
+          // The explicit range matters: regenerating a span of empty measures
+          // must still work, and `selectionToRange` can't derive a span from
+          // an empty eventIds list.
+          range: {
+            startTick: Math.min(state.positionTick, clickedTick),
+            endTick: Math.max(state.positionTick, clickedTick),
+            trackIds: scopeTrackIds,
+          },
+        });
         return;
       }
 
+      // ---- click on a note.
+      const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
+      if (noteId) {
+        // Shift-click stays a pure additive toggle, exactly as before: it
+        // composes fine with cmd-click range (different modifier) and it is
+        // the only way to build a non-contiguous selection, so the caret
+        // rework has no reason to take it away. Deliberately does NOT move
+        // the caret or the active track — yanking the playhead on every
+        // toggle while assembling a selection would be hostile.
+        if (event.shiftKey) {
+          state.toggleEvent(noteId);
+          return;
+        }
+        // Plain click: caret to the note's start, select it alone.
+        const note = findEvent(state.score, noteId);
+        state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+        if (note) {
+          state.setActiveTrack(note.trackId);
+          playbackController.seek(note.startTick);
+        }
+        return;
+      }
+
+      // ---- plain click anywhere else inside a system: caret + active track.
+      // The selection is cleared so the caret becomes the anchor for the next
+      // cmd-click range.
       const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
       if (measureId) {
-        selectMeasure(store, measureId);
+        const owner = state.score.tracks.find((t) => t.measures.some((m) => m.id === measureId));
+        if (owner) state.setActiveTrack(owner.id);
       }
-      // Any other track click — stave background, barlines, or empty canvas
-      // inside a system — moves the playback position there.
+      state.clearSelection();
       seekToEventPoint(event);
     },
-    [store, previewFragment, seekToEventPoint],
+    [store, previewFragment, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
   );
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
@@ -577,15 +699,28 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         const dy = Math.abs(point.y - drag.start.y);
         if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) drag.moved = true;
       }
-      if (drag.moved) setDragBox(boxFromPoints(drag.start, point));
+      if (!drag.moved) return;
+      setDragBox(boxFromPoints(drag.start, point));
+
+      const box = scrollBoxRef.current;
+      if (!box) return;
+      const boxRect = box.getBoundingClientRect();
+      autoscrollPointRef.current = {
+        x: event.clientX - boxRect.left,
+        y: event.clientY - boxRect.top,
+      };
+      if (autoscrollRafRef.current === null) {
+        autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
+      }
     },
-    [pointFromEvent],
+    [pointFromEvent, stepAutoscroll],
   );
 
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const drag = dragStateRef.current;
       if (!drag) return;
+      stopAutoscroll();
       containerRef.current?.releasePointerCapture?.(event.pointerId);
 
       if (drag.moved) {
@@ -611,7 +746,23 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [pointFromEvent, store, previewFragment],
+    [pointFromEvent, store, previewFragment, stopAutoscroll],
+  );
+
+  /**
+   * A cancelled pointer (touch takeover, alt-tab, the browser stealing
+   * capture) must not leave the autoscroll loop running against a stale
+   * pointer position — that would scroll forever with no way to stop it.
+   * Drops the drag without committing any selection.
+   */
+  const handlePointerCancel = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      stopAutoscroll();
+      containerRef.current?.releasePointerCapture?.(event.pointerId);
+      setDragBox(null);
+      dragStateRef.current = null;
+    },
+    [stopAutoscroll],
   );
 
   return (
@@ -637,12 +788,13 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
           ref={containerRef}
           data-testid="score-editor-canvas"
           role="application"
-          aria-label={`Score notation. ${selectionSummaryLabel(selection)}.`}
+          aria-label={`Score notation. ${selectionSummaryLabel(selection, selectionRegenerated)}.`}
           tabIndex={0}
           onClick={handleClick}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           className="relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           style={{
             height: Math.max((layoutPlan?.totalHeight ?? 0) * zoom, CONTAINER_MIN_HEIGHT),
@@ -654,21 +806,16 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
             minWidth: (layoutPlan?.totalWidth ?? 0) * zoom,
           }}
         >
-          {/* Viewport-pinned drawing surfaces: a ZERO-SIZED sticky anchor
+          {/* Viewport-pinned drawing surface: a ZERO-SIZED sticky anchor
               (first child, so its static position is the content origin)
               that pins to the scrollport's top-left corner in BOTH axes;
-              the canvases hang off it via overflow. `pointer-events-none`
+              the canvas hangs off it via overflow. `pointer-events-none`
               keeps every click landing on the interaction div itself. */}
           <div
             className="pointer-events-none sticky left-0 top-0 z-0 h-0 w-0 overflow-visible"
             aria-hidden="true"
           >
             <canvas ref={scoreCanvasRef} data-testid="score-canvas" />
-            <canvas
-              ref={overlayCanvasRef}
-              data-testid="overlay-canvas"
-              className="absolute left-0 top-0"
-            />
           </div>
         </div>
         {dragBox && (
@@ -691,8 +838,9 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
               left: caret.x * zoom,
               top: caret.yTop * zoom,
               height: (caret.yBottom - caret.yTop) * zoom,
+              backgroundColor: renderTheme.caret,
             }}
-            className="pointer-events-none absolute w-0.5 -translate-x-1/2 bg-primary"
+            className="pointer-events-none absolute w-0.5 -translate-x-1/2"
           />
         )}
       </div>

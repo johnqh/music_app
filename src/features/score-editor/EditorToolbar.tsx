@@ -126,7 +126,6 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
-  const view = store((s) => s.view);
   const zoom = store((s) => s.zoom);
   const hasScore = score !== null;
 
@@ -401,28 +400,6 @@ export function EditorToolbar({
 
       <div className="flex-1" />
 
-      <div role="group" aria-label="Editor view" className="flex items-center gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Notation view"
-          aria-pressed={view === 'notation'}
-          onClick={() => store.getState().setView('notation')}
-          className={TOGGLE_BUTTON_CLASS}
-        >
-          Notation
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Piano roll view"
-          aria-pressed={view === 'piano-roll'}
-          onClick={() => store.getState().setView('piano-roll')}
-          className={TOGGLE_BUTTON_CLASS}
-        >
-          Piano roll
-        </Button>
-      </div>
     </div>
   );
 }
