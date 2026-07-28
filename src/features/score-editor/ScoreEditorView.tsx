@@ -37,7 +37,7 @@ import {
   computeLayout,
   tickForPoint,
 } from '@sudobility/music_lib';
-import type { ScoreFragment } from '@sudobility/music_lib';
+import type { LayoutPlan, ScoreFragment } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { findEvent, selectionSummaryLabel } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
@@ -98,6 +98,95 @@ function currentMeasureId(score: Score, positionTick: number): string | null {
   return measure.id;
 }
 
+type PlaybackCaretProps = {
+  store: EditorStoreApi;
+  plan: LayoutPlan | null;
+  score: Score | null;
+  zoom: number;
+  color: string;
+  scrollBoxRef: React.RefObject<HTMLDivElement | null>;
+};
+
+/**
+ * The playback caret, and the ONLY part of the editor that subscribes to
+ * `positionTick`.
+ *
+ * The isolation is the whole point. The engine reports position at 30Hz, and
+ * while `ScoreEditorView` read that at its own top level the entire view
+ * re-rendered 30 times a second during playback, re-running every memo and
+ * rebuilding every callback. Tone.js schedules on this same thread, so the
+ * work turned into audible hesitation and a caret that stuttered rather than
+ * glided. Same pattern the piano roll used for its own cursor.
+ *
+ * Scroll-into-view lives here for the same reason: it is driven by position
+ * and needs nothing from the parent's render.
+ */
+function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: PlaybackCaretProps) {
+  const positionTick = store((s) => s.positionTick);
+  const playbackState = store((s) => s.state);
+
+  const caret = useMemo(
+    () => (plan && score ? caretPositionForTick(plan, score, positionTick) : null),
+    [plan, score, positionTick],
+  );
+
+  // Scroll the active playback measure into view (spec §7 item 13).
+  //
+  // `lastScrolledMeasureRef` resets whenever playback isn't actively
+  // `'playing'` (and whenever `score` itself changes) rather than only being
+  // written on a successful scroll. Without the reset, stopping playback,
+  // scrolling away manually, and restarting on the *same* measure would
+  // silently no-op forever and the active measure would never re-enter view.
+  const lastScrolledMeasureRef = useRef<string | null>(null);
+  const lastScrolledScoreRef = useRef<Score | null>(null);
+  useEffect(() => {
+    if (score !== lastScrolledScoreRef.current) {
+      lastScrolledScoreRef.current = score;
+      lastScrolledMeasureRef.current = null;
+    }
+    if (playbackState !== 'playing') {
+      lastScrolledMeasureRef.current = null;
+      return;
+    }
+
+    const scrollBox = scrollBoxRef.current;
+    if (!scrollBox || !score || !plan) return;
+    const measureId = currentMeasureId(score, positionTick);
+    if (!measureId || measureId === lastScrolledMeasureRef.current) return;
+
+    // Read off the memoized plan rather than the drawn window's bbox map, so
+    // this still finds a measure lying outside the currently-drawn window.
+    const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
+    if (measureIndex === -1) return;
+    const bbox = boxForMeasureIndex(plan, 0, measureIndex);
+    if (!bbox) return;
+
+    lastScrolledMeasureRef.current = measureId;
+    if (typeof scrollBox.scrollTo === 'function') {
+      scrollBox.scrollTo({
+        left: Math.max(0, bbox.x * zoom - SCROLL_MARGIN),
+        top: Math.max(0, bbox.y * zoom - SCROLL_MARGIN),
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
+    }
+  }, [score, positionTick, playbackState, plan, zoom, scrollBoxRef]);
+
+  if (!caret) return null;
+  return (
+    <div
+      data-testid="playback-caret"
+      aria-hidden="true"
+      style={{
+        left: caret.x * zoom,
+        top: caret.yTop * zoom,
+        height: (caret.yBottom - caret.yTop) * zoom,
+        backgroundColor: color,
+      }}
+      className="pointer-events-none absolute w-0.5 -translate-x-1/2"
+    />
+  );
+}
+
 export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
 
@@ -106,8 +195,6 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const zoom = store((s) => s.zoom);
   const activeNoteIds = store((s) => s.activeNoteIds);
   const previewFragment = store((s) => s.previewFragment);
-  const playbackState = store((s) => s.state);
-  const positionTick = store((s) => s.positionTick);
   const themeMode = store((s) => s.themeMode);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
@@ -136,8 +223,6 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   const resultRef = useRef<CanvasRenderResult | null>(null);
   const dragStateRef = useRef<{ start: Point; moved: boolean; additive: boolean } | null>(null);
   const suppressNextClickRef = useRef(false);
-  const lastScrolledMeasureRef = useRef<string | null>(null);
-  const lastScrolledScoreRef = useRef<Score | null>(null);
   /**
    * Throttling bookkeeping for `handleScroll`'s `requestAnimationFrame`-
    * scheduled `measureViewport` call: `scrollFrameScheduledRef` is the
@@ -156,6 +241,8 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
    */
   const scrollFrameScheduledRef = useRef(false);
   const scrollRafIdRef = useRef<number | null>(null);
+  /** Pending rAF for a colour-only repaint (see the repaint effect below). */
+  const colorFrameRef = useRef<number | null>(null);
   /** Live rAF id for drag autoscroll, and the last pointer position in scroll-box coordinates. */
   const autoscrollRafRef = useRef<number | null>(null);
   const autoscrollPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -185,6 +272,13 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   );
 
   const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
+
+  // Mirrors of the two colour inputs, so `draw` can read the latest values
+  // without taking them as dependencies (see the `draw` call site).
+  const noteColorsRef = useRef(noteColors);
+  noteColorsRef.current = noteColors;
+  const selectedMeasureIdsRef = useRef(selectedMeasureIds);
+  selectedMeasureIdsRef.current = selectedMeasureIds;
 
   /**
    * The score actually drawn: the committed score, or — while a
@@ -221,19 +315,6 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     if (!displayScore) return null;
     return computeLayout(displayScore, { zoom, layoutMode, width: viewWidth, theme: renderTheme });
   }, [displayScore, zoom, layoutMode, renderTheme, viewWidth]);
-
-  /**
-   * The playback caret's position (spec follow-up: "caret on the track
-   * view"): a vertical line at `positionTick`, spanning the system that
-   * tick falls in. Present from the very first render (positionTick starts
-   * at 0 — the caret sits at the score's start before playback ever runs)
-   * and follows both live playback and seeks, since the engine reports all
-   * of them back through the store's `positionTick`.
-   */
-  const caret = useMemo(() => {
-    if (!layoutPlan || !displayScore) return null;
-    return caretPositionForTick(layoutPlan, displayScore, positionTick);
-  }, [layoutPlan, displayScore, positionTick]);
 
   /**
    * Sizes both canvas backing stores to the scroll box's client size x the
@@ -296,20 +377,53 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       theme: renderTheme,
       viewport,
       devicePixelRatio: window.devicePixelRatio || 1,
-      noteColors,
+      // Read through refs, not closed over: colours change on every note
+      // boundary, and a new `draw` identity on each would re-fire the mount
+      // effect below instead of going through the coalesced path.
+      noteColors: noteColorsRef.current,
       activeTrackId,
-      selectedMeasureIds,
+      selectedMeasureIds: selectedMeasureIdsRef.current,
     });
-  }, [
-    displayScore,
-    zoom,
-    layoutMode,
-    renderTheme,
-    viewWidth,
-    noteColors,
-    activeTrackId,
-    selectedMeasureIds,
-  ]);
+  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth, activeTrackId]);
+
+  /**
+   * Repaints after a colour change, coalesced to one draw per animation frame
+   * and skipped entirely when nothing *visible* changed.
+   *
+   * Both guards matter. A redraw is not cheap: `CanvasScoreRenderer` caches
+   * the layout plan but still rebuilds and re-formats every VexFlow object in
+   * the window, measured at ~5ms. `activeNoteIds` fires on every note-on AND
+   * note-off, so an unguarded redraw put tens of those per second on the same
+   * thread Tone.js schedules from — which was audible as hesitation.
+   *
+   * - Coalescing caps it at one redraw per frame however many notes change.
+   * - The visible-set check drops the rest: a note starting or ending outside
+   *   the drawn window changes no pixel, and during a held chord nothing
+   *   changes at all.
+   */
+  const paintedColorsRef = useRef<string>('');
+  useEffect(() => {
+    const result = resultRef.current;
+    // Before the first draw there is no window to compare against; the mount
+    // effect above owns that paint.
+    if (!result) return;
+
+    let signature = '';
+    for (const [id, role] of noteColors) {
+      if (result.idToBBox.has(id)) signature += `${id}:${role};`;
+    }
+    for (const id of selectedMeasureIds) {
+      if (result.measureIdToBBox.has(id)) signature += `m${id};`;
+    }
+    if (signature === paintedColorsRef.current) return;
+    paintedColorsRef.current = signature;
+
+    if (colorFrameRef.current !== null) return;
+    colorFrameRef.current = requestAnimationFrame(() => {
+      colorFrameRef.current = null;
+      draw();
+    });
+  }, [noteColors, selectedMeasureIds, draw]);
 
   const stopAutoscroll = useCallback(() => {
     if (autoscrollRafRef.current !== null) {
@@ -373,6 +487,10 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         autoscrollRafRef.current = null;
       }
       autoscrollPointRef.current = null;
+      if (colorFrameRef.current !== null) {
+        cancelAnimationFrame(colorFrameRef.current);
+        colorFrameRef.current = null;
+      }
     };
   }, []);
 
@@ -410,54 +528,6 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   //
   // (The dedicated `draw` effect above already depends on `noteColors` /
   // `activeTrackId` / `selectedMeasureIds`, so no separate effect is needed.)
-
-  // Scroll the active playback measure into view (spec §7 item 13).
-  //
-  // `lastScrolledMeasureRef` is reset whenever playback isn't actively
-  // `'playing'` (and whenever `score` itself changes, e.g. a fresh
-  // generation/import/undo swaps the score object) rather than only being
-  // written on a successful scroll. Without the reset, stopping playback,
-  // scrolling away manually, and restarting on the *same* measure would
-  // silently no-op forever (the ref would already equal that measure's id
-  // from the earlier playback run) and the active measure would never
-  // re-enter view.
-  useEffect(() => {
-    if (score !== lastScrolledScoreRef.current) {
-      lastScrolledScoreRef.current = score;
-      lastScrolledMeasureRef.current = null;
-    }
-
-    if (playbackState !== 'playing') {
-      lastScrolledMeasureRef.current = null;
-      return;
-    }
-
-    const scrollBox = scrollBoxRef.current;
-    if (!scrollBox || !score) return;
-    const measureId = currentMeasureId(score, positionTick);
-    if (!measureId || measureId === lastScrolledMeasureRef.current) return;
-
-    // Computed straight from the memoized `layoutPlan` (not
-    // `resultRef.current.measureIdToBBox`) so this still finds the target
-    // measure's position even when it lies outside the currently-drawn
-    // window — e.g. jumping to a measure several systems below the current
-    // scroll position. Scrolling there fires `onScroll` -> `draw()`, which
-    // renders that measure's window. The scroll target is the scroll box
-    // (the element that actually owns the scrollbar).
-    const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
-    if (measureIndex === -1 || !layoutPlan) return;
-    const bbox = boxForMeasureIndex(layoutPlan, 0, measureIndex);
-    if (!bbox) return;
-
-    lastScrolledMeasureRef.current = measureId;
-    if (typeof scrollBox.scrollTo === 'function') {
-      scrollBox.scrollTo({
-        left: Math.max(0, bbox.x * zoom - SCROLL_MARGIN),
-        top: Math.max(0, bbox.y * zoom - SCROLL_MARGIN),
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      });
-    }
-  }, [score, positionTick, playbackState, layoutPlan, zoom]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -797,19 +867,14 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
             className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
           />
         )}
-        {caret && (
-          <div
-            data-testid="playback-caret"
-            aria-hidden="true"
-            style={{
-              left: caret.x * zoom,
-              top: caret.yTop * zoom,
-              height: (caret.yBottom - caret.yTop) * zoom,
-              backgroundColor: renderTheme.caret,
-            }}
-            className="pointer-events-none absolute w-0.5 -translate-x-1/2"
-          />
-        )}
+        <PlaybackCaret
+          store={store}
+          plan={layoutPlan}
+          score={displayScore}
+          zoom={zoom}
+          color={renderTheme.caret}
+          scrollBoxRef={scrollBoxRef}
+        />
       </div>
     </div>
   );

@@ -54,6 +54,17 @@ function referenceRender(score: Score) {
   });
 }
 
+/**
+ * Lets the colour repaint's `requestAnimationFrame` fire. Colour changes are
+ * coalesced to one draw per frame (see `ScoreEditorView`'s repaint effect), so
+ * assertions about what the renderer received have to wait a frame.
+ */
+async function flushRepaintFrame(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  });
+}
+
 function center(box: BBox): { clientX: number; clientY: number } {
   return { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
 }
@@ -266,7 +277,7 @@ describe('ScoreEditorView', () => {
     expect(updated?.durationTicks).toBe(store.getState().score!.ppq / 2);
   });
 
-  it('redraws notation on a selection change, because note state is the glyph color now', () => {
+  it('redraws notation on a selection change, because note state is the glyph color now', async () => {
     // The highlight overlay is gone, so there is no "repaint highlights
     // without touching notation" path any more. This is cheap by design:
     // computeLayout is cached and NOT invalidated by a color change, so the
@@ -280,10 +291,11 @@ describe('ScoreEditorView', () => {
     act(() => {
       store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
     });
+    await flushRepaintFrame();
     expect(renderSpy.mock.calls.length).toBeGreaterThan(rendersAfterMount);
   });
 
-  it('passes the selected note to the renderer as `selected`', () => {
+  it('passes the selected note to the renderer as `selected`', async () => {
     const store = makeStore();
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
@@ -293,10 +305,11 @@ describe('ScoreEditorView', () => {
       store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
     });
 
+    await flushRepaintFrame();
     expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('selected');
   });
 
-  it('passes a regenerated selection to the renderer as `regenerated`', () => {
+  it('passes a regenerated selection to the renderer as `regenerated`', async () => {
     const store = makeStore();
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
@@ -307,10 +320,11 @@ describe('ScoreEditorView', () => {
       store.setState({ selectionRegenerated: true });
     });
 
+    await flushRepaintFrame();
     expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('regenerated');
   });
 
-  it('passes sounding notes to the renderer as `playing`', () => {
+  it('passes sounding notes to the renderer as `playing`', async () => {
     const store = makeStore();
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
@@ -320,10 +334,11 @@ describe('ScoreEditorView', () => {
       store.getState().setActiveNoteIds([first.id]);
     });
 
+    await flushRepaintFrame();
     expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('playing');
   });
 
-  it('passes the active track and selected measures to the renderer', () => {
+  it('passes the active track and selected measures to the renderer', async () => {
     const store = makeStore();
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
@@ -334,6 +349,7 @@ describe('ScoreEditorView', () => {
       store.getState().selectMeasures([measureId]);
     });
 
+    await flushRepaintFrame();
     const opts = renderSpy.mock.calls.at(-1)![2];
     expect(opts.activeTrackId).toBe(score.tracks[0].id);
     expect(opts.selectedMeasureIds?.has(measureId)).toBe(true);
@@ -814,5 +830,71 @@ describe('caret-anchored range selection (cmd-click)', () => {
     fireEvent.click(interactionSurface(), gutterPoint(score, 0));
 
     expect(playbackController.seek).not.toHaveBeenCalled();
+  });
+});
+
+describe('playback repaint cost', () => {
+  it('does not redraw when a note outside the drawn window changes', async () => {
+    // The regression this guards: `activeNoteIds` fires on every note-on and
+    // note-off, and a redraw rebuilds + re-formats every VexFlow object in the
+    // window (~5ms). Unguarded, that starved Tone.js's scheduling on the same
+    // thread and playback audibly hesitated.
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const before = renderSpy.mock.calls.length;
+
+    act(() => store.getState().setActiveNoteIds(['not-a-note-in-this-score']));
+    await flushRepaintFrame();
+
+    expect(renderSpy.mock.calls.length).toBe(before);
+  });
+
+  it('does not redraw when the colors resolve to the same visible state', async () => {
+    const store = makeStore();
+    const [first] = allNotes(store.getState().score!);
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+
+    act(() => store.getState().setActiveNoteIds([first.id]));
+    await flushRepaintFrame();
+    const afterFirstPaint = renderSpy.mock.calls.length;
+
+    // Same sounding set, a fresh array identity — a held chord reporting again.
+    act(() => store.getState().setActiveNoteIds([first.id]));
+    await flushRepaintFrame();
+
+    expect(renderSpy.mock.calls.length).toBe(afterFirstPaint);
+  });
+
+  it('coalesces a burst of color changes into one redraw', async () => {
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!);
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const before = renderSpy.mock.calls.length;
+
+    act(() => {
+      store.getState().setActiveNoteIds([notes[0].id]);
+      store.getState().setActiveNoteIds([notes[1].id]);
+      store.getState().setActiveNoteIds([notes[2].id]);
+    });
+    await flushRepaintFrame();
+
+    expect(renderSpy.mock.calls.length).toBe(before + 1);
+  });
+
+  it('keeps the caret out of the parent render, so 30Hz position updates are cheap', async () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const before = renderSpy.mock.calls.length;
+
+    act(() => {
+      for (let i = 1; i <= 20; i += 1) store.getState().setPositionTick(i * 24);
+    });
+    await flushRepaintFrame();
+
+    expect(renderSpy.mock.calls.length).toBe(before);
   });
 });
