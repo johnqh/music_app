@@ -27,9 +27,9 @@
  * `renderTheme` picks between `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`
  * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { CanvasScoreRenderer, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
+import { CanvasScoreRenderer, TempoMap, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
   boxForMeasureIndex,
@@ -124,11 +124,83 @@ type PlaybackCaretProps = {
 function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: PlaybackCaretProps) {
   const positionTick = store((s) => s.positionTick);
   const playbackState = store((s) => s.state);
+  const tempoMultiplier = store((s) => s.tempoMultiplier);
+  const elementRef = useRef<HTMLDivElement | null>(null);
 
-  const caret = useMemo(
-    () => (plan && score ? caretPositionForTick(plan, score, positionTick) : null),
-    [plan, score, positionTick],
+  const tempoMap = useMemo(
+    () => (score ? new TempoMap(score.tempoMap, score.ppq) : null),
+    [score],
   );
+
+  /**
+   * Writes the caret's geometry straight to the DOM, bypassing React.
+   *
+   * `transform`, not `left`/`top`: moving the caret through layout
+   * properties forced a layout pass on every update. A transform stays on
+   * the compositor. `height` only changes when the caret crosses into a new
+   * system, so it is written only when it actually differs.
+   */
+  const applyGeometry = useCallback(
+    (tick: number) => {
+      const el = elementRef.current;
+      if (!el || !plan || !score) return;
+      const caret = caretPositionForTick(plan, score, tick);
+      if (!caret) {
+        el.style.visibility = 'hidden';
+        return;
+      }
+      el.style.visibility = '';
+      el.style.transform = `translate(${caret.x * zoom}px, ${caret.yTop * zoom}px) translateX(-50%)`;
+      const height = `${(caret.yBottom - caret.yTop) * zoom}px`;
+      if (el.style.height !== height) el.style.height = height;
+    },
+    [plan, score, zoom],
+  );
+
+  /**
+   * The last position the engine reported, and when it arrived — the anchor
+   * the animation loop dead-reckons from.
+   */
+  const anchorRef = useRef<{ tick: number; at: number }>({ tick: positionTick, at: 0 });
+  useLayoutEffect(() => {
+    anchorRef.current = { tick: positionTick, at: performance.now() };
+    // While playing, the loop below owns the caret; re-applying here would
+    // snap it back to the last 30Hz sample between frames.
+    if (playbackState !== 'playing') applyGeometry(positionTick);
+  }, [positionTick, playbackState, applyGeometry]);
+
+  /**
+   * Interpolates the caret between engine reports.
+   *
+   * The engine samples position at 30Hz through `Transport.scheduleRepeat`,
+   * and those callbacks fire from Tone's lookahead scheduling loop rather
+   * than a wall clock — so they arrive in clumps, not evenly every 33ms.
+   * Driving the caret straight off them made it lurch. This projects the
+   * position forward from the most recent anchor using elapsed real time and
+   * the score's own tempo map, repainting every animation frame, so motion is
+   * smooth and even however unevenly the anchors land. Each new anchor
+   * silently corrects any drift.
+   *
+   * `tempoMultiplier` converts real elapsed time to score time: the engine
+   * divides logical seconds by it, so one real second is `multiplier` logical
+   * seconds.
+   */
+  useEffect(() => {
+    if (playbackState !== 'playing' || !tempoMap) return;
+    let frame = 0;
+    const step = (): void => {
+      const { tick, at } = anchorRef.current;
+      const elapsedSeconds = (performance.now() - at) / 1000;
+      applyGeometry(
+        tempoMap.secondsToTicks(
+          tempoMap.ticksToSeconds(tick) + elapsedSeconds * tempoMultiplier,
+        ),
+      );
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [playbackState, tempoMap, tempoMultiplier, applyGeometry]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
   //
@@ -171,18 +243,16 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
     }
   }, [score, positionTick, playbackState, plan, zoom, scrollBoxRef]);
 
-  if (!caret) return null;
+  if (!plan || !score) return null;
   return (
     <div
+      ref={elementRef}
       data-testid="playback-caret"
       aria-hidden="true"
-      style={{
-        left: caret.x * zoom,
-        top: caret.yTop * zoom,
-        height: (caret.yBottom - caret.yTop) * zoom,
-        backgroundColor: color,
-      }}
-      className="pointer-events-none absolute w-0.5 -translate-x-1/2"
+      // Positioned at the origin and moved entirely by `transform`, which
+      // `applyGeometry` writes; nothing here changes per frame.
+      style={{ left: 0, top: 0, backgroundColor: color }}
+      className="pointer-events-none absolute w-0.5"
     />
   );
 }

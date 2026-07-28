@@ -553,20 +553,73 @@ describe('playback caret and click-to-seek', () => {
   it('shows the caret at the score start (tick 0) before any playback', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const caret = getByTestId('playback-caret');
     const expected = caretPositionForTick(caretPlan(store), store.getState().score!, 0)!;
-    expect(caret.style.left).toBe(`${expected.x}px`);
+    // Positioned by transform, not `left`: animating a layout property forced
+    // a layout pass on every update.
+    expect(getByTestId('playback-caret').style.transform).toContain(`translate(${expected.x}px`);
   });
 
   it('moves the caret as positionTick advances', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const before = getByTestId('playback-caret').style.left;
+    const before = getByTestId('playback-caret').style.transform;
 
     const m1 = store.getState().score!.tracks[0].measures[1];
     act(() => store.getState().setPositionTick(m1.startTick + Math.round(m1.durationTicks / 2)));
 
-    expect(getByTestId('playback-caret').style.left).not.toBe(before);
+    expect(getByTestId('playback-caret').style.transform).not.toBe(before);
+  });
+
+  it('never animates a layout property', () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const m1 = store.getState().score!.tracks[0].measures[1];
+    act(() => store.getState().setPositionTick(m1.startTick));
+
+    // `left`/`top` stay pinned at the origin; all motion is in the transform.
+    const caret = getByTestId('playback-caret');
+    expect(caret.style.left).toBe('0px');
+    expect(caret.style.top).toBe('0px');
+  });
+
+  it('interpolates between engine reports while playing, instead of stepping at 30Hz', async () => {
+    // The engine samples position through Tone's lookahead scheduling loop, so
+    // its 30Hz reports arrive in clumps rather than evenly. Without
+    // interpolation the caret lurched with them.
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const m1 = store.getState().score!.tracks[0].measures[1];
+
+    act(() => {
+      store.getState().setPositionTick(m1.startTick);
+      store.getState().setPlaybackState('playing');
+    });
+    const atAnchor = getByTestId('playback-caret').style.transform;
+
+    // No new report — only frames elapsing. The caret must still have moved.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    expect(getByTestId('playback-caret').style.transform).not.toBe(atAnchor);
+  });
+
+  it('stops interpolating when playback pauses', async () => {
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const m1 = store.getState().score!.tracks[0].measures[1];
+    act(() => {
+      store.getState().setPositionTick(m1.startTick);
+      store.getState().setPlaybackState('playing');
+    });
+
+    act(() => store.getState().setPlaybackState('paused'));
+    const atPause = getByTestId('playback-caret').style.transform;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    });
+
+    expect(getByTestId('playback-caret').style.transform).toBe(atPause);
   });
 
   it('clicking empty space inside a system seeks playback to the clicked tick', () => {
