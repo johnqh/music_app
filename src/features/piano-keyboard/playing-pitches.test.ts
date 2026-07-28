@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pitchToMidi, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { playingPitchesForTrack } from '@/features/piano-roll/playing-pitches';
+import { playingPitchesForTrack } from '@/features/piano-keyboard/playing-pitches';
 
 function firstNote(score: Score, trackIndex = 0): NoteEvent {
   for (const measure of score.tracks[trackIndex].measures) {

@@ -8,7 +8,7 @@
  * Selection vs. acceptance are deliberately decoupled from each other:
  * clicking a card's label button (or its Play-in-context button) makes
  * that candidate the *previewed* one (`selectCandidate` — sets both
- * `activeCandidateId` and the editor/piano-roll overlay), but a card's
+ * `activeCandidateId` and the notation preview), but a card's
  * Accept button always explicitly selects-then-accepts *that* card
  * regardless of which one was previously active, so Accept is never
  * "accept whatever happens to still be selected" — it always does what
@@ -88,7 +88,7 @@ export function CandidateList({ store = useAppStore }: CandidateListProps) {
   const handleSelect = (candidate: RegenerationCandidate): void => {
     // Switching which candidate is active must not leave stale audio
     // playing for whichever candidate the overlay just switched *away*
-    // from — otherwise the editor/piano-roll overlay shows `candidate`
+    // from — otherwise the notation preview shows `candidate`
     // while the engine keeps sounding the previously-active one. Simplest,
     // most predictable fix (matching `handleAccept`/`handleRejectAll`,
     // which already do this): stop the preview outright on switch, rather

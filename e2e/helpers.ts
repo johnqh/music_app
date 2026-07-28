@@ -22,9 +22,8 @@
  *    itself. Technique 3, below, is the one place a real click on a
  *    measure is exercised end to end.
  *
- * 2. **Real pointer interaction for piano-roll dragging** (`view-switch-
- *    piano-roll.spec.ts`): Playwright's Chromium does real DOM layout, so
- *    dragging a `[data-testid="pr-note-<id>"]` rect via real
+ * 2. **Real pointer interaction for drag gestures**: Playwright's Chromium
+ *    does real DOM layout, so dragging via real
  *    `page.mouse.down`/`move`/`up` reliably hits it.
  *
  * 3. **Coordinate clicks resolved through `window.__scoresmith`** (the
@@ -337,7 +336,7 @@ export async function findMeasureGutterClickPoint(
   await requireStore(page);
 
   // Scroll the band into view first, in its own step: the notation viewport
-  // is short (the piano-roll panel takes a fixed slice of the window), so a
+  // is short (the keyboard panel takes a fixed slice of the window), so a
   // measure a system or two down is below the fold, and a point computed
   // against the unscrolled box would land on whatever sits underneath.
   await page.evaluate((index) => {

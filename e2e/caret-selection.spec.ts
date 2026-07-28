@@ -49,7 +49,7 @@ test.describe('caret-anchored selection', () => {
     expect(getErrors()).toEqual([]);
   });
 
-  test('notation and the piano roll are both on screen, and the roll collapses', async ({
+  test('notation and the piano keyboard are both on screen, and the keyboard collapses', async ({
     page,
   }) => {
     const getErrors = collectPageErrors(page);
@@ -59,18 +59,19 @@ test.describe('caret-anchored selection', () => {
     await generateWholeScore(page, { prompt: 'Create a short waltz', measures: 4 });
     await waitForNotation(page);
 
+    const keyboard = page.getByRole('img', { name: /Piano keyboard/ });
     await expect(page.getByTestId('score-editor-canvas')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Piano roll' })).toBeVisible();
+    await expect(keyboard).toBeVisible();
     // No mode switch exists any more.
     await expect(page.getByRole('group', { name: 'Editor view' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Collapse piano roll' }).click();
-    await expect(page.getByRole('region', { name: 'Piano roll' })).toHaveCount(0);
-    // Collapsing the roll must not disturb the notation.
+    await page.getByRole('button', { name: 'Collapse piano keyboard' }).click();
+    await expect(keyboard).toHaveCount(0);
+    // Collapsing the keyboard must not disturb the notation.
     await expect(page.getByTestId('score-editor-canvas')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Expand piano roll' }).click();
-    await expect(page.getByRole('region', { name: 'Piano roll' })).toBeVisible();
+    await page.getByRole('button', { name: 'Expand piano keyboard' }).click();
+    await expect(keyboard).toBeVisible();
 
     expect(getErrors()).toEqual([]);
   });

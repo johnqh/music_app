@@ -2,7 +2,7 @@
  * Score editor toolbar (spec §6 editor region, §7 editing operations):
  * note-duration palette, accidental toggle, articulation menu, tie toggle,
  * insert note/rest, quantize button + grid select, zoom controls, layout
- * mode toggle, and the notation/piano-roll view switch.
+ * mode toggle.
  *
  * Every control that mutates the score routes through `editing.ts` (never
  * `store.dispatchCommand` directly), and every interactive control carries

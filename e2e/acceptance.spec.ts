@@ -9,7 +9,7 @@
  * The individual grouped spec files (`project-generate-play.spec.ts`,
  * `select-edit-undo.spec.ts`, `regeneration.spec.ts`,
  * `midi-roundtrip.spec.ts`, `musicxml-export.spec.ts`,
- * `persistence.spec.ts`, `view-switch-piano-roll.spec.ts`) exercise each
+ * `persistence.spec.ts`, `caret-selection.spec.ts`) exercise each
  * of these areas in isolation with tighter assertions; this test instead
  * verifies they compose correctly as one continuous user session, exactly
  * as spec §39 describes it.
@@ -31,7 +31,7 @@ import {
 } from './helpers';
 
 test.describe('spec §39 acceptance scenario', () => {
-  test('full user session: create, generate, play, regenerate, edit, piano-roll, MIDI, MusicXML, persist', async ({
+  test('full user session: create, generate, play, regenerate, edit, keyboard, MIDI, MusicXML, persist', async ({
     page,
   }) => {
     const getErrors = collectPageErrors(page);
@@ -128,32 +128,19 @@ test.describe('spec §39 acceptance scenario', () => {
     await page.getByRole('button', { name: 'Redo' }).click();
     await expect(pitchStepSelect).toHaveText(nextStep);
 
-    // 16-19. The piano roll is always on screen alongside the notation; the
-    // same notes appear there; drag one; notation updates.
-    await expect(page.getByRole('region', { name: 'Piano roll' })).toBeVisible();
-    // The piano roll culls notes to the scrolled viewport (spec §29), same
-    // as the notation view, so this just asserts some notes render there.
-    const noteRects = page.locator('[data-testid^="pr-note-"]');
-    await expect(noteRects.first()).toBeVisible();
+    // 16-19. The piano keyboard is on screen alongside the notation, and its
+    // keys light up as the active track plays. (The piano-roll timeline it
+    // replaced is gone, along with note-dragging -- see the piano-keyboard
+    // spec's "what this costs".)
+    const keyboard = page.getByRole('img', { name: /Piano keyboard/ });
+    await expect(keyboard).toBeVisible();
+    await expect(page.locator('[data-testid^="piano-key-"]')).toHaveCount(88);
 
-    const firstRect = noteRects.first();
-    // `boundingBox()`/`page.mouse` need the note actually scrolled into
-    // the real viewport first (the 88-key grid is far taller than one
-    // screen; unlike a locator's own `.click()`, neither auto-scrolls).
-    await firstRect.scrollIntoViewIfNeeded();
-    const box = await firstRect.boundingBox();
-    expect(box).not.toBeNull();
-    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box!.x + box!.width / 2 + 60, box!.y + box!.height / 2 - 28, {
-      steps: 8,
-    });
-    await page.mouse.up();
+    await page.getByRole('button', { name: 'Play' }).click();
+    await expect(page.locator('[data-playing="true"]').first()).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Stop' }).click();
+    await expect(page.locator('[data-playing="true"]')).toHaveCount(0);
 
-    // Notation re-renders against the same, now-updated score (not
-    // asserting the dragged note's own element -- like the piano roll, the
-    // notation view culls to the scrolled viewport, spec §29). No view
-    // switch needed: it never left the screen.
     await waitForNotation(page);
 
     // 20-22. Export MIDI, import it into a new project, substantially equivalent notes.

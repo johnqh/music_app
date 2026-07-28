@@ -163,17 +163,17 @@ describe('AppLayout', () => {
   });
 });
 
-describe('AppLayout: simultaneous notation and piano roll', () => {
+describe('AppLayout: simultaneous notation and piano keyboard', () => {
   function makeStore() {
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(twinkleScore());
     return store;
   }
 
-  it('renders both editors at once', () => {
+  it('renders the notation and the keyboard at once', () => {
     render(<AppLayout store={makeStore()} />);
     expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
-    expect(screen.getByTestId('piano-roll-grid')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
   });
 
   it('has no view-mode toggle anywhere', () => {
@@ -181,17 +181,17 @@ describe('AppLayout: simultaneous notation and piano roll', () => {
     expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
   });
 
-  it('collapses and re-expands the piano-roll panel', async () => {
+  it('collapses and re-expands the keyboard panel', async () => {
     render(<AppLayout store={makeStore()} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Collapse piano roll' }));
-    expect(screen.queryByTestId('piano-roll-grid')).not.toBeInTheDocument();
-    // The notation view is unaffected — collapsing the roll is not a mode switch.
+    await user.click(screen.getByRole('button', { name: 'Collapse piano keyboard' }));
+    expect(screen.queryByRole('img', { name: /Piano keyboard/ })).not.toBeInTheDocument();
+    // The notation is unaffected — collapsing the keyboard is not a mode switch.
     expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Expand piano roll' }));
-    expect(screen.getByTestId('piano-roll-grid')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Expand piano keyboard' }));
+    expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
   });
 
   it('announces a regenerated selection in the status bar', () => {

@@ -63,7 +63,7 @@ import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
-import { PianoRollView } from '@/features/piano-roll/PianoRollView';
+import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import { TransportBar } from '@/components/transport/TransportBar';
@@ -84,8 +84,12 @@ export type AppLayoutProps = {
 };
 
 const SIDE_PANEL_WIDTH = 280;
-/** Fixed height of the piano-roll panel. Not resizable — collapse is the only size control. */
-const PIANO_ROLL_PANEL_HEIGHT = 280;
+/**
+ * Fixed height of the piano-keyboard panel. Not resizable — collapse is the
+ * only size control. Far shorter than the timeline it replaced, which hands
+ * ~130px back to the notation.
+ */
+const PIANO_KEYBOARD_PANEL_HEIGHT = 150;
 
 const SAVE_STATE_LABEL: Record<string, string> = {
   saved: 'Saved',
@@ -164,7 +168,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(
     null,
   );
-  const [pianoRollCollapsed, setPianoRollCollapsed] = useState(false);
+  const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -629,18 +633,18 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         )}
       </div>
 
-      {/* Full-width piano roll: a sibling of the transport rather than a
+      {/* Full-width piano keyboard: a sibling of the transport rather than a
           child of the centre column, so it spans the whole window beneath the
           track and inspector panels. Fixed height, collapsible, and its own
-          horizontal scroll across the full score. */}
+          horizontal scroll when the window is too narrow for 88 keys. */}
       <div
         className="shrink-0 overflow-hidden border-t border-theme-border"
-        style={pianoRollCollapsed ? undefined : { height: PIANO_ROLL_PANEL_HEIGHT }}
+        style={keyboardCollapsed ? undefined : { height: PIANO_KEYBOARD_PANEL_HEIGHT }}
       >
-        <PianoRollView
+        <PianoKeyboardView
           store={store}
-          collapsed={pianoRollCollapsed}
-          onToggleCollapsed={() => setPianoRollCollapsed((v) => !v)}
+          collapsed={keyboardCollapsed}
+          onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
         />
       </div>
 
