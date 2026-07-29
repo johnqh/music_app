@@ -60,18 +60,20 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/r
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { staveRectsForViewport } from '@/features/score-editor/stave-layout';
-import type { StaveRect } from '@/features/score-editor/stave-layout';
+import type { StaveLayoutChannel } from '@/features/score-editor/stave-layout-channel';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
   /**
-   * Stave rects for the topmost visible system, in viewport client
-   * coordinates — how the track panel aligns its rows to the staves. Called on
-   * layout change and on the existing rAF-throttled scroll path, never per
-   * frame.
+   * Channel the track panel listens on to align its rows to the staves.
+   * Published on layout change and on the existing rAF-throttled scroll path.
+   *
+   * A channel rather than a `setState` callback on purpose: routing this
+   * through React state re-rendered the whole app tree every scroll frame, and
+   * the rows only moved after the commit, so the list lagged the sheet.
    */
-  onStaveLayout?: (rects: readonly StaveRect[]) => void;
+  staveLayout?: StaveLayoutChannel;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -266,10 +268,7 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
   );
 }
 
-export function ScoreEditorView({
-  store = useAppStore,
-  onStaveLayout = () => undefined,
-}: ScoreEditorViewProps) {
+export function ScoreEditorView({ store = useAppStore, staveLayout }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
 
   const score = store((s) => s.score);
@@ -510,10 +509,10 @@ export function ScoreEditorView({
   const reportStaveLayout = useCallback(() => {
     const box = scrollBoxRef.current;
     if (!box || !layoutPlan) return;
-    onStaveLayout(
+    staveLayout?.publish(
       staveRectsForViewport(layoutPlan, zoom, box.scrollTop, box.getBoundingClientRect().top),
     );
-  }, [layoutPlan, zoom, onStaveLayout]);
+  }, [layoutPlan, zoom, staveLayout]);
 
   // Layout-driven: a new plan, zoom or width moves every stave.
   useEffect(() => {

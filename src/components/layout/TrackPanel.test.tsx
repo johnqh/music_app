@@ -7,6 +7,7 @@ import { twoTrackScore } from '@sudobility/music_lib';
 import { GM_FAMILY_LABELS, changeTrackPropsCommand } from '@sudobility/music_lib';
 import { dragSlider } from '@/test/drag-slider';
 import { TrackPanel } from '@/components/layout/TrackPanel';
+import { createStaveLayoutChannel } from '@/features/score-editor/stave-layout-channel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 function makeStore(): EditorStoreApi {
@@ -275,29 +276,37 @@ describe('stave alignment', () => {
     }));
   }
 
-  it('positions each row at its reported top and height', () => {
+  /** Renders the panel wired to a channel, then publishes `rects` through it. */
+  function renderAligned(store: EditorStoreApi, rects: readonly { trackId: string; top: number; height: number }[]) {
+    const channel = createStaveLayoutChannel();
+    const utils = render(<TrackPanel store={store} staveLayout={channel} />);
+    act(() => channel.publish(rects));
+    return { ...utils, channel };
+  }
+
+  function row(container: HTMLElement, trackId: string): HTMLElement {
+    const el = container.querySelector<HTMLElement>(`[data-testid="track-row-${trackId}"]`);
+    if (!el) throw new Error(`no row for ${trackId}`);
+    return el;
+  }
+
+  it('positions each row at its reported height', () => {
     const store = makeStore();
     const rects = rectsFor(store);
-    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
+    const { container } = renderAligned(store, rects);
 
-    const row = container.querySelector<HTMLElement>(
-      `[data-testid="track-row-${rects[0].trackId}"]`,
-    )!;
-    expect(row.style.position).toBe('absolute');
-    expect(row.style.height).toBe('100px');
+    const el = row(container, rects[0].trackId);
+    expect(el.style.position).toBe('absolute');
+    expect(el.style.height).toBe('100px');
   });
 
   it('gives the second track the second stave position', () => {
     const store = makeStore();
     const rects = rectsFor(store);
-    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
+    const { container } = renderAligned(store, rects);
 
-    const first = container.querySelector<HTMLElement>(
-      `[data-testid="track-row-${rects[0].trackId}"]`,
-    )!;
-    const second = container.querySelector<HTMLElement>(
-      `[data-testid="track-row-${rects[1].trackId}"]`,
-    )!;
+    const first = row(container, rects[0].trackId);
+    const second = row(container, rects[1].trackId);
     // 120px apart, matching the reported rects, whatever the panel's own origin.
     expect(parseFloat(second.style.top) - parseFloat(first.style.top)).toBe(120);
   });
@@ -305,27 +314,45 @@ describe('stave alignment', () => {
   it('clips row content, so a short stave cannot break alignment', () => {
     const store = makeStore();
     const rects = rectsFor(store);
-    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
-
-    const row = container.querySelector<HTMLElement>(
-      `[data-testid="track-row-${rects[0].trackId}"]`,
-    )!;
-    expect(row.style.overflow).toBe('hidden');
+    const { container } = renderAligned(store, rects);
+    expect(row(container, rects[0].trackId).style.overflow).toBe('hidden');
   });
 
-  it('falls back to stacked rows when no rects are reported', () => {
+  it('repositions on a later publish without re-rendering', () => {
+    // The whole point of the channel: a scroll frame moves the rows and costs
+    // no renders. Publishing again must move them.
     const store = makeStore();
-    const { container } = render(<TrackPanel store={store} />);
+    const rects = rectsFor(store);
+    const { container, channel } = renderAligned(store, rects);
+    const before = row(container, rects[0].trackId).style.top;
 
-    const row = container.querySelector<HTMLElement>(
-      `[data-testid="track-row-${store.getState().score!.tracks[0].id}"]`,
-    )!;
-    expect(row.style.position).not.toBe('absolute');
+    act(() => channel.publish(rects.map((r) => ({ ...r, top: r.top - 50 }))));
+
+    const after = row(container, rects[0].trackId).style.top;
+    expect(parseFloat(after)).toBe(parseFloat(before) - 50);
+  });
+
+  it('falls back to stacked rows when nothing is published', () => {
+    const store = makeStore();
+    const { container } = render(<TrackPanel store={store} staveLayout={createStaveLayoutChannel()} />);
+    expect(row(container, store.getState().score!.tracks[0].id).style.position).not.toBe('absolute');
+  });
+
+  it('clears positioning when the layout goes away', () => {
+    const store = makeStore();
+    const rects = rectsFor(store);
+    const { container, channel } = renderAligned(store, rects);
+    expect(row(container, rects[0].trackId).style.position).toBe('absolute');
+
+    act(() => channel.publish([]));
+
+    expect(row(container, rects[0].trackId).style.position).toBe('');
   });
 
   it('ignores a rect for a track that no longer exists', () => {
     const store = makeStore();
-    const rects = [{ trackId: 'deleted-track', top: 10, height: 100 }];
-    expect(() => render(<TrackPanel store={store} staveRects={rects} />)).not.toThrow();
+    expect(() =>
+      renderAligned(store, [{ trackId: 'deleted-track', top: 10, height: 100 }]),
+    ).not.toThrow();
   });
 });

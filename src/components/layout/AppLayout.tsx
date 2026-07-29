@@ -47,7 +47,7 @@
  * skin -- the honest characterization is still "kept native", just with a
  * documented, checked reason rather than an assumed one.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
@@ -63,7 +63,7 @@ import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
-import type { StaveRect } from '@/features/score-editor/stave-layout';
+import { createStaveLayoutChannel } from '@/features/score-editor/stave-layout-channel';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
@@ -188,12 +188,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   );
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
   /**
-   * Stave geometry reported by the notation view, so the track panel can line
-   * its rows up with the staves. Component state, not store state: this is
-   * view-layer geometry and the store's rule is that such geometry stays out
-   * of it.
+   * Carries stave geometry from the notation view to the track panel so the
+   * rows line up with the staves.
+   *
+   * A channel, not state: this updates at scroll frequency, and holding it here
+   * re-rendered the entire app tree every frame — including a track row's
+   * 128-item Select — with the rows only moving after the commit, so the list
+   * visibly lagged the sheet.
    */
-  const [staveRects, setStaveRects] = useState<readonly StaveRect[]>([]);
+  const staveLayout = useMemo(createStaveLayoutChannel, []);
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -593,10 +596,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <div className="flex flex-1 min-h-0">
         {trackPanelOpen && (
           <div
-            className="shrink-0 overflow-y-auto overscroll-contain border-r border-theme-border"
+            // `overflow-hidden`, not `overflow-y-auto`: the list mirrors one
+            // system of the sheet, so it must not scroll independently of it —
+            // the sheet's own scroll is what moves the rows.
+            className="shrink-0 overflow-hidden border-r border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
-            <TrackPanel store={store} staveRects={staveRects} />
+            <TrackPanel store={store} staveLayout={staveLayout} />
           </div>
         )}
 
@@ -630,7 +636,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="min-h-0 flex-1">
-            <ScoreEditorView store={store} onStaveLayout={setStaveRects} />
+            <ScoreEditorView store={store} staveLayout={staveLayout} />
           </div>
         </div>
 
