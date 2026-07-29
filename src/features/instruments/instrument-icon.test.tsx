@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { GM_INSTRUMENTS, gmFamilyOf } from '@sudobility/music_lib';
-import { InstrumentIcon, instrumentEmoji } from '@/features/instruments/instrument-icon';
+import { InstrumentIcon } from '@/features/instruments/instrument-icon';
+import { instrumentEmoji } from '@/features/instruments/instrument-emoji';
 
 describe('instrumentEmoji', () => {
   it('gives every one of the 128 programs a non-empty glyph', () => {

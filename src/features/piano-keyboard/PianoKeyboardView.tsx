@@ -12,7 +12,8 @@
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@sudobility/components';
-import { findTrack, selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
+import { findTrack, gmInstrument, selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
+import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
@@ -143,17 +144,28 @@ export function PianoKeyboardView({
     return playingPitchesForTrack(score, activeNoteIds, activeTrackId);
   }, [playbackState, score, activeNoteIds, activeTrackId]);
 
-  const trackName = activeTrackId && score ? (findTrack(score, activeTrackId)?.name ?? null) : null;
+  const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
+  /**
+   * The instrument, not the literal word "Piano": the keyboard is a view of
+   * whichever track is active, and that track is frequently not a piano.
+   * Falls back to the track's own name when the program has no catalogue entry
+   * (a hand-edited score), and to "Keyboard" when there is no score.
+   */
+  const headerLabel = activeTrack
+    ? (gmInstrument(activeTrack.midiProgram)?.name ?? activeTrack.name)
+    : 'Keyboard';
 
   const header = (
     <div
       className="flex shrink-0 items-center gap-2 border-b border-theme-border px-2"
       style={{ height: HEADER_HEIGHT }}
     >
+      {activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="text-sm" />}
       <span className="text-xs font-medium text-theme-text-primary">
-        {/* Names the track on screen: the keyboard itself carries no track
-            identity, so without this there is no way to tell which hand it is. */}
-        Piano{trackName ? ` — ${trackName}` : ''}
+        {/* The keyboard carries no track identity of its own, so the header is
+            the only thing telling you which part you are looking at. */}
+        {headerLabel}
+        {activeTrack ? ` — ${activeTrack.name}` : ''}
       </span>
       <div className="flex-1" />
       <Tooltip content={collapsed ? 'Expand piano keyboard' : 'Collapse piano keyboard'}>

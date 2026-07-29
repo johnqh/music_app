@@ -8,6 +8,7 @@ import {
   twinkleScore,
   twoTrackScore,
 } from '@sudobility/music_lib';
+import { changeTrackPropsCommand } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -134,5 +135,64 @@ describe('PianoKeyboardView', () => {
     // Same role the notation colors a sounding note with.
     expect(LIGHT_RENDER_THEME.notePlaying).toBe('#1565c0');
     expect(key(container, pitchToMidi(note.pitch)).style.backgroundColor).toBe('rgb(21, 101, 192)');
+  });
+});
+
+describe('header names the active instrument', () => {
+  it('shows the active track instrument, not the literal "Piano"', () => {
+    const store = makeStore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => {
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[1].id, {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          }),
+        );
+      store.getState().setActiveTrack(score.tracks[1].id);
+    });
+
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    expect(container.textContent).toContain('Trumpet');
+  });
+
+  it('follows the active track', () => {
+    const store = makeStore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => {
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[0].id, {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          }),
+        );
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[1].id, {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          }),
+        );
+      store.getState().setActiveTrack(score.tracks[0].id);
+    });
+    const { container } = render(<PianoKeyboardView store={store} />);
+    expect(container.textContent).toContain('Violin');
+
+    act(() => store.getState().setActiveTrack(score.tracks[1].id));
+
+    expect(container.textContent).toContain('Trumpet');
+    expect(container.textContent).not.toContain('Violin');
+  });
+
+  it('falls back to "Keyboard" with no score', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    const { container } = render(<PianoKeyboardView store={store} />);
+    expect(container.textContent).toContain('Keyboard');
   });
 });
