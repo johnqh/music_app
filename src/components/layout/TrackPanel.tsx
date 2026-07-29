@@ -39,7 +39,9 @@ import {
   Input,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
   Slider,
@@ -54,6 +56,13 @@ import {
   deleteTrackCommand,
 } from '@sudobility/music_lib';
 import { selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
+import {
+  GM_FAMILIES,
+  GM_FAMILY_LABELS,
+  gmInstrument,
+  gmInstrumentsByFamily,
+} from '@sudobility/music_lib';
+import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
@@ -122,7 +131,9 @@ function TrackRow({
   active: boolean;
   onSelect: () => void;
   onPatch: (
-    patch: Partial<Pick<Track, 'name' | 'instrumentName' | 'volume' | 'pan' | 'muted' | 'solo'>>,
+    patch: Partial<
+      Pick<Track, 'name' | 'instrumentName' | 'midiProgram' | 'volume' | 'pan' | 'muted' | 'solo'>
+    >,
   ) => void;
   onChangeClef: (clef: Clef) => void;
   onDelete: () => void;
@@ -192,7 +203,41 @@ function TrackRow({
         </Tooltip>
       </div>
 
-      <p className="text-xs text-theme-text-secondary">{track.instrumentName}</p>
+      {/* Sets both fields together: `instrumentName` is free text and could
+          previously drift from `midiProgram`. The catalogue name is now the
+          single source of both. `stopPropagation` matches the mute/solo row,
+          so opening the picker doesn't also select the track. */}
+      <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <InstrumentIcon program={track.midiProgram} className="text-sm" />
+        <Select
+          value={String(track.midiProgram)}
+          onValueChange={(value: string) => {
+            const program = Number(value);
+            const instrument = gmInstrument(program);
+            if (!instrument) return;
+            onPatch({ midiProgram: program, instrumentName: instrument.name });
+          }}
+        >
+          <SelectTrigger
+            aria-label={`Instrument: ${track.name}`}
+            className="h-auto w-full px-1 py-0.5 text-xs"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {GM_FAMILIES.map((family) => (
+              <SelectGroup key={family}>
+                <SelectLabel>{GM_FAMILY_LABELS[family]}</SelectLabel>
+                {gmInstrumentsByFamily(family).map((instrument) => (
+                  <SelectItem key={instrument.program} value={String(instrument.program)}>
+                    {instrument.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <Button

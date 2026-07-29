@@ -4,6 +4,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twoTrackScore } from '@sudobility/music_lib';
+import { GM_FAMILY_LABELS, changeTrackPropsCommand } from '@sudobility/music_lib';
 import { dragSlider } from '@/test/drag-slider';
 import { TrackPanel } from '@/components/layout/TrackPanel';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -188,5 +189,79 @@ describe('active track', () => {
     await user.click(screen.getByLabelText(`Mute: ${score.tracks[1].name}`));
 
     expect(store.getState().activeTrackId).toBe(score.tracks[0].id);
+  });
+});
+
+describe('instrument picker', () => {
+  it('shows the active instrument name and its icon', () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() => {
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[0].id, {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          }),
+        );
+    });
+
+    render(<TrackPanel store={store} />);
+
+    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent('Violin');
+  });
+
+  it('lists every GM family as a group', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+    const score = store.getState().score!;
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+
+    for (const label of Object.values(GM_FAMILY_LABELS)) {
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it('offers all 128 programs', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+    const score = store.getState().score!;
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+
+    expect(await screen.findAllByRole('option')).toHaveLength(128);
+  });
+
+  it('choosing an instrument sets both midiProgram and instrumentName', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+    const score = store.getState().score!;
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+    await user.click(await screen.findByRole('option', { name: /^Trumpet$/ }));
+
+    const track = store.getState().score!.tracks[0];
+    expect(track.midiProgram).toBe(56);
+    // The two fields could drift before, since instrumentName was free text.
+    expect(track.instrumentName).toBe('Trumpet');
+  });
+
+  it('the instrument change is undoable, like any score edit', async () => {
+    const store = makeStore();
+    render(<TrackPanel store={store} />);
+    const user = userEvent.setup();
+    const score = store.getState().score!;
+    const before = score.tracks[0].midiProgram;
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+    await user.click(await screen.findByRole('option', { name: /^Trumpet$/ }));
+    act(() => store.getState().undo());
+
+    expect(store.getState().score!.tracks[0].midiProgram).toBe(before);
   });
 });
