@@ -63,6 +63,7 @@ import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
+import type { StaveRect } from '@/features/score-editor/stave-layout';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
@@ -186,6 +187,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     null,
   );
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
+  /**
+   * Stave geometry reported by the notation view, so the track panel can line
+   * its rows up with the staves. Component state, not store state: this is
+   * view-layer geometry and the store's rule is that such geometry stays out
+   * of it.
+   */
+  const [staveRects, setStaveRects] = useState<readonly StaveRect[]>([]);
   const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -588,7 +596,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             className="shrink-0 overflow-y-auto overscroll-contain border-r border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
-            <TrackPanel store={store} />
+            <TrackPanel store={store} staveRects={staveRects} />
           </div>
         )}
 
@@ -622,7 +630,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="min-h-0 flex-1">
-            <ScoreEditorView store={store} />
+            <ScoreEditorView store={store} onStaveLayout={setStaveRects} />
           </div>
         </div>
 

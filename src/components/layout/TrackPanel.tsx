@@ -32,7 +32,7 @@
  * wrapper doing the commit -- bubbled up from the Slider's own native
  * `<input type="range">`, same as the commit handlers this replaces.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
   Button,
@@ -63,12 +63,20 @@ import {
   gmInstrumentsByFamily,
 } from '@sudobility/music_lib';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
+import type { StaveRect } from '@/features/score-editor/stave-layout';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 export type TrackPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
+  /**
+   * Stave rects reported by the notation view, in client coordinates. When
+   * present, rows are absolutely positioned to line up with their staves on
+   * the sheet; when absent (no score, or before the first layout) rows stack
+   * normally, which is also what most of this suite exercises.
+   */
+  staveRects?: readonly StaveRect[];
 };
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
@@ -120,6 +128,8 @@ function TrackRow({
   track,
   selected,
   active,
+  rect,
+  listTop,
   onSelect,
   onPatch,
   onChangeClef,
@@ -137,6 +147,10 @@ function TrackRow({
   ) => void;
   onChangeClef: (clef: Clef) => void;
   onDelete: () => void;
+  /** This track's stave rect in client coordinates, or `null` when not aligning. */
+  rect: { top: number; height: number } | null;
+  /** Client-space top of the list container, for converting `rect.top` to panel-local. */
+  listTop: number;
 }) {
   const [nameDraft, setNameDraft] = useState(track.name);
 
@@ -163,12 +177,34 @@ function TrackRow({
           onSelect();
         }
       }}
+      style={
+        rect
+          ? {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              // Client -> panel-local.
+              top: rect.top - listTop,
+              height: rect.height,
+              // Clipped so a short stave can never push the row out of
+              // alignment; hover and the active row lift instead (below).
+              overflow: 'hidden',
+            }
+          : undefined
+      }
       className={cn(
         'cursor-pointer border-b border-theme-border p-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary',
         selected && 'bg-theme-bg-secondary',
         // The active track gets a left rail rather than another background
         // tint, so "active" stays readable on top of "selected".
         active && 'border-l-2 border-l-primary',
+        // A stave shorter than the controls clips them; lifting the row above
+        // its neighbours is how they stay reachable. `!h-auto` because the
+        // height is an inline style and only an important utility beats it.
+        // Alignment breaks for this one row while lifted, deliberately -- every
+        // other row keeps it, and this one snaps back on pointer-out.
+        rect && 'bg-theme-bg hover:z-10 hover:!h-auto hover:overflow-visible hover:shadow-lg',
+        rect && active && 'z-10 !h-auto overflow-visible',
       )}
     >
       <div className="flex items-center gap-2">
@@ -303,11 +339,29 @@ function TrackRow({
   );
 }
 
-export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
+export function TrackPanel({ store = useAppStore, staveRects }: TrackPanelProps) {
   const score = store((s) => s.score);
   const selectedTrackIds = store((s) => s.selection.trackIds);
   const activeTrackId = store(selectActiveTrackId);
   const [pendingDeleteId, setPendingDeleteId] = useState<UUID | null>(null);
+
+  const rectByTrackId = useMemo(
+    () => new Map((staveRects ?? []).map((rect) => [rect.trackId, rect])),
+    [staveRects],
+  );
+  const aligned = rectByTrackId.size > 0;
+
+  /**
+   * The rects arrive in client coordinates (the notation view has a different
+   * origin and a toolbar above it), so the panel measures its own top and
+   * converts. Layout effect, not state-on-render: this reads geometry.
+   */
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [listTop, setListTop] = useState(0);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el) setListTop(el.getBoundingClientRect().top);
+  }, [aligned, staveRects]);
 
   if (!score) return null;
   const tracks = score.tracks;
@@ -337,10 +391,20 @@ export function TrackPanel({ store = useAppStore }: TrackPanelProps) {
         </Tooltip>
       </div>
 
-      <div role="list" aria-label="Track list">
+      <div
+        ref={listRef}
+        role="list"
+        aria-label="Track list"
+        // `relative` only while aligning: the rows are absolutely positioned
+        // against this box, and it must not scroll independently -- it mirrors
+        // one system of the sheet rather than being its own scrollable list.
+        className={aligned ? 'relative' : undefined}
+      >
         {tracks.map((track) => (
           <TrackRow
             key={track.id}
+            rect={rectByTrackId.get(track.id) ?? null}
+            listTop={listTop}
             track={track}
             selected={selectedTrackIds.includes(track.id)}
             active={track.id === activeTrackId}

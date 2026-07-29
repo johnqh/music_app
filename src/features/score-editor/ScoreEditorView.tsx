@@ -59,10 +59,19 @@ import { buildNoteColors } from '@/features/score-editor/note-colors';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
+import { staveRectsForViewport } from '@/features/score-editor/stave-layout';
+import type { StaveRect } from '@/features/score-editor/stave-layout';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
+  /**
+   * Stave rects for the topmost visible system, in viewport client
+   * coordinates — how the track panel aligns its rows to the staves. Called on
+   * layout change and on the existing rAF-throttled scroll path, never per
+   * frame.
+   */
+  onStaveLayout?: (rects: readonly StaveRect[]) => void;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -257,7 +266,10 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
   );
 }
 
-export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
+export function ScoreEditorView({
+  store = useAppStore,
+  onStaveLayout = () => undefined,
+}: ScoreEditorViewProps) {
   useEditorShortcuts(store);
 
   const score = store((s) => s.score);
@@ -495,6 +507,19 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
     });
   }, [noteColors, selectedMeasureIds, draw]);
 
+  const reportStaveLayout = useCallback(() => {
+    const box = scrollBoxRef.current;
+    if (!box || !layoutPlan) return;
+    onStaveLayout(
+      staveRectsForViewport(layoutPlan, zoom, box.scrollTop, box.getBoundingClientRect().top),
+    );
+  }, [layoutPlan, zoom, onStaveLayout]);
+
+  // Layout-driven: a new plan, zoom or width moves every stave.
+  useEffect(() => {
+    reportStaveLayout();
+  }, [reportStaveLayout]);
+
   const stopAutoscroll = useCallback(() => {
     if (autoscrollRafRef.current !== null) {
       cancelAnimationFrame(autoscrollRafRef.current);
@@ -542,8 +567,9 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
       scrollFrameScheduledRef.current = false;
       scrollRafIdRef.current = null;
       draw();
+      reportStaveLayout();
     });
-  }, [draw]);
+  }, [draw, reportStaveLayout]);
 
   useEffect(() => {
     return () => {

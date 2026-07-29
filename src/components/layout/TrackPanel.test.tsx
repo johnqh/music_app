@@ -265,3 +265,67 @@ describe('instrument picker', () => {
     expect(store.getState().score!.tracks[0].midiProgram).toBe(before);
   });
 });
+
+describe('stave alignment', () => {
+  function rectsFor(store: EditorStoreApi) {
+    return store.getState().score!.tracks.map((track, i) => ({
+      trackId: track.id,
+      top: 40 + i * 120,
+      height: 100,
+    }));
+  }
+
+  it('positions each row at its reported top and height', () => {
+    const store = makeStore();
+    const rects = rectsFor(store);
+    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
+
+    const row = container.querySelector<HTMLElement>(
+      `[data-testid="track-row-${rects[0].trackId}"]`,
+    )!;
+    expect(row.style.position).toBe('absolute');
+    expect(row.style.height).toBe('100px');
+  });
+
+  it('gives the second track the second stave position', () => {
+    const store = makeStore();
+    const rects = rectsFor(store);
+    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
+
+    const first = container.querySelector<HTMLElement>(
+      `[data-testid="track-row-${rects[0].trackId}"]`,
+    )!;
+    const second = container.querySelector<HTMLElement>(
+      `[data-testid="track-row-${rects[1].trackId}"]`,
+    )!;
+    // 120px apart, matching the reported rects, whatever the panel's own origin.
+    expect(parseFloat(second.style.top) - parseFloat(first.style.top)).toBe(120);
+  });
+
+  it('clips row content, so a short stave cannot break alignment', () => {
+    const store = makeStore();
+    const rects = rectsFor(store);
+    const { container } = render(<TrackPanel store={store} staveRects={rects} />);
+
+    const row = container.querySelector<HTMLElement>(
+      `[data-testid="track-row-${rects[0].trackId}"]`,
+    )!;
+    expect(row.style.overflow).toBe('hidden');
+  });
+
+  it('falls back to stacked rows when no rects are reported', () => {
+    const store = makeStore();
+    const { container } = render(<TrackPanel store={store} />);
+
+    const row = container.querySelector<HTMLElement>(
+      `[data-testid="track-row-${store.getState().score!.tracks[0].id}"]`,
+    )!;
+    expect(row.style.position).not.toBe('absolute');
+  });
+
+  it('ignores a rect for a track that no longer exists', () => {
+    const store = makeStore();
+    const rects = [{ trackId: 'deleted-track', top: 10, height: 100 }];
+    expect(() => render(<TrackPanel store={store} staveRects={rects} />)).not.toThrow();
+  });
+});
