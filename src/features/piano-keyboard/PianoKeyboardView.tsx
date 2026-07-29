@@ -178,7 +178,7 @@ export function PianoKeyboardView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {header}
-      <div ref={boxRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
+      <div ref={boxRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain">
         <div
           role="img"
           aria-label="Piano keyboard showing the notes being played"

@@ -7,6 +7,16 @@
    generateThemeCSS(swissTheme) — same pattern as sudojo_app / sider_app.
    Everything below is app chrome only; colors come from the theme tokens. */
 
+html,
+body {
+  /* The editor is bounded to the viewport and scrolls inside its own panes.
+     Without this, a trackpad swipe that runs past the end of a scrolling pane
+     chains to the document and rubber-bands the entire app, which looks like
+     the content sliding up and leaving blank space below the bottom panel.
+     `none` also stops pull-to-refresh on touch. */
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family:

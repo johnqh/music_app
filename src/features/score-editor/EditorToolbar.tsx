@@ -186,7 +186,12 @@ export function EditorToolbar({
     <div
       role="toolbar"
       aria-label="Score editor toolbar"
-      className="flex flex-wrap items-center gap-1 border-b border-theme-border px-2 py-1"
+      // `flex-nowrap` + horizontal scroll, NOT `flex-wrap`: this app is bounded
+      // to the viewport, and a wrapping toolbar grows without limit as the
+      // window narrows. At 800px it reached 475px tall, overflowed the app
+      // root and made the whole document scrollable, which showed up as the
+      // page sliding away with blank space under the keyboard panel.
+      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-theme-border px-2 py-1"
     >
       <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
         {DURATION_OPTIONS.map((option) => (

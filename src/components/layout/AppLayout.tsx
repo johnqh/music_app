@@ -585,14 +585,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <div className="flex flex-1 min-h-0">
         {trackPanelOpen && (
           <div
-            className="shrink-0 overflow-y-auto border-r border-theme-border"
+            className="shrink-0 overflow-y-auto overscroll-contain border-r border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
             <TrackPanel store={store} />
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex border-b border-theme-border">
             <Tooltip content={trackPanelOpen ? 'Hide track panel' : 'Show track panel'}>
               <Button
@@ -628,7 +628,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
         {inspectorOpen && (
           <div
-            className="flex shrink-0 flex-col overflow-y-auto border-l border-theme-border"
+            className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
             {/* shrink-0 on every child: this column is height-bounded now

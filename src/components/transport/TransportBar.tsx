@@ -219,7 +219,8 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     <div
       role="toolbar"
       aria-label="Playback transport"
-      className="flex flex-wrap items-center gap-2 border-t border-theme-border px-2 py-1"
+      // Same reasoning as the editor toolbar: one row, scrolled, never wrapped.
+      className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-theme-border px-2 py-1"
     >
       <Tooltip content="Go to start">
         <Button

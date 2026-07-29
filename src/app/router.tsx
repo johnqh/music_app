@@ -21,7 +21,7 @@ import { playbackController, reportError, useAppStore } from '@sudobility/music_
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
 import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
-import { supportedLanguages } from '@/i18n';
+import { SUPPORTED_LANGUAGES } from '@/i18n';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
@@ -47,7 +47,7 @@ function ScreenContainerLayout() {
 
 function LanguageValidator() {
   const { lang } = useParams<{ lang: string }>();
-  if (!lang || !(supportedLanguages as readonly string[]).includes(lang)) {
+  if (!lang || !(SUPPORTED_LANGUAGES as readonly string[]).includes(lang)) {
     return <Navigate to="/en" replace />;
   }
   return <Outlet />;

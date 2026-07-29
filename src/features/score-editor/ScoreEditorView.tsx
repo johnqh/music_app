@@ -880,7 +880,7 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
         // its 280px — the roll then painted on top of the notation and
         // swallowed its clicks. CONTAINER_MIN_HEIGHT survives only as the
         // canvas-sizing fallback for jsdom, where clientHeight is 0.
-        className="relative min-h-0 flex-1 overflow-auto"
+        className="relative min-h-0 flex-1 overflow-auto overscroll-contain"
       >
         {/* Interaction surface doubling as the scroll spacer: spans the full
             content size (so the scroll box gets both scrollbars), is

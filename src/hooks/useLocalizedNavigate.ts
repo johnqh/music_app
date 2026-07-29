@@ -4,11 +4,11 @@
  */
 import { useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { supportedLanguages, type SupportedLanguage } from '@/i18n';
+import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n';
 
 export function useCurrentLanguage(): SupportedLanguage {
   const { lang } = useParams<{ lang: string }>();
-  return (supportedLanguages as readonly string[]).includes(lang ?? '')
+  return (SUPPORTED_LANGUAGES as readonly string[]).includes(lang ?? '')
     ? (lang as SupportedLanguage)
     : 'en';
 }
