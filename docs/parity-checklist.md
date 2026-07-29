@@ -58,3 +58,16 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | Playback key highlighting | `src/features/piano-keyboard/playing-pitches.test.ts`; `PianoKeyboardView.test.tsx`; e2e `acceptance.spec.ts` |
 | 88-key physical layout | `src/features/piano-keyboard/keyboard-geometry.test.ts` |
 | Playback repaint cost | `ScoreEditorView.test.tsx` ("playback repaint cost") |
+
+## Instruments and track alignment (2026-07-29)
+
+| Feature | Tests |
+| --- | --- |
+| 128-program General MIDI catalogue | music_lib `src/domain/instruments/gm.test.ts` |
+| Every GM family maps to a synth voice | music_lib `src/adapters/tone/instruments.test.ts` ("categoryForProgram covers every GM family") |
+| Instrument icons for all 128 programs | `src/features/instruments/instrument-icon.test.tsx` |
+| Instrument picker, grouped by family | `src/components/layout/TrackPanel.test.tsx` ("instrument picker"); e2e `e2e/instruments.spec.ts` |
+| Picker sets midiProgram and instrumentName together | `TrackPanel.test.tsx` ("choosing an instrument sets both midiProgram and instrumentName") |
+| Keyboard header names the active instrument | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument") |
+| Stave-rect geometry for the topmost visible system | `src/features/score-editor/stave-layout.test.ts` |
+| Track rows aligned to their staves | `TrackPanel.test.tsx` ("stave alignment") |
