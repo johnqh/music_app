@@ -47,7 +47,7 @@
  * skin -- the honest characterization is still "kept native", just with a
  * documented, checked reason rather than an assumed one.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
@@ -63,12 +63,11 @@ import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
-import { createStaveLayoutChannel } from '@/features/score-editor/stave-layout-channel';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { GenerationPanel } from '@/features/generation/GenerationPanel';
 import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import { TransportBar } from '@/components/transport/TransportBar';
-import { TrackPanel } from '@/components/layout/TrackPanel';
+import { TrackEditorPanel } from '@/features/tracks/TrackEditorPanel';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -90,7 +89,7 @@ const SIDE_PANEL_WIDTH = 280;
  * only size control. Far shorter than the timeline it replaced, which hands
  * ~130px back to the notation.
  */
-const PIANO_KEYBOARD_PANEL_HEIGHT = 150;
+const PIANO_KEYBOARD_PANEL_HEIGHT = 190;
 
 const SAVE_STATE_LABEL: Record<string, string> = {
   saved: 'Saved',
@@ -187,17 +186,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     null,
   );
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
-  /**
-   * Carries stave geometry from the notation view to the track panel so the
-   * rows line up with the staves.
-   *
-   * A channel, not state: this updates at scroll frequency, and holding it here
-   * re-rendered the entire app tree every frame — including a track row's
-   * 128-item Select — with the rows only moving after the commit, so the list
-   * visibly lagged the sheet.
-   */
-  const staveLayout = useMemo(createStaveLayoutChannel, []);
-  const [trackPanelOpen, setTrackPanelOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
   const errorIssues = validationIssues.filter((i) => i.severity === 'error');
@@ -594,32 +582,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       </header>
 
       <div className="flex flex-1 min-h-0">
-        {trackPanelOpen && (
-          <div
-            // `overflow-hidden`, not `overflow-y-auto`: the list mirrors one
-            // system of the sheet, so it must not scroll independently of it —
-            // the sheet's own scroll is what moves the rows.
-            className="shrink-0 overflow-hidden border-r border-theme-border"
-            style={{ width: SIDE_PANEL_WIDTH }}
-          >
-            <TrackPanel store={store} staveLayout={staveLayout} />
-          </div>
-        )}
-
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="flex border-b border-theme-border">
-            <Tooltip content={trackPanelOpen ? 'Hide track panel' : 'Show track panel'}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Toggle track panel"
-                onClick={() => setTrackPanelOpen((v) => !v)}
-                className="h-auto w-auto p-1.5 text-sm leading-none"
-              >
-                {trackPanelOpen ? '⟨' : '⟩'}
-              </Button>
-            </Tooltip>
             <div className="flex-1" />
             <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
               <Button
@@ -636,7 +600,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="min-h-0 flex-1">
-            <ScoreEditorView store={store} staveLayout={staveLayout} />
+            <ScoreEditorView store={store} />
           </div>
         </div>
 
@@ -672,11 +636,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         className="shrink-0 overflow-hidden border-t border-theme-border"
         style={keyboardCollapsed ? undefined : { height: PIANO_KEYBOARD_PANEL_HEIGHT }}
       >
-        <PianoKeyboardView
-          store={store}
-          collapsed={keyboardCollapsed}
-          onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
-        />
+        {/* The editor panel shares the keyboard's row and the canvas gutter's
+            width, so a track's label on the sheet and its controls sit on the
+            same column. Both show only the active track. */}
+        <div className="flex h-full min-h-0">
+          {!keyboardCollapsed && <TrackEditorPanel store={store} />}
+          <div className="min-w-0 flex-1">
+            <PianoKeyboardView
+              store={store}
+              collapsed={keyboardCollapsed}
+              onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Pinned bottom bars: the transport sits directly above the status

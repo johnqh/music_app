@@ -159,7 +159,19 @@ describe('ScoreEditorView', () => {
     render(<ScoreEditorView store={store} />);
     expect(renderSpy).toHaveBeenCalled();
     const result = renderSpy.mock.results.at(-1)!.value;
-    for (const note of allNotes(store.getState().score!)) {
+    // Only notes in the DRAWN WINDOW have bboxes -- that is the virtualization
+    // working. Asserting all of them only passed while the whole score happened
+    // to fit the viewport, which it no longer does now the track gutter takes
+    // 220px of width and the score wraps into more systems.
+    const score = store.getState().score!;
+    const drawnNotes = allNotes(score).filter((note) => {
+      const measure = score.tracks
+        .find((t) => t.id === note.trackId)!
+        .measures.find((m) => m.voices.some((v) => v.events.some((e) => e.id === note.id)))!;
+      return result.drawnMeasureIndices.has(measure.index);
+    });
+    expect(drawnNotes.length).toBeGreaterThan(0);
+    for (const note of drawnNotes) {
       expect(result.idToBBox.get(note.id)).toBeDefined();
     }
   });
@@ -949,5 +961,54 @@ describe('playback repaint cost', () => {
     await flushRepaintFrame();
 
     expect(renderSpy.mock.calls.length).toBe(before);
+  });
+});
+
+describe('track gutter click', () => {
+  /** A point inside `trackIndex`'s gutter cell, in client coordinates (jsdom rects are all zero, so these pass through). */
+  function gutterPoint(store: EditorStoreApi, trackIndex: number) {
+    const plan = computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: THEME,
+    });
+    const box = plan.trackLayouts[trackIndex].measures[0].box;
+    return { clientX: 20, clientY: box.y + box.height / 2 };
+  }
+
+  it('makes the clicked track active and selects it', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), gutterPoint(store, 1));
+
+    expect(store.getState().activeTrackId).toBe(score.tracks[1].id);
+    expect(store.getState().selection.trackIds).toEqual([score.tracks[1].id]);
+  });
+
+  it('does not move the caret: the gutter is not part of the timeline', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    vi.mocked(playbackController.seek).mockClear();
+
+    fireEvent.click(interactionSurface(), gutterPoint(store, 0));
+
+    expect(playbackController.seek).not.toHaveBeenCalled();
+  });
+
+  it('leaves clicks right of the gutter to the stave handlers', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    vi.mocked(playbackController.seek).mockClear();
+
+    // A note-free spot on the stave still seeks, as before.
+    fireEvent.click(interactionSurface(), measureFreePoint(score, score.tracks[0].measures[0].id));
+
+    expect(playbackController.seek).toHaveBeenCalled();
   });
 });

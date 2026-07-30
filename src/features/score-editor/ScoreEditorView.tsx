@@ -59,21 +59,11 @@ import { buildNoteColors } from '@/features/score-editor/note-colors';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
-import { staveRectsForViewport } from '@/features/score-editor/stave-layout';
-import type { StaveLayoutChannel } from '@/features/score-editor/stave-layout-channel';
+import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /**
-   * Channel the track panel listens on to align its rows to the staves.
-   * Published on layout change and on the existing rAF-throttled scroll path.
-   *
-   * A channel rather than a `setState` callback on purpose: routing this
-   * through React state re-rendered the whole app tree every scroll frame, and
-   * the rows only moved after the commit, so the list lagged the sheet.
-   */
-  staveLayout?: StaveLayoutChannel;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -268,7 +258,7 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
   );
 }
 
-export function ScoreEditorView({ store = useAppStore, staveLayout }: ScoreEditorViewProps) {
+export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
   useEditorShortcuts(store);
 
   const score = store((s) => s.score);
@@ -506,19 +496,6 @@ export function ScoreEditorView({ store = useAppStore, staveLayout }: ScoreEdito
     });
   }, [noteColors, selectedMeasureIds, draw]);
 
-  const reportStaveLayout = useCallback(() => {
-    const box = scrollBoxRef.current;
-    if (!box || !layoutPlan) return;
-    staveLayout?.publish(
-      staveRectsForViewport(layoutPlan, zoom, box.scrollTop, box.getBoundingClientRect().top),
-    );
-  }, [layoutPlan, zoom, staveLayout]);
-
-  // Layout-driven: a new plan, zoom or width moves every stave.
-  useEffect(() => {
-    reportStaveLayout();
-  }, [reportStaveLayout]);
-
   const stopAutoscroll = useCallback(() => {
     if (autoscrollRafRef.current !== null) {
       cancelAnimationFrame(autoscrollRafRef.current);
@@ -566,9 +543,8 @@ export function ScoreEditorView({ store = useAppStore, staveLayout }: ScoreEdito
       scrollFrameScheduledRef.current = false;
       scrollRafIdRef.current = null;
       draw();
-      reportStaveLayout();
     });
-  }, [draw, reportStaveLayout]);
+  }, [draw]);
 
   useEffect(() => {
     return () => {
@@ -706,6 +682,26 @@ export function ScoreEditorView({ store = useAppStore, staveLayout }: ScoreEdito
       const point: Point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
       const logical = { x: point.x / zoom, y: point.y / zoom };
       const rangeModifier = event.metaKey || event.ctrlKey;
+
+      // ---- track gutter: left of everything else, so it wins first.
+      //
+      // Viewport coordinates, not the content-space `point` above: the gutter is
+      // pinned to the viewport's left edge, so a content-space hit region would
+      // only be right at scroll position zero.
+      const scrollBox = scrollBoxRef.current;
+      if (layoutPlan && scrollBox) {
+        const boxRect = scrollBox.getBoundingClientRect();
+        const trackId = trackIdAtGutterPoint(layoutPlan, zoom, scrollBox.scrollTop, {
+          x: event.clientX - boxRect.left,
+          y: event.clientY - boxRect.top,
+        });
+        if (trackId) {
+          // Not a timeline position, so the caret stays put.
+          state.setActiveTrack(trackId);
+          state.selectTrack(trackId);
+          return;
+        }
+      }
 
       // ---- measure gutter: the one gesture that still selects measures,
       // which is what keeps regeneration's "select bars 3-4" workflow alive

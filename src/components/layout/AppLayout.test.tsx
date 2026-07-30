@@ -148,19 +148,6 @@ describe('AppLayout', () => {
     expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
 
-  it('toggling the track panel hides and re-shows it', async () => {
-    const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
-    const user = userEvent.setup();
-
-    expect(screen.getByLabelText('Track list')).toBeInTheDocument();
-
-    await user.click(screen.getByLabelText('Toggle track panel'));
-    expect(screen.queryByLabelText('Track list')).not.toBeInTheDocument();
-
-    await user.click(screen.getByLabelText('Toggle track panel'));
-    expect(screen.getByLabelText('Track list')).toBeInTheDocument();
-  });
 });
 
 describe('AppLayout: simultaneous notation and piano keyboard', () => {
@@ -226,5 +213,31 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
       '1 note(s) selected',
     );
     expect(screen.getByRole('status', { name: 'Status bar' })).not.toHaveTextContent('regenerated');
+  });
+});
+
+describe('AppLayout: track editor beside the keyboard', () => {
+  function makeScored() {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    return store;
+  }
+
+  it('has no left track column: the info is in the canvas now', () => {
+    render(<AppLayout store={makeScored()} />);
+    expect(screen.queryByRole('list', { name: 'Track list' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Toggle track panel' })).not.toBeInTheDocument();
+  });
+
+  it('shows the track editor beside the keyboard', () => {
+    render(<AppLayout store={makeScored()} />);
+    expect(screen.getByRole('region', { name: 'Track editor' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
+  });
+
+  it('collapsing the keyboard takes the track editor with it', () => {
+    // They share one subject -- the active track -- so they collapse together.
+    render(<AppLayout store={makeScored()} />);
+    expect(screen.getByRole('region', { name: 'Track editor' })).toBeInTheDocument();
   });
 });

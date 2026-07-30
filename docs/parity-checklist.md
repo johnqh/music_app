@@ -69,5 +69,6 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | Instrument picker, grouped by family | `src/components/layout/TrackPanel.test.tsx` ("instrument picker"); e2e `e2e/instruments.spec.ts` |
 | Picker sets midiProgram and instrumentName together | `TrackPanel.test.tsx` ("choosing an instrument sets both midiProgram and instrumentName") |
 | Keyboard header names the active instrument | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument") |
-| Stave-rect geometry for the topmost visible system | `src/features/score-editor/stave-layout.test.ts` |
-| Track rows aligned to their staves | `TrackPanel.test.tsx` ("stave alignment") |
+| Track info drawn in the canvas gutter | music_lib `canvas-renderer.test.ts` ("track-info gutter drawing"), `layout.test.ts` ("track-info gutter") |
+| Selecting a track from the gutter | `src/features/score-editor/track-gutter.test.ts`; `ScoreEditorView.test.tsx` ("track gutter click"); e2e `e2e/instruments.spec.ts` |
+| Track editing beside the keyboard | `src/features/tracks/TrackEditorPanel.test.tsx`; `AppLayout.test.tsx` ("track editor beside the keyboard") |

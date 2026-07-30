@@ -19,6 +19,9 @@
 import type { RenderTheme } from '@sudobility/music_lib';
 
 export const LIGHT_RENDER_THEME: RenderTheme = {
+  // The paper. Only the viewport-pinned track gutter needs it, since content
+  // scrolls underneath and it has to occlude rather than overlay.
+  background: '#ffffff',
   foreground: '#3f3f46',
   noteNormal: '#3f3f46',
   noteSelected: '#000000',
@@ -30,6 +33,7 @@ export const LIGHT_RENDER_THEME: RenderTheme = {
 };
 
 export const DARK_RENDER_THEME: RenderTheme = {
+  background: '#121212',
   foreground: '#d4d4d8',
   noteNormal: '#d4d4d8',
   noteSelected: '#ffffff',
