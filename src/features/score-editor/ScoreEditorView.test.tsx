@@ -535,6 +535,40 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the reader\'s vertical scroll instead of snapping back to track 1', () => {
+    // The whole point of the change: following playback used to scroll to the
+    // top of the new system, throwing whatever track the reader was watching
+    // off the top of the viewport on every wrap.
+    const store = makeStore();
+    // A position provably inside the system playback starts in, so "same
+    // system, leave the scroll alone" is what is under test here.
+    const plan = computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: LIGHT_RENDER_THEME,
+    });
+    const insideFirstSystem = Math.round(plan.systems[0].yTop + 1);
+
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const scrollBox = getByTestId('score-editor-scroll');
+    Object.defineProperty(scrollBox, 'scrollTop', {
+      value: insideFirstSystem,
+      configurable: true,
+      writable: true,
+    });
+    const scrollToSpy = mockScrollTo(scrollBox);
+
+    act(() => store.getState().setPlaybackState('playing'));
+
+    // Old behaviour scrolled to track 1's stave — 0 here, once the margin is
+    // subtracted — regardless of where the reader had scrolled to.
+    expect(scrollToSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ top: insideFirstSystem }),
+    );
+    expect(insideFirstSystem).toBeGreaterThan(0);
+  });
+
   it('uses instant ("auto") scroll behavior when the user prefers reduced motion', () => {
     const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
     vi.stubGlobal('matchMedia', matchMediaSpy);

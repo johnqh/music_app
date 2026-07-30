@@ -60,6 +60,7 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/r
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
+import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -108,6 +109,8 @@ type PlaybackCaretProps = {
   score: Score | null;
   zoom: number;
   color: string;
+  /** Which way the score wraps, which decides how following playback scrolls. */
+  layoutMode: LayoutMode;
   scrollBoxRef: React.RefObject<HTMLDivElement | null>;
 };
 
@@ -125,7 +128,7 @@ type PlaybackCaretProps = {
  * Scroll-into-view lives here for the same reason: it is driven by position
  * and needs nothing from the parent's render.
  */
-function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: PlaybackCaretProps) {
+function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxRef }: PlaybackCaretProps) {
   const positionTick = store((s) => s.positionTick);
   const playbackState = store((s) => s.state);
   const tempoMultiplier = store((s) => s.tempoMultiplier);
@@ -237,15 +240,29 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
     const bbox = boxForMeasureIndex(plan, 0, measureIndex);
     if (!bbox) return;
 
+    // Deliberately not `bbox.y`: that is track 1's stave, so following playback
+    // used to snap whatever track the reader was watching back off the top of
+    // the viewport on every wrap.
+    const target = playbackScrollTarget({
+      plan,
+      layoutMode,
+      zoom,
+      measureIndex,
+      measureX: bbox.x,
+      scrollTop: scrollBox.scrollTop,
+      margin: SCROLL_MARGIN,
+    });
+    if (!target) return;
+
     lastScrolledMeasureRef.current = measureId;
     if (typeof scrollBox.scrollTo === 'function') {
       scrollBox.scrollTo({
-        left: Math.max(0, bbox.x * zoom - SCROLL_MARGIN),
-        top: Math.max(0, bbox.y * zoom - SCROLL_MARGIN),
+        left: target.left,
+        top: target.top,
         behavior: prefersReducedMotion() ? 'auto' : 'smooth',
       });
     }
-  }, [score, positionTick, playbackState, plan, zoom, scrollBoxRef]);
+  }, [score, positionTick, playbackState, plan, zoom, layoutMode, scrollBoxRef]);
 
   if (!plan || !score) return null;
   return (
@@ -977,6 +994,7 @@ export function ScoreEditorView({
           score={displayScore}
           zoom={zoom}
           color={renderTheme.caret}
+          layoutMode={layoutMode}
           scrollBoxRef={scrollBoxRef}
         />
       </div>

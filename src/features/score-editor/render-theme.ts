@@ -12,6 +12,14 @@
  * cue: `noteEmphasisFor` thickens and haloes non-normal notes, and the piano
  * roll thickens their borders — spec §27.)
  *
+ * `noteInactive` is the one value that does NOT clear 4.5:1 — it sits at ~3:1,
+ * deliberately. It marks the tracks you are *not* editing, and its whole job is
+ * to recede; at 4.5:1 against the same background it was indistinguishable from
+ * `noteNormal` and the active track stopped standing out at all. The music it
+ * draws stays legible (large glyphs, not body text), and no state is carried by
+ * it alone: a note you need to act on is selected, regenerated or playing, and
+ * those keep their full-contrast colours on every track.
+ *
  * Its own module rather than a `ScoreEditorView` export: both editors draw
  * from this one palette, so a note means the same thing in either, and a
  * component file exporting shared constants breaks Fast Refresh.
@@ -21,6 +29,7 @@ import type { RenderTheme } from '@sudobility/music_lib';
 export const LIGHT_RENDER_THEME: RenderTheme = {
   foreground: '#3f3f46',
   noteNormal: '#3f3f46',
+  noteInactive: '#8e8e97',
   noteSelected: '#000000',
   noteRegenerated: '#8b5a2b',
   notePlaying: '#1565c0',
@@ -32,6 +41,7 @@ export const LIGHT_RENDER_THEME: RenderTheme = {
 export const DARK_RENDER_THEME: RenderTheme = {
   foreground: '#d4d4d8',
   noteNormal: '#d4d4d8',
+  noteInactive: '#82828c',
   noteSelected: '#ffffff',
   noteRegenerated: '#d9a066',
   notePlaying: '#64b5f6',

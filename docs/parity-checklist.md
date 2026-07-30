@@ -73,3 +73,5 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | Selecting a track from the gutter | `src/features/score-editor/track-gutter.test.ts`; `ScoreEditorView.test.tsx` ("track gutter click"); e2e `e2e/instruments.spec.ts` |
 | Track editing beside the keyboard | `src/features/tracks/TrackEditorPanel.test.tsx`; `AppLayout.test.tsx` ("track editor beside the keyboard") |
 | Inspector toggle lives on the toolbar, outside its scroller | `src/features/score-editor/EditorToolbar.test.tsx` (`describe('inspector toggle')`) |
+| Inactive tracks dim whole (notes, beams, ties, clef) | music_lib `note-color.test.ts` (`describe('noteColorFor: inactive tracks')`), `canvas-renderer.test.ts` (`describe('inactive-track dimming')`) |
+| Following playback preserves vertical scroll | `src/features/score-editor/playback-scroll.test.ts`; `ScoreEditorView.test.tsx` ("keeps the reader's vertical scroll instead of snapping back to track 1") |
