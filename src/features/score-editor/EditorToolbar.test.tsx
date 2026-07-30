@@ -17,10 +17,25 @@ function makeStore(withScore = true): EditorStoreApi {
 
 afterEach(async () => {});
 
-function renderToolbar(store: EditorStoreApi, layoutMode: 'page' | 'continuous' = 'page') {
+function renderToolbar(
+  store: EditorStoreApi,
+  layoutModeOrOverrides:
+    | 'page'
+    | 'continuous'
+    | Partial<React.ComponentProps<typeof EditorToolbar>> = 'page',
+) {
+  const overrides =
+    typeof layoutModeOrOverrides === 'string'
+      ? { layoutMode: layoutModeOrOverrides }
+      : layoutModeOrOverrides;
   const onLayoutModeChange = vi.fn();
   render(
-    <EditorToolbar store={store} layoutMode={layoutMode} onLayoutModeChange={onLayoutModeChange} />,
+    <EditorToolbar
+      store={store}
+      layoutMode="page"
+      onLayoutModeChange={onLayoutModeChange}
+      {...overrides}
+    />,
   );
   return { onLayoutModeChange };
 }
@@ -190,5 +205,30 @@ describe('EditorToolbar', () => {
     for (const button of buttons) {
       expect(button).toHaveAccessibleName();
     }
+  });
+});
+
+describe('inspector toggle', () => {
+  it('is not rendered when no handler is given, so the view works standalone', () => {
+    renderToolbar(makeStore());
+    expect(screen.queryByRole('button', { name: 'Toggle inspector panel' })).not.toBeInTheDocument();
+  });
+
+  it('calls the handler and reflects the current state', async () => {
+    const onToggleInspector = vi.fn();
+    renderToolbar(makeStore(), { inspectorOpen: true, onToggleInspector });
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Toggle inspector panel' }));
+
+    expect(onToggleInspector).toHaveBeenCalledTimes(1);
+  });
+
+  it('sits outside the scrolling tool group, so it stays reachable on a narrow window', () => {
+    // Inside the scroller the flex spacer collapses once the tools overflow and
+    // the button lands past the right edge, reachable only by scrolling.
+    renderToolbar(makeStore(), { inspectorOpen: true, onToggleInspector: vi.fn() });
+    const toggle = screen.getByRole('button', { name: 'Toggle inspector panel' });
+    expect(screen.getByRole('toolbar').contains(toggle)).toBe(false);
   });
 });

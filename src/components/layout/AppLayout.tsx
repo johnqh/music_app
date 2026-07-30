@@ -583,24 +583,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
       <div className="flex flex-1 min-h-0">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex border-b border-theme-border">
-            <div className="flex-1" />
-            <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Toggle inspector panel"
-                onClick={() => setInspectorOpen((v) => !v)}
-                className="h-auto w-auto p-1.5 text-sm leading-none"
-              >
-                {inspectorOpen ? '⟩' : '⟨'}
-              </Button>
-            </Tooltip>
-          </div>
-
+          {/* The inspector toggle lives on the editor toolbar. It used to sit on
+              a strip of its own alongside a track-panel toggle; with that gone
+              the strip was a blank row holding one button. */}
           <div className="min-h-0 flex-1">
-            <ScoreEditorView store={store} />
+            <ScoreEditorView
+              store={store}
+              inspectorOpen={inspectorOpen}
+              onToggleInspector={() => setInspectorOpen((v) => !v)}
+            />
           </div>
         </div>
 

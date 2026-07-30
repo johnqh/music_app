@@ -57,6 +57,9 @@ export type EditorToolbarProps = {
   store?: EditorStoreApi;
   layoutMode: LayoutMode;
   onLayoutModeChange: (mode: LayoutMode) => void;
+  /** Inspector visibility. Omitted when the view is rendered without a surrounding layout, in which case no toggle shows. */
+  inspectorOpen?: boolean;
+  onToggleInspector?: () => void;
 };
 
 const DURATION_OPTIONS: Array<{ value: DurationName; label: string; ariaLabel: string }> = [
@@ -123,6 +126,8 @@ export function EditorToolbar({
   store = useAppStore,
   layoutMode,
   onLayoutModeChange,
+  inspectorOpen,
+  onToggleInspector,
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
@@ -183,16 +188,22 @@ export function EditorToolbar({
   const handleZoomOut = (): void => store.getState().setZoom(clampZoom(zoom / ZOOM_STEP));
 
   return (
-    <div
-      role="toolbar"
-      aria-label="Score editor toolbar"
-      // `flex-nowrap` + horizontal scroll, NOT `flex-wrap`: this app is bounded
-      // to the viewport, and a wrapping toolbar grows without limit as the
-      // window narrows. At 800px it reached 475px tall, overflowed the app
-      // root and made the whole document scrollable, which showed up as the
-      // page sliding away with blank space under the keyboard panel.
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-theme-border px-2 py-1"
-    >
+    // Two parts on one row: the tools scroll, the inspector toggle does not.
+    // The toggle sits outside the scrolling region because inside it the
+    // `flex-1` spacer collapses once the tools overflow, pushing the toggle
+    // past the right edge where it can only be reached by scrolling the
+    // toolbar.
+    <div className="flex shrink-0 items-stretch border-b border-theme-border">
+      <div
+        role="toolbar"
+        aria-label="Score editor toolbar"
+        // `flex-nowrap` + horizontal scroll, NOT `flex-wrap`: this app is bounded
+        // to the viewport, and a wrapping toolbar grows without limit as the
+        // window narrows. At 800px it reached 475px tall, overflowed the app
+        // root and made the whole document scrollable, which showed up as the
+        // page sliding away with blank space under the keyboard panel.
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-1"
+      >
       <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
         {DURATION_OPTIONS.map((option) => (
           <Tooltip key={option.value} content={option.ariaLabel}>
@@ -403,8 +414,27 @@ export function EditorToolbar({
         </Button>
       </div>
 
-      <div className="flex-1" />
+      </div>
 
+      {/* Outside the scroller, so it stays reachable however narrow the window
+          gets. It controls the inspector, not the score, which is why it sits
+          apart from the tools rather than among them. */}
+      {onToggleInspector && (
+        <div className="flex shrink-0 items-center pr-1">
+          <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Toggle inspector panel"
+              onClick={onToggleInspector}
+              className="h-auto w-auto p-1.5 text-sm leading-none"
+            >
+              {inspectorOpen ? '⟩' : '⟨'}
+            </Button>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }

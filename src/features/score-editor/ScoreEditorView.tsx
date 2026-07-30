@@ -64,6 +64,9 @@ import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
 export type ScoreEditorViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
+  /** Inspector visibility, forwarded to the toolbar, which owns the toggle. Optional so tests can render the view alone. */
+  inspectorOpen?: boolean;
+  onToggleInspector?: () => void;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -258,7 +261,11 @@ function PlaybackCaret({ store, plan, score, zoom, color, scrollBoxRef }: Playba
   );
 }
 
-export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
+export function ScoreEditorView({
+  store = useAppStore,
+  inspectorOpen,
+  onToggleInspector,
+}: ScoreEditorViewProps) {
   useEditorShortcuts(store);
 
   const score = store((s) => s.score);
@@ -890,7 +897,13 @@ export function ScoreEditorView({ store = useAppStore }: ScoreEditorViewProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorToolbar store={store} layoutMode={layoutMode} onLayoutModeChange={setLayoutMode} />
+      <EditorToolbar
+        store={store}
+        layoutMode={layoutMode}
+        onLayoutModeChange={setLayoutMode}
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={onToggleInspector}
+      />
       <div
         ref={scrollBoxRef}
         data-testid="score-editor-scroll"
