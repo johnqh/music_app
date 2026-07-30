@@ -54,10 +54,18 @@ test.describe('track gutter and editor', () => {
     // The gutter is drawn in the canvas, so target it by geometry: the second
     // track's stave band, inside the reserved left column.
     const point = await page.evaluate(() => {
-      const h = (window as any).__scoresmith;
-      const scroll = h.scrollBox;
+      // Minimal local shape rather than `any`: only the fields this reads.
+      type Box = { y: number; height: number };
+      type Handle = {
+        result: {
+          plan: { trackLayouts: Array<{ measures: Array<{ box: Box }> }> };
+        } | null;
+        scrollBox: HTMLElement | null;
+      };
+      const h = (window as unknown as { __scoresmith: Handle }).__scoresmith;
+      const scroll = h.scrollBox!;
       const rect = scroll.getBoundingClientRect();
-      const plan = h.result.plan;
+      const plan = h.result!.plan;
       const box = plan.trackLayouts[1].measures[0].box;
       return { x: rect.left + 20, y: rect.top + box.y + box.height / 2 - scroll.scrollTop };
     });
