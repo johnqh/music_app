@@ -66,9 +66,9 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | 128-program General MIDI catalogue | music_lib `src/domain/instruments/gm.test.ts` |
 | Every GM family maps to a synth voice | music_lib `src/adapters/tone/instruments.test.ts` ("categoryForProgram covers every GM family") |
 | Instrument icons for all 128 programs | `src/features/instruments/instrument-icon.test.tsx` |
-| Instrument picker, grouped by family | `src/components/layout/TrackPanel.test.tsx` ("instrument picker"); e2e `e2e/instruments.spec.ts` |
-| Picker sets midiProgram and instrumentName together | `TrackPanel.test.tsx` ("choosing an instrument sets both midiProgram and instrumentName") |
+| Instrument picker, grouped by family | `src/features/tracks/TrackEditorPanel.test.tsx` ("changes the instrument, setting both fields"); e2e `e2e/instruments.spec.ts` |
 | Keyboard header names the active instrument | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument") |
 | Track info drawn in the canvas gutter | music_lib `canvas-renderer.test.ts` ("track-info gutter drawing"), `layout.test.ts` ("track-info gutter") |
 | Selecting a track from the gutter | `src/features/score-editor/track-gutter.test.ts`; `ScoreEditorView.test.tsx` ("track gutter click"); e2e `e2e/instruments.spec.ts` |
 | Track editing beside the keyboard | `src/features/tracks/TrackEditorPanel.test.tsx`; `AppLayout.test.tsx` ("track editor beside the keyboard") |
+| Inspector toggle lives on the toolbar, outside its scroller | `src/features/score-editor/EditorToolbar.test.tsx` (`describe('inspector toggle')`) |
