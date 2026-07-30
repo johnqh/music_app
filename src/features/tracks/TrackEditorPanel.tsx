@@ -152,7 +152,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           />
 
           <div className="flex items-center gap-1">
-            <InstrumentIcon program={track.midiProgram} className="text-sm" />
+            <InstrumentIcon program={track.midiProgram} className="size-4 shrink-0" />
             <Select
               value={String(track.midiProgram)}
               onValueChange={(value: string) => {

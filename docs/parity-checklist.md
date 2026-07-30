@@ -65,7 +65,8 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | --- | --- |
 | 128-program General MIDI catalogue | music_lib `src/domain/instruments/gm.test.ts` |
 | Every GM family maps to a synth voice | music_lib `src/adapters/tone/instruments.test.ts` ("categoryForProgram covers every GM family") |
-| Instrument icons for all 128 programs | `src/features/instruments/instrument-icon.test.tsx` |
+| Instrument icons for all 128 programs | music_lib `src/domain/instruments/gm-icon.test.ts`; `src/features/instruments/instrument-icon.test.tsx` |
+| Icons are line art that take the surrounding colour | music_lib `icon-canvas.test.ts`, `canvas-renderer.test.ts` ("strokes the icon in the same colour as the track it labels"); `instrument-icon.test.tsx` ("strokes in currentColor") |
 | Instrument picker, grouped by family | `src/features/tracks/TrackEditorPanel.test.tsx` ("changes the instrument, setting both fields"); e2e `e2e/instruments.spec.ts` |
 | Keyboard header names the active instrument | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument") |
 | Track info drawn in the canvas gutter | music_lib `canvas-renderer.test.ts` ("track-info gutter drawing"), `layout.test.ts` ("track-info gutter") |

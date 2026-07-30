@@ -1,51 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { GM_INSTRUMENTS, gmFamilyOf } from '@sudobility/music_lib';
+import { GM_INSTRUMENTS, gmInstrumentIcon } from '@sudobility/music_lib';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
-import { instrumentEmoji } from '@/features/instruments/instrument-emoji';
-
-describe('instrumentEmoji', () => {
-  it('gives every one of the 128 programs a non-empty glyph', () => {
-    for (const instrument of GM_INSTRUMENTS) {
-      expect(instrumentEmoji(instrument.program).length).toBeGreaterThan(0);
-    }
-  });
-
-  it('uses the hand-picked glyph for common instruments', () => {
-    expect(instrumentEmoji(0)).toBe('🎹'); // Acoustic Grand Piano
-    expect(instrumentEmoji(24)).toBe('🎸'); // Acoustic Guitar (nylon)
-    expect(instrumentEmoji(40)).toBe('🎻'); // Violin
-    expect(instrumentEmoji(56)).toBe('🎺'); // Trumpet
-    expect(instrumentEmoji(65)).toBe('🎷'); // Alto Sax
-    expect(instrumentEmoji(73)).toBe('🪈'); // Flute
-  });
-
-  it('falls back to the family glyph for an instrument with no hand-picked one', () => {
-    // Every member of a family shares a glyph unless hand-picked, so two
-    // un-picked members of the same family must agree.
-    const sameFamily = GM_INSTRUMENTS.filter((i) => i.family === 'synth-effects');
-    const glyphs = new Set(sameFamily.map((i) => instrumentEmoji(i.program)));
-    expect(glyphs.size).toBe(1);
-  });
-
-  it('falls back rather than returning empty for a program outside the range', () => {
-    expect(instrumentEmoji(-1).length).toBeGreaterThan(0);
-    expect(instrumentEmoji(999).length).toBeGreaterThan(0);
-  });
-
-  it('gives every family a glyph', () => {
-    const families = new Set(GM_INSTRUMENTS.map((i) => gmFamilyOf(i.program)));
-    for (const family of families) {
-      const member = GM_INSTRUMENTS.find((i) => i.family === family)!;
-      expect(instrumentEmoji(member.program).length).toBeGreaterThan(0);
-    }
-  });
-});
 
 describe('InstrumentIcon', () => {
-  it('renders the glyph', () => {
+  it("draws every shape of the program's art", () => {
+    const art = gmInstrumentIcon(40);
     const { container } = render(<InstrumentIcon program={40} />);
-    expect(container.textContent).toBe('🎻');
+
+    expect(container.querySelectorAll('path, circle')).toHaveLength(art.shapes.length);
+  });
+
+  it('renders something for all 128 programs', () => {
+    for (const instrument of GM_INSTRUMENTS) {
+      const { container } = render(<InstrumentIcon program={instrument.program} />);
+      expect(container.querySelectorAll('path, circle').length).toBeGreaterThan(0);
+    }
+  });
+
+  it('strokes in currentColor, so it takes the colour of the text beside it', () => {
+    // The whole reason these are line art rather than emoji: an emoji keeps its
+    // own colours and stayed bright beside a dimmed inactive track name.
+    const { container } = render(<InstrumentIcon program={40} />);
+
+    const svg = container.firstElementChild!;
+    expect(svg).toHaveAttribute('stroke', 'currentColor');
+    expect(svg).toHaveAttribute('fill', 'none');
   });
 
   it('is hidden from assistive tech, since the name is always beside it', () => {
@@ -53,8 +33,8 @@ describe('InstrumentIcon', () => {
     expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('passes through a className', () => {
-    const { container } = render(<InstrumentIcon program={40} className="text-lg" />);
-    expect(container.firstElementChild).toHaveClass('text-lg');
+  it('passes through a className, which is how it gets its size', () => {
+    const { container } = render(<InstrumentIcon program={40} className="size-4" />);
+    expect(container.firstElementChild).toHaveClass('size-4');
   });
 });

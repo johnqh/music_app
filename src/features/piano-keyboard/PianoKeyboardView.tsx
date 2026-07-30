@@ -160,7 +160,7 @@ export function PianoKeyboardView({
       className="flex shrink-0 items-center gap-2 border-b border-theme-border px-2"
       style={{ height: HEADER_HEIGHT }}
     >
-      {activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="text-sm" />}
+      {activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="size-4 shrink-0" />}
       <span className="text-xs font-medium text-theme-text-primary">
         {/* The keyboard carries no track identity of its own, so the header is
             the only thing telling you which part you are looking at. */}
