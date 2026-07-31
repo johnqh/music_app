@@ -206,7 +206,7 @@ export function EditorToolbar({
       >
       <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
         {DURATION_OPTIONS.map((option) => (
-          <Tooltip key={option.value} content={option.ariaLabel}>
+          <Tooltip placement="bottom" key={option.value} content={option.ariaLabel}>
             <Button
               type="button"
               variant="ghost"
@@ -225,7 +225,7 @@ export function EditorToolbar({
 
       <div role="group" aria-label="Accidental" className="flex items-center gap-0.5">
         {ACCIDENTAL_OPTIONS.map((option) => (
-          <Tooltip key={option.value} content={option.ariaLabel}>
+          <Tooltip placement="bottom" key={option.value} content={option.ariaLabel}>
             <Button
               type="button"
               variant="ghost"
@@ -243,7 +243,7 @@ export function EditorToolbar({
       <VerticalDivider />
 
       <div ref={articulationRef} className="relative">
-        <Tooltip content="Add an articulation to the selection">
+        <Tooltip placement="bottom" content="Add an articulation to the selection">
           <Button
             type="button"
             variant="outline"
@@ -281,7 +281,7 @@ export function EditorToolbar({
         ) : null}
       </div>
 
-      <Tooltip content="Toggle tie">
+      <Tooltip placement="bottom" content="Toggle tie">
         <Button
           type="button"
           variant="ghost"
@@ -297,7 +297,7 @@ export function EditorToolbar({
 
       <VerticalDivider />
 
-      <Tooltip content="Insert a note at the caret">
+      <Tooltip placement="bottom" content="Insert a note at the caret">
         <Button
           type="button"
           variant="outline"
@@ -309,7 +309,7 @@ export function EditorToolbar({
           Insert note
         </Button>
       </Tooltip>
-      <Tooltip content="Insert a rest at the caret">
+      <Tooltip placement="bottom" content="Insert a rest at the caret">
         <Button
           type="button"
           variant="outline"
@@ -321,7 +321,7 @@ export function EditorToolbar({
           Insert rest
         </Button>
       </Tooltip>
-      <Tooltip content="Select every note in the score">
+      <Tooltip placement="bottom" content="Select every note in the score">
         <Button
           type="button"
           variant="outline"
@@ -336,7 +336,7 @@ export function EditorToolbar({
 
       <VerticalDivider />
 
-      <Tooltip content="Grid that Quantize snaps to">
+      <Tooltip placement="bottom" content="Grid that Quantize snaps to">
         <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
           <SelectTrigger
             aria-label="Quantize grid"
@@ -353,7 +353,7 @@ export function EditorToolbar({
           </SelectContent>
         </Select>
       </Tooltip>
-      <Tooltip content="Snap the selection to the quantize grid">
+      <Tooltip placement="bottom" content="Snap the selection to the quantize grid">
         <Button
           type="button"
           variant="outline"
@@ -369,7 +369,7 @@ export function EditorToolbar({
       <VerticalDivider />
 
       <div className="flex items-center gap-0.5">
-        <Tooltip content="Zoom out">
+        <Tooltip placement="bottom" content="Zoom out">
           <Button
             type="button"
             variant="ghost"
@@ -381,7 +381,7 @@ export function EditorToolbar({
             −
           </Button>
         </Tooltip>
-        <Tooltip content="Current zoom level">
+        <Tooltip placement="bottom" content="Current zoom level">
           <span
             aria-label="Current zoom level"
             className="min-w-[40px] text-center text-sm text-theme-text-primary"
@@ -389,7 +389,7 @@ export function EditorToolbar({
             {zoomLabel}
           </span>
         </Tooltip>
-        <Tooltip content="Zoom in">
+        <Tooltip placement="bottom" content="Zoom in">
           <Button
             type="button"
             variant="ghost"
@@ -406,7 +406,7 @@ export function EditorToolbar({
       <VerticalDivider />
 
       <div role="group" aria-label="Layout mode" className="flex items-center gap-0.5">
-        <Tooltip content="Wrap systems to the page width">
+        <Tooltip placement="bottom" content="Wrap systems to the page width">
           <Button
             type="button"
             variant="ghost"
@@ -418,7 +418,7 @@ export function EditorToolbar({
             Page
           </Button>
         </Tooltip>
-        <Tooltip content="Lay the score out in one scrolling line">
+        <Tooltip placement="bottom" content="Lay the score out in one scrolling line">
           <Button
             type="button"
             variant="ghost"
@@ -439,7 +439,7 @@ export function EditorToolbar({
           apart from the tools rather than among them. */}
       {onToggleInspector && (
         <div className="flex shrink-0 items-center pr-1">
-          <Tooltip content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
+          <Tooltip placement="bottom" content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
             <Button
               type="button"
               variant="ghost"
