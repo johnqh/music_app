@@ -981,7 +981,14 @@ export function ScoreEditorView({
         // its 280px — the roll then painted on top of the notation and
         // swallowed its clicks. CONTAINER_MIN_HEIGHT survives only as the
         // canvas-sizing fallback for jsdom, where clientHeight is 0.
-        className="relative min-h-0 flex-1 overflow-auto overscroll-contain"
+        // Page mode wraps every system to the viewport, so there is nothing to
+        // its right to reach: `overflow-x-hidden` keeps a stray pixel of
+        // rounding from producing a scrollbar that would only ever slide the
+        // sheet under the pinned gutter. Continuous mode is one wide system and
+        // scrolls horizontally by definition.
+        className={`relative min-h-0 flex-1 overscroll-contain ${
+          layoutMode === 'continuous' ? 'overflow-auto' : 'overflow-y-auto overflow-x-hidden'
+        }`}
       >
         {/* Interaction surface doubling as the scroll spacer: spans the full
             content size (so the scroll box gets both scrollbars), is
@@ -1009,9 +1016,9 @@ export function ScoreEditorView({
             // Horizontal scroll extent: continuous mode's single system is
             // (much) wider than the viewport — the spacer must span it so
             // the scroll box scrolls horizontally (trackpad swipe included).
-            // In page mode totalWidth ≈ the measured view width, so this is
-            // a no-op there.
-            minWidth: (layoutPlan?.totalWidth ?? 0) * zoom,
+            // Page mode lays out to exactly the viewport width, so asking for
+            // it here would only risk a sub-pixel overflow.
+            minWidth: layoutMode === 'continuous' ? (layoutPlan?.totalWidth ?? 0) * zoom : undefined,
           }}
         >
           {/* Viewport-pinned drawing surface: a ZERO-SIZED sticky anchor

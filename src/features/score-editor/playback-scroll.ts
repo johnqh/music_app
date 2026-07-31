@@ -71,18 +71,25 @@ export function playbackScrollTarget({
   const target = systemOf(plan, measureIndex);
   if (!target) return null;
 
-  // Horizontal follows the music in both modes. The track-info gutter is
-  // pinned to the viewport's left edge and painted over the sheet, so the
-  // target has to clear its width as well as the margin — scrolling the
-  // playing measure to `margin` parked it, and the caret travelling through
-  // it, *behind* the track info for most of every measure.
-  //
-  // Gutter width scales with zoom: it is cleared in the zoom-scaled space.
-  const left = Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin);
+  if (layoutMode === 'continuous') {
+    // The track-info gutter is pinned to the viewport's left edge and painted
+    // over the sheet, so the target has to clear its width as well as the
+    // margin — scrolling the playing measure to `margin` parked it, and the
+    // caret travelling through it, *behind* the track info for most of every
+    // measure. Gutter width scales with zoom: it is cleared in the zoom-scaled
+    // space.
+    //
+    // Vertical is left completely alone: one long system means there is no
+    // "next line" to follow, so any vertical move would be the caller fighting
+    // the reader for the scrollbar.
+    return { left: Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin), top: scrollTop };
+  }
 
-  // One long system: there is no "next line" to follow, so any vertical move
-  // here would be the caller fighting the reader for the scrollbar.
-  if (layoutMode === 'continuous') return { left, top: scrollTop };
+  // Page mode wraps every system to the viewport and does not scroll
+  // horizontally at all, so there is no horizontal following to do — and
+  // asking for one would scroll the sheet under the gutter with no way for the
+  // reader to bring it back.
+  const left = 0;
 
   const current = systemAtViewportTop(plan, scrollTop, zoom);
   // Same system: the music has not wrapped, so nothing vertical needs to move.

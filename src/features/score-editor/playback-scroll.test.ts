@@ -112,6 +112,30 @@ describe('playbackScrollTarget: continuous mode', () => {
   });
 });
 
+describe('playbackScrollTarget: page mode never scrolls horizontally', () => {
+  it('returns a zero left however far into the score the music is', () => {
+    // Page mode wraps every system to the viewport, so horizontal following
+    // would only slide the sheet under the pinned gutter — and with horizontal
+    // scrolling disabled there, the reader could not bring it back.
+    const p = plan();
+    const lastSystem = p.systems.at(-1)!;
+    const measure = p.trackLayouts[0].measures.find(
+      (m) => m.measureIndex === lastSystem.measureIndices.at(-1),
+    )!;
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      plan: p,
+      layoutMode: 'page',
+      measureIndex: measure.measureIndex,
+      measureX: measure.box.x,
+      scrollTop: 0,
+    })!;
+
+    expect(target.left).toBe(0);
+  });
+});
+
 describe('playbackScrollTarget: horizontal following', () => {
   it('leaves the playing measure clear of the pinned track-info gutter', () => {
     // The gutter is painted over the sheet at the viewport's left edge, so
