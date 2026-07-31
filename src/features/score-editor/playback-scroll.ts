@@ -16,6 +16,7 @@
  * - **Continuous mode** is one very wide system, so following the music is
  *   purely horizontal and vertical scroll is left completely alone.
  */
+import { TRACK_INFO_WIDTH } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 
 export type PlaybackScrollParams = {
@@ -70,10 +71,14 @@ export function playbackScrollTarget({
   const target = systemOf(plan, measureIndex);
   if (!target) return null;
 
-  // Horizontal follows the music in both modes, unchanged. In page mode the
-  // systems wrap to the viewport width, so this resolves to 0 and the scroll
-  // box clamps it away; zoomed in past the viewport width, it follows.
-  const left = Math.max(0, measureX * zoom - margin);
+  // Horizontal follows the music in both modes. The track-info gutter is
+  // pinned to the viewport's left edge and painted over the sheet, so the
+  // target has to clear its width as well as the margin — scrolling the
+  // playing measure to `margin` parked it, and the caret travelling through
+  // it, *behind* the track info for most of every measure.
+  //
+  // Gutter width scales with zoom: it is cleared in the zoom-scaled space.
+  const left = Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin);
 
   // One long system: there is no "next line" to follow, so any vertical move
   // here would be the caller fighting the reader for the scrollbar.

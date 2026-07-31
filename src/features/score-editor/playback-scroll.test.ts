@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeLayout, stressScore, testRenderTheme } from '@sudobility/music_lib';
+import { TRACK_INFO_WIDTH, computeLayout, stressScore, testRenderTheme } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 
@@ -113,7 +113,10 @@ describe('playbackScrollTarget: continuous mode', () => {
 });
 
 describe('playbackScrollTarget: horizontal following', () => {
-  it('follows the measure horizontally, less the margin', () => {
+  it('leaves the playing measure clear of the pinned track-info gutter', () => {
+    // The gutter is painted over the sheet at the viewport's left edge, so
+    // scrolling the measure to just `margin` parked it — and the caret
+    // crossing it — behind the track info for most of every measure.
     const p = plan('continuous');
     const measure = p.trackLayouts[0].measures[6];
 
@@ -126,7 +129,27 @@ describe('playbackScrollTarget: horizontal following', () => {
       scrollTop: 0,
     })!;
 
-    expect(target.left).toBeCloseTo(Math.max(0, measure.box.x - 40), 5);
+    const measureOnScreen = measure.box.x - target.left;
+    expect(measureOnScreen).toBeGreaterThanOrEqual(TRACK_INFO_WIDTH);
+    expect(target.left).toBeCloseTo(Math.max(0, measure.box.x - TRACK_INFO_WIDTH - 40), 5);
+  });
+
+  it('scales the gutter allowance with zoom', () => {
+    const p = plan('continuous');
+    const measure = p.trackLayouts[0].measures[6];
+    const zoom = 1.5;
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      plan: p,
+      zoom,
+      layoutMode: 'continuous',
+      measureIndex: measure.measureIndex,
+      measureX: measure.box.x,
+      scrollTop: 0,
+    })!;
+
+    expect(measure.box.x * zoom - target.left).toBeGreaterThanOrEqual(TRACK_INFO_WIDTH * zoom);
   });
 
   it('returns null for a measure outside the plan rather than scrolling somewhere arbitrary', () => {

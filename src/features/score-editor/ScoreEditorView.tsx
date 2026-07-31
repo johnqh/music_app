@@ -29,7 +29,13 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { CanvasScoreRenderer, TempoMap, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
+import {
+  CanvasScoreRenderer,
+  TRACK_INFO_WIDTH,
+  TempoMap,
+  playbackController,
+  selectActiveTrackId,
+} from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
   boxForMeasureIndex,
@@ -146,6 +152,13 @@ function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxR
    * properties forced a layout pass on every update. A transform stays on
    * the compositor. `height` only changes when the caret crosses into a new
    * system, so it is written only when it actually differs.
+   *
+   * The caret is an absolutely-positioned child of the scroll box, so it sits
+   * in content coordinates *above* the canvas — including above the track-info
+   * gutter, which the renderer pins to the viewport's left edge and paints over
+   * the sheet. Left to itself the caret slid across the track info as though
+   * the labels were part of the music, which is also what made it obvious that
+   * the sheet continues underneath them. It hides there instead.
    */
   const applyGeometry = useCallback(
     (tick: number) => {
@@ -156,12 +169,23 @@ function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxR
         el.style.visibility = 'hidden';
         return;
       }
+
+      // Read the scroll offset BEFORE writing any style below. Reading it
+      // after a write in the same frame would force a synchronous layout, on
+      // the frame loop that has to stay smooth during playback.
+      const scrollLeft = scrollBoxRef.current?.scrollLeft ?? 0;
+      const x = caret.x * zoom;
+      if (x - scrollLeft < TRACK_INFO_WIDTH * zoom) {
+        el.style.visibility = 'hidden';
+        return;
+      }
+
       el.style.visibility = '';
-      el.style.transform = `translate(${caret.x * zoom}px, ${caret.yTop * zoom}px) translateX(-50%)`;
+      el.style.transform = `translate(${x}px, ${caret.yTop * zoom}px) translateX(-50%)`;
       const height = `${(caret.yBottom - caret.yTop) * zoom}px`;
       if (el.style.height !== height) el.style.height = height;
     },
-    [plan, score, zoom],
+    [plan, score, zoom, scrollBoxRef],
   );
 
   /**
@@ -208,6 +232,32 @@ function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxR
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
   }, [playbackState, tempoMap, tempoMultiplier, applyGeometry]);
+
+  /**
+   * Re-evaluate the caret when the reader scrolls while paused.
+   *
+   * Whether the caret is hidden behind the pinned gutter depends on the scroll
+   * offset, and while paused nothing else re-runs `applyGeometry` — a caret
+   * left sitting over the track info would stay there. During playback the
+   * animation loop already re-evaluates every frame, so this stands down.
+   */
+  useEffect(() => {
+    const box = scrollBoxRef.current;
+    if (!box || playbackState === 'playing') return;
+    let frame: number | null = null;
+    const onScroll = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        applyGeometry(anchorRef.current.tick);
+      });
+    };
+    box.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      box.removeEventListener('scroll', onScroll);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [applyGeometry, playbackState, scrollBoxRef]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
   //

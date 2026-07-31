@@ -5,7 +5,12 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
-import { computeLayout, caretPositionForTick, tickForPoint } from '@sudobility/music_lib';
+import {
+  TRACK_INFO_WIDTH,
+  caretPositionForTick,
+  computeLayout,
+  tickForPoint,
+} from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import type { BBox, RenderTheme } from '@sudobility/music_lib';
@@ -603,6 +608,37 @@ describe('playback caret and click-to-seek', () => {
     // Positioned by transform, not `left`: animating a layout property forced
     // a layout pass on every update.
     expect(getByTestId('playback-caret').style.transform).toContain(`translate(${expected.x}px`);
+  });
+
+  it('hides the caret behind the pinned track-info gutter rather than drawing over it', () => {
+    // The caret is an abspos child of the scroll box, so it scrolls with the
+    // content and sits above the canvas — including above the gutter, which is
+    // pinned to the viewport's left edge and painted over the sheet.
+    // The scroll handler coalesces through rAF; run it inline so the assertion
+    // does not depend on jsdom scheduling a frame.
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    const store = makeStore();
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+    const caret = getByTestId('playback-caret');
+    const scrollBox = getByTestId('score-editor-scroll');
+    expect(caret.style.visibility).toBe('');
+
+    // Scroll the caret's content position in under the gutter.
+    const x = caretPositionForTick(caretPlan(store), store.getState().score!, 0)!.x;
+    Object.defineProperty(scrollBox, 'scrollLeft', {
+      value: x - TRACK_INFO_WIDTH + 1,
+      configurable: true,
+      writable: true,
+    });
+    act(() => {
+      scrollBox.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(caret.style.visibility).toBe('hidden');
+    vi.unstubAllGlobals();
   });
 
   it('moves the caret as positionTick advances', () => {

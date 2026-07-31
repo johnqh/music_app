@@ -75,3 +75,4 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | Inspector toggle lives on the toolbar, outside its scroller | `src/features/score-editor/EditorToolbar.test.tsx` (`describe('inspector toggle')`) |
 | Inactive tracks dim whole (notes, beams, ties, clef) | music_lib `note-color.test.ts` (`describe('noteColorFor: inactive tracks')`), `canvas-renderer.test.ts` (`describe('inactive-track dimming')`) |
 | Following playback preserves vertical scroll | `src/features/score-editor/playback-scroll.test.ts`; `ScoreEditorView.test.tsx` ("keeps the reader's vertical scroll instead of snapping back to track 1") |
+| Playback keeps the caret and playing measure clear of the gutter | `src/features/score-editor/playback-scroll.test.ts` ("leaves the playing measure clear of the pinned track-info gutter"); `ScoreEditorView.test.tsx` ("hides the caret behind the pinned track-info gutter") |
