@@ -67,6 +67,37 @@ describe('TrackEditorPanel', () => {
     expect(track.instrumentName).toBe('Trumpet');
   });
 
+  it('opens the instrument list in a modal, grouped by family', async () => {
+    // 128 options is why this is a modal and not a dropdown: a dropdown is
+    // bounded by the space around its trigger, and the family headings are
+    // what make the list navigable once it is that long.
+    const store = makeStore();
+    const score = store.getState().score!;
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+
+    expect(await screen.findByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getAllByRole('option')).toHaveLength(128);
+    expect(screen.getByText('Brass')).toBeInTheDocument();
+  });
+
+  it('cancels the instrument modal without changing the track', async () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    const before = score.tracks[0].midiProgram;
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(store.getState().score!.tracks[0].midiProgram).toBe(before);
+  });
+
   it('changes the clef', async () => {
     const store = makeStore();
     const score = store.getState().score!;

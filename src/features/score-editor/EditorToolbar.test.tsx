@@ -197,6 +197,21 @@ describe('EditorToolbar', () => {
     expect(screen.getByRole('button', { name: 'Sharp' })).toBeDisabled();
   });
 
+  it('every control has a tooltip, so nothing on the bar is unexplained', () => {
+    // The toolbar is dense and mostly glyphs; a control whose only explanation
+    // is its icon is a control most people will not find.
+    const store = makeStore();
+    renderToolbar(store);
+    const toolbar = screen.getByRole('toolbar');
+
+    for (const button of within(toolbar).getAllByRole('button')) {
+      // Tooltip wraps its trigger in a positioned element; a bare control has
+      // the toolbar's own group as its parent instead.
+      const wrapper = button.parentElement;
+      expect(wrapper?.className, button.getAttribute('aria-label') ?? '').toContain('relative');
+    }
+  });
+
   it('every interactive control has an accessible name', () => {
     const store = makeStore();
     renderToolbar(store);

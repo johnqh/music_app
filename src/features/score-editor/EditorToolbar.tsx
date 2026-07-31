@@ -243,18 +243,20 @@ export function EditorToolbar({
       <VerticalDivider />
 
       <div ref={articulationRef} className="relative">
-        <Button
-          type="button"
-          variant="outline"
-          aria-label="Articulation"
-          aria-haspopup="menu"
-          aria-expanded={articulationOpen}
-          disabled={!hasScore}
-          onClick={() => setArticulationOpen((open) => !open)}
-          className={TEXT_BUTTON_CLASS}
-        >
-          Articulation
-        </Button>
+        <Tooltip content="Add an articulation to the selection">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Articulation"
+            aria-haspopup="menu"
+            aria-expanded={articulationOpen}
+            disabled={!hasScore}
+            onClick={() => setArticulationOpen((open) => !open)}
+            className={TEXT_BUTTON_CLASS}
+          >
+            Articulation
+          </Button>
+        </Tooltip>
         {articulationOpen ? (
           <div
             role="menu"
@@ -295,64 +297,74 @@ export function EditorToolbar({
 
       <VerticalDivider />
 
-      <Button
-        type="button"
-        variant="outline"
-        aria-label="Insert note"
-        disabled={!hasScore}
-        onClick={handleInsertNote}
-        className={TEXT_BUTTON_CLASS}
-      >
-        Insert note
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        aria-label="Insert rest"
-        disabled={!hasScore}
-        onClick={handleInsertRest}
-        className={TEXT_BUTTON_CLASS}
-      >
-        Insert rest
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        aria-label="Select all"
-        disabled={!hasScore}
-        onClick={() => selectAll(store)}
-        className={TEXT_BUTTON_CLASS}
-      >
-        Select all
-      </Button>
+      <Tooltip content="Insert a note at the caret">
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="Insert note"
+          disabled={!hasScore}
+          onClick={handleInsertNote}
+          className={TEXT_BUTTON_CLASS}
+        >
+          Insert note
+        </Button>
+      </Tooltip>
+      <Tooltip content="Insert a rest at the caret">
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="Insert rest"
+          disabled={!hasScore}
+          onClick={handleInsertRest}
+          className={TEXT_BUTTON_CLASS}
+        >
+          Insert rest
+        </Button>
+      </Tooltip>
+      <Tooltip content="Select every note in the score">
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="Select all"
+          disabled={!hasScore}
+          onClick={() => selectAll(store)}
+          className={TEXT_BUTTON_CLASS}
+        >
+          Select all
+        </Button>
+      </Tooltip>
 
       <VerticalDivider />
 
-      <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
-        <SelectTrigger
-          aria-label="Quantize grid"
-          className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm"
+      <Tooltip content="Grid that Quantize snaps to">
+        <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
+          <SelectTrigger
+            aria-label="Quantize grid"
+            className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {QUANTIZE_GRID_OPTIONS.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Tooltip>
+      <Tooltip content="Snap the selection to the quantize grid">
+        <Button
+          type="button"
+          variant="outline"
+          aria-label="Quantize"
+          disabled={!hasScore}
+          onClick={handleQuantize}
+          className={TEXT_BUTTON_CLASS}
         >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {QUANTIZE_GRID_OPTIONS.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        type="button"
-        variant="outline"
-        aria-label="Quantize"
-        disabled={!hasScore}
-        onClick={handleQuantize}
-        className={TEXT_BUTTON_CLASS}
-      >
-        Quantize
-      </Button>
+          Quantize
+        </Button>
+      </Tooltip>
 
       <VerticalDivider />
 
@@ -369,12 +381,14 @@ export function EditorToolbar({
             −
           </Button>
         </Tooltip>
-        <span
-          aria-label="Current zoom level"
-          className="min-w-[40px] text-center text-sm text-theme-text-primary"
-        >
-          {zoomLabel}
-        </span>
+        <Tooltip content="Current zoom level">
+          <span
+            aria-label="Current zoom level"
+            className="min-w-[40px] text-center text-sm text-theme-text-primary"
+          >
+            {zoomLabel}
+          </span>
+        </Tooltip>
         <Tooltip content="Zoom in">
           <Button
             type="button"
@@ -392,26 +406,30 @@ export function EditorToolbar({
       <VerticalDivider />
 
       <div role="group" aria-label="Layout mode" className="flex items-center gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Page layout"
-          aria-pressed={layoutMode === 'page'}
-          onClick={() => onLayoutModeChange('page')}
-          className={TOGGLE_BUTTON_CLASS}
-        >
-          Page
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Continuous layout"
-          aria-pressed={layoutMode === 'continuous'}
-          onClick={() => onLayoutModeChange('continuous')}
-          className={TOGGLE_BUTTON_CLASS}
-        >
-          Continuous
-        </Button>
+        <Tooltip content="Wrap systems to the page width">
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Page layout"
+            aria-pressed={layoutMode === 'page'}
+            onClick={() => onLayoutModeChange('page')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            Page
+          </Button>
+        </Tooltip>
+        <Tooltip content="Lay the score out in one scrolling line">
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Continuous layout"
+            aria-pressed={layoutMode === 'continuous'}
+            onClick={() => onLayoutModeChange('continuous')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            Continuous
+          </Button>
+        </Tooltip>
       </div>
 
       </div>

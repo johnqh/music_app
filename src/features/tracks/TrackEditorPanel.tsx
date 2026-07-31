@@ -19,13 +19,7 @@ import type { ChangeEvent } from 'react';
 import {
   Button,
   Input,
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
+  SheetSelector,
   Slider,
   Tooltip,
   cn,
@@ -55,6 +49,22 @@ export type TrackEditorPanelProps = {
 };
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
+
+const CLEF_SELECT_OPTIONS = CLEF_OPTIONS.map((clef) => ({ value: clef, label: clef }));
+
+/**
+ * All 128 General MIDI programs, flattened once with their family as a group
+ * heading. Built at module scope rather than per render: it never changes, and
+ * rebuilding 128 objects every time the active track's volume slider moves is
+ * pure waste.
+ */
+const INSTRUMENT_OPTIONS = GM_FAMILIES.flatMap((family) =>
+  gmInstrumentsByFamily(family).map((instrument) => ({
+    value: String(instrument.program),
+    label: instrument.name,
+    group: GM_FAMILY_LABELS[family],
+  })),
+);
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1 text-sm leading-none';
 const TOGGLE_BUTTON_CLASS = cn(
@@ -153,57 +163,34 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
 
           <div className="flex items-center gap-1">
             <InstrumentIcon program={track.midiProgram} className="size-4 shrink-0" />
-            <Select
+            <SheetSelector
+              title="Instrument"
+              aria-label={`Instrument: ${track.name}`}
+              options={INSTRUMENT_OPTIONS}
               value={String(track.midiProgram)}
-              onValueChange={(value: string) => {
+              onChange={(value: string) => {
                 const instrument = gmInstrument(Number(value));
                 if (!instrument) return;
                 // Both together: `instrumentName` is free text and could
                 // otherwise drift from `midiProgram`.
                 patch({ midiProgram: instrument.program, instrumentName: instrument.name });
               }}
-            >
-              <SelectTrigger
-                aria-label={`Instrument: ${track.name}`}
-                className="h-auto w-full px-1 py-0.5 text-xs"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GM_FAMILIES.map((family) => (
-                  <SelectGroup key={family}>
-                    <SelectLabel>{GM_FAMILY_LABELS[family]}</SelectLabel>
-                    {gmInstrumentsByFamily(family).map((instrument) => (
-                      <SelectItem key={instrument.program} value={String(instrument.program)}>
-                        {instrument.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+              size="large"
+              className="h-auto w-full px-1 py-0.5 text-xs"
+            />
           </div>
 
-          <Select
+          <SheetSelector
+            title="Clef"
+            aria-label={`Clef: ${track.clef}`}
+            options={CLEF_SELECT_OPTIONS}
             value={track.clef}
-            onValueChange={(value) =>
+            onChange={(value) =>
               store.getState().dispatchCommand(changeClefCommand(track.id, value as Clef))
             }
-          >
-            <SelectTrigger
-              aria-label={`Clef: ${track.clef}`}
-              className="h-auto w-full px-1 py-0.5 text-xs"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CLEF_OPTIONS.map((clef) => (
-                <SelectItem key={clef} value={clef}>
-                  {clef}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            size="small"
+            className="h-auto w-full px-1 py-0.5 text-xs"
+          />
 
           <div className="flex items-center gap-1">
             <Button

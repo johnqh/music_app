@@ -95,12 +95,14 @@ function formatTimecode(seconds: number): string {
 function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
   const measureBeat = store(selectCurrentMeasureBeat);
   return (
-    <span
-      aria-label="Current measure and beat"
-      className="min-w-[40px] text-center text-sm text-theme-text-primary"
-    >
-      {formatMeasureBeat(measureBeat)}
-    </span>
+    <Tooltip content="Current measure and beat">
+      <span
+        aria-label="Current measure and beat"
+        className="min-w-[40px] text-center text-sm text-theme-text-primary"
+      >
+        {formatMeasureBeat(measureBeat)}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -117,16 +119,20 @@ function PositionScrubber({
 }) {
   const positionTick = store((s) => s.positionTick);
   return (
-    <input
-      type="range"
-      aria-label="Playback position"
-      min={0}
-      max={maxTick}
-      value={Math.min(positionTick, maxTick)}
-      disabled={disabled}
-      onChange={onScrub}
-      className="w-full"
-    />
+    // `wrapperClassName` keeps the scrubber full-width: Tooltip's wrapper is
+    // inline-block, which would otherwise collapse it to its intrinsic size.
+    <Tooltip content="Drag to scrub through the score" wrapperClassName="w-full">
+      <input
+        type="range"
+        aria-label="Playback position"
+        min={0}
+        max={maxTick}
+        value={Math.min(positionTick, maxTick)}
+        disabled={disabled}
+        onChange={onScrub}
+        className="w-full"
+      />
+    </Tooltip>
   );
 }
 
@@ -144,13 +150,15 @@ function Timecode({
   const positionTick = store((s) => s.positionTick);
   const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
   return (
-    <span
-      data-testid="playback-timecode"
-      aria-label="Playback time"
-      className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
-    >
-      {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
-    </span>
+    <Tooltip content="Elapsed time / total duration">
+      <span
+        data-testid="playback-timecode"
+        aria-label="Playback time"
+        className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
+      >
+        {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -332,6 +340,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         <Input
           type="number"
           aria-label="Tempo (BPM)"
+          title="Tempo in beats per minute"
           value={tempoDraft}
           autoFocus
           onChange={(event: ChangeEvent<HTMLInputElement>) => setTempoDraft(event.target.value)}
@@ -354,7 +363,8 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Tooltip>
       )}
 
-      <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
+      <Tooltip content="Playback speed multiplier">
+        <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
         <SelectTrigger
           aria-label="Playback speed"
           className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm"
@@ -368,7 +378,8 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
+        </Select>
+      </Tooltip>
 
       <div className="flex w-[120px] items-center gap-2">
         <span className="text-sm text-theme-text-primary">Vol</span>
