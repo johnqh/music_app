@@ -26,6 +26,7 @@ import type { MusicXmlImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { getAppServices } from '@/config/initialize';
 
 export type MusicXmlImportDialogProps = {
   open: boolean;
@@ -48,7 +49,7 @@ export function MusicXmlImportDialog({
   onImportedNewProject,
   forceNewProject = false,
 }: MusicXmlImportDialogProps) {
-  const service = musicXmlService ?? new MusicXmlService();
+  const service = musicXmlService ?? new MusicXmlService(getAppServices().io.xmlParser);
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<MusicXmlImportResult | null>(null);

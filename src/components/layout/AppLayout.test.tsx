@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -34,6 +34,18 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 
 import { AppLayout } from '@/components/layout/AppLayout';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+
+// AppLayout mounts the import dialogs even while they are closed, and those
+// build their import service from the composition root, so the harness has to
+// be installed for a plain render.
+beforeEach(() => {
+  installTestAppServices();
+});
+
+afterEach(() => {
+  resetTestAppServices();
+});
 
 async function makeStoreWithProject(score: Score = twinkleScore()): Promise<EditorStoreApi> {
   const store = createAppStore({ context: testStoreContext() });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,16 +9,29 @@ import { analyzeMidi } from '@sudobility/music_lib';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { createMusicIo } from '@sudobility/music_io/mocks';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+
+// The real codec, via the mocks entry, so these fixtures are genuine MIDI bytes.
+const codec = createMusicIo().midiCodec;
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });
 }
 
-afterEach(async () => {});
+// The dialog resolves its import service from the composition root, so the
+// test harness has to be installed -- it also registers the mock platform.
+beforeEach(() => {
+  installTestAppServices();
+});
+
+afterEach(() => {
+  resetTestAppServices();
+});
 
 /** A real Standard MIDI File, round-tripped from a fixture score via the Task 7 exporter -- the same pattern `analyze.test.ts` uses. */
 function fixtureMidiFile(name = 'fixture.mid'): File {
-  const bytes = exportMidi(chordScore());
+  const bytes = exportMidi(chordScore(), codec);
   return new File([bytes.buffer as ArrayBuffer], name, { type: 'audio/midi' });
 }
 
@@ -137,7 +150,7 @@ describe('MidiImportWizard', () => {
   it('a failed import (commit step) shows an error toast, not a silent failure', async () => {
     const store = makeStore();
     const failingService = {
-      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer)),
+      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer, codec)),
       import: vi.fn().mockRejectedValue(new Error('corrupt track data')),
     };
     render(

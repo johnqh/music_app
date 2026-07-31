@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,12 +8,21 @@ import { exportMusicXml } from '@sudobility/music_lib';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });
 }
 
-afterEach(async () => {});
+// The dialog resolves its import service from the composition root, so the
+// test harness has to be installed -- it also registers the mock platform.
+beforeEach(() => {
+  installTestAppServices();
+});
+
+afterEach(() => {
+  resetTestAppServices();
+});
 
 function fixtureFile(name = 'fixture.musicxml'): File {
   const xml = exportMusicXml(twinkleScore());

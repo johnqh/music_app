@@ -26,7 +26,8 @@ import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sud
 import { configureTheme } from '@sudobility/design';
 import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
-import { initializeAppStore, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
+import { initializeAppStore, initializeMusicPlatform, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
+import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { CONSTANTS } from '@/config/constants';
 
 // Activate the design-system theme (Swiss). configureTheme() registers the
@@ -203,12 +204,20 @@ export type AppServices = {
   baseUrl: string;
   auth: AuthBackend;
   prefsStorage: PrefsStorage;
+  /** The platform's implementations: playback, XML parsing, MIDI codec, file export. */
+  io: MusicIo;
 };
 
 let services: AppServices | null = null;
 
 export function initializeApp(): AppServices {
   if (services) return services;
+
+  // The platform comes first: music_lib resolves its playback engine from the
+  // registry on first use, and nothing else here may touch playback before it
+  // is registered.
+  const io = createMusicIo();
+  initializeMusicPlatform({ playback: io.playback });
 
   const baseUrl = CONSTANTS.API_URL;
   const networkClient = new FetchNetworkClient();
@@ -228,7 +237,7 @@ export function initializeApp(): AppServices {
   };
   initializeAppStore(context);
 
-  services = { networkClient, musicClient, baseUrl, auth, prefsStorage };
+  services = { networkClient, musicClient, baseUrl, auth, prefsStorage, io };
   return services;
 }
 

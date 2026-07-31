@@ -66,6 +66,7 @@ import { MidiService } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { getAppServices } from '@/config/initialize';
 
 export type MidiImportWizardProps = {
   open: boolean;
@@ -123,7 +124,10 @@ export function MidiImportWizard({
   onImportedNewProject,
   forceNewProject = false,
 }: MidiImportWizardProps) {
-  const service = useMemo(() => midiService ?? new MidiService(), [midiService]);
+  const service = useMemo(
+    () => midiService ?? new MidiService(getAppServices().io.midiCodec),
+    [midiService],
+  );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);

@@ -17,11 +17,11 @@ import { Button, Checkbox, Dialog, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
-import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { getAppServices } from '@/config/initialize';
 import { runBenchmark, toBenchmarkTable } from '@sudobility/music_lib';
 import type { BenchmarkReport, BenchmarkSize } from '@sudobility/music_lib';
 
@@ -99,7 +99,7 @@ export function DeveloperSettingsDialog({
     setBenchmarkRunning(true);
     setTimeout(() => {
       try {
-        const report = runBenchmark(benchmarkSizes);
+        const report = runBenchmark(getAppServices().io.midiCodec, benchmarkSizes);
         setBenchmarkReport(report);
         console.table(toBenchmarkTable(report));
       } finally {
@@ -130,9 +130,10 @@ export function DeveloperSettingsDialog({
       // diagnostic export, alongside the existing console.table).
       benchmark: benchmarkReport,
     };
-    downloadBlob(
+    void getAppServices().io.fileExporter.save(
       'scoresmith-diagnostics.json',
-      new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' }),
+      JSON.stringify(diagnostics, null, 2),
+      'application/json',
     );
   };
 

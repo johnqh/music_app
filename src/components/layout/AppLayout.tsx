@@ -59,7 +59,6 @@ import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { parseScore } from '@sudobility/music_types';
-import { downloadBlob } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
@@ -75,6 +74,7 @@ import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
+import { getAppServices } from '@/config/initialize';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -227,13 +227,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     }
   };
 
-  const handleExportMidi = (): void => {
+  const handleExportMidi = async (): Promise<void> => {
     if (!score) return;
     try {
-      const bytes = exportMidi(score);
-      downloadBlob(
+      const bytes = exportMidi(score, getAppServices().io.midiCodec);
+      await getAppServices().io.fileExporter.save(
         `${midiSafeFilename(score.metadata.title)}.mid`,
-        new Blob([bytes.buffer as ArrayBuffer], { type: 'audio/midi' }),
+        bytes,
+        'audio/midi',
       );
     } catch (err) {
       reportError(err, { context: 'MIDI export failed', store });
@@ -241,13 +242,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     exportMenu.setOpen(false);
   };
 
-  const handleExportMusicXml = (): void => {
+  const handleExportMusicXml = async (): Promise<void> => {
     if (!score) return;
     try {
       const xml = exportMusicXml(score);
-      downloadBlob(
+      await getAppServices().io.fileExporter.save(
         `${musicXmlSafeFilename(score.metadata.title)}.musicxml`,
-        new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }),
+        xml,
+        'application/vnd.recordare.musicxml+xml',
       );
     } catch (err) {
       reportError(err, { context: 'MusicXML export failed', store });
@@ -266,9 +268,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         null,
         2,
       );
-      downloadBlob(
+      await getAppServices().io.fileExporter.save(
         `${projectName || 'project'}.json`,
-        new Blob([payload], { type: 'application/json' }),
+        payload,
+        'application/json',
       );
     } catch (err) {
       reportError(err, { context: 'Project JSON export failed', store });

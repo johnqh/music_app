@@ -5,7 +5,13 @@
  * against in-memory backends. Returns the context so tests can build a
  * matching store (`createAppStore({ context })`).
  */
-import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
+import {
+  initializeMusicPlatform,
+  resetMusicPlatform,
+  testStoreContext,
+  type TestStoreContext,
+} from '@sudobility/music_lib';
+import { createMusicIo } from '@sudobility/music_io/mocks';
 import type { NetworkClient } from '@sudobility/types';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
 
@@ -18,7 +24,13 @@ const TEST_USER: AuthUser = {
 export function installTestAppServices(
   context: TestStoreContext = testStoreContext(),
 ): TestStoreContext {
+  // Register the platform before anything can reach playback: music_lib
+  // resolves its engine from the registry on first use and throws otherwise.
+  const io = createMusicIo();
+  initializeMusicPlatform({ playback: io.playback });
+
   const services: AppServices = {
+    io,
     networkClient: {} as NetworkClient,
     musicClient: context.client,
     baseUrl: 'http://test.local',
@@ -41,4 +53,7 @@ export function installTestAppServices(
 
 export function resetTestAppServices(): void {
   setAppServices(null);
+  // Clear the platform too, or a suite that registered one leaks it into the
+  // next, hiding a missing initializeMusicPlatform in whatever runs after it.
+  resetMusicPlatform();
 }
