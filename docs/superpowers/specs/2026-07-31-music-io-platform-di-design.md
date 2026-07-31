@@ -133,7 +133,15 @@ export type MidiTrackData = {
   channel: number;
   instrument: { number: number; name?: string };
   notes: MidiNote[];
-  controlChanges: MidiControlChange[];
+  /**
+   * Keyed by CC number, not a flat list: `import.ts` looks up sustain (64),
+   * volume (7) and pan (10) directly by number, and flattening them would
+   * silently break volume and pan on import.
+   */
+  controlChanges: Record<number, MidiControlChange[]>;
+  durationTicks: number;
+  /** `analyze.ts` reports per-track duration in the import wizard's track list. */
+  durationSeconds: number;
 };
 
 export type MidiFile = {
