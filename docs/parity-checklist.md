@@ -77,3 +77,5 @@ All of the above passed unchanged after the MUI removal (T13) — no accessible-
 | Following playback preserves vertical scroll | `src/features/score-editor/playback-scroll.test.ts`; `ScoreEditorView.test.tsx` ("keeps the reader's vertical scroll instead of snapping back to track 1") |
 | Playback keeps the caret and playing measure clear of the gutter | `src/features/score-editor/playback-scroll.test.ts` ("leaves the playing measure clear of the pinned track-info gutter"); `ScoreEditorView.test.tsx` ("hides the caret behind the pinned track-info gutter") |
 | Page mode fits the viewport and never scrolls horizontally | music_lib `layout.test.ts` (`describe('page mode fits the viewport width')`); `playback-scroll.test.ts` ("returns a zero left however far into the score the music is") |
+| Platform services are injected, not imported | music_io `src/contract/platform-contract.ts` (run against web, rn and mocks); music_lib `src/platform/registry.test.ts` |
+| music_lib stays platform-free | music_lib `src/platform/no-platform-imports.test.ts` |

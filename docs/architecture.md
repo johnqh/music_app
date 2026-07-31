@@ -1,10 +1,10 @@
 # ScoreSmith architecture
 
-ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split across **five repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains _how_ the codebase satisfies it.
+ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split across **six repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains _how_ the codebase satisfies it.
 
 ## Contents
 
-- [The five repos](#the-five-repos)
+- [The six repos](#the-six-repos)
 - [Repo diagram](#repo-diagram)
 - [Request flows](#request-flows)
 - [The store-context injection pattern](#the-store-context-injection-pattern)
@@ -18,7 +18,7 @@ ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split ac
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Troubleshooting](#troubleshooting)
 
-## The five repos
+## The six repos
 
 | Repo                                                     | npm package                          | Role                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -26,9 +26,14 @@ ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split ac
 | [`music_client`](https://github.com/johnqh/music_client) | `@sudobility/music_client`           | Typed network client (`MusicClient`) + React Query hooks for `music_api`. Zero direct `fetch` calls — takes an injected `NetworkClient` (SudojoClient DI pattern).                                                                                                                                                          |
 | [`music_lib`](https://github.com/johnqh/music_lib)       | `@sudobility/music_lib`              | The entire non-UI application layer: the domain score model, undoable commands, validation/quantization/voicing, VexFlow/Tone.js/MIDI/MusicXML adapters, and the Zustand app store. Calls `music_api` through an injected `MusicClient`, not directly.                                                                      |
 | [`music_api`](https://github.com/johnqh/music_api)       | `music_api` (private, not published) | Backend: Hono + Drizzle ORM + PostgreSQL, Firebase-authenticated. Proxies AI generation through OpenAI (the API key never reaches the browser) and persists per-user projects.                                                                                                                                              |
+| [`music_io`](https://github.com/johnqh/music_io)         | `@sudobility/music_io`               | Platform implementations of the interfaces in `music_types`: audio playback, XML parsing, file export and the MIDI codec, for web and React Native. A `react-native` export condition means consumers write one import and Metro or Vite each resolve their own build. Runtime dependencies are empty by design; every platform library is an optional peer.                                              |
 | `music_app` (this repo)                                  | `scoresmith` (private)               | The web app: routing, page-level React components, Tailwind styling, and the composition root that wires `music_client`/`music_lib` together with real browser services (fetch, Firebase auth, `localStorage`). No business logic lives here — see [Known limitations](#known-limitations) for what that means in practice. |
 
 Dependency direction is strictly one-way: `music_app` → `music_lib` → `music_client` → `music_types`, with `music_api` depending only on `music_types`. No package ever depends on something that depends on it.
+
+`music_io` sits alongside that chain rather than in it. It implements interfaces declared in `music_types`, and peer-depends on `music_lib` for the domain knowledge its playback engine needs (scheduling a score, GM instrument lookup). That is one-way too: `music_lib` reaches for `music_io` **only in its tests**, and only through `music_io/mocks`, which imports nothing of ours. The app's composition root is the single place both are constructed and joined — `createMusicIo()` builds the platform bundle and `initializeMusicPlatform()` hands `music_lib` the playback engine it resolves lazily on first use.
+
+The point of the split is that `music_lib` contains no platform library at all — its runtime dependencies are exactly `immer`, `vexflow` and `zod` — so the same domain logic runs unchanged in a browser and in React Native. Three guard tests in `music_lib` fail the build if an audio or MIDI import, a platform dependency, or a DOM global creeps back in.
 
 ## Repo diagram
 
@@ -120,7 +125,7 @@ export type StoreContext = {
 
 `music_app`'s composition root is the **only** place allowed to build the concrete implementations (`src/config/initialize.ts`):
 
-- `FetchNetworkClient` — the one and only `fetch()` call site in the whole five-repo family; implements `@sudobility/types`' `NetworkClient` interface.
+- `FetchNetworkClient` — the one and only `fetch()` call site in the whole six-repo family; implements `@sudobility/types`' `NetworkClient` interface.
 - `MusicClient` (from `music_client`), constructed with that `NetworkClient` and `VITE_API_URL`.
 - `AuthBackend` — real Firebase or the e2e shim, exposing `getToken()`.
 - `PrefsStorage` — a thin `localStorage` wrapper for device prefs.
