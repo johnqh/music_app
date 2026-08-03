@@ -3,7 +3,7 @@ import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore } from '@sudobility/music_lib';
+import { threeTrackScore, twinkleScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { changeVelocityCommand } from '@sudobility/music_lib';
@@ -35,6 +35,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { AppLayout } from '@/components/layout/AppLayout';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+import { getAppServices } from '@/config/initialize';
 
 // AppLayout mounts the import dialogs even while they are closed, and those
 // build their import service from the composition root, so the harness has to
@@ -251,5 +252,105 @@ describe('AppLayout: track editor beside the keyboard', () => {
     // They share one subject -- the active track -- so they collapse together.
     render(<AppLayout store={makeScored()} />);
     expect(screen.getByRole('region', { name: 'Track editor' })).toBeInTheDocument();
+  });
+});
+
+describe('AppLayout export scope', () => {
+  /** The mock exporter records every save; the mock io uses the real MIDI codec. */
+  function savedFiles(): Array<{ name: string; data: Uint8Array | string; mimeType: string }> {
+    return (getAppServices().io.fileExporter as unknown as { saved: Array<{ name: string; data: Uint8Array | string; mimeType: string }> }).saved;
+  }
+
+  function exportedTrackCount(): number {
+    const last = savedFiles().at(-1)!;
+    const bytes = last.data as Uint8Array;
+    return getAppServices().io.midiCodec.decode(bytes.buffer as ArrayBuffer).tracks.length;
+  }
+
+  async function openExportMenu(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    await user.click(screen.getByLabelText('Export menu'));
+  }
+
+  it('exports without asking when nothing is hidden', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
+
+    expect(screen.queryByText('Export hidden tracks?')).toBeNull();
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+    expect(exportedTrackCount()).toBe(3);
+  });
+
+  it('asks when tracks are hidden, and exports the whole score on that choice', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
+
+    expect(await screen.findByText('Export hidden tracks?')).toBeInTheDocument();
+    expect(screen.getByText(/2 hidden tracks/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Whole score' }));
+
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+    expect(exportedTrackCount()).toBe(3);
+  });
+
+  it('exports only the visible tracks on that choice', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
+    await user.click(screen.getByRole('button', { name: 'Visible tracks only' }));
+
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+    expect(exportedTrackCount()).toBe(1);
+  });
+
+  it('cancelling writes no file', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('Export hidden tracks?')).toBeNull();
+    expect(savedFiles()).toHaveLength(0);
+  });
+
+  it('asks for MusicXML too', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MusicXML' }));
+
+    expect(await screen.findByText('Export hidden tracks?')).toBeInTheDocument();
+  });
+
+  it('does not ask for Project JSON, which is the project rather than a view of it', async () => {
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Project JSON' }));
+
+    expect(screen.queryByText('Export hidden tracks?')).toBeNull();
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
   });
 });

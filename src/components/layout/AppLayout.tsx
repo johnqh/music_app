@@ -53,12 +53,14 @@ import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
+import { scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { parseScore } from '@sudobility/music_types';
+import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
@@ -73,6 +75,8 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
+import { ExportScopeDialog } from '@/components/dialogs/ExportScopeDialog';
+import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
 
@@ -188,6 +192,35 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
+  const visibleTrackIds = store(selectVisibleTrackIds);
+  const hiddenCount = (score?.tracks.length ?? 0) - visibleTrackIds.length;
+  /**
+   * The export waiting on the user's answer, or null when nothing is pending.
+   *
+   * Held as a callback rather than a "which format" tag so each handler keeps
+   * its own filename, mime type and error context in one place, instead of
+   * this dialog having to reconstruct them.
+   */
+  const [pendingExport, setPendingExport] = useState<null | ((scope: ExportScope) => void)>(null);
+
+  /**
+   * Runs `write` against the score the user asked for, asking first only when
+   * the two possible answers actually differ.
+   */
+  const withExportScope = (write: (target: Score) => Promise<void>): void => {
+    if (!score) return;
+    if (hiddenCount <= 0) {
+      void write(score);
+      return;
+    }
+    // Stored via an updater that *returns* the callback: React would otherwise
+    // call a function passed to setState as an updater rather than store it.
+    setPendingExport(() => (scope: ExportScope) => {
+      setPendingExport(null);
+      void write(scope === 'all' ? score : scoreWithTracks(score, visibleTrackIds));
+    });
+  };
+
   const errorIssues = validationIssues.filter((i) => i.severity === 'error');
 
   const commitTitle = (): void => {
@@ -227,33 +260,35 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     }
   };
 
-  const handleExportMidi = async (): Promise<void> => {
-    if (!score) return;
-    try {
-      const bytes = exportMidi(score, getAppServices().io.midiCodec);
-      await getAppServices().io.fileExporter.save(
-        `${midiSafeFilename(score.metadata.title)}.mid`,
-        bytes,
-        'audio/midi',
-      );
-    } catch (err) {
-      reportError(err, { context: 'MIDI export failed', store });
-    }
+  const handleExportMidi = (): void => {
+    withExportScope(async (target) => {
+      try {
+        const bytes = exportMidi(target, getAppServices().io.midiCodec);
+        await getAppServices().io.fileExporter.save(
+          `${midiSafeFilename(target.metadata.title)}.mid`,
+          bytes,
+          'audio/midi',
+        );
+      } catch (err) {
+        reportError(err, { context: 'MIDI export failed', store });
+      }
+    });
     exportMenu.setOpen(false);
   };
 
-  const handleExportMusicXml = async (): Promise<void> => {
-    if (!score) return;
-    try {
-      const xml = exportMusicXml(score);
-      await getAppServices().io.fileExporter.save(
-        `${musicXmlSafeFilename(score.metadata.title)}.musicxml`,
-        xml,
-        'application/vnd.recordare.musicxml+xml',
-      );
-    } catch (err) {
-      reportError(err, { context: 'MusicXML export failed', store });
-    }
+  const handleExportMusicXml = (): void => {
+    withExportScope(async (target) => {
+      try {
+        const xml = exportMusicXml(target);
+        await getAppServices().io.fileExporter.save(
+          `${musicXmlSafeFilename(target.metadata.title)}.musicxml`,
+          xml,
+          'application/vnd.recordare.musicxml+xml',
+        );
+      } catch (err) {
+        reportError(err, { context: 'MusicXML export failed', store });
+      }
+    });
     exportMenu.setOpen(false);
   };
 
@@ -737,6 +772,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <ShortcutHelpDialog
         open={dialogs.shortcutHelp === true}
         onClose={() => store.getState().closeDialog('shortcutHelp')}
+      />
+      <ExportScopeDialog
+        open={pendingExport !== null}
+        hiddenCount={hiddenCount}
+        onChoose={(scope) => pendingExport?.(scope)}
+        onCancel={() => setPendingExport(null)}
       />
       {developerMode && (
         <DeveloperSettingsDialog
