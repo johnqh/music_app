@@ -44,8 +44,9 @@ import {
   tickForPoint,
 } from '@sudobility/music_lib';
 import type { LayoutPlan, ScoreFragment } from '@sudobility/music_lib';
-import type { Score } from '@sudobility/music_types';
-import { findEvent, selectionSummaryLabel } from '@sudobility/music_lib';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { Pitch, Score } from '@sudobility/music_types';
+import { changePitchCommand, findEvent, selectionSummaryLabel, shiftDiatonic } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
 import { useAppStore } from '@sudobility/music_lib';
@@ -66,6 +67,7 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/r
 import { noteIdsInTickRange } from '@/features/score-editor/range-select';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
+import { scoreWithPitch, stepsForDrag } from '@/features/score-editor/pitch-drag';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 
 export type ScoreEditorViewProps = {
@@ -367,6 +369,19 @@ export function ScoreEditorView({
   if (!rendererRef.current) rendererRef.current = new CanvasScoreRenderer();
   const resultRef = useRef<CanvasRenderResult | null>(null);
   const dragStateRef = useRef<{ start: Point; moved: boolean; additive: boolean } | null>(null);
+  /**
+   * A pitch drag in progress: the single selected note being dragged, its
+   * pitch when the drag began, and how many staff positions the pointer has
+   * moved it.
+   *
+   * `steps` is React state, not a ref, because the preview has to redraw when
+   * it changes — but it only changes once per staff position crossed, roughly
+   * ten times in a drag rather than sixty times a second, so rebuilding the
+   * previewed score there is affordable in a way that doing it per pointermove
+   * would not be (a new score identity invalidates the cached layout).
+   */
+  const pitchDragRef = useRef<{ eventId: string; pitch: Pitch; startY: number } | null>(null);
+  const [pitchDragSteps, setPitchDragSteps] = useState(0);
   const suppressNextClickRef = useRef(false);
   /**
    * Throttling bookkeeping for `handleScroll`'s `requestAnimationFrame`-
@@ -442,9 +457,16 @@ export function ScoreEditorView({
    * selection-only change elsewhere).
    */
   const displayScore = useMemo(() => {
-    if (!score || !previewFragment) return score;
-    return scoreWithCandidate(score, previewFragment);
-  }, [score, previewFragment]);
+    const previewed = score && previewFragment ? scoreWithCandidate(score, previewFragment) : score;
+    if (!previewed || !pitchDragRef.current || pitchDragSteps === 0) return previewed;
+    // Live feedback for a pitch drag: the note is drawn where it would land, so
+    // the reader aims at a staff position rather than guessing.
+    return scoreWithPitch(
+      previewed,
+      pitchDragRef.current.eventId,
+      shiftDiatonic(pitchDragRef.current.pitch, pitchDragSteps),
+    );
+  }, [score, previewFragment, pitchDragSteps]);
 
   /**
    * The current score's system/measure geometry (spec §26), memoized on
@@ -879,6 +901,26 @@ export function ScoreEditorView({
       // real drags), so note/measure clicks behave exactly as before.
       const point = pointFromEvent(event);
       if (!point) return;
+
+      // Exactly one note selected, and the press landed on it: this is a pitch
+      // drag, not a selection box. Requiring the note to be selected first is
+      // what keeps an ordinary click-and-drag on the staff a box select.
+      const state = store.getState();
+      const onlySelected =
+        state.selection.eventIds.length === 1 ? state.selection.eventIds[0] : null;
+      const result = resultRef.current;
+      if (onlySelected && result && !previewFragment) {
+        const hit = eventIdAtPoint(result.idToBBox, point);
+        const hitEvent = state.score ? findEvent(state.score, onlySelected) : null;
+        // A rest has no pitch to drag.
+        if (hit === onlySelected && hitEvent && isNoteEvent(hitEvent)) {
+          pitchDragRef.current = { eventId: onlySelected, pitch: hitEvent.pitch, startY: point.y };
+          setPitchDragSteps(0);
+          containerRef.current?.setPointerCapture?.(event.pointerId);
+          return;
+        }
+      }
+
       dragStateRef.current = { start: point, moved: false, additive: event.shiftKey };
       containerRef.current?.setPointerCapture?.(event.pointerId);
     },
@@ -887,6 +929,16 @@ export function ScoreEditorView({
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const pitchDrag = pitchDragRef.current;
+      if (pitchDrag) {
+        const point = pointFromEvent(event);
+        if (!point) return;
+        // Only re-renders when the step count actually changes -- about ten
+        // times in a drag, not once per pointermove.
+        setPitchDragSteps(stepsForDrag(point.y - pitchDrag.startY, zoom));
+        return;
+      }
+
       const drag = dragStateRef.current;
       if (!drag) return;
       const point = pointFromEvent(event);
@@ -915,6 +967,25 @@ export function ScoreEditorView({
 
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const pitchDrag = pitchDragRef.current;
+      if (pitchDrag) {
+        containerRef.current?.releasePointerCapture?.(event.pointerId);
+        const steps = pitchDragSteps;
+        pitchDragRef.current = null;
+        setPitchDragSteps(0);
+        if (steps !== 0) {
+          // One command for the whole gesture, so undo restores the pitch the
+          // note had before the drag rather than stepping back through it.
+          suppressNextClickRef.current = true;
+          store
+            .getState()
+            .dispatchCommand(
+              changePitchCommand([pitchDrag.eventId], shiftDiatonic(pitchDrag.pitch, steps)),
+            );
+        }
+        return;
+      }
+
       const drag = dragStateRef.current;
       if (!drag) return;
       stopAutoscroll();
@@ -943,7 +1014,7 @@ export function ScoreEditorView({
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [pointFromEvent, store, previewFragment, stopAutoscroll],
+    [pointFromEvent, store, previewFragment, stopAutoscroll, pitchDragSteps],
   );
 
   /**

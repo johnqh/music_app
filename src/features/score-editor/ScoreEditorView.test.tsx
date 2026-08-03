@@ -9,6 +9,7 @@ import {
   TRACK_INFO_WIDTH,
   caretPositionForTick,
   computeLayout,
+  pitchToMidi,
   tickForPoint,
 } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
@@ -1080,5 +1081,100 @@ describe('track gutter click', () => {
     fireEvent.click(interactionSurface(), measureFreePoint(score, score.tracks[0].measures[0].id));
 
     expect(playbackController.seek).toHaveBeenCalled();
+  });
+});
+
+describe('drag a selected note to change its pitch', () => {
+  /** Presses at `noteId`'s drawn centre, drags by `dy`, releases. */
+  function dragNote(score: Score, noteId: string, dy: number): void {
+    const box = referenceRender(score).idToBBox.get(noteId);
+    if (!box) throw new Error(`no bbox for note ${noteId}`);
+    const from = center(box);
+    const surface = interactionSurface();
+    fireEvent.pointerDown(surface, { ...from, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(surface, {
+      clientX: from.clientX,
+      clientY: from.clientY + dy,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: from.clientX,
+      clientY: from.clientY + dy,
+      pointerId: 1,
+    });
+  }
+
+  it('moves the note by staff positions and is one undoable command', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+    const undoBefore = store.getState().canUndo;
+
+    dragNote(store.getState().score!, note.id, -10); // up two positions
+
+    const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
+    expect(updated.pitch).not.toEqual(note.pitch);
+    expect(store.getState().canUndo).toBe(true);
+    expect(undoBefore).toBe(false);
+
+    // One command for the whole gesture: undo restores the pitch it had before
+    // the drag, rather than stepping back through every position it crossed.
+    act(() => store.getState().undo());
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).pitch).toEqual(note.pitch);
+  });
+
+  it('drags down as well as up', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+
+    dragNote(store.getState().score!, note.id, 10);
+
+    const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
+    expect(pitchToMidi(updated.pitch)).toBeLessThan(pitchToMidi(note.pitch));
+  });
+
+  it('does nothing when the drag never crosses a staff position', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+
+    dragNote(store.getState().score!, note.id, 1);
+
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).pitch).toEqual(note.pitch);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('stays a box select when the note under the pointer is not the selection', () => {
+    // Requiring the note to be selected first is what keeps an ordinary
+    // click-and-drag across the staff a selection box.
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!) as NoteEvent[];
+    store.getState().setSelection({ eventIds: [notes[1].id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+
+    dragNote(store.getState().score!, notes[0].id, -10);
+
+    expect((findEvent(store.getState().score!, notes[0].id) as NoteEvent).pitch).toEqual(
+      notes[0].pitch,
+    );
+  });
+
+  it('stays a box select when more than one note is selected', () => {
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!) as NoteEvent[];
+    store
+      .getState()
+      .setSelection({ eventIds: [notes[0].id, notes[1].id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+
+    dragNote(store.getState().score!, notes[0].id, -10);
+
+    expect((findEvent(store.getState().score!, notes[0].id) as NoteEvent).pitch).toEqual(
+      notes[0].pitch,
+    );
   });
 });
