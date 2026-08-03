@@ -4,7 +4,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { stressScore, threeTrackScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import {
   TRACK_INFO_WIDTH,
   caretPositionForTick,
@@ -1176,5 +1176,50 @@ describe('drag a selected note to change its pitch', () => {
     expect((findEvent(store.getState().score!, notes[0].id) as NoteEvent).pitch).toEqual(
       notes[0].pitch,
     );
+  });
+});
+
+describe('ScoreEditorView visible tracks', () => {
+  function threeTrackStore(): EditorStoreApi {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(threeTrackScore());
+    return store;
+  }
+
+  /** The tracks the last frame was actually laid out against. */
+  function drawnTrackIds(spy: ReturnType<typeof vi.spyOn>): string[] {
+    const result = spy.mock.results.at(-1)!.value as { plan: { tracks: Array<{ id: string }> } };
+    return result.plan.tracks.map((track) => track.id);
+  }
+
+  it('lays out every track when nothing is hidden', () => {
+    const store = threeTrackStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    expect(drawnTrackIds(renderSpy)).toEqual(store.getState().score!.tracks.map((t) => t.id));
+  });
+
+  it('lays out only the visible tracks', () => {
+    const store = threeTrackStore();
+    const [first, second, third] = store.getState().score!.tracks;
+    store.getState().setVisibleTracks([first.id, third.id]);
+
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+
+    const drawn = drawnTrackIds(renderSpy);
+    expect(drawn).toEqual([first.id, third.id]);
+    expect(drawn).not.toContain(second.id);
+  });
+
+  it('redraws when a track is hidden while mounted', () => {
+    const store = threeTrackStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const [first] = store.getState().score!.tracks;
+
+    act(() => store.getState().setVisibleTracks([first.id]));
+
+    expect(drawnTrackIds(renderSpy)).toEqual([first.id]);
   });
 });

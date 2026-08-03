@@ -35,6 +35,7 @@ import {
   TempoMap,
   playbackController,
   selectActiveTrackId,
+  selectVisibleTrackIds,
 } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
@@ -345,6 +346,7 @@ export function ScoreEditorView({
   const themeMode = store((s) => s.themeMode);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
+  const visibleTrackIds = store(selectVisibleTrackIds);
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
@@ -480,8 +482,19 @@ export function ScoreEditorView({
    */
   const layoutPlan = useMemo(() => {
     if (!displayScore) return null;
-    return computeLayout(displayScore, { zoom, layoutMode, width: viewWidth, theme: renderTheme });
-  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth]);
+    return computeLayout(displayScore, {
+      zoom,
+      layoutMode,
+      width: viewWidth,
+      theme: renderTheme,
+      // `computeLayout` already lays out a subset and already drops ids that
+      // do not resolve, so hiding a track costs one option rather than a code
+      // path. The track-info gutter follows for free, since it iterates the
+      // plan. `visibleTrackIds` is a memoized selector, so it is
+      // reference-stable and will not re-run this on unrelated store updates.
+      trackIds: visibleTrackIds,
+    });
+  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth, visibleTrackIds]);
 
   /**
    * Sizes both canvas backing stores to the scroll box's client size x the
@@ -541,6 +554,10 @@ export function ScoreEditorView({
       // Same width as `layoutPlan` (see `viewWidth`'s doc) — the caret and
       // the drawn systems must wrap lines at identical points.
       width: viewWidth,
+      // And the same track list, for the same reason: the renderer computes
+      // its own plan from these options, so leaving this out would draw every
+      // track against geometry the caret was placed in without them.
+      trackIds: visibleTrackIds,
       theme: renderTheme,
       viewport,
       devicePixelRatio: window.devicePixelRatio || 1,
@@ -551,7 +568,7 @@ export function ScoreEditorView({
       activeTrackId,
       selectedMeasureIds: selectedMeasureIdsRef.current,
     });
-  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth, activeTrackId]);
+  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth, activeTrackId, visibleTrackIds]);
 
   /**
    * Repaints after a colour change, coalesced to one draw per animation frame
