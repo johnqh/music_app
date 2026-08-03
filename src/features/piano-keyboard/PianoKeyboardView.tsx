@@ -10,15 +10,19 @@
  * out trivially, each gets a testid for free, and the canvas renderer exists
  * for notation because VexFlow requires it — not as a house style.
  */
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@sudobility/components';
 import {
   findTrack,
   gmInstrument,
   gmInstrumentRange,
+  midiToPitch,
+  playbackController,
   selectActiveTrackId,
   useAppStore,
 } from '@sudobility/music_lib';
+import { insertNoteAtCaret } from '@/features/score-editor/editing';
+import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
@@ -28,6 +32,7 @@ import {
   MIN_WHITE_KEY_WIDTH,
   FULL_RANGE,
   computeKeys,
+  noteLabel,
   keyboardWidth,
   snapToWhiteKeys,
   whiteKeyCount,
@@ -49,11 +54,32 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   label,
   isLit,
   litColor,
-}: PianoKey & { isLit: boolean; litColor: string }) {
+  onPress,
+  onRelease,
+}: PianoKey & {
+  isLit: boolean;
+  litColor: string;
+  onPress: (midi: number) => void;
+  onRelease: (midi: number) => void;
+}) {
   return (
     <div
       data-testid={`piano-key-${midi}`}
       data-playing={isLit ? 'true' : 'false'}
+      role="button"
+      // The note itself, not "Play C4": every key would otherwise match a
+      // search for the transport's Play button, and a key's accessible name
+      // should be the note it sounds.
+      aria-label={noteLabel(midi)}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+        onPress(midi);
+      }}
+      onPointerUp={() => onRelease(midi)}
+      // A pointer that leaves the key still has to release it, or the note
+      // sustains forever and the tap never gets written.
+      onPointerCancel={() => onRelease(midi)}
       style={{
         position: 'absolute',
         left: x,
@@ -70,6 +96,8 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         // metaphor for a struck key.
         transform: isLit ? 'translateY(2px)' : undefined,
         boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
+        cursor: 'pointer',
+        touchAction: 'none',
       }}
     >
       {label && (
@@ -152,6 +180,52 @@ export function PianoKeyboardView({
     return snapToWhiteKeys(program === undefined ? FULL_RANGE : gmInstrumentRange(program));
   }, [activeTrack?.midiProgram]);
 
+  /**
+   * Keys currently held by the pointer, and when each went down.
+   *
+   * The timestamps live in a ref because nothing renders from them; only the
+   * set of held keys is state, so a held key can be drawn pressed.
+   */
+  const heldSinceRef = useRef(new Map<number, number>());
+  const [heldKeys, setHeldKeys] = useState<ReadonlySet<number>>(() => new Set());
+
+  const pressKey = useCallback(
+    (midi: number) => {
+      heldSinceRef.current.set(midi, performance.now());
+      setHeldKeys((held) => new Set(held).add(midi));
+      // Sound it immediately. This is an audition, not transport playback: it
+      // must be heard whether or not a score is loaded or playing.
+      playbackController.noteOn(midi, activeTrack?.midiProgram ?? 0);
+    },
+    [activeTrack?.midiProgram],
+  );
+
+  const releaseKey = useCallback(
+    (midi: number) => {
+      const since = heldSinceRef.current.get(midi);
+      heldSinceRef.current.delete(midi);
+      setHeldKeys((held) => {
+        if (!held.has(midi)) return held;
+        const next = new Set(held);
+        next.delete(midi);
+        return next;
+      });
+      playbackController.noteOff(midi);
+      if (since === undefined) return;
+
+      // Written as long as it was held, snapped to a duration the toolbar could
+      // also have produced.
+      const score = store.getState().score;
+      if (!score) return;
+      const bpm = score.tempoMap[0]?.bpm ?? 120;
+      insertNoteAtCaret(store, midiToPitch(midi), {
+        duration: durationForTap(performance.now() - since, bpm),
+        advanceCaret: true,
+      });
+    },
+    [store],
+  );
+
   const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
   const keys = useMemo(
     () => computeKeys(whiteKeyWidth, box.height, range),
@@ -224,8 +298,10 @@ export function PianoKeyboardView({
             <PianoKeyDiv
               key={key.midi}
               {...key}
-              isLit={lit.has(key.midi)}
+              isLit={lit.has(key.midi) || heldKeys.has(key.midi)}
               litColor={theme.notePlaying}
+              onPress={pressKey}
+              onRelease={releaseKey}
             />
           ))}
         </div>

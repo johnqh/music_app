@@ -34,7 +34,7 @@ import type { MusicalEvent } from '@sudobility/music_types';
 import type { ScoreSelection } from '@sudobility/music_lib';
 import type { ScoreCommand } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
-import { allNotes, findEvent, findTrack, selectActiveTrackId } from '@sudobility/music_lib';
+import { allNotes, findEvent, findTrack, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
 import { ticksFor } from '@sudobility/music_lib';
 import {
   addNoteCommand,
@@ -144,14 +144,17 @@ export function resolveInsertTarget(
 export function insertNoteAtCaret(
   store: EditorStoreApi,
   pitch: Pitch,
-  articulation?: Articulation,
+  options: { articulation?: Articulation; duration?: DurationName; advanceCaret?: boolean } = {},
 ): void {
   const state = store.getState();
   if (!state.score) return;
   const target = resolveInsertTarget(state.score, selectActiveTrackId(state), state.positionTick);
   if (!target) return;
 
-  const durationTicks = ticksFor(state.snapGrid, state.score.ppq);
+  const { articulation, duration, advanceCaret = false } = options;
+  // `duration` overrides the toolbar grid, for callers that carry their own --
+  // a key tap is written as long as it was held, not as long as the grid says.
+  const durationTicks = ticksFor(duration ?? state.snapGrid, state.score.ppq);
   dispatchTracked(
     store,
     addNoteCommand({
@@ -164,6 +167,10 @@ export function insertNoteAtCaret(
       ...(articulation ? { articulation } : {}),
     }),
   );
+
+  // Step the caret past what was just written, so a run of taps lays out a
+  // melody instead of overwriting one position.
+  if (advanceCaret) playbackController.seek(target.startTick + durationTicks);
 }
 
 /**

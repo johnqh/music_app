@@ -1,14 +1,28 @@
-import { describe, expect, it } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import {
-  allNotes,
   createAppStore,
   pitchToMidi,
   testStoreContext,
   twinkleScore,
   twoTrackScore,
 } from '@sudobility/music_lib';
-import { changeTrackPropsCommand } from '@sudobility/music_lib';
+import { allNotes, changeTrackPropsCommand, playbackController } from '@sudobility/music_lib';
+
+// The keyboard auditions through the controller; the real one would build a
+// Tone graph, which jsdom has no audio for.
+vi.mock('@sudobility/music_lib', async () => {
+  const actual = await vi.importActual<typeof import('@sudobility/music_lib')>(
+    '@sudobility/music_lib',
+  );
+  return {
+    ...actual,
+    // Replaced wholesale, not spread: the real export is a lazy Proxy that
+    // builds a Tone graph on first property access, which jsdom has no audio
+    // for and which would demand an initialized platform.
+    playbackController: { noteOn: vi.fn(), noteOff: vi.fn(), seek: vi.fn() },
+  };
+});
 import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -260,5 +274,82 @@ describe('header names the active instrument', () => {
     const store = createAppStore({ context: testStoreContext() });
     const { container } = render(<PianoKeyboardView store={store} />);
     expect(container.textContent).toContain('Keyboard');
+  });
+});
+
+describe('playing the keyboard writes notes', () => {
+  /** Presses a key, holds it for `heldMs` of mocked time, releases. */
+  function tap(container: HTMLElement, midi: number, heldMs: number): void {
+    let now = 1_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    fireEvent.pointerDown(key(container, midi), { pointerId: 1 });
+    now += heldMs;
+    fireEvent.pointerUp(key(container, midi), { pointerId: 1 });
+    clock.mockRestore();
+  }
+
+  it('sounds the key and writes a note of the length it was held', () => {
+    const store = makeStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    tap(container, 60, 500); // a quarter at 120bpm
+
+    // Not a count delta: twinkleScore already opens with a quarter at tick 0,
+    // and reflowVoice replaces on overlap rather than adding beside it.
+    const written = allNotes(store.getState().score!).find((n) => n.startTick === 0)!;
+    expect(written.durationTicks).toBe(store.getState().score!.ppq);
+    expect(store.getState().canUndo).toBe(true);
+    expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalledWith(60, expect.any(Number));
+    expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
+  });
+
+  it('writes a shorter note for a shorter tap', () => {
+    const store = makeStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    tap(container, 60, 500);
+    const quarter = allNotes(store.getState().score!).find((n) => n.startTick === 0)!;
+    const long = quarter.durationTicks;
+
+    const store2 = makeStore();
+    const { container: c2 } = render(<PianoKeyboardView store={store2} />);
+    tap(c2, 60, 125); // a sixteenth
+    const short = allNotes(store2.getState().score!).find((n) => n.startTick === 0)!.durationTicks;
+
+    expect(short).toBeLessThan(long);
+  });
+
+  it('advances the caret, so a run of taps lays out a melody', () => {
+    // Without this every tap would overwrite the same position.
+    const store = makeStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    tap(container, 60, 500);
+
+    expect(vi.mocked(playbackController.seek)).toHaveBeenCalledWith(
+      store.getState().score!.ppq, // one quarter past the start
+    );
+  });
+
+  it('draws a held key pressed, like a sounding one', () => {
+    const store = makeStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 60), { pointerId: 1 });
+    expect(key(container, 60)).toHaveAttribute('data-playing', 'true');
+
+    fireEvent.pointerUp(key(container, 60), { pointerId: 1 });
+    expect(key(container, 60)).toHaveAttribute('data-playing', 'false');
+  });
+
+  it('releases a key the pointer leaves, so the note cannot sustain forever', () => {
+    const store = makeStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 60), { pointerId: 1 });
+    fireEvent.pointerCancel(key(container, 60), { pointerId: 1 });
+
+    expect(key(container, 60)).toHaveAttribute('data-playing', 'false');
+    expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
   });
 });
