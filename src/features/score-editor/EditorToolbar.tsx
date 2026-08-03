@@ -38,6 +38,7 @@ import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 import type { ReactElement } from 'react';
 import { MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon } from '@heroicons/react/24/solid';
 import {
@@ -428,6 +429,10 @@ export function EditorToolbar({
           </Button>
         </Tooltip>
       </div>
+
+      <VerticalDivider />
+
+      <TrackVisibilitySelect store={store} />
 
       <VerticalDivider />
 
