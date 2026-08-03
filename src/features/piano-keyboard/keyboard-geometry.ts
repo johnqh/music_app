@@ -22,6 +22,41 @@ export const KEYBOARD_MAX_MIDI = 108;
 export const WHITE_KEY_COUNT = 52;
 
 /**
+ * The keyboard is drawn over a caller-chosen range, not always all 88 keys:
+ * the active track's instrument decides it, so a piccolo part does not present
+ * three octaves of keys that will never sound.
+ */
+export type KeyboardRange = { min: number; max: number };
+
+export const FULL_RANGE: KeyboardRange = { min: KEYBOARD_MIN_MIDI, max: KEYBOARD_MAX_MIDI };
+
+/**
+ * Widens `range` so it begins and ends on a white key, and clamps it to the
+ * 88-key piano.
+ *
+ * A keyboard whose first or last key is black looks broken — a black key has no
+ * white neighbour to hang off on that side, so it would float. Widening is
+ * always safe: it only ever adds a key the instrument nearly reaches.
+ */
+export function snapToWhiteKeys(range: KeyboardRange): KeyboardRange {
+  let min = Math.max(KEYBOARD_MIN_MIDI, Math.min(range.min, range.max));
+  let max = Math.min(KEYBOARD_MAX_MIDI, Math.max(range.min, range.max));
+  while (min > KEYBOARD_MIN_MIDI && isBlackKey(min)) min -= 1;
+  while (max < KEYBOARD_MAX_MIDI && isBlackKey(max)) max += 1;
+  // If clamping left an edge black (the very ends of the piano), step inward.
+  while (isBlackKey(min) && min < max) min += 1;
+  while (isBlackKey(max) && max > min) max -= 1;
+  return { min, max };
+}
+
+/** How many white keys a range spans, which is what sets the keyboard's width. */
+export function whiteKeyCount(range: KeyboardRange = FULL_RANGE): number {
+  let count = 0;
+  for (let midi = range.min; midi <= range.max; midi += 1) if (!isBlackKey(midi)) count += 1;
+  return count;
+}
+
+/**
  * Below this the keys stop shrinking and the keyboard scrolls horizontally
  * instead — 52 × 14 = 728px, so any narrower panel scrolls.
  */
@@ -38,7 +73,14 @@ export type PianoKey = {
   x: number;
   width: number;
   height: number;
-  /** Set on each C only (`C4`), so octaves stay locatable without labelling all 88. */
+  /**
+   * Set on each C and F (`C4`, `F4`), left null elsewhere.
+   *
+   * Those two are the landmarks of the black-key groups — C sits left of the
+   * group of two, F left of the group of three — so with both labelled no white
+   * key is ever more than two steps from a reference. Labelling all seven per
+   * octave is legible only while the keys are wide, and this keyboard shrinks.
+   */
   label: string | null;
 };
 
@@ -54,8 +96,8 @@ export function noteLabel(midi: number): string {
 }
 
 /** Total width of the keyboard at a given white-key width. */
-export function keyboardWidth(whiteKeyWidth: number): number {
-  return WHITE_KEY_COUNT * whiteKeyWidth;
+export function keyboardWidth(whiteKeyWidth: number, range: KeyboardRange = FULL_RANGE): number {
+  return whiteKeyCount(range) * whiteKeyWidth;
 }
 
 /**
@@ -65,7 +107,11 @@ export function keyboardWidth(whiteKeyWidth: number): number {
  * and the blacks land on top of the whites they overlap, with no z-index
  * bookkeeping.
  */
-export function computeKeys(whiteKeyWidth: number, whiteKeyHeight: number): PianoKey[] {
+export function computeKeys(
+  whiteKeyWidth: number,
+  whiteKeyHeight: number,
+  range: KeyboardRange = FULL_RANGE,
+): PianoKey[] {
   const whites: PianoKey[] = [];
   const blacks: PianoKey[] = [];
   const blackWidth = whiteKeyWidth * BLACK_KEY_WIDTH_RATIO;
@@ -75,9 +121,10 @@ export function computeKeys(whiteKeyWidth: number, whiteKeyHeight: number): Pian
   // both kinds: a white sits at its own index, and a black hangs off the
   // boundary after the white that precedes it.
   let whiteIndex = 0;
-  for (let midi = KEYBOARD_MIN_MIDI; midi <= KEYBOARD_MAX_MIDI; midi += 1) {
+  for (let midi = range.min; midi <= range.max; midi += 1) {
     const pitch = midiToPitch(midi);
-    const label = pitch.step === 'C' && pitch.accidental === 0 ? noteLabel(midi) : null;
+    const isLandmark = pitch.accidental === 0 && (pitch.step === 'C' || pitch.step === 'F');
+    const label = isLandmark ? noteLabel(midi) : null;
 
     if (isBlackKey(midi)) {
       blacks.push({
@@ -86,7 +133,7 @@ export function computeKeys(whiteKeyWidth: number, whiteKeyHeight: number): Pian
         x: whiteIndex * whiteKeyWidth - blackWidth / 2,
         width: blackWidth,
         height: blackHeight,
-        label: null, // a black key is never a C
+        label: null, // a black key is never a landmark
       });
     } else {
       whites.push({

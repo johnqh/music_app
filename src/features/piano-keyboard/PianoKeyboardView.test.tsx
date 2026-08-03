@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { act, render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import {
   allNotes,
   createAppStore,
@@ -35,9 +35,75 @@ function play(store: EditorStoreApi, ids: string[]): void {
 }
 
 describe('PianoKeyboardView', () => {
-  it('renders all 88 keys', () => {
+  it('renders all 88 keys for a piano track', () => {
     const { container } = render(<PianoKeyboardView store={makeStore()} />);
     expect(container.querySelectorAll('[data-testid^="piano-key-"]')).toHaveLength(88);
+  });
+
+  describe('range follows the active track', () => {
+    /** Sets the active track's instrument, as the track editor would. */
+    function setProgram(store: EditorStoreApi, midiProgram: number): void {
+      const score = store.getState().score!;
+      act(() => {
+        store.getState().setScore({
+          ...score,
+          tracks: score.tracks.map((track, i) => (i === 0 ? { ...track, midiProgram } : track)),
+        });
+      });
+    }
+
+    it('narrows to the instrument, so keys that cannot sound are not offered', () => {
+      // A piccolo on an 88-key keyboard says nothing about what will sound.
+      const store = makeStore();
+      const { container } = render(<PianoKeyboardView store={store} />);
+      expect(container.querySelectorAll('[data-testid^="piano-key-"]')).toHaveLength(88);
+
+      setProgram(store, 72); // Piccolo
+
+      const keys = container.querySelectorAll('[data-testid^="piano-key-"]');
+      expect(keys.length).toBeLessThan(88);
+      expect(keys.length).toBeGreaterThan(0);
+    });
+
+    it('follows an instrument change on the same track', () => {
+      const store = makeStore();
+      const { container } = render(<PianoKeyboardView store={store} />);
+
+      setProgram(store, 58); // Tuba — low
+      const low = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
+        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
+      );
+
+      setProgram(store, 72); // Piccolo — high
+      const high = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
+        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
+      );
+
+      expect(Math.min(...high)).toBeGreaterThan(Math.max(...low));
+    });
+
+    it('begins and ends on a white key, which a black one cannot do', () => {
+      // A black key at either end has no white neighbour to hang off.
+      const store = makeStore();
+      const { container } = render(<PianoKeyboardView store={store} />);
+      setProgram(store, 65); // Alto Sax — its raw range starts on a black key
+
+      const midis = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
+        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
+      );
+      const black = [1, 3, 6, 8, 10];
+      expect(black).not.toContain(Math.min(...midis) % 12);
+      expect(black).not.toContain(Math.max(...midis) % 12);
+    });
+  });
+
+  it('labels C and F, the landmarks of the black-key groups', () => {
+    // With both labelled no white key is more than two steps from a reference;
+    // labelling all seven per octave is legible only while the keys are wide.
+    render(<PianoKeyboardView store={makeStore()} />);
+    expect(screen.getByText('C4')).toBeInTheDocument();
+    expect(screen.getByText('F4')).toBeInTheDocument();
+    expect(screen.queryByText('D4')).not.toBeInTheDocument();
   });
 
   it('renders unlit with no score', () => {

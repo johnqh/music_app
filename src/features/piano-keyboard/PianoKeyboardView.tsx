@@ -12,7 +12,13 @@
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@sudobility/components';
-import { findTrack, gmInstrument, selectActiveTrackId, useAppStore } from '@sudobility/music_lib';
+import {
+  findTrack,
+  gmInstrument,
+  gmInstrumentRange,
+  selectActiveTrackId,
+  useAppStore,
+} from '@sudobility/music_lib';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
@@ -20,9 +26,11 @@ import { resolveColorScheme } from '@/app/theme';
 import type { PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
 import {
   MIN_WHITE_KEY_WIDTH,
-  WHITE_KEY_COUNT,
+  FULL_RANGE,
   computeKeys,
   keyboardWidth,
+  snapToWhiteKeys,
+  whiteKeyCount,
 } from '@/features/piano-keyboard/keyboard-geometry';
 import { playingPitchesForTrack } from '@/features/piano-keyboard/playing-pitches';
 
@@ -128,10 +136,26 @@ export function PianoKeyboardView({
     return () => observer.disconnect();
   }, [collapsed]);
 
-  const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / WHITE_KEY_COUNT);
+  const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
+
+  /**
+   * The keyboard spans the active track's instrument, not always all 88 keys —
+   * a piccolo part should not present three octaves that will never sound. It
+   * follows a track change and an instrument change alike, because both move
+   * `midiProgram`.
+   *
+   * Widened to whole keys first: a keyboard whose outermost key is black has
+   * nothing for that key to hang off, so it would float.
+   */
+  const range = useMemo(() => {
+    const program = activeTrack?.midiProgram;
+    return snapToWhiteKeys(program === undefined ? FULL_RANGE : gmInstrumentRange(program));
+  }, [activeTrack?.midiProgram]);
+
+  const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
   const keys = useMemo(
-    () => computeKeys(whiteKeyWidth, box.height),
-    [whiteKeyWidth, box.height],
+    () => computeKeys(whiteKeyWidth, box.height, range),
+    [whiteKeyWidth, box.height, range],
   );
 
   /**
@@ -144,7 +168,6 @@ export function PianoKeyboardView({
     return playingPitchesForTrack(score, activeNoteIds, activeTrackId);
   }, [playbackState, score, activeNoteIds, activeTrackId]);
 
-  const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
   /**
    * The instrument, not the literal word "Piano": the keyboard is a view of
    * whichever track is active, and that track is frequently not a piano.

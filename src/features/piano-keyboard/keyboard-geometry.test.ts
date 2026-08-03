@@ -96,12 +96,24 @@ describe('computeKeys', () => {
     for (const white of whites) expect(white.height).toBe(H);
   });
 
-  it('labels every C and nothing else', () => {
+  it('labels every C and F, and nothing else', () => {
+    // C and F are the landmarks of the black-key groups -- C sits left of the
+    // group of two, F left of the group of three -- so with both labelled no
+    // white key is more than two steps from a reference. Labelling all seven
+    // per octave is legible only while the keys are wide, and this shrinks.
     const labelled = keys.filter((k) => k.label !== null);
-    expect(labelled.map((k) => k.label)).toEqual(['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8']);
+    expect(labelled.map((k) => k.label).slice(0, 6)).toEqual([
+      'C1',
+      'F1',
+      'C2',
+      'F2',
+      'C3',
+      'F3',
+    ]);
     for (const key of keys) {
       if (key.label === null) continue;
-      expect(key.midi % 12).toBe(0); // pitch class C
+      expect([0, 5]).toContain(key.midi % 12); // pitch class C or F
+      expect(key.isBlack).toBe(false);
     }
   });
 
