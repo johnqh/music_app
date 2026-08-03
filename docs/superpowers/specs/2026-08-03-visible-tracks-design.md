@@ -22,7 +22,11 @@ Keeping hidden and muted separate is the point. You can hide an accompaniment yo
 
 Two things materially shrink this work from its original framing.
 
-**The endpoint already exists.** `ProjectUpdateRequest` already carries `uiPrefs`, `ProjectRecord` already returns it, and `PUT /projects/:id` already persists it. No new `music_api` route is needed. The channel was built and then never used: no production code in `music_lib` reads or writes `uiPrefs`, and `project-slice.ts`'s autosave sends only `{ name, score }`. The in-memory test fake (`src/test/store-context.ts`) *does* already round-trip it on create and update, so the fake needs no change — tests can assert persistence against it immediately.
+**The endpoint already exists.** `ProjectUpdateRequest` already carries `uiPrefs`, `ProjectRecord` already returns it, and `PUT /projects/:id` already persists it to a JSONB column. No new `music_api` route is needed. The channel was built and then never used: no production code in `music_lib` reads or writes `uiPrefs`, and `project-slice.ts`'s autosave sends only `{ name, score }`. The in-memory test fake (`src/test/store-context.ts`) *does* already round-trip it on create and update, so the fake needs no change — tests can assert persistence against it immediately.
+
+**But the deployed API would silently drop the new field.** `music_api` pins `@sudobility/music_types@^0.1.0` and validates request bodies with `zValidator('json', projectUpdateRequestSchema)`. In 0.1.0 `projectUiPrefsSchema` requires `view` *and* is a `$strip` object — so a body carrying `{ zoom, visibleTrackIds }` is rejected outright for the missing `view`, and even one carrying `view` would have `visibleTrackIds` stripped before it reached the DB. **`music_api` must upgrade `music_types` and redeploy before the app ships**, and that ordering is a hard constraint rather than a nicety: without it the feature fails silently, which is the worst way for it to fail.
+
+The upgrade itself is trivial, and was measured rather than assumed: bumping `music_api` to `music_types@0.3.0` in a scratch clone typechecks clean and passes all 84 tests with **zero** code changes.
 
 **The renderer already draws a subset.** `RenderOptions.trackIds` ("omit/empty = all tracks in score order") and `computeLayout` both take a track list. Hiding is a matter of passing one, not of teaching the renderer anything.
 
@@ -107,7 +111,7 @@ With nothing hidden there is no question to ask and no dialog appears.
 
 This is the one place the feature is allowed to change what leaves the app, and it is deliberate: a file that quietly omits parts is hard to notice until it matters, and silently exporting everything would equally surprise someone who hid tracks precisely to extract a subset. Asking only when the answer could differ keeps the common path unchanged.
 
-"Visible tracks only" exports a filtered copy of the score; it does not alter the project.
+"Visible tracks only" exports a filtered copy of the score; it does not alter the project. The filter itself (`scoreWithTracks`) lives in `music_lib` rather than the app, since it reads and rewrites a `Score` — and it returns the score by reference when nothing is filtered, so the common path costs nothing.
 
 ## Persistence
 
@@ -132,4 +136,4 @@ Two consequences worth stating:
 - **Per-user visibility.** One setting per project, shared by anyone who opens it. The app has no notion of per-user view state and this does not add one.
 - **Reordering tracks.** The selector shows score order and does not change it.
 - **Hiding by instrument, family, or any other rule.** Explicit checkboxes only.
-- **A new `music_api` route.** None is needed; `uiPrefs` already round-trips.
+- **A new `music_api` route.** None is needed — `uiPrefs` already round-trips. `music_api` does need its `music_types` dependency bumped and a redeploy, but that is a version bump, not a route.
