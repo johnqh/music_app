@@ -80,15 +80,17 @@ describe('EditorToolbar', () => {
     expect(updated.pitch.accidental).toBe(1);
   });
 
-  it('articulation menu dispatches changeArticulationCommand', async () => {
+  it('articulation picker dispatches changeArticulationCommand', async () => {
     const store = makeStore();
     const note = allNotes(store.getState().score!)[0] as NoteEvent;
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
     renderToolbar(store);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Articulation' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Staccato' }));
+    // A Select now, not a hand-rolled menu: its content is portalled, which is
+    // what stopped the toolbar's horizontal overflow clipping the options away.
+    await user.click(screen.getByRole('combobox', { name: 'Articulation' }));
+    await user.click(await screen.findByRole('option', { name: 'Staccato' }));
 
     const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
     expect(updated.articulation).toBe('staccato');

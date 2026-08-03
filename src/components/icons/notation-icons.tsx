@@ -1,0 +1,391 @@
+/**
+ * Music-notation icons, drawn rather than typed.
+ *
+ * These replaced Unicode musical symbols (`𝅝`, `𝅗𝅥`, `𝅘𝅥𝅯`, `𝄫`, …), which cannot be
+ * relied on: the note and double-accidental glyphs live in Unicode's
+ * Supplementary Multilingual Plane, which most UI fonts do not cover at all, so
+ * they render as tofu on a plain system. `𝅗𝅥` is worse still — it is a
+ * *two-codepoint* combining sequence, so whether it forms one glyph depends on
+ * the shaping engine. And the few that are widely available (`♩`, `♪`) come
+ * from a different block with different metrics, so they never lined up with
+ * the rest.
+ *
+ * Every glyph is drawn on the same 24x24 grid with the same construction, so
+ * the set is internally consistent in a way a mix of font glyphs cannot be:
+ *
+ * - Noteheads are ellipses tilted -20°, the angle used by engraving fonts.
+ * - Open noteheads are a filled outer ellipse with a *differently tilted*
+ *   counter, punched out with `evenodd`. That difference in tilt is what gives
+ *   a real notehead its thick/thin contrast; a uniformly stroked ring reads as
+ *   a zero, not a note.
+ * - Stems sit on the notehead's right edge and are the same length in every
+ *   glyph, so the row reads as one family.
+ * - Flags repeat one shape at a fixed vertical pitch.
+ *
+ * Sizing is the caller's job, via `className` — see `ICON_GLYPH_CLASS` in the
+ * toolbars, which is what keeps every control the same pixel size.
+ */
+import type { SVGProps } from 'react';
+
+/**
+ * Every icon in both toolbars renders at exactly this size.
+ *
+ * Sizing lives on the glyph rather than the button because the controls differ
+ * — some sit in toggle groups, some are standalone, some carry text — and one
+ * class on the icon is what actually guarantees they all come out the same
+ * pixel size, which a mix of font glyphs never did.
+ *
+ * It lives here, beside the icons, rather than in a toolbar: importing it from
+ * `EditorToolbar` pulled that module's whole dependency graph into the
+ * transport bar and broke the app at start-up.
+ */
+export const ICON_GLYPH_CLASS = 'size-[18px] shrink-0';
+
+type GlyphProps = SVGProps<SVGSVGElement>;
+
+/** Shared frame: one grid, one fill rule, no intrinsic size. */
+function Glyph({ children, ...props }: GlyphProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
+      {children}
+    </svg>
+  );
+}
+
+// --- shared note geometry -------------------------------------------------
+
+/** Notehead centre for every stemmed duration, so the row shares one baseline. */
+const HEAD_X = 8.6;
+const HEAD_Y = 17.4;
+/** Right edge of the tilted notehead, which is where a stem attaches. */
+const STEM_RIGHT = 12;
+const STEM_WIDTH = 1.25;
+const STEM_TOP = 3;
+
+/** Filled notehead, tilted like an engraved one. */
+function NoteHead() {
+  return <ellipse cx={HEAD_X} cy={HEAD_Y} rx={3.6} ry={2.55} transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`} />;
+}
+
+function Stem() {
+  return (
+    <rect x={STEM_RIGHT - STEM_WIDTH} y={STEM_TOP} width={STEM_WIDTH} height={HEAD_Y - STEM_TOP} />
+  );
+}
+
+/** Vertical pitch between successive flags, tuned so three still clear the notehead. */
+const FLAG_PITCH = 3;
+
+/** One flag, hanging from the stem at `y`: a wing that sweeps right and down. */
+function Flag({ y }: { y: number }) {
+  return (
+    <path
+      d={`M${STEM_RIGHT} ${y}
+          C${STEM_RIGHT + 4.2} ${y + 1.5} ${STEM_RIGHT + 5.7} ${y + 3.6} ${STEM_RIGHT + 4.6} ${y + 5.4}
+          C${STEM_RIGHT + 5.1} ${y + 3.9} ${STEM_RIGHT + 3.2} ${y + 2.3} ${STEM_RIGHT} ${y + 2.7}
+          Z`}
+    />
+  );
+}
+
+// --- durations ------------------------------------------------------------
+
+/**
+ * Semibreve: no stem, so it is centred in the box rather than sharing the
+ * stemmed notes' left-hand notehead position — with nothing on the right to
+ * balance it, an aligned head would just look adrift.
+ */
+export function WholeNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path
+        fillRule="evenodd"
+        d="M7.1 17.4A4.5 2.8 0 1 0 16.1 17.4A4.5 2.8 0 1 0 7.1 17.4ZM9.31 18.83A2.7 1.25 -32 1 0 13.89 15.97A2.7 1.25 -32 1 0 9.31 18.83Z"
+      />
+    </Glyph>
+  );
+}
+
+export function HalfNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path
+        fillRule="evenodd"
+        d="M5.22 18.63A3.6 2.55 -20 1 0 11.98 16.17A3.6 2.55 -20 1 0 5.22 18.63ZM6.25 18.26A2.5 1 -20 1 0 10.95 16.54A2.5 1 -20 1 0 6.25 18.26Z"
+      />
+      <Stem />
+    </Glyph>
+  );
+}
+
+export function QuarterNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <NoteHead />
+      <Stem />
+    </Glyph>
+  );
+}
+
+export function EighthNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <NoteHead />
+      <Stem />
+      <Flag y={STEM_TOP} />
+    </Glyph>
+  );
+}
+
+export function SixteenthNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <NoteHead />
+      <Stem />
+      <Flag y={STEM_TOP} />
+      <Flag y={STEM_TOP + FLAG_PITCH} />
+    </Glyph>
+  );
+}
+
+export function ThirtySecondNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <NoteHead />
+      <Stem />
+      <Flag y={STEM_TOP} />
+      <Flag y={STEM_TOP + FLAG_PITCH} />
+      <Flag y={STEM_TOP + FLAG_PITCH * 2} />
+    </Glyph>
+  );
+}
+
+// --- accidentals ----------------------------------------------------------
+
+/**
+ * One flat: an upright stem with a teardrop bowl on its lower right. `bowl`
+ * scales the bowl horizontally so the doubled form can be narrower — at full
+ * width the first bowl runs into the second stem.
+ */
+function flatAt(x: number, bowl = 1) {
+  const w = (n: number) => x + 1.25 + n * bowl;
+  return (
+    <>
+      <rect x={x} y={3.6} width={1.25} height={16} rx={0.4} />
+      <path
+        d={`M${x + 1.25} 11.6
+            C${w(4.15)} 10.2 ${w(5.95)} 13.4 ${w(3.05)} 16.1
+            C${w(1.95)} 17.1 ${w(0.75)} 18.1 ${x + 1.25} 18.8
+            Z`}
+      />
+    </>
+  );
+}
+
+export function FlatIcon(props: GlyphProps) {
+  return <Glyph {...props}>{flatAt(9)}</Glyph>;
+}
+
+export function DoubleFlatIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      {flatAt(3.9, 0.78)}
+      {flatAt(11.6, 0.78)}
+    </Glyph>
+  );
+}
+
+export function NaturalIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={8.2} y={3} width={1.2} height={13.8} />
+      <rect x={14.6} y={7.2} width={1.2} height={13.8} />
+      {/* Slanted crossbars, kept close to the stems' weight so they do not swamp them. */}
+      <path d="M8.2 9.9 L15.8 8.5 L15.8 10.4 L8.2 11.8 Z" />
+      <path d="M8.2 14.5 L15.8 13.1 L15.8 15 L8.2 16.4 Z" />
+    </Glyph>
+  );
+}
+
+export function SharpIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={9} y={4.2} width={1.3} height={15.6} />
+      <rect x={13.7} y={4.2} width={1.3} height={15.6} />
+      <path d="M6.8 10.6 L17.2 8.9 L17.2 11.3 L6.8 13 Z" />
+      <path d="M6.8 15 L17.2 13.3 L17.2 15.7 L6.8 17.4 Z" />
+    </Glyph>
+  );
+}
+
+/** Double sharp: the squat X of four wedges, not two sharps. */
+export function DoubleSharpIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M4.8 4.8 L12 9.6 L19.2 4.8 L14.4 12 L19.2 19.2 L12 14.4 L4.8 19.2 L9.6 12 Z" />
+    </Glyph>
+  );
+}
+
+// --- articulation ---------------------------------------------------------
+
+/** Tie: two noteheads joined by a slur, which is what the control does. */
+export function TieIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx={6.4} cy={16.4} rx={2.9} ry={2.1} transform="rotate(-20 6.4 16.4)" />
+      <ellipse cx={17.6} cy={16.4} rx={2.9} ry={2.1} transform="rotate(-20 17.6 16.4)" />
+      <path d="M5.2 12.2 C8.2 4.9 15.8 4.9 18.8 12.2 C15.8 7.6 8.2 7.6 5.2 12.2 Z" />
+    </Glyph>
+  );
+}
+
+/**
+ * Articulation: a notehead under an accent.
+ *
+ * The control applies one of several articulations, so the icon shows the
+ * category rather than any single mark — an accent over a note is the most
+ * legible stand-in at toolbar size.
+ */
+export function ArticulationIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx={12} cy={17.2} rx={3.6} ry={2.55} transform="rotate(-20 12 17.2)" />
+      <path d="M5.4 6 L18.6 9.6 L18.6 11.8 L5.4 8.2 Z" />
+      <path d="M18.6 9.6 L5.4 13.2 L5.4 11 L18.6 7.4 Z" />
+    </Glyph>
+  );
+}
+
+// --- editing actions ------------------------------------------------------
+
+/** A plus badge, so "insert" actions read as actions and not as duration toggles. */
+function PlusBadge() {
+  return (
+    <>
+      <rect x={16.4} y={3.2} width={6.4} height={1.9} rx={0.6} />
+      <rect x={18.65} y={0.95} width={1.9} height={6.4} rx={0.6} />
+    </>
+  );
+}
+
+/**
+ * Insert note. The plus matters: without it this is just a quarter note, and
+ * the duration group two controls to the left already shows one of those.
+ */
+export function InsertNoteIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <g transform="translate(-0.6 2) scale(0.86)">
+        <ellipse cx={HEAD_X} cy={HEAD_Y} rx={3.6} ry={2.55} transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`} />
+        <rect x={STEM_RIGHT - STEM_WIDTH} y={STEM_TOP} width={STEM_WIDTH} height={HEAD_Y - STEM_TOP} />
+      </g>
+      <PlusBadge />
+    </Glyph>
+  );
+}
+
+/** Insert rest: the quarter-rest zigzag with its bottom curl, plus the badge. */
+export function InsertRestIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <g transform="translate(-1.2 1.4) scale(0.88)">
+        <path
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M8.6 5.6 L14.4 11.2 L9.4 14.2 L13.6 18.2"
+        />
+        <path d="M13.9 17.7 C10.6 16.1 8.8 17.7 9.8 20.4 C7.4 18.2 7.6 14.4 11.6 15.3 Z" />
+      </g>
+      <PlusBadge />
+    </Glyph>
+  );
+}
+
+/** Select all: a marquee around the music. */
+export function SelectAllIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect
+        x={3}
+        y={5}
+        width={18}
+        height={14}
+        rx={1.6}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeDasharray="3.4 2.6"
+      />
+      <ellipse cx={9} cy={14.2} rx={2.2} ry={1.6} transform="rotate(-20 9 14.2)" />
+      <rect x={10.8} y={8.4} width={0.9} height={5.8} />
+      <ellipse cx={15.4} cy={14.2} rx={2.2} ry={1.6} transform="rotate(-20 15.4 14.2)" />
+      <rect x={17.2} y={8.4} width={0.9} height={5.8} />
+    </Glyph>
+  );
+}
+
+/** Quantize: a notehead snapping onto a gridline. */
+export function QuantizeIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={4.2} y={3} width={1.1} height={18} rx={0.4} opacity={0.45} />
+      <rect x={11.45} y={3} width={1.1} height={18} rx={0.4} />
+      <rect x={18.7} y={3} width={1.1} height={18} rx={0.4} opacity={0.45} />
+      <ellipse cx={12} cy={12} rx={3.4} ry={2.4} transform="rotate(-20 12 12)" />
+      <path d="M7.4 12 L10.1 9.9 L10.1 14.1 Z" />
+    </Glyph>
+  );
+}
+
+/** Page layout: systems wrapped onto a page. */
+export function PageLayoutIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect
+        x={4}
+        y={3}
+        width={16}
+        height={18}
+        rx={1.8}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      />
+      <rect x={7} y={7.4} width={10} height={1.6} rx={0.6} />
+      <rect x={7} y={11.2} width={10} height={1.6} rx={0.6} />
+      <rect x={7} y={15} width={6.4} height={1.6} rx={0.6} />
+    </Glyph>
+  );
+}
+
+/** Continuous layout: one line running off both edges. */
+export function ContinuousLayoutIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={2.4} y={11.2} width={19.2} height={1.7} rx={0.6} />
+      <path d="M6.6 6.6 L2 12 L6.6 17.4 Z" />
+      <path d="M17.4 6.6 L22 12 L17.4 17.4 Z" />
+    </Glyph>
+  );
+}
+
+/**
+ * Metronome: the trapezoid case with its pendulum rod.
+ *
+ * Drawn rather than borrowed — no general-purpose icon set has a metronome,
+ * and a generic clock or tick would not say "click track".
+ */
+export function MetronomeIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M9.2 3.4 L14.8 3.4 L18.6 20.6 L5.4 20.6 Z" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />
+      <rect x={6.6} y={16.4} width={10.8} height={1.6} />
+      <path d="M15.8 6.6 L10.6 17 L9.1 16.3 L14.3 5.9 Z" />
+      <rect x={11.9} y={9.6} width={3.4} height={2.4} rx={0.5} transform="rotate(-24 13.6 10.8)" />
+    </Glyph>
+  );
+}

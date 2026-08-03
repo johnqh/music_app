@@ -32,13 +32,36 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
-import { variants } from '@sudobility/design';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { ReactElement } from 'react';
+import { MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon } from '@heroicons/react/24/solid';
+import {
+  DoubleFlatIcon,
+  DoubleSharpIcon,
+  EighthNoteIcon,
+  FlatIcon,
+  HalfNoteIcon,
+  NaturalIcon,
+  QuarterNoteIcon,
+  SharpIcon,
+  SixteenthNoteIcon,
+  ICON_GLYPH_CLASS,
+  ArticulationIcon,
+  ContinuousLayoutIcon,
+  InsertNoteIcon,
+  InsertRestIcon,
+  PageLayoutIcon,
+  QuantizeIcon,
+  SelectAllIcon,
+  ThirtySecondNoteIcon,
+  TieIcon,
+  WholeNoteIcon,
+} from '@/components/icons/notation-icons';
 import {
   changeAccidental,
   changeArticulation,
@@ -62,22 +85,31 @@ export type EditorToolbarProps = {
   onToggleInspector?: () => void;
 };
 
-const DURATION_OPTIONS: Array<{ value: DurationName; label: string; ariaLabel: string }> = [
-  { value: 'whole', label: '𝅝', ariaLabel: 'Whole note' },
-  { value: 'half', label: '𝅗𝅥', ariaLabel: 'Half note' },
-  { value: 'quarter', label: '♩', ariaLabel: 'Quarter note' },
-  { value: 'eighth', label: '♪', ariaLabel: 'Eighth note' },
-  { value: 'sixteenth', label: '𝅘𝅥𝅯', ariaLabel: 'Sixteenth note' },
-  { value: 'thirtysecond', label: '𝅘𝅥𝅰', ariaLabel: 'Thirty-second note' },
+/**
+ * Drawn icons, not Unicode musical symbols: the note glyphs live in Unicode's
+ * Supplementary Multilingual Plane, which most UI fonts do not cover, so they
+ * rendered as tofu on a plain system — and the two that were widely available
+ * (`♩`, `♪`) came from a different block and never matched the others' size.
+ */
+const DURATION_OPTIONS: Array<{ value: DurationName; Icon: NotationIcon; ariaLabel: string }> = [
+  { value: 'whole', Icon: WholeNoteIcon, ariaLabel: 'Whole note' },
+  { value: 'half', Icon: HalfNoteIcon, ariaLabel: 'Half note' },
+  { value: 'quarter', Icon: QuarterNoteIcon, ariaLabel: 'Quarter note' },
+  { value: 'eighth', Icon: EighthNoteIcon, ariaLabel: 'Eighth note' },
+  { value: 'sixteenth', Icon: SixteenthNoteIcon, ariaLabel: 'Sixteenth note' },
+  { value: 'thirtysecond', Icon: ThirtySecondNoteIcon, ariaLabel: 'Thirty-second note' },
 ];
 
-const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; label: string; ariaLabel: string }> = [
-  { value: -2, label: '𝄫', ariaLabel: 'Double flat' },
-  { value: -1, label: '♭', ariaLabel: 'Flat' },
-  { value: 0, label: '♮', ariaLabel: 'Natural' },
-  { value: 1, label: '♯', ariaLabel: 'Sharp' },
-  { value: 2, label: '𝄪', ariaLabel: 'Double sharp' },
+const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; Icon: NotationIcon; ariaLabel: string }> = [
+  { value: -2, Icon: DoubleFlatIcon, ariaLabel: 'Double flat' },
+  { value: -1, Icon: FlatIcon, ariaLabel: 'Flat' },
+  { value: 0, Icon: NaturalIcon, ariaLabel: 'Natural' },
+  { value: 1, Icon: SharpIcon, ariaLabel: 'Sharp' },
+  { value: 2, Icon: DoubleSharpIcon, ariaLabel: 'Double sharp' },
 ];
+
+/** Radix rejects an empty item value, so "None" travels under a sentinel. */
+const NO_ARTICULATION = 'none';
 
 const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; label: string }> = [
   { value: undefined, label: 'None' },
@@ -109,6 +141,9 @@ function defaultInsertPitch(store: EditorStoreApi): Pitch {
   return { step: 'C', accidental: 0, octave: 4 };
 }
 
+/** A drawn notation glyph: sized by the caller, coloured by `currentColor`. */
+type NotationIcon = (props: { className?: string }) => ReactElement;
+
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
 
 const TOGGLE_BUTTON_CLASS = cn(
@@ -116,7 +151,6 @@ const TOGGLE_BUTTON_CLASS = cn(
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
-const TEXT_BUTTON_CLASS = 'px-3 py-1.5';
 
 function VerticalDivider() {
   return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
@@ -158,9 +192,8 @@ export function EditorToolbar({
     changeAccidental(store, accidental);
   };
 
-  const handleArticulationSelect = (articulation: Articulation | undefined): void => {
-    changeArticulation(store, articulation);
-    setArticulationOpen(false);
+  const handleArticulationSelect = (value: string): void => {
+    changeArticulation(store, value === NO_ARTICULATION ? undefined : (value as Articulation));
   };
 
   const handleInsertNote = (): void => {
@@ -215,7 +248,7 @@ export function EditorToolbar({
               onClick={() => handleDurationClick(option.value)}
               className={TOGGLE_BUTTON_CLASS}
             >
-              {option.label}
+              <option.Icon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
         ))}
@@ -234,7 +267,7 @@ export function EditorToolbar({
               onClick={() => handleAccidentalClick(option.value)}
               className={ICON_BUTTON_CLASS}
             >
-              {option.label}
+              <option.Icon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
         ))}
@@ -242,44 +275,35 @@ export function EditorToolbar({
 
       <VerticalDivider />
 
-      <div ref={articulationRef} className="relative">
+      {/*
+        A Select, not a hand-rolled popup. The old menu was an absolutely
+        positioned child of this toolbar, and the toolbar scrolls horizontally
+        -- CSS stops the y axis being visible as soon as overflow-x is set, so
+        the menu was clipped to the bar's height and its items could not be
+        seen at all. Select portals its content out, which fixes that
+        structurally rather than by fighting the overflow.
+
+        `value` is deliberately never set: this applies an articulation to the
+        selection, it does not hold one. The trigger shows a fixed icon.
+      */}
+      <Select value="" onValueChange={handleArticulationSelect}>
         <Tooltip placement="bottom" content="Add an articulation to the selection">
-          <Button
-            type="button"
-            variant="outline"
+          <SelectTrigger
             aria-label="Articulation"
-            aria-haspopup="menu"
-            aria-expanded={articulationOpen}
             disabled={!hasScore}
-            onClick={() => setArticulationOpen((open) => !open)}
-            className={TEXT_BUTTON_CLASS}
+            className={cn(ICON_BUTTON_CLASS, 'gap-1 [&_svg]:size-[18px]')}
           >
-            Articulation
-          </Button>
+            <ArticulationIcon className={ICON_GLYPH_CLASS} />
+          </SelectTrigger>
         </Tooltip>
-        {articulationOpen ? (
-          <div
-            role="menu"
-            className={cn(
-              variants.card.default.base(),
-              'absolute left-0 top-full z-10 mt-1 min-w-[140px] rounded-md py-1 shadow-lg',
-            )}
-          >
-            {ARTICULATION_OPTIONS.map((option) => (
-              <Button
-                key={option.label}
-                type="button"
-                variant="ghost"
-                role="menuitem"
-                onClick={() => handleArticulationSelect(option.value)}
-                className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+        <SelectContent>
+          {ARTICULATION_OPTIONS.map((option) => (
+            <SelectItem key={option.label} value={option.value ?? NO_ARTICULATION}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <Tooltip placement="bottom" content="Toggle tie">
         <Button
@@ -291,7 +315,7 @@ export function EditorToolbar({
           onClick={() => toggleTie(store, 'tieStart')}
           className={ICON_BUTTON_CLASS}
         >
-          ⌣
+          <TieIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -304,9 +328,9 @@ export function EditorToolbar({
           aria-label="Insert note"
           disabled={!hasScore}
           onClick={handleInsertNote}
-          className={TEXT_BUTTON_CLASS}
+          className={ICON_BUTTON_CLASS}
         >
-          Insert note
+          <InsertNoteIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip placement="bottom" content="Insert a rest at the caret">
@@ -316,9 +340,9 @@ export function EditorToolbar({
           aria-label="Insert rest"
           disabled={!hasScore}
           onClick={handleInsertRest}
-          className={TEXT_BUTTON_CLASS}
+          className={ICON_BUTTON_CLASS}
         >
-          Insert rest
+          <InsertRestIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip placement="bottom" content="Select every note in the score">
@@ -328,9 +352,9 @@ export function EditorToolbar({
           aria-label="Select all"
           disabled={!hasScore}
           onClick={() => selectAll(store)}
-          className={TEXT_BUTTON_CLASS}
+          className={ICON_BUTTON_CLASS}
         >
-          Select all
+          <SelectAllIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -340,7 +364,9 @@ export function EditorToolbar({
         <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
           <SelectTrigger
             aria-label="Quantize grid"
-            className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm"
+            // The trigger's own chevron is 16px by default; this brings it in
+            // line with every other icon on the bar.
+            className="h-auto w-auto min-w-[110px] px-2 py-1.5 text-sm [&_svg]:size-[18px]"
           >
             <SelectValue />
           </SelectTrigger>
@@ -360,9 +386,9 @@ export function EditorToolbar({
           aria-label="Quantize"
           disabled={!hasScore}
           onClick={handleQuantize}
-          className={TEXT_BUTTON_CLASS}
+          className={ICON_BUTTON_CLASS}
         >
-          Quantize
+          <QuantizeIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -378,7 +404,7 @@ export function EditorToolbar({
             onClick={handleZoomOut}
             className={ICON_BUTTON_CLASS}
           >
-            −
+            <MagnifyingGlassMinusIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
         <Tooltip placement="bottom" content="Current zoom level">
@@ -398,7 +424,7 @@ export function EditorToolbar({
             onClick={handleZoomIn}
             className={ICON_BUTTON_CLASS}
           >
-            +
+            <MagnifyingGlassPlusIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
       </div>
@@ -415,7 +441,7 @@ export function EditorToolbar({
             onClick={() => onLayoutModeChange('page')}
             className={TOGGLE_BUTTON_CLASS}
           >
-            Page
+            <PageLayoutIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
         <Tooltip placement="bottom" content="Lay the score out in one scrolling line">
@@ -427,7 +453,7 @@ export function EditorToolbar({
             onClick={() => onLayoutModeChange('continuous')}
             className={TOGGLE_BUTTON_CLASS}
           >
-            Continuous
+            <ContinuousLayoutIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
       </div>

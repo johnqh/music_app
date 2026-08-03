@@ -12,6 +12,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
 import { AppRouter } from '@/app/router';
 import { AuthProvider } from '@/app/AuthContext';
 import { playbackController } from '@sudobility/music_lib';
+import { CONSTANTS } from '@/config/constants';
 
 let context: TestStoreContext;
 
@@ -55,7 +56,10 @@ describe('AppRouter', () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument(),
+      // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
+      // here made these tests pass in CI and fail on any machine with a .env
+      // that rebrands the app.
+      expect(screen.getByRole('heading', { name: CONSTANTS.APP_NAME })).toBeInTheDocument(),
     );
   });
 
@@ -131,7 +135,10 @@ describe('AppRouter', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/en/projects'));
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'ScoreSmith' })).toBeInTheDocument(),
+      // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
+      // here made these tests pass in CI and fail on any machine with a .env
+      // that rebrands the app.
+      expect(screen.getByRole('heading', { name: CONSTANTS.APP_NAME })).toBeInTheDocument(),
     );
   });
 });

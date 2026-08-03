@@ -95,7 +95,10 @@ const KEY_FIFTHS_LABELS = [
 /** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
 export async function gotoDashboard(page: Page): Promise<void> {
   await page.goto('/en/projects');
-  await expect(page.getByRole('heading', { name: 'ScoreSmith' })).toBeVisible();
+  // Waits on the dashboard's own controls rather than the product name: the
+  // name comes from VITE_APP_NAME, so asserting it here made the whole suite
+  // fail on any machine whose .env rebrands the app.
+  await expect(page.getByLabel('Search projects')).toBeVisible();
 }
 
 /** Creates a brand-new project from the dashboard and waits for the editor route to load. */

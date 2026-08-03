@@ -53,6 +53,16 @@ import type { PlaybackStoreApi } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import type { MeasureBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
+import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
+import { ICON_GLYPH_CLASS, MetronomeIcon } from '@/components/icons/notation-icons';
+import {
+  BackwardIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PauseIcon,
+  PlayIcon,
+  StopIcon,
+} from '@heroicons/react/24/solid';
 
 export type TransportBarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -240,7 +250,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.goToStart()}
           className={ICON_BUTTON_CLASS}
         >
-          ◀◀
+          <BackwardIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip content="Previous measure">
@@ -253,7 +263,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.previousMeasure()}
           className={ICON_BUTTON_CLASS}
         >
-          ◀
+          <ChevronLeftIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip content={playbackState === 'playing' ? 'Pause' : 'Play'}>
@@ -266,7 +276,11 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.togglePlay()}
           className={ICON_BUTTON_CLASS}
         >
-          {playbackState === 'playing' ? '❚❚' : '▶'}
+          {playbackState === 'playing' ? (
+            <PauseIcon className={ICON_GLYPH_CLASS} />
+          ) : (
+            <PlayIcon className={ICON_GLYPH_CLASS} />
+          )}
         </Button>
       </Tooltip>
       <Tooltip content="Stop">
@@ -289,7 +303,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           }}
           className={ICON_BUTTON_CLASS}
         >
-          ■
+          <StopIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip content="Next measure">
@@ -302,7 +316,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.nextMeasure()}
           className={ICON_BUTTON_CLASS}
         >
-          ▶
+          <ChevronRightIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -316,7 +330,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.toggleLoop()}
           className={TOGGLE_BUTTON_CLASS}
         >
-          Loop
+          <ArrowPathRoundedSquareIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -330,7 +344,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.setMetronome(!metronome)}
           className={TOGGLE_BUTTON_CLASS}
         >
-          Metronome
+          <MetronomeIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -367,7 +381,8 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
         <SelectTrigger
           aria-label="Playback speed"
-          className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm"
+          // Matches the bar's icon size; the trigger's chevron is 16px by default.
+          className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm [&_svg]:size-[18px]"
         >
           <SelectValue />
         </SelectTrigger>
