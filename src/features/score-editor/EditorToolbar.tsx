@@ -66,7 +66,7 @@ import {
   changeAccidental,
   changeArticulation,
   changeDuration,
-  insertNoteAtSelection,
+  insertNoteAtCaret,
   insertRestAtSelection,
   quantizeSelection,
   selectAll,
@@ -197,7 +197,7 @@ export function EditorToolbar({
   };
 
   const handleInsertNote = (): void => {
-    insertNoteAtSelection(store, defaultInsertPitch(store));
+    insertNoteAtCaret(store, defaultInsertPitch(store));
   };
 
   const handleInsertRest = (): void => {

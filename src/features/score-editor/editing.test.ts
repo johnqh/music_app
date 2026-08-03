@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { createAppStore } from '@sudobility/music_lib';
-import { stressScore, twinkleScore } from '@sudobility/music_lib';
+import { stressScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -13,7 +13,7 @@ import {
   deleteSelected,
   duplicateSelected,
   findAdjacentEventId,
-  insertNoteAtSelection,
+  insertNoteAtCaret,
   insertRestAtSelection,
   moveSelectionHorizontal,
   quantizeSelection,
@@ -39,58 +39,51 @@ function makeStore() {
 afterEach(async () => {});
 
 describe('resolveInsertTarget', () => {
-  it("targets the first selected event's own measure/voice/tick", () => {
+  it('targets the caret tick in the active track', () => {
     const score = twinkleScore();
     const track = score.tracks[0];
     const secondMeasure = track.measures[1];
-    const noteId = secondMeasure.voices[0].events[0].id;
+    const caret = secondMeasure.startTick + 120;
 
-    const target = resolveInsertTarget(score, { eventIds: [noteId], measureIds: [], trackIds: [] });
-    expect(target).toEqual({
+    expect(resolveInsertTarget(score, track.id, caret)).toEqual({
       trackId: track.id,
       measureId: secondMeasure.id,
       voiceIndex: 0,
-      startTick: secondMeasure.voices[0].events[0].startTick,
+      startTick: caret,
     });
   });
 
-  it('falls back to the first selected measure start when no event is selected', () => {
-    const score = twinkleScore();
-    const track = score.tracks[0];
-    const thirdMeasure = track.measures[2];
+  it('inserts into the active track, not the first one', () => {
+    // The whole point of the caret model: what you are editing is the active
+    // track, and the old selection-based target could not express that.
+    const score = twoTrackScore();
+    const second = score.tracks[1];
 
-    const target = resolveInsertTarget(score, {
-      eventIds: [],
-      measureIds: [thirdMeasure.id],
-      trackIds: [],
-    });
-    expect(target).toEqual({
-      trackId: track.id,
-      measureId: thirdMeasure.id,
-      voiceIndex: 0,
-      startTick: thirdMeasure.startTick,
-    });
+    expect(resolveInsertTarget(score, second.id, 0)?.trackId).toBe(second.id);
   });
 
-  it("falls back to the score's first measure when nothing is selected", () => {
+  it('clamps a caret past the last barline into the final measure', () => {
     const score = twinkleScore();
     const track = score.tracks[0];
-    const target = resolveInsertTarget(score, { eventIds: [], measureIds: [], trackIds: [] });
-    expect(target).toEqual({
-      trackId: track.id,
-      measureId: track.measures[0].id,
-      voiceIndex: 0,
-      startTick: 0,
-    });
+    const last = track.measures[track.measures.length - 1];
+
+    const target = resolveInsertTarget(score, track.id, 10_000_000)!;
+    expect(target.measureId).toBe(last.id);
+    expect(target.startTick).toBeLessThan(last.startTick + last.durationTicks);
+  });
+
+  it('falls back to the first track when none is active', () => {
+    const score = twinkleScore();
+    expect(resolveInsertTarget(score, null, 0)?.trackId).toBe(score.tracks[0].id);
   });
 });
 
-describe('insertNoteAtSelection', () => {
+describe('insertNoteAtCaret', () => {
   it('adds a note at the target position using the current snapGrid duration', () => {
     const store = makeStore();
     const before = allNotes(store.getState().score!).length;
 
-    insertNoteAtSelection(store, { step: 'C', accidental: 0, octave: 5 });
+    insertNoteAtCaret(store, { step: 'C', accidental: 0, octave: 5 });
 
     const after = allNotes(store.getState().score!);
     expect(after.length).toBe(before + 1);
@@ -100,7 +93,7 @@ describe('insertNoteAtSelection', () => {
   it('is a no-op with no score loaded', () => {
     const store = createAppStore({ context: testStoreContext() });
     expect(() =>
-      insertNoteAtSelection(store, { step: 'C', accidental: 0, octave: 4 }),
+      insertNoteAtCaret(store, { step: 'C', accidental: 0, octave: 4 }),
     ).not.toThrow();
     expect(store.getState().score).toBeNull();
   });

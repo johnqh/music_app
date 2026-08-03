@@ -146,6 +146,36 @@ describe('TrackEditorPanel', () => {
     expect(store.getState().score!.tracks.map((t) => t.id)).not.toContain(score.tracks[1].id);
   });
 
+  it('shows mute state as an icon, not as the letter M', async () => {
+    // "M" and "S" only read to someone who already knows the convention, and
+    // this panel is where a newcomer meets these controls.
+    const store = makeStore();
+    const score = store.getState().score!;
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    const mute = screen.getByLabelText(`Mute: ${score.tracks[0].name}`);
+    expect(mute.textContent).toBe('');
+    expect(mute.querySelector('svg')).not.toBeNull();
+    expect(mute).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(mute);
+    expect(screen.getByLabelText(`Mute: ${score.tracks[0].name}`)).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('pans from the centre, since pan is bipolar', async () => {
+    // A left-anchored fill made a centred pan look like a half-open volume.
+    const store = makeStore();
+    const { container } = render(<TrackEditorPanel store={store} />);
+
+    const fills = Array.from(container.querySelectorAll<HTMLElement>('div[style*="width"]'));
+    const panFill = fills[fills.length - 1];
+    expect(panFill.style.width).toBe('0%');
+  });
+
   it('every edit is undoable, like any score change', async () => {
     const store = makeStore();
     const score = store.getState().score!;

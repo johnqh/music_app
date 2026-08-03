@@ -34,7 +34,7 @@ import type { MusicalEvent } from '@sudobility/music_types';
 import type { ScoreSelection } from '@sudobility/music_lib';
 import type { ScoreCommand } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
-import { allNotes, findEvent, findTrack } from '@sudobility/music_lib';
+import { allNotes, findEvent, findTrack, selectActiveTrackId } from '@sudobility/music_lib';
 import { ticksFor } from '@sudobility/music_lib';
 import {
   addNoteCommand,
@@ -99,28 +99,6 @@ export function selectedNoteIds(score: Score, selection: ScoreSelection): UUID[]
 
 type InsertTarget = { trackId: UUID; measureId: UUID; voiceIndex: number; startTick: number };
 
-/** Locates an event's owning track/measure/voice-ordinal-index and its own startTick. */
-function locateEvent(
-  score: Score,
-  eventId: UUID,
-): { trackId: UUID; measureId: UUID; voiceIndex: number; startTick: number } | null {
-  for (const track of score.tracks) {
-    for (const measure of track.measures) {
-      for (let voiceIndex = 0; voiceIndex < measure.voices.length; voiceIndex += 1) {
-        const event = measure.voices[voiceIndex].events.find((e) => e.id === eventId);
-        if (event) {
-          return {
-            trackId: track.id,
-            measureId: measure.id,
-            voiceIndex,
-            startTick: event.startTick,
-          };
-        }
-      }
-    }
-  }
-  return null;
-}
 
 /**
  * Resolves where an insert/rest action should target, from (in priority
@@ -129,39 +107,32 @@ function locateEvent(
  * score's very first measure. `null` only if the score has no measures at
  * all on any candidate track.
  */
-export function resolveInsertTarget(score: Score, selection: ScoreSelection): InsertTarget | null {
-  for (const eventId of selection.eventIds) {
-    const located = locateEvent(score, eventId);
-    if (located) return located;
-  }
+export function resolveInsertTarget(
+  score: Score,
+  activeTrackId: UUID | null,
+  caretTick: number,
+): InsertTarget | null {
+  // The caret, not the selection. Everywhere else in this editor the caret is
+  // the anchor -- a click sets it, playback starts from it -- and inserting
+  // from the selection meant that clicking empty staff (which moves the caret
+  // and clears the selection) put the next note at the very start of the
+  // score, nowhere near where the user was looking.
+  const track =
+    (activeTrackId ? findTrack(score, activeTrackId) : null) ?? score.tracks[0] ?? null;
+  if (!track || track.measures.length === 0) return null;
 
-  for (const measureId of selection.measureIds) {
-    const owner = score.tracks.find((t) => t.measures.some((m) => m.id === measureId));
-    const measure = owner?.measures.find((m) => m.id === measureId);
-    if (owner && measure) {
-      return { trackId: owner.id, measureId, voiceIndex: 0, startTick: measure.startTick };
-    }
-  }
+  const tick = Math.max(0, caretTick);
+  const measure =
+    track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ??
+    // Past the end: the last measure, so a caret parked at the final barline
+    // still inserts somewhere sensible rather than failing.
+    track.measures[track.measures.length - 1];
 
-  for (const trackId of selection.trackIds) {
-    const track = findTrack(score, trackId);
-    if (track?.measures[0]) {
-      return {
-        trackId,
-        measureId: track.measures[0].id,
-        voiceIndex: 0,
-        startTick: track.measures[0].startTick,
-      };
-    }
-  }
-
-  const track = score.tracks[0];
-  if (!track?.measures[0]) return null;
   return {
     trackId: track.id,
-    measureId: track.measures[0].id,
+    measureId: measure.id,
     voiceIndex: 0,
-    startTick: track.measures[0].startTick,
+    startTick: Math.min(tick, measure.startTick + measure.durationTicks - 1),
   };
 }
 
@@ -170,14 +141,14 @@ export function resolveInsertTarget(score: Score, selection: ScoreSelection): In
  * `resolveInsertTarget`), using the store's current `snapGrid` as the
  * note's duration. No-op if there's no score or no resolvable target.
  */
-export function insertNoteAtSelection(
+export function insertNoteAtCaret(
   store: EditorStoreApi,
   pitch: Pitch,
   articulation?: Articulation,
 ): void {
   const state = store.getState();
   if (!state.score) return;
-  const target = resolveInsertTarget(state.score, state.selection);
+  const target = resolveInsertTarget(state.score, selectActiveTrackId(state), state.positionTick);
   if (!target) return;
 
   const durationTicks = ticksFor(state.snapGrid, state.score.ppq);

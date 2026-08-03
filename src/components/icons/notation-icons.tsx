@@ -389,3 +389,25 @@ export function MetronomeIcon(props: GlyphProps) {
     </Glyph>
   );
 }
+
+/**
+ * Solo: headphones, the studio convention for "let me hear only this".
+ *
+ * Drawn because no general icon set carries one, and the alternatives say the
+ * wrong thing — a star means favourite, a speaker means the opposite of solo.
+ */
+export function SoloIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path
+        d="M4.4 15.4 V12.6 a7.6 7.6 0 0 1 15.2 0 V15.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+      <rect x={2.8} y={13.6} width={4.4} height={7} rx={2.2} />
+      <rect x={16.8} y={13.6} width={4.4} height={7} rx={2.2} />
+    </Glyph>
+  );
+}

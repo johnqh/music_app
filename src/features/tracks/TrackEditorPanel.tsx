@@ -42,6 +42,8 @@ import {
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { SpeakerWaveIcon, SpeakerXMarkIcon } from '@heroicons/react/24/solid';
+import { ICON_GLYPH_CLASS, SoloIcon } from '@/components/icons/notation-icons';
 
 export type TrackEditorPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -193,26 +195,40 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           />
 
           <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label={`Mute: ${track.name}`}
-              aria-pressed={track.muted}
-              onClick={() => patch({ muted: !track.muted })}
-              className={TOGGLE_BUTTON_CLASS}
-            >
-              M
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label={`Solo: ${track.name}`}
-              aria-pressed={track.solo}
-              onClick={() => patch({ solo: !track.solo })}
-              className={TOGGLE_BUTTON_CLASS}
-            >
-              S
-            </Button>
+            {/*
+              Icons rather than "M" and "S": those initials only read to
+              someone who already knows the convention, and this panel is the
+              one place a newcomer meets these controls. A struck-through
+              speaker and headphones say it without the vocabulary.
+            */}
+            <Tooltip content={track.muted ? 'Unmute this track' : 'Mute this track'}>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={`Mute: ${track.name}`}
+                aria-pressed={track.muted}
+                onClick={() => patch({ muted: !track.muted })}
+                className={TOGGLE_BUTTON_CLASS}
+              >
+                {track.muted ? (
+                  <SpeakerXMarkIcon className={ICON_GLYPH_CLASS} />
+                ) : (
+                  <SpeakerWaveIcon className={ICON_GLYPH_CLASS} />
+                )}
+              </Button>
+            </Tooltip>
+            <Tooltip content={track.solo ? 'Stop soloing this track' : 'Solo this track'}>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={`Solo: ${track.name}`}
+                aria-pressed={track.solo}
+                onClick={() => patch({ solo: !track.solo })}
+                className={TOGGLE_BUTTON_CLASS}
+              >
+                <SoloIcon className={ICON_GLYPH_CLASS} />
+              </Button>
+            </Tooltip>
           </div>
 
           <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
@@ -229,12 +245,18 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
             <span className="w-8 shrink-0">Pan</span>
             <span className="sr-only">{`Pan: ${track.name}`}</span>
+            {/*
+              `origin={0}`: pan is bipolar, so the reading that matters is how
+              far from centre and which way. A left-anchored fill made a centred
+              pan look like a half-open volume.
+            */}
             <Slider
               value={track.pan}
               onChange={(v: number) => patch({ pan: v })}
               min={-1}
               max={1}
               step={0.01}
+              origin={0}
             />
           </label>
         </div>
