@@ -1,5 +1,24 @@
+import i18n from 'i18next';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import '@/i18n';
 import '@testing-library/jest-dom/vitest';
+
+// Every language is fetched over HTTP from `public/locales/` at runtime (see
+// `src/i18n.ts`), and jsdom has no server to fetch from -- so without this,
+// every rendered string is its own key and any test asserting on real copy
+// fails. Reading the shipped file off disk keeps those assertions honest: it is
+// the same bytes the static server would hand the browser, not a fixture that
+// can drift from it.
+i18n.addResourceBundle(
+  'en',
+  'app',
+  // `process.cwd()` is the project root under vitest; `import.meta.url` is not
+  // a file: URL once Vite has transformed this module.
+  JSON.parse(readFileSync(resolve(process.cwd(), 'public/locales/en/app.json'), 'utf8')),
+  true,
+  true,
+);
 
 // jsdom does not implement SVGElement.prototype.getBBox, but VexFlow (used by
 // src/adapters/vexflow) calls it both internally (text measurement) and from
