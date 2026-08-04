@@ -10,7 +10,12 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { LANGUAGE_NAMES, SUPPORTED_LANGUAGES, isLanguageSupported } from '@/config/languages';
+import {
+  LANGUAGE_NAMES,
+  LANGUAGE_OPTIONS,
+  SUPPORTED_LANGUAGES,
+  isLanguageSupported,
+} from '@/config/languages';
 
 const LOCALES_DIR = resolve(process.cwd(), 'public/locales');
 
@@ -54,6 +59,17 @@ describe('language configuration', () => {
   it('ships a bundle for every supported language', () => {
     for (const lang of SUPPORTED_LANGUAGES) {
       expect(existsSync(bundlePath(lang)), `public/locales/${lang}/app.json`).toBe(true);
+    }
+  });
+
+  it('offers exactly the supported languages in the picker', () => {
+    // The top bar's LanguageSelector defaults to its own list of 16 languages.
+    // Offering one this app has no bundle for is silent -- the switch succeeds
+    // and every string renders as its raw key.
+    expect(LANGUAGE_OPTIONS.map((option) => option.code)).toEqual([...SUPPORTED_LANGUAGES]);
+    for (const option of LANGUAGE_OPTIONS) {
+      expect(option.name, option.code).toBeTruthy();
+      expect(option.flag, option.code).toBeTruthy();
     }
   });
 

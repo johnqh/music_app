@@ -17,13 +17,16 @@ import { PageConfigContext } from '@/context/pageConfigContextDef';
 import { usePageConfig } from '@/hooks/usePageConfig';
 import { useAuth } from '@/app/AuthContext';
 import { CONSTANTS } from '@/config/constants';
-import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
+import { useCurrentLanguage, useSwitchLanguage } from '@/hooks/useLocalizedNavigate';
+import { LANGUAGE_OPTIONS } from '@/config/languages';
+import { isLanguageSupported } from '@/i18n';
 
 function ScreenContainerInner({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const lang = useCurrentLanguage();
+  const switchLanguage = useSwitchLanguage();
   const { user, signOut } = useAuth();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
@@ -43,7 +46,15 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
         { id: 'projects', label: t('nav.dashboard'), href: `/${lang}/projects` },
         { id: 'settings', label: t('nav.settings'), href: `/${lang}/settings` },
       ],
-      hideLanguageSelector: true,
+      // The top bar has a language selector built in; it was hidden only while
+      // English was the sole locale. Its own default list is 16 languages, so
+      // it must be given this app's — offering a language with no bundle behind
+      // it leaves every string rendering as its raw key.
+      languages: LANGUAGE_OPTIONS,
+      currentLanguage: lang,
+      onLanguageChange: (code: string) => {
+        if (isLanguageSupported(code)) switchLanguage(code);
+      },
       LinkComponent: Link as never,
       sticky: true,
       ariaLabel: 'Main navigation',
@@ -60,7 +71,7 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
           </Button>
         ) : null,
     }),
-    [t, navigate, lang, user, signOut],
+    [t, navigate, lang, switchLanguage, user, signOut],
   );
 
   const footer = useMemo<FooterConfig>(

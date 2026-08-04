@@ -26,3 +26,27 @@ export const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
 export function isLanguageSupported(code: string): code is SupportedLanguage {
   return (SUPPORTED_LANGUAGES as readonly string[]).includes(code);
 }
+
+/**
+ * The shape the top bar's `LanguageSelector` wants — code, native name, flag.
+ *
+ * Derived from `SUPPORTED_LANGUAGES` rather than written out again, so a
+ * language cannot end up offered in the picker without a bundle behind it. That
+ * matters because the selector ships its own default list of 16 languages: hand
+ * it that and it offers locales this app has no translations for, and every
+ * string renders as its raw key.
+ *
+ * Flags are a rough convention, not a claim about nationhood — a language is
+ * not a country, and several here are spoken in many.
+ */
+const LANGUAGE_FLAGS: Record<SupportedLanguage, string> = {
+  en: '\u{1F1FA}\u{1F1F8}',
+  fr: '\u{1F1EB}\u{1F1F7}',
+};
+
+export const LANGUAGE_OPTIONS: Array<{ code: string; name: string; flag: string }> =
+  SUPPORTED_LANGUAGES.map((code) => ({
+    code,
+    name: LANGUAGE_NAMES[code],
+    flag: LANGUAGE_FLAGS[code],
+  }));
