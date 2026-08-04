@@ -3,6 +3,13 @@
  * apps: an HTTP backend loading `public/locales/{{lng}}/{{ns}}.json`, plus a
  * language detector reading the URL path first and then localStorage.
  *
+ * The bundled language lives in `src/locales/`, NOT `public/locales/`, and the
+ * split is deliberate. Vite copies `public/` verbatim and forbids importing
+ * from it: a file that is both served and imported gets inlined into the
+ * bundle *and* shipped again as a static asset, which is why importing one
+ * warns. So the two roles get two homes — `src/locales/` for what is compiled
+ * in, `public/locales/` for what is fetched at runtime.
+ *
  * `i18next-http-backend` is not optional here even though only English ships
  * today: `@sudobility/building_blocks` imports it unconditionally at module
  * top level, despite declaring it an optional peer. Without it installed the
@@ -11,7 +18,8 @@
  * present in `node_modules`.
  *
  * English is *also* bundled statically, with `partialBundledLanguages` telling
- * i18next to use the backend only for what isn't bundled. That keeps the
+ * i18next to use the backend only for what isn't bundled — so with English the
+ * only supported language, the backend currently fetches nothing at all. That keeps the
  * default language available on first paint with no network round trip, and
  * keeps jsdom tests deterministic — they have no server to fetch from, and
  * several assert on real translated strings rather than key names.
@@ -23,7 +31,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import Backend from 'i18next-http-backend';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import en from '../public/locales/en/app.json';
+import en from '@/locales/en/app.json';
 import { CONSTANTS } from '@/config/constants';
 import { SUPPORTED_LANGUAGES, isLanguageSupported } from '@/config/languages';
 

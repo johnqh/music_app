@@ -32,7 +32,10 @@ export default defineConfig({
   // CJS deps are pre-bundled explicitly instead.
   optimizeDeps: {
     exclude: ['@sudobility/music_lib'],
-    include: ['@tonejs/midi', 'dexie', 'immer', 'zustand', 'tone', 'vexflow', 'zod'],
+    // No `dexie`: it went with the IndexedDB persistence the server-backed
+    // store replaced, and naming an uninstalled package here makes Vite log a
+    // resolve failure on every dev start.
+    include: ['@tonejs/midi', 'immer', 'zustand', 'tone', 'vexflow', 'zod'],
   },
   test: {
     environment: 'jsdom',
