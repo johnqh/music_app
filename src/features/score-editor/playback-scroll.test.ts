@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { TRACK_INFO_WIDTH, computeLayout, stressScore, testRenderTheme } from '@sudobility/music_lib';
+import {
+  TRACK_INFO_WIDTH,
+  computeLayout,
+  stressScore,
+  testRenderTheme,
+} from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 
@@ -25,7 +30,9 @@ describe('playbackScrollTarget: page mode', () => {
     expect(second).toBeDefined();
 
     // Reader has scrolled so track 3 sits at the top of the viewport.
-    const track3 = p.trackLayouts[2].measures.find((m) => m.measureIndex === first.measureIndices[0])!;
+    const track3 = p.trackLayouts[2].measures.find(
+      (m) => m.measureIndex === first.measureIndices[0],
+    )!;
     const scrollTop = track3.box.y;
 
     const target = playbackScrollTarget({

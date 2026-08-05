@@ -12,9 +12,8 @@ import { allNotes, changeTrackPropsCommand, playbackController } from '@sudobili
 // The keyboard auditions through the controller; the real one would build a
 // Tone graph, which jsdom has no audio for.
 vi.mock('@sudobility/music_lib', async () => {
-  const actual = await vi.importActual<typeof import('@sudobility/music_lib')>(
-    '@sudobility/music_lib',
-  );
+  const actual =
+    await vi.importActual<typeof import('@sudobility/music_lib')>('@sudobility/music_lib');
   return {
     ...actual,
     // Replaced wholesale, not spread: the real export is a lazy Proxy that
@@ -25,6 +24,7 @@ vi.mock('@sudobility/music_lib', async () => {
 });
 import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { addNoteCommand, createEmptyScore } from '@sudobility/music_lib';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 
@@ -223,14 +223,12 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[1].id, {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          }),
-        );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[1].id, {
+          midiProgram: 56,
+          instrumentName: 'Trumpet',
+        }),
+      );
       store.getState().setActiveTrack(score.tracks[1].id);
     });
 
@@ -243,22 +241,18 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[0].id, {
-            midiProgram: 40,
-            instrumentName: 'Violin',
-          }),
-        );
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[1].id, {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          }),
-        );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[0].id, {
+          midiProgram: 40,
+          instrumentName: 'Violin',
+        }),
+      );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[1].id, {
+          midiProgram: 56,
+          instrumentName: 'Trumpet',
+        }),
+      );
       store.getState().setActiveTrack(score.tracks[0].id);
     });
     const { container } = render(<PianoKeyboardView store={store} />);
@@ -351,5 +345,204 @@ describe('playing the keyboard writes notes', () => {
 
     expect(key(container, 60)).toHaveAttribute('data-playing', 'false');
     expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
+  });
+});
+
+describe('playing several keys at once writes a chord', () => {
+  /**
+   * Presses every key in `midis`, holds them together for `heldMs`, then
+   * releases them in order — i.e. plays a chord rather than a run of notes.
+   */
+  function playChord(container: HTMLElement, midis: number[], heldMs: number): void {
+    let now = 1_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    midis.forEach((midi, i) => {
+      now += i === 0 ? 0 : 5; // real fingers never land on the same millisecond
+      fireEvent.pointerDown(key(container, midi), { pointerId: midi });
+    });
+    now += heldMs;
+    midis.forEach((midi) => {
+      now += 5; // nor do they lift together
+      fireEvent.pointerUp(key(container, midi), { pointerId: midi });
+    });
+    clock.mockRestore();
+  }
+
+  function emptyPianoStore(): EditorStoreApi {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(createEmptyScore({ title: 'Chord', measures: 2 }));
+    return store;
+  }
+
+  it('writes one chord at one tick, not an arpeggio', () => {
+    const store = emptyPianoStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    playChord(container, [60, 64, 67], 500);
+
+    const notes = allNotes(store.getState().score!);
+    expect(notes).toHaveLength(3);
+    // The point of the whole grouping: every note shares the start tick.
+    expect(new Set(notes.map((n) => n.startTick))).toEqual(new Set([0]));
+  });
+
+  it('gives every note of the chord the same duration', () => {
+    // Measuring each key separately is what made this dangerous: same-start
+    // notes whose durations differ delete each other instead of stacking.
+    const store = emptyPianoStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    playChord(container, [60, 64, 67], 500);
+
+    const notes = allNotes(store.getState().score!);
+    expect(new Set(notes.map((n) => n.durationTicks)).size).toBe(1);
+  });
+
+  it('still writes a run of separate taps as a melody', () => {
+    // Asserted through caret advances rather than start ticks: seek is mocked
+    // in this file, so the caret never actually moves and all three notes land
+    // on tick 0 regardless. Three advances is a melody; a chord advances once.
+    const store = emptyPianoStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+    const seek = vi.mocked(playbackController.seek);
+    seek.mockClear();
+
+    let now = 1_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    for (const midi of [60, 62, 64]) {
+      fireEvent.pointerDown(key(container, midi), { pointerId: midi });
+      now += 500;
+      fireEvent.pointerUp(key(container, midi), { pointerId: midi });
+      now += 50; // released before the next is pressed — not a chord
+    }
+    clock.mockRestore();
+
+    expect(seek).toHaveBeenCalledTimes(3);
+  });
+
+  it('advances the caret once for a chord, however many keys were held', () => {
+    const store = emptyPianoStore();
+    const { container } = render(<PianoKeyboardView store={store} />);
+    const seek = vi.mocked(playbackController.seek);
+    seek.mockClear();
+
+    playChord(container, [60, 64, 67], 500);
+
+    expect(seek).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the chord on a monophonic instrument and writes nothing', () => {
+    const store = emptyPianoStore();
+    const score = store.getState().score!;
+    store.getState().setScore({
+      ...score,
+      tracks: score.tracks.map((t) => ({ ...t, midiProgram: 56, instrumentName: 'Trumpet' })),
+    });
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    playChord(container, [60, 64, 67], 500);
+
+    expect(allNotes(store.getState().score!)).toHaveLength(0);
+    expect(store.getState().toasts.some((t) => /one note at a time/.test(t.message))).toBe(true);
+  });
+});
+
+describe('the keyboard edits a selected chord', () => {
+  function storeWithChord(): { store: EditorStoreApi; ids: string[] } {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(createEmptyScore({ title: 'Sel', measures: 2 }));
+    const track = store.getState().score!.tracks[0];
+    for (const step of ['C', 'E', 'G']) {
+      store.getState().dispatchCommand(
+        addNoteCommand({
+          trackId: track.id,
+          measureId: track.measures[0].id,
+          voiceIndex: 0,
+          pitch: { step, accidental: 0, octave: 4 } as never,
+          startTick: 0,
+          durationTicks: store.getState().score!.ppq,
+        }),
+      );
+    }
+    const ids = allNotes(store.getState().score!)
+      .filter((n) => n.startTick === 0)
+      .map((n) => n.id);
+    store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
+    return { store, ids };
+  }
+
+  it('lights the selected pitches', () => {
+    const { store } = storeWithChord();
+    const { container } = render(<PianoKeyboardView store={store} />);
+    expect(key(container, 60)).toHaveAttribute('data-selected', 'true'); // C4
+    expect(key(container, 64)).toHaveAttribute('data-selected', 'true'); // E4
+    expect(key(container, 62)).toHaveAttribute('data-selected', 'false'); // D4
+  });
+
+  it('removes a note when its lit key is pressed', () => {
+    const { store } = storeWithChord();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 64), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 64), { pointerId: 1 });
+
+    expect(
+      allNotes(store.getState().score!)
+        .map((n) => n.pitch.step)
+        .sort(),
+    ).toEqual(['C', 'G']);
+  });
+
+  it('adds a note when an unlit key is pressed', () => {
+    const { store } = storeWithChord();
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1 }); // D4
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+
+    const atZero = allNotes(store.getState().score!).filter((n) => n.startTick === 0);
+    expect(atZero.map((n) => n.pitch.step).sort()).toEqual(['C', 'D', 'E', 'G']);
+  });
+
+  it('does not advance the caret while editing a selection', () => {
+    // The two jobs must not both happen: that would edit the chord AND move on.
+    const { store } = storeWithChord();
+    const { container } = render(<PianoKeyboardView store={store} />);
+    const seek = vi.mocked(playbackController.seek);
+    seek.mockClear();
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+
+    // Seeks to the chord's own tick, never past it.
+    for (const call of seek.mock.calls) expect(call[0]).toBe(0);
+  });
+
+  it('stays in entry mode when the selection spans several ticks', () => {
+    const { store } = storeWithChord();
+    const track = store.getState().score!.tracks[0];
+    const ppq = store.getState().score!.ppq;
+    store.getState().dispatchCommand(
+      addNoteCommand({
+        trackId: track.id,
+        measureId: track.measures[0].id,
+        voiceIndex: 0,
+        pitch: { step: 'A', accidental: 0, octave: 4 } as never,
+        startTick: ppq,
+        durationTicks: ppq,
+      }),
+    );
+    const all = allNotes(store.getState().score!).map((n) => n.id);
+    store.getState().setSelection({ eventIds: all, measureIds: [], trackIds: [] });
+
+    const { container } = render(<PianoKeyboardView store={store} />);
+    const seek = vi.mocked(playbackController.seek);
+    seek.mockClear();
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+
+    // Entry mode advances the caret past what it wrote; edit mode never does.
+    expect(seek.mock.calls.some((call) => call[0] > 0)).toBe(true);
   });
 });

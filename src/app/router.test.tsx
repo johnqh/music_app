@@ -81,6 +81,20 @@ describe('AppRouter', () => {
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
   });
 
+  it('renders the print view at "/project/:id/print"', async () => {
+    const store = makeStore();
+    store.getState().setScore(createEmptyScore({ title: 'Printable' }));
+    window.history.pushState({}, '', '/en/project/proj-1/print');
+
+    render(
+      <AuthProvider>
+        <AppRouter store={store} />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument();
+  });
+
   it('an unknown path redirects to the localized home', async () => {
     const store = makeStore();
     window.history.pushState({}, '', '/nope');

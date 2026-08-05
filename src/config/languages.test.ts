@@ -74,14 +74,17 @@ describe('language configuration', () => {
   });
 
   it('recognises exactly the supported codes', () => {
-    expect(isLanguageSupported('en')).toBe(true);
-    expect(isLanguageSupported('fr')).toBe(true);
+    for (const lang of SUPPORTED_LANGUAGES) {
+      expect(isLanguageSupported(lang), lang).toBe(true);
+    }
+    // A code with no bundle must not be accepted: the router validates against
+    // this, and letting one through renders the whole app as raw keys.
     expect(isLanguageSupported('de')).toBe(false);
     expect(isLanguageSupported('')).toBe(false);
   });
 
   describe.each(SUPPORTED_LANGUAGES.filter((lang) => lang !== 'en'))('%s', (lang) => {
-    it('has exactly English\'s keys — no missing, no stale', () => {
+    it("has exactly English's keys — no missing, no stale", () => {
       expect(leafKeys(load(lang)).sort()).toEqual(leafKeys(load('en')).sort());
     });
 

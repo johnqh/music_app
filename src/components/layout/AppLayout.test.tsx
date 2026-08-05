@@ -160,7 +160,6 @@ describe('AppLayout', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
-
 });
 
 describe('AppLayout: simultaneous notation and piano keyboard', () => {
@@ -258,7 +257,11 @@ describe('AppLayout: track editor beside the keyboard', () => {
 describe('AppLayout export scope', () => {
   /** The mock exporter records every save; the mock io uses the real MIDI codec. */
   function savedFiles(): Array<{ name: string; data: Uint8Array | string; mimeType: string }> {
-    return (getAppServices().io.fileExporter as unknown as { saved: Array<{ name: string; data: Uint8Array | string; mimeType: string }> }).saved;
+    return (
+      getAppServices().io.fileExporter as unknown as {
+        saved: Array<{ name: string; data: Uint8Array | string; mimeType: string }>;
+      }
+    ).saved;
   }
 
   function exportedTrackCount(): number {

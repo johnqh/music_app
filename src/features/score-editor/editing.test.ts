@@ -92,9 +92,7 @@ describe('insertNoteAtCaret', () => {
 
   it('is a no-op with no score loaded', () => {
     const store = createAppStore({ context: testStoreContext() });
-    expect(() =>
-      insertNoteAtCaret(store, { step: 'C', accidental: 0, octave: 4 }),
-    ).not.toThrow();
+    expect(() => insertNoteAtCaret(store, { step: 'C', accidental: 0, octave: 4 })).not.toThrow();
     expect(store.getState().score).toBeNull();
   });
 });

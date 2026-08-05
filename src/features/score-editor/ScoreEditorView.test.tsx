@@ -541,7 +541,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the reader\'s vertical scroll instead of snapping back to track 1', () => {
+  it("keeps the reader's vertical scroll instead of snapping back to track 1", () => {
     // The whole point of the change: following playback used to scroll to the
     // top of the new system, throwing whatever track the reader was watching
     // off the top of the viewport on every wrap.
@@ -569,9 +569,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
 
     // Old behaviour scrolled to track 1's stave — 0 here, once the margin is
     // subtracted — regardless of where the reader had scrolled to.
-    expect(scrollToSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ top: insideFirstSystem }),
-    );
+    expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ top: insideFirstSystem }));
     expect(insideFirstSystem).toBeGreaterThan(0);
   });
 
@@ -917,7 +915,9 @@ describe('caret-anchored range selection (cmd-click)', () => {
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
-    const target = allNotes(score).filter((n) => n.trackId === score.tracks[0].id).at(-1)!;
+    const target = allNotes(score)
+      .filter((n) => n.trackId === score.tracks[0].id)
+      .at(-1)!;
     clickNote(score, target.id, { metaKey: true, shiftKey: true });
 
     const tracksHit = new Set(

@@ -33,13 +33,29 @@ export function changeTrackPropsCommand(trackId: UUID, patch: TrackPropsPatch): 
 // music_lib/src/adapters/tone/instruments.ts
 export type InstrumentCategory =
   'piano' | 'electric-piano' | 'strings' | 'bass' | 'synth-lead' | 'drum-kit';
-export function resolveInstrumentCategory(nameOrProgram: string | number, isPercussion: boolean): InstrumentCategory;
+export function resolveInstrumentCategory(
+  nameOrProgram: string | number,
+  isPercussion: boolean,
+): InstrumentCategory;
 
 // music_lib/src/adapters/vexflow/layout.ts
 export type MeasureLayout = { measureIndex: number; isFirstInSystem: boolean; box: StaveBox };
 export type TrackLayout = { track: Track; measures: MeasureLayout[] };
-export type SystemLayout = { measureIndices: number[]; xLeft: number; xRight: number; gutterTop: number; yTop: number; yBottom: number };
-export type LayoutPlan = { tracks: Track[]; trackLayouts: TrackLayout[]; systems: SystemLayout[]; totalWidth: number; totalHeight: number };
+export type SystemLayout = {
+  measureIndices: number[];
+  xLeft: number;
+  xRight: number;
+  gutterTop: number;
+  yTop: number;
+  yBottom: number;
+};
+export type LayoutPlan = {
+  tracks: Track[];
+  trackLayouts: TrackLayout[];
+  systems: SystemLayout[];
+  totalWidth: number;
+  totalHeight: number;
+};
 ```
 
 ---
@@ -53,11 +69,13 @@ All Phase 1 work happens in `/Users/johnhuang/projects/music_lib`.
 ### Task 1: The 128-program catalogue
 
 **Files:**
+
 - Create: `src/domain/instruments/gm.ts`
 - Test: `src/domain/instruments/gm.test.ts`
 - Modify: `src/index.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `GmFamily`, `GmInstrument`, `GM_INSTRUMENTS`, `GM_FAMILY_LABELS`, `GM_FAMILIES`, `gmInstrument(program)`, `gmFamilyOf(program)`, `gmInstrumentsByFamily(family)`.
 
@@ -246,54 +264,149 @@ export const GM_FAMILY_LABELS: Record<GmFamily, string> = {
  */
 const GM_NAMES: readonly string[] = [
   // 0-7 Piano
-  'Acoustic Grand Piano', 'Bright Acoustic Piano', 'Electric Grand Piano', 'Honky-tonk Piano',
-  'Electric Piano 1', 'Electric Piano 2', 'Harpsichord', 'Clavinet',
+  'Acoustic Grand Piano',
+  'Bright Acoustic Piano',
+  'Electric Grand Piano',
+  'Honky-tonk Piano',
+  'Electric Piano 1',
+  'Electric Piano 2',
+  'Harpsichord',
+  'Clavinet',
   // 8-15 Chromatic Percussion
-  'Celesta', 'Glockenspiel', 'Music Box', 'Vibraphone',
-  'Marimba', 'Xylophone', 'Tubular Bells', 'Dulcimer',
+  'Celesta',
+  'Glockenspiel',
+  'Music Box',
+  'Vibraphone',
+  'Marimba',
+  'Xylophone',
+  'Tubular Bells',
+  'Dulcimer',
   // 16-23 Organ
-  'Drawbar Organ', 'Percussive Organ', 'Rock Organ', 'Church Organ',
-  'Reed Organ', 'Accordion', 'Harmonica', 'Tango Accordion',
+  'Drawbar Organ',
+  'Percussive Organ',
+  'Rock Organ',
+  'Church Organ',
+  'Reed Organ',
+  'Accordion',
+  'Harmonica',
+  'Tango Accordion',
   // 24-31 Guitar
-  'Acoustic Guitar (nylon)', 'Acoustic Guitar (steel)', 'Electric Guitar (jazz)',
-  'Electric Guitar (clean)', 'Electric Guitar (muted)', 'Overdriven Guitar',
-  'Distortion Guitar', 'Guitar Harmonics',
+  'Acoustic Guitar (nylon)',
+  'Acoustic Guitar (steel)',
+  'Electric Guitar (jazz)',
+  'Electric Guitar (clean)',
+  'Electric Guitar (muted)',
+  'Overdriven Guitar',
+  'Distortion Guitar',
+  'Guitar Harmonics',
   // 32-39 Bass
-  'Acoustic Bass', 'Electric Bass (finger)', 'Electric Bass (pick)', 'Fretless Bass',
-  'Slap Bass 1', 'Slap Bass 2', 'Synth Bass 1', 'Synth Bass 2',
+  'Acoustic Bass',
+  'Electric Bass (finger)',
+  'Electric Bass (pick)',
+  'Fretless Bass',
+  'Slap Bass 1',
+  'Slap Bass 2',
+  'Synth Bass 1',
+  'Synth Bass 2',
   // 40-47 Strings
-  'Violin', 'Viola', 'Cello', 'Contrabass',
-  'Tremolo Strings', 'Pizzicato Strings', 'Orchestral Harp', 'Timpani',
+  'Violin',
+  'Viola',
+  'Cello',
+  'Contrabass',
+  'Tremolo Strings',
+  'Pizzicato Strings',
+  'Orchestral Harp',
+  'Timpani',
   // 48-55 Ensemble
-  'String Ensemble 1', 'String Ensemble 2', 'Synth Strings 1', 'Synth Strings 2',
-  'Choir Aahs', 'Voice Oohs', 'Synth Voice', 'Orchestra Hit',
+  'String Ensemble 1',
+  'String Ensemble 2',
+  'Synth Strings 1',
+  'Synth Strings 2',
+  'Choir Aahs',
+  'Voice Oohs',
+  'Synth Voice',
+  'Orchestra Hit',
   // 56-63 Brass
-  'Trumpet', 'Trombone', 'Tuba', 'Muted Trumpet',
-  'French Horn', 'Brass Section', 'Synth Brass 1', 'Synth Brass 2',
+  'Trumpet',
+  'Trombone',
+  'Tuba',
+  'Muted Trumpet',
+  'French Horn',
+  'Brass Section',
+  'Synth Brass 1',
+  'Synth Brass 2',
   // 64-71 Reed
-  'Soprano Sax', 'Alto Sax', 'Tenor Sax', 'Baritone Sax',
-  'Oboe', 'English Horn', 'Bassoon', 'Clarinet',
+  'Soprano Sax',
+  'Alto Sax',
+  'Tenor Sax',
+  'Baritone Sax',
+  'Oboe',
+  'English Horn',
+  'Bassoon',
+  'Clarinet',
   // 72-79 Pipe
-  'Piccolo', 'Flute', 'Recorder', 'Pan Flute',
-  'Blown Bottle', 'Shakuhachi', 'Whistle', 'Ocarina',
+  'Piccolo',
+  'Flute',
+  'Recorder',
+  'Pan Flute',
+  'Blown Bottle',
+  'Shakuhachi',
+  'Whistle',
+  'Ocarina',
   // 80-87 Synth Lead
-  'Lead 1 (square)', 'Lead 2 (sawtooth)', 'Lead 3 (calliope)', 'Lead 4 (chiff)',
-  'Lead 5 (charang)', 'Lead 6 (voice)', 'Lead 7 (fifths)', 'Lead 8 (bass + lead)',
+  'Lead 1 (square)',
+  'Lead 2 (sawtooth)',
+  'Lead 3 (calliope)',
+  'Lead 4 (chiff)',
+  'Lead 5 (charang)',
+  'Lead 6 (voice)',
+  'Lead 7 (fifths)',
+  'Lead 8 (bass + lead)',
   // 88-95 Synth Pad
-  'Pad 1 (new age)', 'Pad 2 (warm)', 'Pad 3 (polysynth)', 'Pad 4 (choir)',
-  'Pad 5 (bowed)', 'Pad 6 (metallic)', 'Pad 7 (halo)', 'Pad 8 (sweep)',
+  'Pad 1 (new age)',
+  'Pad 2 (warm)',
+  'Pad 3 (polysynth)',
+  'Pad 4 (choir)',
+  'Pad 5 (bowed)',
+  'Pad 6 (metallic)',
+  'Pad 7 (halo)',
+  'Pad 8 (sweep)',
   // 96-103 Synth Effects
-  'FX 1 (rain)', 'FX 2 (soundtrack)', 'FX 3 (crystal)', 'FX 4 (atmosphere)',
-  'FX 5 (brightness)', 'FX 6 (goblins)', 'FX 7 (echoes)', 'FX 8 (sci-fi)',
+  'FX 1 (rain)',
+  'FX 2 (soundtrack)',
+  'FX 3 (crystal)',
+  'FX 4 (atmosphere)',
+  'FX 5 (brightness)',
+  'FX 6 (goblins)',
+  'FX 7 (echoes)',
+  'FX 8 (sci-fi)',
   // 104-111 Ethnic
-  'Sitar', 'Banjo', 'Shamisen', 'Koto',
-  'Kalimba', 'Bagpipe', 'Fiddle', 'Shanai',
+  'Sitar',
+  'Banjo',
+  'Shamisen',
+  'Koto',
+  'Kalimba',
+  'Bagpipe',
+  'Fiddle',
+  'Shanai',
   // 112-119 Percussive
-  'Tinkle Bell', 'Agogo', 'Steel Drums', 'Woodblock',
-  'Taiko Drum', 'Melodic Tom', 'Synth Drum', 'Reverse Cymbal',
+  'Tinkle Bell',
+  'Agogo',
+  'Steel Drums',
+  'Woodblock',
+  'Taiko Drum',
+  'Melodic Tom',
+  'Synth Drum',
+  'Reverse Cymbal',
   // 120-127 Sound Effects
-  'Guitar Fret Noise', 'Breath Noise', 'Seashore', 'Bird Tweet',
-  'Telephone Ring', 'Helicopter', 'Applause', 'Gunshot',
+  'Guitar Fret Noise',
+  'Breath Noise',
+  'Seashore',
+  'Bird Tweet',
+  'Telephone Ring',
+  'Helicopter',
+  'Applause',
+  'Gunshot',
 ];
 
 /** The family a program belongs to. Arithmetic, because families are runs of eight. */
@@ -360,14 +473,16 @@ EOF
 ### Task 2: Map every GM family to a synth voice
 
 **Files:**
+
 - Modify: `src/adapters/tone/instruments.ts:55-70` (`categoryForProgram`)
 - Modify: `src/adapters/tone/instruments.test.ts`
 
 **Interfaces:**
+
 - Consumes: `GmFamily`, `gmFamilyOf` (Task 1).
 - Produces: no new API — `resolveInstrumentCategory` keeps its signature; only which category a program resolves to changes.
 
-**Why:** `categoryForProgram` currently distinguishes five program ranges and returns `'piano'` for everything else — its own comment says "there is no dedicated voice for those families yet". With 128 programs selectable, that means 122 of them sound like a piano. Six voices cannot represent sixteen families, but mapping each family to its *nearest* voice is honest where defaulting to piano is not. Real per-family timbres are explicitly out of scope (spec §1.2).
+**Why:** `categoryForProgram` currently distinguishes five program ranges and returns `'piano'` for everything else — its own comment says "there is no dedicated voice for those families yet". With 128 programs selectable, that means 122 of them sound like a piano. Six voices cannot represent sixteen families, but mapping each family to its _nearest_ voice is honest where defaulting to piano is not. Real per-family timbres are explicitly out of scope (spec §1.2).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -525,6 +640,7 @@ EOF
 ### Task 3: Publish `music_lib`
 
 **Files:**
+
 - Modify: `package.json` (version)
 
 - [ ] **Step 1: Full verify**
@@ -581,10 +697,12 @@ bun add @sudobility/music_lib@^0.5.0
 ### Task 4: Instrument icons
 
 **Files:**
+
 - Create: `src/features/instruments/instrument-icon.tsx`
 - Test: `src/features/instruments/instrument-icon.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `GM_INSTRUMENTS`, `GmFamily`, `gmFamilyOf`, `gmInstrument` (Task 1).
 - Produces: `instrumentEmoji(program: number): string`, `InstrumentIcon(props: { program: number; className?: string })`.
 
@@ -785,10 +903,12 @@ EOF
 ### Task 5: Instrument picker in the track panel
 
 **Files:**
+
 - Modify: `src/components/layout/TrackPanel.tsx`
 - Modify: `src/components/layout/TrackPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `InstrumentIcon` (Task 4), `GM_FAMILIES`, `GM_FAMILY_LABELS`, `gmInstrumentsByFamily`, `gmInstrument` (Task 1), `changeTrackPropsCommand`.
 - Produces: no exported API.
 
@@ -802,14 +922,21 @@ describe('instrument picker', () => {
     const store = makeStore();
     const score = store.getState().score!;
     act(() => {
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[0].id, { midiProgram: 40, instrumentName: 'Violin' }),
-      );
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[0].id, {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          }),
+        );
     });
 
     render(<TrackPanel store={store} />);
 
-    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent('Violin');
+    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent(
+      'Violin',
+    );
   });
 
   it('lists every GM family as a group', async () => {
@@ -905,46 +1032,48 @@ Add `midiProgram`:
 Find the read-only line:
 
 ```tsx
-      <p className="text-xs text-theme-text-secondary">{track.instrumentName}</p>
+<p className="text-xs text-theme-text-secondary">{track.instrumentName}</p>
 ```
 
 Replace it with:
 
 ```tsx
-      {/* Setting both fields together: `instrumentName` is free text and could
+{
+  /* Setting both fields together: `instrumentName` is free text and could
           previously drift from `midiProgram`. The catalogue name is now the
-          single source of both. */}
-      <div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <InstrumentIcon program={track.midiProgram} className="text-sm" />
-        <Select
-          value={String(track.midiProgram)}
-          onValueChange={(value: string) => {
-            const program = Number(value);
-            const instrument = gmInstrument(program);
-            if (!instrument) return;
-            onPatch({ midiProgram: program, instrumentName: instrument.name });
-          }}
-        >
-          <SelectTrigger
-            aria-label={`Instrument: ${track.name}`}
-            className="h-auto w-full px-1 py-0.5 text-xs"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {GM_FAMILIES.map((family) => (
-              <SelectGroup key={family}>
-                <SelectLabel>{GM_FAMILY_LABELS[family]}</SelectLabel>
-                {gmInstrumentsByFamily(family).map((instrument) => (
-                  <SelectItem key={instrument.program} value={String(instrument.program)}>
-                    {instrument.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+          single source of both. */
+}
+<div className="mt-1 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+  <InstrumentIcon program={track.midiProgram} className="text-sm" />
+  <Select
+    value={String(track.midiProgram)}
+    onValueChange={(value: string) => {
+      const program = Number(value);
+      const instrument = gmInstrument(program);
+      if (!instrument) return;
+      onPatch({ midiProgram: program, instrumentName: instrument.name });
+    }}
+  >
+    <SelectTrigger
+      aria-label={`Instrument: ${track.name}`}
+      className="h-auto w-full px-1 py-0.5 text-xs"
+    >
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      {GM_FAMILIES.map((family) => (
+        <SelectGroup key={family}>
+          <SelectLabel>{GM_FAMILY_LABELS[family]}</SelectLabel>
+          {gmInstrumentsByFamily(family).map((instrument) => (
+            <SelectItem key={instrument.program} value={String(instrument.program)}>
+              {instrument.name}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      ))}
+    </SelectContent>
+  </Select>
+</div>;
 ```
 
 `stopPropagation` on the wrapper matches what the mute/solo row already does, so opening the picker doesn't also select the track.
@@ -998,10 +1127,12 @@ EOF
 ### Task 6: Name the active track's instrument on the keyboard
 
 **Files:**
+
 - Modify: `src/features/piano-keyboard/PianoKeyboardView.tsx`
 - Modify: `src/features/piano-keyboard/PianoKeyboardView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `InstrumentIcon` (Task 4), `gmInstrument` (Task 1).
 - Produces: no exported API.
 
@@ -1015,9 +1146,14 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[1].id, { midiProgram: 56, instrumentName: 'Trumpet' }),
-      );
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[1].id, {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          }),
+        );
       store.getState().setActiveTrack(score.tracks[1].id);
     });
 
@@ -1030,12 +1166,22 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[0].id, { midiProgram: 40, instrumentName: 'Violin' }),
-      );
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[1].id, { midiProgram: 56, instrumentName: 'Trumpet' }),
-      );
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[0].id, {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          }),
+        );
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(score.tracks[1].id, {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          }),
+        );
       store.getState().setActiveTrack(score.tracks[0].id);
     });
     const { container } = render(<PianoKeyboardView store={store} />);
@@ -1067,44 +1213,46 @@ Expected: FAIL — the header renders `Piano — <track name>`.
 In `PianoKeyboardView.tsx`, replace the `trackName` derivation:
 
 ```tsx
-  const trackName = activeTrackId && score ? (findTrack(score, activeTrackId)?.name ?? null) : null;
+const trackName = activeTrackId && score ? (findTrack(score, activeTrackId)?.name ?? null) : null;
 ```
 
 with the active track itself, so both its name and its program are available:
 
 ```tsx
-  const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
-  /**
-   * The instrument, not the literal word "Piano": the keyboard is a view of
-   * whichever track is active, and that track is frequently not a piano.
-   * Falls back to the track's own name when the program has no catalogue
-   * entry (a hand-edited score), and to "Keyboard" when there is no score.
-   */
-  const headerLabel = activeTrack
-    ? (gmInstrument(activeTrack.midiProgram)?.name ?? activeTrack.name)
-    : 'Keyboard';
+const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
+/**
+ * The instrument, not the literal word "Piano": the keyboard is a view of
+ * whichever track is active, and that track is frequently not a piano.
+ * Falls back to the track's own name when the program has no catalogue
+ * entry (a hand-edited score), and to "Keyboard" when there is no score.
+ */
+const headerLabel = activeTrack
+  ? (gmInstrument(activeTrack.midiProgram)?.name ?? activeTrack.name)
+  : 'Keyboard';
 ```
 
 Then replace the header's text:
 
 ```tsx
-      <span className="text-xs font-medium text-theme-text-primary">
-        {/* Names the track on screen: the keyboard itself carries no track
+<span className="text-xs font-medium text-theme-text-primary">
+  {/* Names the track on screen: the keyboard itself carries no track
             identity, so without this there is no way to tell which hand it is. */}
-        Piano{trackName ? ` — ${trackName}` : ''}
-      </span>
+  Piano{trackName ? ` — ${trackName}` : ''}
+</span>
 ```
 
 with:
 
 ```tsx
-      {activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="text-sm" />}
-      <span className="text-xs font-medium text-theme-text-primary">
-        {/* The keyboard carries no track identity of its own, so the header is
+{
+  activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="text-sm" />;
+}
+<span className="text-xs font-medium text-theme-text-primary">
+  {/* The keyboard carries no track identity of its own, so the header is
             the only thing telling you which part you are looking at. */}
-        {headerLabel}
-        {activeTrack ? ` — ${activeTrack.name}` : ''}
-      </span>
+  {headerLabel}
+  {activeTrack ? ` — ${activeTrack.name}` : ''}
+</span>;
 ```
 
 Add the imports:
@@ -1147,10 +1295,12 @@ EOF
 ### Task 7: Stave-rect geometry
 
 **Files:**
+
 - Create: `src/features/score-editor/stave-layout.ts`
 - Test: `src/features/score-editor/stave-layout.test.ts`
 
 **Interfaces:**
+
 - Consumes: `LayoutPlan` (music_lib).
 - Produces: `StaveRect = { trackId: string; top: number; height: number }`, `staveRectsForViewport(plan, zoom, scrollTop, boxTop): StaveRect[]`.
 
@@ -1179,15 +1329,31 @@ function plan(): LayoutPlan {
       {
         track: { id: 't0' },
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 10, y: 28, width: 200, height: 100 } },
-          { measureIndex: 2, isFirstInSystem: true, box: { x: 10, y: 268, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 10, y: 28, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 2,
+            isFirstInSystem: true,
+            box: { x: 10, y: 268, width: 200, height: 100 },
+          },
         ],
       },
       {
         track: { id: 't1' },
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 10, y: 148, width: 200, height: 100 } },
-          { measureIndex: 2, isFirstInSystem: true, box: { x: 10, y: 388, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 10, y: 148, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 2,
+            isFirstInSystem: true,
+            box: { x: 10, y: 388, width: 200, height: 100 },
+          },
         ],
       },
     ],
@@ -1232,7 +1398,13 @@ describe('staveRectsForViewport', () => {
   });
 
   it('returns empty for a plan with no systems', () => {
-    const empty = { tracks: [], systems: [], trackLayouts: [], totalWidth: 0, totalHeight: 0 } as unknown as LayoutPlan;
+    const empty = {
+      tracks: [],
+      systems: [],
+      trackLayouts: [],
+      totalWidth: 0,
+      totalHeight: 0,
+    } as unknown as LayoutPlan;
     expect(staveRectsForViewport(empty, 1, 0, 0)).toEqual([]);
   });
 
@@ -1337,6 +1509,7 @@ EOF
 ### Task 8: Report the rects and align the rows
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`
 - Modify: `src/components/layout/AppLayout.tsx`
 - Modify: `src/components/layout/TrackPanel.tsx`
@@ -1344,6 +1517,7 @@ EOF
 - Modify: `src/components/layout/AppLayout.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `StaveRect`, `staveRectsForViewport` (Task 7).
 - Produces: `ScoreEditorViewProps.onStaveLayout?: (rects: readonly StaveRect[]) => void`, `TrackPanelProps.staveRects?: readonly StaveRect[]`.
 
@@ -1440,34 +1614,29 @@ export type ScoreEditorViewProps = {
 Destructure it with a no-op default, then add an effect and fold a call into the scroll path. Add after the existing `draw` callback:
 
 ```tsx
-  const reportStaveLayout = useCallback(() => {
-    const box = scrollBoxRef.current;
-    if (!box || !layoutPlan) return;
-    onStaveLayout(
-      staveRectsForViewport(
-        layoutPlan,
-        zoom,
-        box.scrollTop,
-        box.getBoundingClientRect().top,
-      ),
-    );
-  }, [layoutPlan, zoom, onStaveLayout]);
+const reportStaveLayout = useCallback(() => {
+  const box = scrollBoxRef.current;
+  if (!box || !layoutPlan) return;
+  onStaveLayout(
+    staveRectsForViewport(layoutPlan, zoom, box.scrollTop, box.getBoundingClientRect().top),
+  );
+}, [layoutPlan, zoom, onStaveLayout]);
 
-  // Layout-driven: a new plan, zoom or width moves every stave.
-  useEffect(() => {
-    reportStaveLayout();
-  }, [reportStaveLayout]);
+// Layout-driven: a new plan, zoom or width moves every stave.
+useEffect(() => {
+  reportStaveLayout();
+}, [reportStaveLayout]);
 ```
 
 Then call it from the existing throttled scroll frame — find `handleScroll` and add the call beside `draw()`:
 
 ```tsx
-    scrollRafIdRef.current = requestAnimationFrame(() => {
-      scrollFrameScheduledRef.current = false;
-      scrollRafIdRef.current = null;
-      draw();
-      reportStaveLayout();
-    });
+scrollRafIdRef.current = requestAnimationFrame(() => {
+  scrollFrameScheduledRef.current = false;
+  scrollRafIdRef.current = null;
+  draw();
+  reportStaveLayout();
+});
 ```
 
 Add `reportStaveLayout` to `handleScroll`'s dependency array.
@@ -1484,21 +1653,21 @@ import type { StaveRect } from '@/features/score-editor/stave-layout';
 In `AppLayout.tsx`, hold the rects and pass them both ways:
 
 ```tsx
-  /**
-   * Stave geometry reported by the notation view, so the track panel can line
-   * its rows up with the staves. Component state, not store state: this is
-   * view-layer geometry and the store's rule is that such geometry stays out
-   * of it.
-   */
-  const [staveRects, setStaveRects] = useState<readonly StaveRect[]>([]);
+/**
+ * Stave geometry reported by the notation view, so the track panel can line
+ * its rows up with the staves. Component state, not store state: this is
+ * view-layer geometry and the store's rule is that such geometry stays out
+ * of it.
+ */
+const [staveRects, setStaveRects] = useState<readonly StaveRect[]>([]);
 ```
 
 ```tsx
-            <TrackPanel store={store} staveRects={staveRects} />
+<TrackPanel store={store} staveRects={staveRects} />
 ```
 
 ```tsx
-            <ScoreEditorView store={store} onStaveLayout={setStaveRects} />
+<ScoreEditorView store={store} onStaveLayout={setStaveRects} />
 ```
 
 Import the type:
@@ -1526,32 +1695,32 @@ export type TrackPanelProps = {
 Build a lookup and stop the list scrolling itself when aligning:
 
 ```tsx
-  const rectByTrackId = useMemo(
-    () => new Map((staveRects ?? []).map((rect) => [rect.trackId, rect])),
-    [staveRects],
-  );
-  const aligned = rectByTrackId.size > 0;
+const rectByTrackId = useMemo(
+  () => new Map((staveRects ?? []).map((rect) => [rect.trackId, rect])),
+  [staveRects],
+);
+const aligned = rectByTrackId.size > 0;
 ```
 
 The rects are in client coordinates, so the panel converts to its own box:
 
 ```tsx
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const [listTop, setListTop] = useState(0);
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) setListTop(el.getBoundingClientRect().top);
-  }, [aligned, staveRects]);
+const listRef = useRef<HTMLDivElement | null>(null);
+const [listTop, setListTop] = useState(0);
+useLayoutEffect(() => {
+  const el = listRef.current;
+  if (el) setListTop(el.getBoundingClientRect().top);
+}, [aligned, staveRects]);
 ```
 
 Pass each row its rect, and give the list container `relative` when aligned:
 
 ```tsx
-          <TrackRow
-            /* ...existing props... */
-            rect={rectByTrackId.get(track.id) ?? null}
-            listTop={listTop}
-          />
+<TrackRow
+  /* ...existing props... */
+  rect={rectByTrackId.get(track.id) ?? null}
+  listTop={listTop}
+/>
 ```
 
 In `TrackRow`, accept them and apply:
@@ -1629,6 +1798,7 @@ EOF
 ### Task 9: E2E and docs
 
 **Files:**
+
 - Modify: `e2e/acceptance.spec.ts`
 - Modify: `CLAUDE.md`
 - Modify: `docs/parity-checklist.md`
@@ -1674,7 +1844,7 @@ Expected: PASS.
 `CLAUDE.md` — add to Gotchas:
 
 ```markdown
-- **Instruments are the 128 General MIDI programs** (`gm.ts` in music_lib). `Track.midiProgram` is the identity; `instrumentName` is set from the catalogue alongside it so the two cannot drift. Icons are emoji (`instrument-icon.tsx`) to match the app's existing emoji chrome. Six Tone voices cover sixteen GM families, so each family maps to its *nearest* voice — a trumpet does not yet sound like a trumpet, and real per-family timbres are separate work.
+- **Instruments are the 128 General MIDI programs** (`gm.ts` in music_lib). `Track.midiProgram` is the identity; `instrumentName` is set from the catalogue alongside it so the two cannot drift. Icons are emoji (`instrument-icon.tsx`) to match the app's existing emoji chrome. Six Tone voices cover sixteen GM families, so each family maps to its _nearest_ voice — a trumpet does not yet sound like a trumpet, and real per-family timbres are separate work.
 - **The track panel mirrors the sheet.** `ScoreEditorView` reports stave rects for the topmost visible system in client coordinates (`stave-layout.ts`), `AppLayout` holds them in component state (view geometry never goes in the store), and `TrackPanel` positions rows to match. Rows clip; hover and the active row lift above their neighbours to reach hidden controls. Reported on the existing rAF-throttled scroll path — do not move it onto a per-frame path.
 ```
 
@@ -1683,16 +1853,16 @@ Expected: PASS.
 ```markdown
 ## Instruments and track alignment (2026-07-29)
 
-| Feature | Tests |
-| --- | --- |
-| 128-program General MIDI catalogue | music_lib `src/domain/instruments/gm.test.ts` |
-| Every GM family maps to a synth voice | music_lib `src/adapters/tone/instruments.test.ts` ("categoryForProgram covers every GM family") |
-| Instrument icons for all 128 programs | `src/features/instruments/instrument-icon.test.tsx` |
-| Instrument picker, grouped by family | `src/components/layout/TrackPanel.test.tsx` ("instrument picker"); e2e `e2e/instruments.spec.ts` |
-| Picker sets midiProgram and instrumentName together | `TrackPanel.test.tsx` ("choosing an instrument sets both midiProgram and instrumentName") |
-| Keyboard header names the active instrument | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument") |
-| Stave-rect geometry for the topmost visible system | `src/features/score-editor/stave-layout.test.ts` |
-| Track rows aligned to their staves | `TrackPanel.test.tsx` ("stave alignment") |
+| Feature                                             | Tests                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 128-program General MIDI catalogue                  | music_lib `src/domain/instruments/gm.test.ts`                                                    |
+| Every GM family maps to a synth voice               | music_lib `src/adapters/tone/instruments.test.ts` ("categoryForProgram covers every GM family")  |
+| Instrument icons for all 128 programs               | `src/features/instruments/instrument-icon.test.tsx`                                              |
+| Instrument picker, grouped by family                | `src/components/layout/TrackPanel.test.tsx` ("instrument picker"); e2e `e2e/instruments.spec.ts` |
+| Picker sets midiProgram and instrumentName together | `TrackPanel.test.tsx` ("choosing an instrument sets both midiProgram and instrumentName")        |
+| Keyboard header names the active instrument         | `src/features/piano-keyboard/PianoKeyboardView.test.tsx` ("header names the active instrument")  |
+| Stave-rect geometry for the topmost visible system  | `src/features/score-editor/stave-layout.test.ts`                                                 |
+| Track rows aligned to their staves                  | `TrackPanel.test.tsx` ("stave alignment")                                                        |
 ```
 
 - [ ] **Step 4: Final verify and commit**
@@ -1712,17 +1882,17 @@ EOF
 
 ## Spec coverage check
 
-| Spec section | Task |
-| --- | --- |
-| §1 GM catalogue, families, lookups | 1 |
-| §1.1 Family → synth voice mapping | 2 |
-| §1.2 Per-family voices out of scope | 2 (documented, not built) |
-| §2.1 Emoji icons, hand-picked + family fallback | 4 |
-| §2.2 Track picker, sets both fields | 5 |
-| §2.3 Generation panel unchanged | — (no task, deliberately) |
-| §3 Keyboard header names the instrument | 6 |
-| §4.1–4.2 Topmost visible system, client coords, contract | 7, 8 |
-| §4.3 Clipping rows, hover/active lift, fallback | 8 |
-| §4.4 Update rate on scroll + layout only | 8 |
-| §5 Testing | every task; e2e in 9 |
-| §6 Sequencing (publish between phases) | 3 |
+| Spec section                                             | Task                      |
+| -------------------------------------------------------- | ------------------------- |
+| §1 GM catalogue, families, lookups                       | 1                         |
+| §1.1 Family → synth voice mapping                        | 2                         |
+| §1.2 Per-family voices out of scope                      | 2 (documented, not built) |
+| §2.1 Emoji icons, hand-picked + family fallback          | 4                         |
+| §2.2 Track picker, sets both fields                      | 5                         |
+| §2.3 Generation panel unchanged                          | — (no task, deliberately) |
+| §3 Keyboard header names the instrument                  | 6                         |
+| §4.1–4.2 Topmost visible system, client coords, contract | 7, 8                      |
+| §4.3 Clipping rows, hover/active lift, fallback          | 8                         |
+| §4.4 Update rate on scroll + layout only                 | 8                         |
+| §5 Testing                                               | every task; e2e in 9      |
+| §6 Sequencing (publish between phases)                   | 3                         |

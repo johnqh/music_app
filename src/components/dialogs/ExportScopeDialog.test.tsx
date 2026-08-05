@@ -41,7 +41,9 @@ describe('ExportScopeDialog', () => {
   });
 
   it('renders nothing when closed', () => {
-    render(<ExportScopeDialog open={false} hiddenCount={2} onChoose={() => {}} onCancel={() => {}} />);
+    render(
+      <ExportScopeDialog open={false} hiddenCount={2} onChoose={() => {}} onCancel={() => {}} />,
+    );
     expect(screen.queryByText('Export hidden tracks?')).toBeNull();
   });
 });

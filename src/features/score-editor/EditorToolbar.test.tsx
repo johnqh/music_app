@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
+import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -20,9 +21,7 @@ afterEach(async () => {});
 function renderToolbar(
   store: EditorStoreApi,
   layoutModeOrOverrides:
-    | 'page'
-    | 'continuous'
-    | Partial<React.ComponentProps<typeof EditorToolbar>> = 'page',
+    'page' | 'continuous' | Partial<React.ComponentProps<typeof EditorToolbar>> = 'page',
 ) {
   const overrides =
     typeof layoutModeOrOverrides === 'string'
@@ -38,6 +37,20 @@ function renderToolbar(
     />,
   );
   return { onLayoutModeChange };
+}
+
+/** Opens the overflow menu and picks one of its items. */
+async function chooseMoreAction(label: string) {
+  await userEvent.click(screen.getByLabelText('More actions'));
+  await userEvent.click(screen.getByRole('option', { name: label }));
+}
+
+/** Same render, but handing back the container so the DOM can be swept. */
+function renderToolbarContainer(store: EditorStoreApi) {
+  const onLayoutModeChange = vi.fn();
+  return render(
+    <EditorToolbar store={store} layoutMode="page" onLayoutModeChange={onLayoutModeChange} />,
+  );
 }
 
 describe('EditorToolbar', () => {
@@ -74,7 +87,9 @@ describe('EditorToolbar', () => {
     renderToolbar(store);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Sharp' }));
+    // Accidentals are one picker now, not five buttons.
+    await user.click(screen.getByLabelText('Accidental'));
+    await user.click(screen.getByRole('option', { name: 'Sharp' }));
 
     const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
     expect(updated.pitch.accidental).toBe(1);
@@ -141,9 +156,8 @@ describe('EditorToolbar', () => {
   it('select all selects every note', async () => {
     const store = makeStore();
     renderToolbar(store);
-    const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Select all' }));
+    await chooseMoreAction('Select all notes');
 
     const allIds = allNotes(store.getState().score!).map((n) => n.id);
     expect(new Set(store.getState().selection.eventIds)).toEqual(new Set(allIds));
@@ -196,7 +210,7 @@ describe('EditorToolbar', () => {
 
     expect(screen.getByRole('button', { name: 'Insert note' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Quantize' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Sharp' })).toBeDisabled();
+    expect(screen.getByLabelText('Accidental')).toBeDisabled();
   });
 
   it('every control has a tooltip, so nothing on the bar is unexplained', () => {
@@ -228,7 +242,9 @@ describe('EditorToolbar', () => {
 describe('inspector toggle', () => {
   it('is not rendered when no handler is given, so the view works standalone', () => {
     renderToolbar(makeStore());
-    expect(screen.queryByRole('button', { name: 'Toggle inspector panel' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Toggle inspector panel' }),
+    ).not.toBeInTheDocument();
   });
 
   it('calls the handler and reflects the current state', async () => {
@@ -247,5 +263,225 @@ describe('inspector toggle', () => {
     renderToolbar(makeStore(), { inspectorOpen: true, onToggleInspector: vi.fn() });
     const toggle = screen.getByRole('button', { name: 'Toggle inspector panel' });
     expect(screen.getByRole('toolbar').contains(toggle)).toBe(false);
+  });
+});
+
+describe('edit mode control', () => {
+  it('shows replace as the active mode by default', () => {
+    const store = makeStore();
+    renderToolbar(store);
+    expect(screen.getByLabelText('Replace mode')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Insert mode')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('switches mode', async () => {
+    const store = makeStore();
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Insert mode'));
+    expect(store.getState().editMode).toBe('insert');
+    expect(screen.getByLabelText('Insert mode')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('disables stack on a monophonic instrument', () => {
+    // Offering a mode that would refuse every edit is worse than not offering
+    // it: the refusal only shows up after you have tried to play something.
+    const store = makeStore();
+    const score = store.getState().score!;
+    store.getState().setScore({
+      ...score,
+      tracks: score.tracks.map((t) => ({ ...t, midiProgram: 56, instrumentName: 'Trumpet' })),
+    });
+    renderToolbar(store);
+
+    expect(screen.getByLabelText('Stack mode')).toBeDisabled();
+    expect(screen.getByLabelText('Replace mode')).toBeEnabled();
+  });
+
+  it('leaves stack available on a polyphonic instrument', () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    store.getState().setScore({
+      ...score,
+      tracks: score.tracks.map((t) => ({ ...t, midiProgram: 0, instrumentName: 'Piano' })),
+    });
+    renderToolbar(store);
+
+    expect(screen.getByLabelText('Stack mode')).toBeEnabled();
+  });
+
+  it('falls back off stack when the active track cannot play chords', () => {
+    // The mode is set before the track changes; leaving it on stack would mean
+    // every subsequent edit silently refuses.
+    const store = makeStore();
+    store.getState().setEditMode('stack');
+    const score = store.getState().score!;
+    store.getState().setScore({
+      ...score,
+      tracks: score.tracks.map((t) => ({ ...t, midiProgram: 56, instrumentName: 'Trumpet' })),
+    });
+    renderToolbar(store);
+
+    expect(store.getState().editMode).toBe('replace');
+  });
+});
+
+describe('duration modifiers', () => {
+  it('a plain duration shows neither modifier pressed', () => {
+    const store = makeStore();
+    store.getState().setSnapGrid('quarter');
+    renderToolbar(store);
+    expect(screen.getByLabelText('Dotted')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByLabelText('Triplet')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('dotting keeps the note value and lengthens it', async () => {
+    const store = makeStore();
+    store.getState().setSnapGrid('quarter');
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Dotted'));
+
+    expect(store.getState().snapGrid).toBe('dotted-quarter');
+    // Still a quarter as far as the note row is concerned.
+    expect(screen.getByLabelText('Quarter note')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('changing the note value keeps the modifier', async () => {
+    const store = makeStore();
+    store.getState().setSnapGrid('dotted-quarter');
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Eighth note'));
+
+    expect(store.getState().snapGrid).toBe('dotted-eighth');
+  });
+
+  it('the modifiers replace each other rather than stacking', async () => {
+    // There is no dotted triplet in the model, so there must not be one here.
+    const store = makeStore();
+    store.getState().setSnapGrid('dotted-quarter');
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Triplet'));
+
+    expect(store.getState().snapGrid).toBe('triplet-quarter');
+  });
+
+  it('clicking an active modifier turns it off', async () => {
+    const store = makeStore();
+    store.getState().setSnapGrid('dotted-half');
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Dotted'));
+
+    expect(store.getState().snapGrid).toBe('half');
+  });
+});
+
+describe('measure and delete controls', () => {
+  it('adds a measure to every track', async () => {
+    const store = makeStore();
+    const before = store.getState().score!.tracks.map((t) => t.measures.length);
+    renderToolbar(store);
+
+    await chooseMoreAction('Add measure');
+
+    const after = store.getState().score!.tracks.map((t) => t.measures.length);
+    expect(after).toEqual(before.map((n) => n + 1));
+  });
+
+  it('removes the measure the caret is in', async () => {
+    const store = makeStore();
+    store.getState().dispatchCommand(addMeasureCommand());
+    const before = store.getState().score!.tracks[0].measures.length;
+    renderToolbar(store);
+
+    await chooseMoreAction('Delete measure at caret');
+
+    expect(store.getState().score!.tracks[0].measures.length).toBe(before - 1);
+  });
+
+  it('refuses to remove the last measure', async () => {
+    // A score with no measures has nothing to draw and nowhere for the caret
+    // to sit, and no control left to get back except undo.
+    const store = makeStore();
+    while (store.getState().score!.tracks[0].measures.length > 1) {
+      store.getState().dispatchCommand(deleteMeasureCommand(0));
+    }
+    renderToolbar(store);
+
+    await chooseMoreAction('Delete measure at caret');
+
+    expect(store.getState().score!.tracks[0].measures.length).toBe(1);
+    expect(store.getState().toasts.some((t) => /at least one measure/.test(t.message))).toBe(true);
+  });
+
+  it('deletes the selected notes', async () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('Delete selection'));
+
+    expect(findEvent(store.getState().score!, note.id)).toBeNull();
+  });
+});
+
+describe('accessible names are unambiguous', () => {
+  it('no two controls in the toolbar share a name', () => {
+    // A duplicate makes both impossible to address — by a screen reader, and
+    // by a test. "Measures" once collided with the generation panel's own
+    // Measures field and broke 18 e2e specs at once.
+    const store = makeStore();
+    const { container } = renderToolbarContainer(store);
+
+    const labels = Array.from(container.querySelectorAll('[aria-label]')).map((el) =>
+      el.getAttribute('aria-label'),
+    );
+    const duplicates = labels.filter((label, i) => labels.indexOf(label) !== i);
+    expect(duplicates).toEqual([]);
+  });
+});
+
+describe('selection-only controls say so', () => {
+  const SELECTION_ONLY = [
+    'Accidental',
+    'Articulation',
+    'Toggle tie',
+    'Quantize',
+    'Delete selection',
+    'Copy',
+    'Cut',
+  ];
+
+  it('are disabled with a score open but nothing selected', () => {
+    // They all return early when the selection is empty. Enabled, they invited
+    // a click and did nothing — the worst of the three possible behaviours.
+    const store = makeStore();
+    renderToolbar(store);
+    for (const name of SELECTION_ONLY) {
+      expect(screen.getByLabelText(name), name).toBeDisabled();
+    }
+  });
+
+  it('become available once something is selected', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    renderToolbar(store);
+    for (const name of SELECTION_ONLY) {
+      expect(screen.getByLabelText(name), name).toBeEnabled();
+    }
+  });
+
+  it('leaves entry controls available without a selection', () => {
+    // Writing a note needs no selection, so these must not be gated on one.
+    const store = makeStore();
+    renderToolbar(store);
+    expect(screen.getByLabelText('Insert note')).toBeEnabled();
+    expect(screen.getByLabelText('Quarter note')).toBeEnabled();
+    expect(screen.getByLabelText('Paste')).toBeEnabled();
   });
 });

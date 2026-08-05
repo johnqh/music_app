@@ -4,6 +4,7 @@ import {
   measureIndexAtGutterPoint,
   boxFromPoints,
   eventIdAtPoint,
+  eventIdsAtPoint,
   eventIdsInBox,
   measureIdAtPoint,
   pointInBBox,
@@ -141,8 +142,16 @@ describe('measureIndexAtGutterPoint', () => {
     trackLayouts: [
       {
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 10, y: 28, width: 200, height: 100 } },
-          { measureIndex: 1, isFirstInSystem: false, box: { x: 210, y: 28, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 10, y: 28, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 1,
+            isFirstInSystem: false,
+            box: { x: 210, y: 28, width: 200, height: 100 },
+          },
         ],
       },
     ],
@@ -172,5 +181,33 @@ describe('measureIndexAtGutterPoint', () => {
   it('treats the band as half-open at the stave top, so yTop belongs to the stave', () => {
     expect(measureIndexAtGutterPoint(plan, { x: 50, y: 28 })).toBeNull();
     expect(measureIndexAtGutterPoint(plan, { x: 50, y: 27 })).toBe(0);
+  });
+});
+
+describe('eventIdsAtPoint', () => {
+  const box: BBox = { x: 10, y: 10, width: 20, height: 20 };
+
+  it('returns every id sharing a box, which is what a chord is', () => {
+    // Every note of a chord is drawn as one VexFlow StaveNote, so the renderer
+    // maps them all to the same box. Returning one of them is what made a
+    // chord impossible to select.
+    const map = new Map([
+      ['c', box],
+      ['e', box],
+      ['g', box],
+    ]);
+    expect(eventIdsAtPoint(map, { x: 15, y: 15 }).sort()).toEqual(['c', 'e', 'g']);
+  });
+
+  it('returns only the ids under the point', () => {
+    const map = new Map<string, BBox>([
+      ['hit', box],
+      ['elsewhere', { x: 100, y: 100, width: 5, height: 5 }],
+    ]);
+    expect(eventIdsAtPoint(map, { x: 15, y: 15 })).toEqual(['hit']);
+  });
+
+  it('returns an empty list when nothing is under the point', () => {
+    expect(eventIdsAtPoint(new Map([['a', box]]), { x: 0, y: 0 })).toEqual([]);
   });
 });

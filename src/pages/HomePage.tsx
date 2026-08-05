@@ -8,15 +8,15 @@
  * card treatment come from the library, so this page follows a design change
  * instead of drifting from it.
  *
- * Full width on purpose. The editor spans the viewport, and a home page capped
- * at `7xl` (the `Section` default) made the app look like two different
- * products — the same window, differently sized, depending on the route.
- * `maxWidth="full"` keeps the container's horizontal padding while removing the
- * cap; `fullWidth` would drop the container too and let text reach the edge of
- * the glass. Reading measure is protected per-element instead, which is where
- * it belongs: the hero paragraph keeps its own `max-w-3xl` because a line of
- * prose spanning an ultrawide monitor is unreadable, while the feature grid
- * genuinely wants the room.
+ * The sections carry no width of their own. They inherit it from the page's
+ * `layoutMode` (set to `full` in `ScreenContainer`, to match the editor), so
+ * the hero and the cards line up with the topbar and the footer. Overriding
+ * width here instead would put the content edge to edge while the topbar kept
+ * its own — which is exactly the misalignment that made this page look wrong.
+ *
+ * Reading measure is protected per element, which is where it belongs: the
+ * hero paragraph keeps its own `max-w-3xl`, since a line of prose spanning an
+ * ultrawide monitor is unreadable, while the feature grid wants the room.
  */
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Heading, Section, Text } from '@sudobility/components';
@@ -35,7 +35,7 @@ export default function HomePage() {
 
   return (
     <>
-      <Section spacing="5xl" variant="hero" maxWidth="full">
+      <Section spacing="5xl" variant="hero">
         <div className="text-center">
           <Heading level={1} size="4xl" weight="bold" align="center">
             {t('home.heroTitle')}
@@ -55,7 +55,7 @@ export default function HomePage() {
         </div>
       </Section>
 
-      <Section spacing="3xl" maxWidth="full">
+      <Section spacing="3xl">
         <div className="grid gap-8 sm:grid-cols-3">
           {FEATURES.map((feature) => (
             <Card key={feature.key} variant="elevated" padding="lg" className="rounded-xl">

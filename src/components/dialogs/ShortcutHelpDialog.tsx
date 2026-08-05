@@ -24,6 +24,8 @@ const SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: 'ArrowUp / ArrowDown', action: 'Move pitch up/down a semitone' },
   { keys: 'Shift+ArrowUp / Shift+ArrowDown', action: 'Move pitch up/down an octave' },
   { keys: 'ArrowLeft / ArrowRight', action: 'Move selection backward/forward' },
+  { keys: 'Click a chord', action: 'Select every note in it' },
+  { keys: 'Piano key (chord selected)', action: 'Add or remove that note' },
 ];
 
 export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {

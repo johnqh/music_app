@@ -24,16 +24,16 @@
 
 ### Color values (used verbatim in Tasks 1 and 8)
 
-| Role | Light | Dark |
-| --- | --- | --- |
-| `foreground` | `#3f3f46` | `#d4d4d8` |
-| `noteNormal` | `#3f3f46` | `#d4d4d8` |
-| `noteSelected` | `#000000` | `#ffffff` |
+| Role              | Light     | Dark      |
+| ----------------- | --------- | --------- |
+| `foreground`      | `#3f3f46` | `#d4d4d8` |
+| `noteNormal`      | `#3f3f46` | `#d4d4d8` |
+| `noteSelected`    | `#000000` | `#ffffff` |
 | `noteRegenerated` | `#8b5a2b` | `#d9a066` |
-| `notePlaying` | `#1565c0` | `#64b5f6` |
-| `staveActive` | `#000000` | `#ffffff` |
-| `staveInactive` | `#71717a` | `#8a8a93` |
-| `caret` | `#d32f2f` | `#ef5350` |
+| `notePlaying`     | `#1565c0` | `#64b5f6` |
+| `staveActive`     | `#000000` | `#ffffff` |
+| `staveInactive`   | `#71717a` | `#8a8a93` |
+| `caret`           | `#d32f2f` | `#ef5350` |
 
 ### Amendment to the spec
 
@@ -50,6 +50,7 @@ All Part A work happens in `/Users/johnhuang/projects/music_lib`.
 ### Task 1: Color roles and the redefined RenderTheme
 
 **Files:**
+
 - Modify: `src/adapters/vexflow/types.ts`
 - Create: `src/adapters/vexflow/note-color.ts`
 - Create: `src/adapters/vexflow/note-color.test.ts`
@@ -57,6 +58,7 @@ All Part A work happens in `/Users/johnhuang/projects/music_lib`.
 - Modify: `src/index.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `NoteColorRole`, the redefined `RenderTheme`, `resolveNoteColorRole(eventIds, noteColors)`, `noteColorFor(role, theme)`.
 
@@ -287,11 +289,13 @@ EOF
 ### Task 2: Per-note and per-stave coloring in the canvas renderer
 
 **Files:**
+
 - Modify: `src/adapters/vexflow/types.ts` (extend `RenderOptions`)
 - Modify: `src/adapters/vexflow/canvas-renderer.ts`
 - Modify: `src/adapters/vexflow/canvas-renderer.test.ts`
 
 **Interfaces:**
+
 - Consumes: `NoteColorRole`, `RenderTheme`, `resolveNoteColorRole`, `noteColorFor` (Task 1).
 - Produces: `CanvasRenderOptions.noteColors`, `.activeTrackId`, `.selectedMeasureIds` (the last is consumed by Task 3).
 
@@ -314,12 +318,13 @@ describe('note and stave coloring', () => {
     const ctx = createMock2DContext();
 
     const styled: Array<{ fillStyle?: string }> = [];
-    const spy = vi
-      .spyOn(StaveNote.prototype, 'setStyle')
-      .mockImplementation(function (this: StaveNote, style: { fillStyle?: string }) {
-        styled.push(style);
-        return this;
-      });
+    const spy = vi.spyOn(StaveNote.prototype, 'setStyle').mockImplementation(function (
+      this: StaveNote,
+      style: { fillStyle?: string },
+    ) {
+      styled.push(style);
+      return this;
+    });
 
     renderer.render(score, ctx as unknown as CanvasRenderingContext2D, {
       ...renderOptions(),
@@ -337,12 +342,13 @@ describe('note and stave coloring', () => {
     const ctx = createMock2DContext();
 
     const strokes: string[] = [];
-    const spy = vi
-      .spyOn(Stave.prototype, 'setStyle')
-      .mockImplementation(function (this: Stave, style: { strokeStyle?: string }) {
-        if (style.strokeStyle) strokes.push(style.strokeStyle);
-        return this;
-      });
+    const spy = vi.spyOn(Stave.prototype, 'setStyle').mockImplementation(function (
+      this: Stave,
+      style: { strokeStyle?: string },
+    ) {
+      if (style.strokeStyle) strokes.push(style.strokeStyle);
+      return this;
+    });
 
     renderer.render(score, ctx as unknown as CanvasRenderingContext2D, {
       ...renderOptions(),
@@ -360,12 +366,13 @@ describe('note and stave coloring', () => {
     const ctx = createMock2DContext();
 
     const styled: Array<{ fillStyle?: string }> = [];
-    const spy = vi
-      .spyOn(StaveNote.prototype, 'setStyle')
-      .mockImplementation(function (this: StaveNote, style: { fillStyle?: string }) {
-        styled.push(style);
-        return this;
-      });
+    const spy = vi.spyOn(StaveNote.prototype, 'setStyle').mockImplementation(function (
+      this: StaveNote,
+      style: { fillStyle?: string },
+    ) {
+      styled.push(style);
+      return this;
+    });
 
     renderer.render(score, ctx as unknown as CanvasRenderingContext2D, renderOptions());
 
@@ -407,16 +414,16 @@ import { noteColorFor, resolveNoteColorRole } from './note-color.js';
 In `drawSystem`'s signature add `options: CanvasRenderOptions` as a parameter (pass `options` at the single call site in `render()`), then inside the `plan.trackLayouts.forEach` callback, after `buildMeasureContent(...)` returns and before `staves.push(stave)`:
 
 ```ts
-        // Stave lines only: `strokeStyle` colors the five lines and the
-        // barlines, while `fillStyle` is left alone so the clef / key
-        // signature / time signature glyphs keep drawing in
-        // `theme.foreground` and an inactive track's clef doesn't wash out.
-        stave.setStyle({
-          strokeStyle:
-            options.activeTrackId != null && track.id === options.activeTrackId
-              ? options.theme.staveActive
-              : options.theme.staveInactive,
-        });
+// Stave lines only: `strokeStyle` colors the five lines and the
+// barlines, while `fillStyle` is left alone so the clef / key
+// signature / time signature glyphs keep drawing in
+// `theme.foreground` and an inactive track's clef doesn't wash out.
+stave.setStyle({
+  strokeStyle:
+    options.activeTrackId != null && track.id === options.activeTrackId
+      ? options.theme.staveActive
+      : options.theme.staveInactive,
+});
 ```
 
 Note `track` is available as `plan.trackLayouts[trackIndex].track` — the callback already destructures `{ track }`.
@@ -453,16 +460,16 @@ Call it from `drawSystem`, **not** from the tie/bbox loop in `render()` — that
 Place the call in `drawSystem` immediately before the draw block (`staves.forEach((s) => s.draw())`), walking every channel accumulated so far:
 
 ```ts
-    for (const channels of channelsByTrack.values()) {
-      for (const channel of channels.values()) {
-        for (const entry of channel) {
-          this.styleNote(entry.note, entry.meta, options);
-        }
-      }
+for (const channels of channelsByTrack.values()) {
+  for (const channel of channels.values()) {
+    for (const entry of channel) {
+      this.styleNote(entry.note, entry.meta, options);
     }
+  }
+}
 
-    // Draw order: staves, then notes/voices, then beams on top.
-    staves.forEach((s) => s.draw());
+// Draw order: staves, then notes/voices, then beams on top.
+staves.forEach((s) => s.draw());
 ```
 
 This restyles entries carried over from earlier systems in the same frame, which is idempotent and cheap — the accumulated channels only ever hold the drawn window, so this stays O(visible).
@@ -497,12 +504,14 @@ EOF
 ### Task 3: Measure-number gutter
 
 **Files:**
+
 - Modify: `src/adapters/vexflow/layout.ts`
 - Modify: `src/adapters/vexflow/layout.test.ts`
 - Modify: `src/adapters/vexflow/canvas-renderer.ts`
 - Modify: `src/adapters/vexflow/canvas-renderer.test.ts`
 
 **Interfaces:**
+
 - Consumes: `CanvasRenderOptions.selectedMeasureIds` (Task 2).
 - Produces: `MEASURE_HEADER_HEIGHT` (exported const), `SystemLayout.gutterTop`.
 
@@ -573,20 +582,20 @@ export type SystemLayout = {
 Change the top margin so the first system's gutter has room. Find the line reading `const topMargin = TOP_MARGIN;` (or the direct use of `TOP_MARGIN` around line 127) and make it:
 
 ```ts
-  const topMargin = TOP_MARGIN + MEASURE_HEADER_HEIGHT;
+const topMargin = TOP_MARGIN + MEASURE_HEADER_HEIGHT;
 ```
 
 Then populate the new field where systems are pushed (around line 197):
 
 ```ts
-    systems.push({
-      measureIndices,
-      xLeft: leftMargin,
-      xRight: cursorX,
-      gutterTop: yTop - MEASURE_HEADER_HEIGHT,
-      yTop,
-      yBottom,
-    });
+systems.push({
+  measureIndices,
+  xLeft: leftMargin,
+  xRight: cursorX,
+  gutterTop: yTop - MEASURE_HEADER_HEIGHT,
+  yTop,
+  yBottom,
+});
 ```
 
 - [ ] **Step 4: Export the new constant**
@@ -698,7 +707,7 @@ Thread the raw `CanvasRenderingContext2D` from `render()` into `drawSystem` as i
 Call it at the end of `drawSystem`, after the brace connector:
 
 ```ts
-    this.drawMeasureGutter(system, plan, ctx, windowIndices, options);
+this.drawMeasureGutter(system, plan, ctx, windowIndices, options);
 ```
 
 - [ ] **Step 9: Run the tests**
@@ -732,6 +741,7 @@ EOF
 ### Task 4: activeTrackId in ui-slice, remove view mode
 
 **Files:**
+
 - Modify: `src/store/slices/ui-slice.ts`
 - Modify: `src/store/slices/ui-slice.test.ts`
 - Modify: `src/store/selectors.ts`
@@ -739,6 +749,7 @@ EOF
 - Modify: `src/index.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `UiSlice.activeTrackId: UUID | null`, `UiSlice.setActiveTrack(trackId: UUID | null): void`, `selectActiveTrackId(state: AppState): string | null`.
 
@@ -911,12 +922,14 @@ EOF
 ### Task 5: selectionRegenerated flag
 
 **Files:**
+
 - Modify: `src/store/slices/selection-slice.ts`
 - Modify: `src/store/slices/selection-slice.test.ts`
 - Modify: `src/store/slices/generation-slice.ts:248-305`
 - Modify: `src/store/slices/generation-slice.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `SelectionSlice.selectionRegenerated: boolean`.
 
@@ -987,16 +1000,16 @@ Expected: FAIL — `selectionRegenerated` is undefined.
 In `src/store/slices/selection-slice.ts`, add to `SelectionSlice`:
 
 ```ts
-  /**
-   * True when the current selection is the direct product of an accepted
-   * regeneration — those notes draw in `theme.noteRegenerated` (brown)
-   * instead of the normal selected color.
-   *
-   * Cleared by `setSelection`, and therefore by every selection action
-   * (`toggleEvent`/`selectMeasures`/`selectTrack`/`clearSelection` all
-   * funnel through it). Set only by `generation-slice.acceptCandidate`.
-   */
-  selectionRegenerated: boolean;
+/**
+ * True when the current selection is the direct product of an accepted
+ * regeneration — those notes draw in `theme.noteRegenerated` (brown)
+ * instead of the normal selected color.
+ *
+ * Cleared by `setSelection`, and therefore by every selection action
+ * (`toggleEvent`/`selectMeasures`/`selectTrack`/`clearSelection` all
+ * funnel through it). Set only by `generation-slice.acceptCandidate`.
+ */
+selectionRegenerated: boolean;
 ```
 
 Add `selectionRegenerated: false,` to the initial state, and clear it in `setSelection`:
@@ -1047,13 +1060,13 @@ Then in `acceptCandidate`, replace the `eventIds: []` line (currently `generatio
 and set the flag in the same `set()`:
 
 ```ts
-      set((state) => {
-        state.candidates = [];
-        state.activeCandidateId = null;
-        state.previewFragment = null;
-        state.selection = normalizedSelection;
-        state.selectionRegenerated = normalizedSelection.eventIds.length > 0;
-      });
+set((state) => {
+  state.candidates = [];
+  state.activeCandidateId = null;
+  state.previewFragment = null;
+  state.selection = normalizedSelection;
+  state.selectionRegenerated = normalizedSelection.eventIds.length > 0;
+});
 ```
 
 `ScoreFragment` is already imported in this file; confirm with `grep -n "ScoreFragment" src/store/slices/generation-slice.ts`.
@@ -1138,10 +1151,12 @@ EOF
 ### Task 6: Play clears the selection
 
 **Files:**
+
 - Modify: `src/services/playback/controller.ts:206-231`
 - Modify: `src/services/playback/controller.test.ts`
 
 **Interfaces:**
+
 - Consumes: `clearSelection` (existing selection-slice action).
 - Produces: no new API — a behavior change to `PlaybackController.togglePlay`.
 
@@ -1194,29 +1209,29 @@ Expected: FAIL on the first test — the selection survives.
 In `src/services/playback/controller.ts`, in `togglePlay()`, in the `else` branch (the one that starts playback):
 
 ```ts
-    this.pendingResume = null; // an explicit user play/pause action takes over from any queued auto-resume
-    if (state === 'playing') {
-      this.engine.pause();
-    } else {
-      // Starting playback deselects (spec: "click play to playback, deselect
-      // all, start playing from caret"). Only on the -> playing transition:
-      // pause and stop deliberately leave the selection alone. "From the
-      // caret" needs no code — the engine resumes from the transport
-      // position, which is exactly what a caret seek set.
-      this.store.getState().clearSelection();
-      this.engine.play().catch((error: unknown) => this.reportError('Playback failed to start', error));
-    }
+this.pendingResume = null; // an explicit user play/pause action takes over from any queued auto-resume
+if (state === 'playing') {
+  this.engine.pause();
+} else {
+  // Starting playback deselects (spec: "click play to playback, deselect
+  // all, start playing from caret"). Only on the -> playing transition:
+  // pause and stop deliberately leave the selection alone. "From the
+  // caret" needs no code — the engine resumes from the transport
+  // position, which is exactly what a caret seek set.
+  this.store.getState().clearSelection();
+  this.engine.play().catch((error: unknown) => this.reportError('Playback failed to start', error));
+}
 ```
 
 Also clear it in the `previewing` early-return branch above, which queues a resume and is also a "start playing" gesture:
 
 ```ts
-    if (this.previewing) {
-      this.store.getState().clearSelection();
-      this.pendingResume = { tick: this.store.getState().positionTick };
-      this.stopPreview();
-      return;
-    }
+if (this.previewing) {
+  this.store.getState().clearSelection();
+  this.pendingResume = { tick: this.store.getState().positionTick };
+  this.stopPreview();
+  return;
+}
 ```
 
 - [ ] **Step 4: Run the tests**
@@ -1249,6 +1264,7 @@ EOF
 ### Task 7: Verify and publish music_lib
 
 **Files:**
+
 - Modify: `package.json` (version)
 
 - [ ] **Step 1: Full verify**
@@ -1305,12 +1321,14 @@ bun add @sudobility/music_lib@^0.4.0
 ### Task 8: New render theme and renderer wiring; delete the overlay canvas
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`
 - Create: `src/features/score-editor/note-colors.ts`
 - Create: `src/features/score-editor/note-colors.test.ts`
 - Modify: `src/features/score-editor/ScoreEditorView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `NoteColorRole`, `RenderTheme`, `selectActiveTrackId` (Part A).
 - Produces: `buildNoteColors(params): Map<string, NoteColorRole>`.
 
@@ -1453,47 +1471,44 @@ Still in `ScoreEditorView.tsx`:
 Add the store reads near the other ones:
 
 ```ts
-  const selectionRegenerated = store((s) => s.selectionRegenerated);
-  const activeTrackId = store(selectActiveTrackId);
+const selectionRegenerated = store((s) => s.selectionRegenerated);
+const activeTrackId = store(selectActiveTrackId);
 ```
 
 Import `selectActiveTrackId` and `buildNoteColors`. Build the map:
 
 ```ts
-  /**
-   * Preview-fragment ids color as `regenerated` too: a candidate on screen
-   * is the same "this is generated material" signal as a just-accepted one.
-   */
-  const noteColors = useMemo(
-    () =>
-      buildNoteColors({
-        selectedIds: [...selection.eventIds, ...previewIds],
-        playingIds: activeNoteIds,
-        regenerated: selectionRegenerated || previewIds.length > 0,
-      }),
-    [selection.eventIds, previewIds, activeNoteIds, selectionRegenerated],
-  );
+/**
+ * Preview-fragment ids color as `regenerated` too: a candidate on screen
+ * is the same "this is generated material" signal as a just-accepted one.
+ */
+const noteColors = useMemo(
+  () =>
+    buildNoteColors({
+      selectedIds: [...selection.eventIds, ...previewIds],
+      playingIds: activeNoteIds,
+      regenerated: selectionRegenerated || previewIds.length > 0,
+    }),
+  [selection.eventIds, previewIds, activeNoteIds, selectionRegenerated],
+);
 
-  const selectedMeasureIds = useMemo(
-    () => new Set(selection.measureIds),
-    [selection.measureIds],
-  );
+const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
 ```
 
 Pass them in `draw`'s `render(...)` call and add them to `draw`'s dependency array:
 
 ```ts
-    resultRef.current = rendererRef.current!.render(displayScore, ctx, {
-      zoom,
-      layoutMode,
-      width: viewWidth,
-      theme: renderTheme,
-      viewport,
-      devicePixelRatio: window.devicePixelRatio || 1,
-      noteColors,
-      activeTrackId,
-      selectedMeasureIds,
-    });
+resultRef.current = rendererRef.current!.render(displayScore, ctx, {
+  zoom,
+  layoutMode,
+  width: viewWidth,
+  theme: renderTheme,
+  viewport,
+  devicePixelRatio: window.devicePixelRatio || 1,
+  noteColors,
+  activeTrackId,
+  selectedMeasureIds,
+});
 ```
 
 - [ ] **Step 8: Recolor the caret**
@@ -1501,19 +1516,21 @@ Pass them in `draw`'s `render(...)` call and add them to `draw`'s dependency arr
 Change the caret div's class from `bg-primary` to an inline style so it uses the theme's caret color:
 
 ```tsx
-        {caret && (
-          <div
-            data-testid="playback-caret"
-            aria-hidden="true"
-            style={{
-              left: caret.x * zoom,
-              top: caret.yTop * zoom,
-              height: (caret.yBottom - caret.yTop) * zoom,
-              backgroundColor: renderTheme.caret,
-            }}
-            className="pointer-events-none absolute w-0.5 -translate-x-1/2"
-          />
-        )}
+{
+  caret && (
+    <div
+      data-testid="playback-caret"
+      aria-hidden="true"
+      style={{
+        left: caret.x * zoom,
+        top: caret.yTop * zoom,
+        height: (caret.yBottom - caret.yTop) * zoom,
+        backgroundColor: renderTheme.caret,
+      }}
+      className="pointer-events-none absolute w-0.5 -translate-x-1/2"
+    />
+  );
+}
 ```
 
 - [ ] **Step 9: Fix the tests**
@@ -1565,10 +1582,12 @@ EOF
 ### Task 9: Caret-to-click range selection
 
 **Files:**
+
 - Create: `src/features/score-editor/range-select.ts`
 - Create: `src/features/score-editor/range-select.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `noteIdsInTickRange(score, fromTick, toTick, trackIds): UUID[]`.
 
@@ -1628,8 +1647,9 @@ describe('noteIdsInTickRange', () => {
   it('returns nothing for an empty span', () => {
     const score = buildScore();
     const notes = notesOf(score);
-    expect(noteIdsInTickRange(score, notes[0].startTick, notes[0].startTick, [score.tracks[0].id]))
-      .toEqual([]);
+    expect(
+      noteIdsInTickRange(score, notes[0].startTick, notes[0].startTick, [score.tracks[0].id]),
+    ).toEqual([]);
   });
 
   it('only returns notes on the named tracks', () => {
@@ -1745,21 +1765,23 @@ EOF
 ### Task 10: The new click model
 
 **Files:**
+
 - Modify: `src/features/score-editor/ScoreEditorView.tsx` (`handleClick`)
 - Modify: `src/features/score-editor/ScoreEditorView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `noteIdsInTickRange` (Task 9), `selectActiveTrackId`, `setActiveTrack`.
 - Produces: no exported API — behavior only.
 
 **Gesture table this task implements:**
 
-| Gesture | Caret | Selection | Active track |
-| --- | --- | --- | --- |
-| Click empty stave/barline | → clicked tick | cleared | → clicked track |
-| Click a note | → note's `startTick` | that note only | → note's track |
-| Cmd-click | unchanged | notes caret→click, active track | unchanged |
-| Cmd-shift-click | unchanged | same span, all tracks | unchanged |
+| Gesture                   | Caret                | Selection                       | Active track    |
+| ------------------------- | -------------------- | ------------------------------- | --------------- |
+| Click empty stave/barline | → clicked tick       | cleared                         | → clicked track |
+| Click a note              | → note's `startTick` | that note only                  | → note's track  |
+| Cmd-click                 | unchanged            | notes caret→click, active track | unchanged       |
+| Cmd-shift-click           | unchanged            | same span, all tracks           | unchanged       |
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1945,91 +1967,84 @@ Expected: FAIL — old behavior selects measures and doesn't set the active trac
 Replace the body of `handleClick` in `ScoreEditorView.tsx`:
 
 ```tsx
-  const handleClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (suppressNextClickRef.current) {
-        suppressNextClickRef.current = false;
-        return;
+const handleClick = useCallback(
+  (event: React.MouseEvent<HTMLDivElement>) => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+
+    // While a regeneration candidate is being previewed (spec §13),
+    // `displayScore` (and so this click's `result`) is the committed score
+    // with the candidate spliced in — clicking must not dispatch a
+    // selection against ids that may not exist in the committed score, and
+    // seeking would fight the preview playback that owns the engine.
+    if (previewFragment) return;
+
+    const container = containerRef.current;
+    const result = resultRef.current;
+    const state = store.getState();
+    if (!container || !state.score) return;
+    const rect = container.getBoundingClientRect();
+    const point: Point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+
+    // ---- cmd-click: range from the caret to here. Never moves the caret,
+    // so the same anchor can be extended repeatedly.
+    if (event.metaKey || event.ctrlKey) {
+      const clickedTick = tickForPoint(layoutPlan!, displayScore!, point.x / zoom, point.y / zoom);
+      if (clickedTick === null) return;
+
+      const scopeTrackIds = event.shiftKey
+        ? state.score.tracks.map((t) => t.id)
+        : activeTrackId
+          ? [activeTrackId]
+          : [];
+      const eventIds = noteIdsInTickRange(
+        state.score,
+        state.positionTick,
+        clickedTick,
+        scopeTrackIds,
+      );
+      // The explicit `range` matters: regenerating a span of empty measures
+      // must still work, and `selectionToRange` can't derive a span from an
+      // empty eventIds list.
+      state.setSelection({
+        eventIds,
+        measureIds: [],
+        trackIds: [],
+        range: {
+          startTick: Math.min(state.positionTick, clickedTick),
+          endTick: Math.max(state.positionTick, clickedTick),
+          trackIds: scopeTrackIds,
+        },
+      });
+      return;
+    }
+
+    // ---- plain click on a note: caret to its start, select it alone.
+    const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
+    if (noteId) {
+      const note = findEvent(state.score, noteId);
+      state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+      if (note) {
+        state.setActiveTrack(note.trackId);
+        playbackController.seek(note.startTick);
       }
+      return;
+    }
 
-      // While a regeneration candidate is being previewed (spec §13),
-      // `displayScore` (and so this click's `result`) is the committed score
-      // with the candidate spliced in — clicking must not dispatch a
-      // selection against ids that may not exist in the committed score, and
-      // seeking would fight the preview playback that owns the engine.
-      if (previewFragment) return;
-
-      const container = containerRef.current;
-      const result = resultRef.current;
-      const state = store.getState();
-      if (!container || !state.score) return;
-      const rect = container.getBoundingClientRect();
-      const point: Point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-
-      // ---- cmd-click: range from the caret to here. Never moves the caret,
-      // so the same anchor can be extended repeatedly.
-      if (event.metaKey || event.ctrlKey) {
-        const clickedTick = tickForPoint(
-          layoutPlan!,
-          displayScore!,
-          point.x / zoom,
-          point.y / zoom,
-        );
-        if (clickedTick === null) return;
-
-        const scopeTrackIds = event.shiftKey
-          ? state.score.tracks.map((t) => t.id)
-          : activeTrackId
-            ? [activeTrackId]
-            : [];
-        const eventIds = noteIdsInTickRange(
-          state.score,
-          state.positionTick,
-          clickedTick,
-          scopeTrackIds,
-        );
-        // The explicit `range` matters: regenerating a span of empty measures
-        // must still work, and `selectionToRange` can't derive a span from an
-        // empty eventIds list.
-        state.setSelection({
-          eventIds,
-          measureIds: [],
-          trackIds: [],
-          range: {
-            startTick: Math.min(state.positionTick, clickedTick),
-            endTick: Math.max(state.positionTick, clickedTick),
-            trackIds: scopeTrackIds,
-          },
-        });
-        return;
-      }
-
-      // ---- plain click on a note: caret to its start, select it alone.
-      const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
-      if (noteId) {
-        const note = findEvent(state.score, noteId);
-        state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
-        if (note) {
-          state.setActiveTrack(note.trackId);
-          playbackController.seek(note.startTick);
-        }
-        return;
-      }
-
-      // ---- plain click anywhere else in a system: caret + active track,
-      // selection cleared so the caret becomes the next cmd-click's anchor.
-      const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
-      if (measureId) {
-        const owner = state.score.tracks.find((t) =>
-          t.measures.some((m) => m.id === measureId),
-        );
-        if (owner) state.setActiveTrack(owner.id);
-      }
-      state.clearSelection();
-      seekToEventPoint(event);
-    },
-    [store, previewFragment, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
-  );
+    // ---- plain click anywhere else in a system: caret + active track,
+    // selection cleared so the caret becomes the next cmd-click's anchor.
+    const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
+    if (measureId) {
+      const owner = state.score.tracks.find((t) => t.measures.some((m) => m.id === measureId));
+      if (owner) state.setActiveTrack(owner.id);
+    }
+    state.clearSelection();
+    seekToEventPoint(event);
+  },
+  [store, previewFragment, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
+);
 ```
 
 Add imports: `noteIdsInTickRange` from `@/features/score-editor/range-select`, and `findEvent` from `@sudobility/music_lib`. `tickForPoint` and `playbackController` are already imported.
@@ -2062,12 +2077,14 @@ EOF
 ### Task 11: Measure-gutter selection
 
 **Files:**
+
 - Modify: `src/features/score-editor/hit-test.ts`
 - Modify: `src/features/score-editor/hit-test.test.ts`
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`
 - Modify: `src/features/score-editor/ScoreEditorView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `MEASURE_HEADER_HEIGHT`, `LayoutPlan` (Part A Task 3).
 - Produces: `measureIndexAtGutterPoint(plan, point): number | null`.
 
@@ -2078,12 +2095,22 @@ Append to `src/features/score-editor/hit-test.test.ts`:
 ```ts
 describe('measureIndexAtGutterPoint', () => {
   const plan = {
-    systems: [{ measureIndices: [0, 1], xLeft: 10, xRight: 410, gutterTop: 10, yTop: 28, yBottom: 128 }],
+    systems: [
+      { measureIndices: [0, 1], xLeft: 10, xRight: 410, gutterTop: 10, yTop: 28, yBottom: 128 },
+    ],
     trackLayouts: [
       {
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 10, y: 28, width: 200, height: 100 } },
-          { measureIndex: 1, isFirstInSystem: false, box: { x: 210, y: 28, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 10, y: 28, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 1,
+            isFirstInSystem: false,
+            box: { x: 210, y: 28, width: 200, height: 100 },
+          },
         ],
       },
     ],
@@ -2164,9 +2191,7 @@ describe('measure gutter selection', () => {
     store.getState().setActiveTrack(score.tracks[0].id);
     clickGutter(0);
 
-    expect(store.getState().selection.measureIds).toEqual([
-      score.tracks[0].measures[0].id,
-    ]);
+    expect(store.getState().selection.measureIds).toEqual([score.tracks[0].measures[0].id]);
   });
 
   it('cmd-shift-clicking the gutter selects that measure on every track', () => {
@@ -2195,25 +2220,25 @@ describe('measure gutter selection', () => {
 In `handleClick`, insert this **before** the cmd-click branch (a gutter click must win over both, and must not seek):
 
 ```tsx
-      // ---- measure gutter: the one gesture that still selects measures
-      // (regeneration's "select bars 3-4" workflow). Never moves the caret.
-      if (layoutPlan) {
-        const gutterIndex = measureIndexAtGutterPoint(layoutPlan, {
-          x: point.x / zoom,
-          y: point.y / zoom,
-        });
-        if (gutterIndex !== null) {
-          const tracks =
-            event.metaKey && event.shiftKey
-              ? state.score.tracks
-              : state.score.tracks.filter((t) => t.id === activeTrackId);
-          const measureIds = tracks
-            .map((t) => t.measures[gutterIndex]?.id)
-            .filter((id): id is string => id !== undefined);
-          if (measureIds.length > 0) state.selectMeasures(measureIds);
-          return;
-        }
-      }
+// ---- measure gutter: the one gesture that still selects measures
+// (regeneration's "select bars 3-4" workflow). Never moves the caret.
+if (layoutPlan) {
+  const gutterIndex = measureIndexAtGutterPoint(layoutPlan, {
+    x: point.x / zoom,
+    y: point.y / zoom,
+  });
+  if (gutterIndex !== null) {
+    const tracks =
+      event.metaKey && event.shiftKey
+        ? state.score.tracks
+        : state.score.tracks.filter((t) => t.id === activeTrackId);
+    const measureIds = tracks
+      .map((t) => t.measures[gutterIndex]?.id)
+      .filter((id): id is string => id !== undefined);
+    if (measureIds.length > 0) state.selectMeasures(measureIds);
+    return;
+  }
+}
 ```
 
 Import `measureIndexAtGutterPoint` from `@/features/score-editor/hit-test`.
@@ -2243,11 +2268,13 @@ EOF
 ### Task 12: Drag autoscroll
 
 **Files:**
+
 - Create: `src/features/score-editor/autoscroll.ts`
 - Create: `src/features/score-editor/autoscroll.test.ts`
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `autoscrollDelta(params): { dx: number; dy: number }`.
 
@@ -2264,7 +2291,10 @@ const box = { width: 800, height: 600 };
 describe('autoscrollDelta', () => {
   it('is zero well inside the box', () => {
     expect(autoscrollDelta({ x: 400, y: 300, box, layoutMode: 'page' })).toEqual({ dx: 0, dy: 0 });
-    expect(autoscrollDelta({ x: 400, y: 300, box, layoutMode: 'continuous' })).toEqual({ dx: 0, dy: 0 });
+    expect(autoscrollDelta({ x: 400, y: 300, box, layoutMode: 'continuous' })).toEqual({
+      dx: 0,
+      dy: 0,
+    });
   });
 
   it('scrolls vertically in page mode near the bottom edge', () => {
@@ -2290,7 +2320,12 @@ describe('autoscrollDelta', () => {
   });
 
   it('scrolls faster the deeper into the edge band the pointer is', () => {
-    const shallow = autoscrollDelta({ x: 400, y: 600 - AUTOSCROLL_EDGE_PX + 2, box, layoutMode: 'page' });
+    const shallow = autoscrollDelta({
+      x: 400,
+      y: 600 - AUTOSCROLL_EDGE_PX + 2,
+      box,
+      layoutMode: 'page',
+    });
     const deep = autoscrollDelta({ x: 400, y: 600, box, layoutMode: 'page' });
     expect(deep.dy).toBeGreaterThan(shallow.dy);
   });
@@ -2370,62 +2405,62 @@ Expected: PASS (7 tests)
 In `ScoreEditorView.tsx` add a ref and two helpers:
 
 ```tsx
-  /** Live rAF id for drag autoscroll, and the last pointer position in scroll-box coordinates. */
-  const autoscrollRafRef = useRef<number | null>(null);
-  const autoscrollPointRef = useRef<{ x: number; y: number } | null>(null);
+/** Live rAF id for drag autoscroll, and the last pointer position in scroll-box coordinates. */
+const autoscrollRafRef = useRef<number | null>(null);
+const autoscrollPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  const stopAutoscroll = useCallback(() => {
-    if (autoscrollRafRef.current !== null) {
-      cancelAnimationFrame(autoscrollRafRef.current);
-      autoscrollRafRef.current = null;
-    }
-    autoscrollPointRef.current = null;
-  }, []);
+const stopAutoscroll = useCallback(() => {
+  if (autoscrollRafRef.current !== null) {
+    cancelAnimationFrame(autoscrollRafRef.current);
+    autoscrollRafRef.current = null;
+  }
+  autoscrollPointRef.current = null;
+}, []);
 
-  /**
-   * Runs while a drag-box selection is in flight: each frame, nudges the
-   * scroll box if the pointer is inside an edge band. The scroll itself
-   * fires `onScroll` -> `draw()`, so the newly-exposed window repaints
-   * without any extra wiring here.
-   */
-  const stepAutoscroll = useCallback(() => {
-    const box = scrollBoxRef.current;
-    const point = autoscrollPointRef.current;
-    if (!box || !point) {
-      autoscrollRafRef.current = null;
-      return;
-    }
-    const { dx, dy } = autoscrollDelta({
-      x: point.x,
-      y: point.y,
-      box: {
-        width: box.clientWidth || DEFAULT_WIDTH,
-        height: box.clientHeight || CONTAINER_MIN_HEIGHT,
-      },
-      layoutMode,
-    });
-    if (dx !== 0) box.scrollLeft += dx;
-    if (dy !== 0) box.scrollTop += dy;
-    autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
-  }, [layoutMode]);
+/**
+ * Runs while a drag-box selection is in flight: each frame, nudges the
+ * scroll box if the pointer is inside an edge band. The scroll itself
+ * fires `onScroll` -> `draw()`, so the newly-exposed window repaints
+ * without any extra wiring here.
+ */
+const stepAutoscroll = useCallback(() => {
+  const box = scrollBoxRef.current;
+  const point = autoscrollPointRef.current;
+  if (!box || !point) {
+    autoscrollRafRef.current = null;
+    return;
+  }
+  const { dx, dy } = autoscrollDelta({
+    x: point.x,
+    y: point.y,
+    box: {
+      width: box.clientWidth || DEFAULT_WIDTH,
+      height: box.clientHeight || CONTAINER_MIN_HEIGHT,
+    },
+    layoutMode,
+  });
+  if (dx !== 0) box.scrollLeft += dx;
+  if (dy !== 0) box.scrollTop += dy;
+  autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
+}, [layoutMode]);
 ```
 
 In `handlePointerMove`, after `if (drag.moved) setDragBox(...)`:
 
 ```tsx
-      if (drag.moved) {
-        const box = scrollBoxRef.current;
-        if (box) {
-          const boxRect = box.getBoundingClientRect();
-          autoscrollPointRef.current = {
-            x: event.clientX - boxRect.left,
-            y: event.clientY - boxRect.top,
-          };
-          if (autoscrollRafRef.current === null) {
-            autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
-          }
-        }
-      }
+if (drag.moved) {
+  const box = scrollBoxRef.current;
+  if (box) {
+    const boxRect = box.getBoundingClientRect();
+    autoscrollPointRef.current = {
+      x: event.clientX - boxRect.left,
+      y: event.clientY - boxRect.top,
+    };
+    if (autoscrollRafRef.current === null) {
+      autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
+    }
+  }
+}
 ```
 
 Add `stepAutoscroll` to `handlePointerMove`'s dependency array.
@@ -2461,6 +2496,7 @@ EOF
 ### Task 13: Simultaneous layout
 
 **Files:**
+
 - Modify: `src/components/layout/AppLayout.tsx`
 - Modify: `src/components/layout/AppLayout.test.tsx`
 - Modify: `src/features/score-editor/EditorToolbar.tsx:404-425`
@@ -2471,6 +2507,7 @@ EOF
 - Modify: `src/features/piano-roll/PianoRollView.tsx` (summary call site + collapse props)
 
 **Interfaces:**
+
 - Consumes: `selectionSummaryLabel(sel, regenerated)` (Part A Task 5).
 - Produces: `PianoRollViewProps.collapsed`, `PianoRollViewProps.onToggleCollapsed`, and the same two props on `PianoRollToolbarProps`.
 
@@ -2531,18 +2568,18 @@ export type PianoRollToolbarProps = {
 ```
 
 ```tsx
-      <Tooltip content={collapsed ? 'Expand piano roll' : 'Collapse piano roll'}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={collapsed ? 'Expand piano roll' : 'Collapse piano roll'}
-          onClick={onToggleCollapsed}
-          className="h-auto w-auto p-1.5 text-sm leading-none"
-        >
-          {collapsed ? '▴' : '▾'}
-        </Button>
-      </Tooltip>
+<Tooltip content={collapsed ? 'Expand piano roll' : 'Collapse piano roll'}>
+  <Button
+    type="button"
+    variant="ghost"
+    size="icon"
+    aria-label={collapsed ? 'Expand piano roll' : 'Collapse piano roll'}
+    onClick={onToggleCollapsed}
+    className="h-auto w-auto p-1.5 text-sm leading-none"
+  >
+    {collapsed ? '▴' : '▾'}
+  </Button>
+</Tooltip>
 ```
 
 Place it as the toolbar's first child so it stays reachable when collapsed.
@@ -2552,17 +2589,17 @@ Place it as the toolbar's first child so it stays reachable when collapsed.
 In `PianoRollView.tsx`, add `collapsed`/`onToggleCollapsed` props, pass them to the toolbar, and return early after the toolbar when collapsed:
 
 ```tsx
-  if (collapsed) {
-    return (
-      <div className="flex flex-col border-t border-theme-border">
-        <PianoRollToolbar
-          /* ...existing props... */
-          collapsed
-          onToggleCollapsed={onToggleCollapsed}
-        />
-      </div>
-    );
-  }
+if (collapsed) {
+  return (
+    <div className="flex flex-col border-t border-theme-border">
+      <PianoRollToolbar
+        /* ...existing props... */
+        collapsed
+        onToggleCollapsed={onToggleCollapsed}
+      />
+    </div>
+  );
+}
 ```
 
 - [ ] **Step 6: Restructure AppLayout**
@@ -2573,34 +2610,36 @@ In `AppLayout.tsx`:
 - Replace the conditional editor block:
 
 ```tsx
-          <div className="min-h-0 flex-1">
-            <ScoreEditorView store={store} />
-          </div>
+<div className="min-h-0 flex-1">
+  <ScoreEditorView store={store} />
+</div>
 ```
 
 - Add piano-roll state near the other panel state:
 
 ```tsx
-  const [pianoRollCollapsed, setPianoRollCollapsed] = useState(false);
+const [pianoRollCollapsed, setPianoRollCollapsed] = useState(false);
 ```
 
 - Insert the panel between the three-pane row's closing tag and `<TransportBar store={store} />`:
 
 ```tsx
-      {/* Full-width piano roll: a sibling of the transport rather than a
+{
+  /* Full-width piano roll: a sibling of the transport rather than a
           child of the center column, so it spans the whole window under the
           track and inspector panels. Fixed height, collapsible, own
-          horizontal scroll across the full score. */}
-      <div
-        className="shrink-0 overflow-hidden border-t border-theme-border"
-        style={pianoRollCollapsed ? undefined : { height: PIANO_ROLL_PANEL_HEIGHT }}
-      >
-        <PianoRollView
-          store={store}
-          collapsed={pianoRollCollapsed}
-          onToggleCollapsed={() => setPianoRollCollapsed((v) => !v)}
-        />
-      </div>
+          horizontal scroll across the full score. */
+}
+<div
+  className="shrink-0 overflow-hidden border-t border-theme-border"
+  style={pianoRollCollapsed ? undefined : { height: PIANO_ROLL_PANEL_HEIGHT }}
+>
+  <PianoRollView
+    store={store}
+    collapsed={pianoRollCollapsed}
+    onToggleCollapsed={() => setPianoRollCollapsed((v) => !v)}
+  />
+</div>;
 ```
 
 - Add the constant next to `SIDE_PANEL_WIDTH`:
@@ -2634,9 +2673,9 @@ In each of `AppLayout.tsx` (status bar), `ScoreEditorView.tsx` (the
 read the flag and pass it:
 
 ```tsx
-  const selectionRegenerated = store((s) => s.selectionRegenerated);
-  // ...
-  selectionSummaryLabel(selection, selectionRegenerated)
+const selectionRegenerated = store((s) => s.selectionRegenerated);
+// ...
+selectionSummaryLabel(selection, selectionRegenerated);
 ```
 
 `ScoreEditorView` and `PianoRollView` already read `selectionRegenerated` from
@@ -2683,12 +2722,14 @@ EOF
 ### Task 14: Piano roll shows the active track, colored by state
 
 **Files:**
+
 - Modify: `src/features/piano-roll/PianoRollView.tsx`
 - Modify: `src/features/piano-roll/PianoRollView.test.tsx`
 - Modify: `src/features/piano-roll/PianoRollToolbar.tsx` (remove Track filter)
 - Modify: `src/features/piano-roll/PianoRollToolbar.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `selectActiveTrackId`, `buildNoteColors` (Task 8), `noteColorFor`.
 - Produces: no exported API.
 
@@ -2722,9 +2763,7 @@ describe('state colors', () => {
   it('colors a selected note with the selected color', () => {
     const { store, score } = setupPianoRoll();
     const note = firstNoteOf(score, 0);
-    act(() =>
-      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] }),
-    );
+    act(() => store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] }));
     expect(screen.getByTestId(`pr-note-${note.id}`)).toHaveStyle({
       backgroundColor: 'rgb(0, 0, 0)',
     });
@@ -2754,23 +2793,23 @@ Expected: FAIL — all tracks render; notes use `trackColor`.
 In `PianoRollView.tsx`, replace:
 
 ```tsx
-  const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
+const [visibleTrackIds, setVisibleTrackIds] = useState<Set<UUID> | null>(null);
 ```
 
 with:
 
 ```tsx
-  const activeTrackId = store(selectActiveTrackId);
-  /**
-   * The piano roll is the active track's detail view — one keyboard, one set
-   * of rows. That's what makes the four state colors unambiguous here (there
-   * are no per-track colors left to collide with) and what makes the
-   * playback key highlighting mean anything.
-   */
-  const visibleTrackIds = useMemo(
-    () => (activeTrackId ? new Set<UUID>([activeTrackId]) : null),
-    [activeTrackId],
-  );
+const activeTrackId = store(selectActiveTrackId);
+/**
+ * The piano roll is the active track's detail view — one keyboard, one set
+ * of rows. That's what makes the four state colors unambiguous here (there
+ * are no per-track colors left to collide with) and what makes the
+ * playback key highlighting mean anything.
+ */
+const visibleTrackIds = useMemo(
+  () => (activeTrackId ? new Set<UUID>([activeTrackId]) : null),
+  [activeTrackId],
+);
 ```
 
 Remove every `setVisibleTrackIds` reference and the `visibleTrackIds` prop passed to `PianoRollToolbar`.
@@ -2834,22 +2873,22 @@ const NoteLayer = memo(function NoteLayer({ noteRects, noteColors, theme }: Note
 In `PianoRollView`, build the same inputs `ScoreEditorView` does:
 
 ```tsx
-  const selectionRegenerated = store((s) => s.selectionRegenerated);
-  const activeNoteIds = store((s) => s.activeNoteIds);
-  const themeMode = store((s) => s.themeMode);
-  const theme = useMemo(
-    () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
-    [themeMode],
-  );
-  const noteColors = useMemo(
-    () =>
-      buildNoteColors({
-        selectedIds: selection.eventIds,
-        playingIds: activeNoteIds,
-        regenerated: selectionRegenerated,
-      }),
-    [selection.eventIds, activeNoteIds, selectionRegenerated],
-  );
+const selectionRegenerated = store((s) => s.selectionRegenerated);
+const activeNoteIds = store((s) => s.activeNoteIds);
+const themeMode = store((s) => s.themeMode);
+const theme = useMemo(
+  () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
+  [themeMode],
+);
+const noteColors = useMemo(
+  () =>
+    buildNoteColors({
+      selectedIds: selection.eventIds,
+      playingIds: activeNoteIds,
+      regenerated: selectionRegenerated,
+    }),
+  [selection.eventIds, activeNoteIds, selectionRegenerated],
+);
 ```
 
 Export `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME` from `ScoreEditorView.tsx` and import them here, so both views draw from one palette. Import `resolveColorScheme` from `@/app/theme`, and `buildNoteColors` from `@/features/score-editor/note-colors`, `noteColorFor`/`resolveNoteColorRole`/`NoteColorRole`/`RenderTheme` from `@sudobility/music_lib`.
@@ -2888,12 +2927,14 @@ EOF
 ### Task 15: Playback key highlighting
 
 **Files:**
+
 - Modify: `src/features/piano-roll/PianoRollView.tsx`
 - Modify: `src/features/piano-roll/PianoRollView.test.tsx`
 - Create: `src/features/piano-roll/playing-pitches.ts`
 - Create: `src/features/piano-roll/playing-pitches.test.ts`
 
 **Interfaces:**
+
 - Consumes: `activeNoteIds`, `selectActiveTrackId`.
 - Produces: `playingPitchesForTrack(score, activeNoteIds, trackId): Set<number>`.
 
@@ -3068,11 +3109,7 @@ function KeyboardColumn({ store, rows, height, theme }: KeyboardColumnProps) {
               left: 0,
               width: KEYBOARD_WIDTH,
               height: rowHeight(zoomV),
-              backgroundColor: isPlaying
-                ? theme.notePlaying
-                : row.isBlack
-                  ? '#2a2a2a'
-                  : '#fafafa',
+              backgroundColor: isPlaying ? theme.notePlaying : row.isBlack ? '#2a2a2a' : '#fafafa',
               color: row.isBlack ? '#fafafa' : '#2a2a2a',
               fontSize: 9,
               boxSizing: 'border-box',
@@ -3126,10 +3163,12 @@ EOF
 ### Task 16: Track panel sets the active track
 
 **Files:**
+
 - Modify: `src/components/layout/TrackPanel.tsx`
 - Modify: `src/components/layout/TrackPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `selectActiveTrackId`, `setActiveTrack`.
 - Produces: no exported API.
 
@@ -3179,7 +3218,7 @@ Expected: FAIL — no `track-row-*` testid, no `aria-current`.
 In `TrackPanel.tsx`, read the active track:
 
 ```tsx
-  const activeTrackId = store(selectActiveTrackId);
+const activeTrackId = store(selectActiveTrackId);
 ```
 
 On each track's root row element add:
@@ -3226,6 +3265,7 @@ EOF
 ### Task 17: E2E and final verification
 
 **Files:**
+
 - Modify: `e2e/*.spec.ts` (whichever reference the view toggle)
 - Modify: `docs/parity-checklist.md`
 - Modify: `CLAUDE.md`
@@ -3305,26 +3345,26 @@ EOF
 
 ## Spec coverage check
 
-| Spec section | Task |
-| --- | --- |
-| §1 Color system, dark palette, precedence | 1, 8 |
+| Spec section                                           | Task                                                                          |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| §1 Color system, dark palette, precedence              | 1, 8                                                                          |
 | §1 Non-color redundancy in the status bar / SR summary | 5 (`selectionSummaryLabel` gains the flag), 13 (all three call sites pass it) |
-| §2 Per-note / per-stave coloring | 2 |
-| §2 Measure-number gutter | 3 |
-| §2 Deletions (overlay, second canvas) | 1, 8 |
-| §3 `activeTrackId` + selector | 4 |
-| §3 `selectionRegenerated` | 5 |
-| §3 `acceptCandidate` selects new ids | 5 |
-| §4 Play clears selection; pause/stop unchanged | 6 |
-| §5 Gesture table | 10 |
-| §5 Range selection | 9, 10 |
-| §5 Measure gutter selection | 11 |
-| §6 Drag autoscroll | 12 |
-| §7 Full-width collapsible panel; toggles removed | 13 |
-| §8 Active-track-only piano roll, state colors | 14 |
-| §8 Playback key highlighting | 15 |
-| §9 Track panel active track | 16 |
-| §10 Testing | every task; e2e in 17 |
+| §2 Per-note / per-stave coloring                       | 2                                                                             |
+| §2 Measure-number gutter                               | 3                                                                             |
+| §2 Deletions (overlay, second canvas)                  | 1, 8                                                                          |
+| §3 `activeTrackId` + selector                          | 4                                                                             |
+| §3 `selectionRegenerated`                              | 5                                                                             |
+| §3 `acceptCandidate` selects new ids                   | 5                                                                             |
+| §4 Play clears selection; pause/stop unchanged         | 6                                                                             |
+| §5 Gesture table                                       | 10                                                                            |
+| §5 Range selection                                     | 9, 10                                                                         |
+| §5 Measure gutter selection                            | 11                                                                            |
+| §6 Drag autoscroll                                     | 12                                                                            |
+| §7 Full-width collapsible panel; toggles removed       | 13                                                                            |
+| §8 Active-track-only piano roll, state colors          | 14                                                                            |
+| §8 Playback key highlighting                           | 15                                                                            |
+| §9 Track panel active track                            | 16                                                                            |
+| §10 Testing                                            | every task; e2e in 17                                                         |
 
 ### Two decisions the plan makes that the spec left open
 

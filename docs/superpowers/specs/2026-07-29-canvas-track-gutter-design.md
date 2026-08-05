@@ -166,7 +166,7 @@ The bottom panel goes from 150px to **190px**. Those controls do not fit in 150
 at 220px wide, and the keyboard benefits from slightly taller keys.
 
 The editing panel may scroll internally when a short window squeezes it. That
-was *wrong* for the old track list, which had to mirror the sheet; this panel
+was _wrong_ for the old track list, which had to mirror the sheet; this panel
 mirrors nothing, so an internal scrollbar costs nothing.
 
 ## 5. Deletions
@@ -185,6 +185,7 @@ goes with the component.
 ## 6. Testing
 
 **`music_lib`**
+
 - `layout.test.ts`: `leftMargin` includes `TRACK_INFO_WIDTH`; the first stave's
   `box.x` shifts by exactly that; `totalWidth` grows accordingly.
 - `canvas-renderer.test.ts`: the name, instrument, and `M`/`S` are drawn for
@@ -194,8 +195,9 @@ goes with the component.
   stays at the viewport edge while stave content moves.
 
 **`music_app`**
+
 - `track-gutter.test.ts`: hits inside a band return that track; x beyond the
-  gutter returns `null`; bands in the *second* system resolve (the repeat case);
+  gutter returns `null`; bands in the _second_ system resolve (the repeat case);
   zoom scales the hit region; an empty plan returns `null`.
 - `ScoreEditorView.test.tsx`: a gutter click sets the active track and selects
   it, and does not seek.

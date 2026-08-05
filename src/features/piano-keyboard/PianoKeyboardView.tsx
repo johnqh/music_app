@@ -20,8 +20,11 @@ import {
   playbackController,
   selectActiveTrackId,
   useAppStore,
+  pitchToMidi,
+  selectSelectedNotes,
 } from '@sudobility/music_lib';
-import { insertNoteAtCaret } from '@/features/score-editor/editing';
+import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editing';
+import { chordSelection } from '@/features/piano-keyboard/selection-editing';
 import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -54,11 +57,15 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   label,
   isLit,
   litColor,
+  isSelected,
+  selectedColor,
   onPress,
   onRelease,
 }: PianoKey & {
   isLit: boolean;
   litColor: string;
+  isSelected: boolean;
+  selectedColor: string;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
 }) {
@@ -66,6 +73,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
     <div
       data-testid={`piano-key-${midi}`}
       data-playing={isLit ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
       role="button"
       // The note itself, not "Play C4": every key would otherwise match a
       // search for the transport's Play button, and a key's accessible name
@@ -73,7 +81,17 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
       aria-label={noteLabel(midi)}
       onPointerDown={(event) => {
         event.preventDefault();
-        (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+        // Capture keeps the release on this key when a finger slides off it,
+        // but it is an enhancement, not a precondition for sounding the note.
+        // `?.` only guards the method being absent; it still throws for a
+        // pointer the browser no longer considers active, and that exception
+        // used to abort the handler before `onPress` — swallowing the key
+        // press entirely.
+        try {
+          (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+        } catch {
+          // Nothing to do: the key still sounds and still writes its note.
+        }
         onPress(midi);
       }}
       onPointerUp={() => onRelease(midi)}
@@ -86,7 +104,15 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         top: 0,
         width,
         height,
-        backgroundColor: isLit ? litColor : isBlack ? '#1f1f23' : '#fbfbfd',
+        // Sounding wins over selected: it is the more transient signal, and a
+        // key that is both should show what is happening now.
+        backgroundColor: isLit
+          ? litColor
+          : isSelected
+            ? selectedColor
+            : isBlack
+              ? '#1f1f23'
+              : '#fbfbfd',
         border: '1px solid rgba(0,0,0,0.45)',
         borderTop: 'none',
         borderRadius: '0 0 3px 3px',
@@ -187,11 +213,41 @@ export function PianoKeyboardView({
    * set of held keys is state, so a held key can be drawn pressed.
    */
   const heldSinceRef = useRef(new Map<number, number>());
+  /**
+   * The notes of the chord currently being played, and when the first of them
+   * went down.
+   *
+   * Keys pressed while another is still held belong to one chord, and the
+   * whole group is written when the last of them lifts — which is simply what
+   * playing a chord is. Accumulating here rather than writing per release is
+   * what makes that possible: a note written on its own release has already
+   * chosen a start tick and a duration, and cannot retroactively join anything.
+   */
+  const chordRef = useRef<{ midis: number[]; firstPressAt: number } | null>(null);
+
+  /**
+   * The selected chord, when the selection is exactly one — the keyboard's
+   * second job. With one of these the keys toggle its pitches instead of
+   * entering notes; without, they enter as before.
+   */
+  const selectedNotes = store(selectSelectedNotes);
+  const editableChord = useMemo(() => chordSelection(selectedNotes), [selectedNotes]);
+  const selectedMidis = useMemo(
+    () => new Set((editableChord?.notes ?? []).map((note) => pitchToMidi(note.pitch))),
+    [editableChord],
+  );
   const [heldKeys, setHeldKeys] = useState<ReadonlySet<number>>(() => new Set());
 
   const pressKey = useCallback(
     (midi: number) => {
-      heldSinceRef.current.set(midi, performance.now());
+      const now = performance.now();
+      heldSinceRef.current.set(midi, now);
+      const group = chordRef.current;
+      if (group) {
+        if (!group.midis.includes(midi)) group.midis.push(midi);
+      } else {
+        chordRef.current = { midis: [midi], firstPressAt: now };
+      }
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
       // must be heard whether or not a score is loaded or playing.
@@ -213,17 +269,48 @@ export function PianoKeyboardView({
       playbackController.noteOff(midi);
       if (since === undefined) return;
 
-      // Written as long as it was held, snapped to a duration the toolbar could
-      // also have produced.
+      // Nothing is written until every key of the group is up: until then the
+      // player may still be adding notes to the same chord.
+      if (heldSinceRef.current.size > 0) return;
+
+      const group = chordRef.current;
+      chordRef.current = null;
+      if (!group || group.midis.length === 0) return;
+
       const score = store.getState().score;
       if (!score) return;
       const bpm = score.tempoMap[0]?.bpm ?? 120;
-      insertNoteAtCaret(store, midiToPitch(midi), {
-        duration: durationForTap(performance.now() - since, bpm),
+      // Wrapped, not point-free: `map` would pass the index into
+      // `midiToPitch`'s key-signature parameter.
+      const pitches = group.midis.map((midi) => midiToPitch(midi));
+
+      // With one chord selected the keyboard edits it rather than entering
+      // notes: a lit key removes its note, an unlit one joins the chord. The
+      // two jobs are exclusive — doing both would add a note and also move on.
+      if (editableChord) {
+        // The chord's own tick, not wherever the caret happens to be, or an
+        // added note lands somewhere the player never pointed at.
+        playbackController.seek(editableChord.startTick);
+        for (const midi of group.midis) {
+          const existing = editableChord.notes.find((note) => pitchToMidi(note.pitch) === midi);
+          if (existing) deleteEvents(store, [existing.id]);
+          else
+            insertChordAtCaret(store, [midiToPitch(midi)], { advanceCaret: false, mode: 'stack' });
+        }
+        return;
+      }
+
+      // Written as long as the group was held, snapped to a duration the
+      // toolbar could also have produced. One length for the whole chord, from
+      // the first key down to the last key up: measuring each key separately
+      // would give notes that differ by milliseconds, and same-start notes with
+      // differing durations delete each other rather than stacking.
+      insertChordAtCaret(store, pitches, {
+        duration: durationForTap(performance.now() - group.firstPressAt, bpm),
         advanceCaret: true,
       });
     },
-    [store],
+    [store, editableChord],
   );
 
   const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
@@ -257,7 +344,9 @@ export function PianoKeyboardView({
       className="flex shrink-0 items-center gap-2 border-b border-theme-border px-2"
       style={{ height: HEADER_HEIGHT }}
     >
-      {activeTrack && <InstrumentIcon program={activeTrack.midiProgram} className="size-4 shrink-0" />}
+      {activeTrack && (
+        <InstrumentIcon program={activeTrack.midiProgram} className="size-4 shrink-0" />
+      )}
       <span className="text-xs font-medium text-theme-text-primary">
         {/* The keyboard carries no track identity of its own, so the header is
             the only thing telling you which part you are looking at. */}
@@ -287,7 +376,10 @@ export function PianoKeyboardView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {header}
-      <div ref={boxRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain">
+      <div
+        ref={boxRef}
+        className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain"
+      >
         <div
           role="img"
           aria-label="Piano keyboard showing the notes being played"
@@ -300,6 +392,8 @@ export function PianoKeyboardView({
               {...key}
               isLit={lit.has(key.midi) || heldKeys.has(key.midi)}
               litColor={theme.notePlaying}
+              isSelected={selectedMidis.has(key.midi)}
+              selectedColor={theme.noteSelected}
               onPress={pressKey}
               onRelease={releaseKey}
             />

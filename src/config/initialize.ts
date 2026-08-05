@@ -26,7 +26,12 @@ import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sud
 import { configureTheme } from '@sudobility/design';
 import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
-import { initializeAppStore, initializeMusicPlatform, type PrefsStorage, type StoreContext } from '@sudobility/music_lib';
+import {
+  initializeAppStore,
+  initializeMusicPlatform,
+  type PrefsStorage,
+  type StoreContext,
+} from '@sudobility/music_lib';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { CONSTANTS } from '@/config/constants';
 

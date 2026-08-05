@@ -379,20 +379,20 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
 
       <Tooltip content="Playback speed multiplier">
         <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
-        <SelectTrigger
-          aria-label="Playback speed"
-          // Matches the bar's icon size; the trigger's chevron is 16px by default.
-          className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm [&_svg]:size-[18px]"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SPEED_OPTIONS.map((speed) => (
-            <SelectItem key={speed} value={String(speed)}>
-              {speed}x
-            </SelectItem>
-          ))}
-        </SelectContent>
+          <SelectTrigger
+            aria-label="Playback speed"
+            // Matches the bar's icon size; the trigger's chevron is 16px by default.
+            className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm [&_svg]:size-[18px]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SPEED_OPTIONS.map((speed) => (
+              <SelectItem key={speed} value={String(speed)}>
+                {speed}x
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </Tooltip>
 

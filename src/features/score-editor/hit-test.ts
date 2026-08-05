@@ -55,6 +55,23 @@ export function eventIdAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point
   return hit;
 }
 
+/**
+ * Every event id whose bbox contains `point`.
+ *
+ * A chord's notes are drawn as one VexFlow `StaveNote`, so the renderer maps
+ * all of their ids to the same box — `eventIdAtPoint` therefore returns an
+ * arbitrary member of a chord, and no click can reach the others. Selecting
+ * the whole chord is the honest answer to a click on overlapping noteheads;
+ * picking individual notes out of it is the piano keyboard's job.
+ */
+export function eventIdsAtPoint(idToBBox: ReadonlyMap<string, BBox>, point: Point): string[] {
+  const ids: string[] = [];
+  for (const [id, box] of idToBBox) {
+    if (pointInBBox(box, point)) ids.push(id);
+  }
+  return ids;
+}
+
 /** Every id whose bbox intersects `box` (drag-box/rubber-band selection), in map iteration order. */
 export function eventIdsInBox(idToBBox: ReadonlyMap<string, BBox>, box: BBox): string[] {
   const ids: string[] = [];

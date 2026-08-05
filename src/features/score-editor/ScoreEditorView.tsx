@@ -47,17 +47,25 @@ import {
 import type { LayoutPlan, ScoreFragment } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { Pitch, Score } from '@sudobility/music_types';
-import { changePitchCommand, findEvent, selectionSummaryLabel, shiftDiatonic } from '@sudobility/music_lib';
+import {
+  changePitchCommand,
+  findEvent,
+  selectionSummaryLabel,
+  shiftDiatonic,
+} from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
+import { useClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
+import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
 import {
   boxFromPoints,
   eventIdAtPoint,
+  eventIdsAtPoint,
   eventIdsInBox,
   measureIdAtPoint,
   measureIndexAtGutterPoint,
@@ -85,7 +93,6 @@ const CONTAINER_MIN_HEIGHT = 400;
 const DRAG_THRESHOLD = 3;
 /** Padding (px) kept between the scrolled-to measure and the viewport edge. */
 const SCROLL_MARGIN = 40;
-
 
 /** Every event id (note or rest) referenced by a preview fragment's measures, for the highlight overlay's `previewIds`. */
 function previewEventIds(fragment: ScoreFragment | null): string[] {
@@ -137,16 +144,21 @@ type PlaybackCaretProps = {
  * Scroll-into-view lives here for the same reason: it is driven by position
  * and needs nothing from the parent's render.
  */
-function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxRef }: PlaybackCaretProps) {
+function PlaybackCaret({
+  store,
+  plan,
+  score,
+  zoom,
+  color,
+  layoutMode,
+  scrollBoxRef,
+}: PlaybackCaretProps) {
   const positionTick = store((s) => s.positionTick);
   const playbackState = store((s) => s.state);
   const tempoMultiplier = store((s) => s.tempoMultiplier);
   const elementRef = useRef<HTMLDivElement | null>(null);
 
-  const tempoMap = useMemo(
-    () => (score ? new TempoMap(score.tempoMap, score.ppq) : null),
-    [score],
-  );
+  const tempoMap = useMemo(() => (score ? new TempoMap(score.tempoMap, score.ppq) : null), [score]);
 
   /**
    * Writes the caret's geometry straight to the DOM, bypassing React.
@@ -226,9 +238,7 @@ function PlaybackCaret({ store, plan, score, zoom, color, layoutMode, scrollBoxR
       const { tick, at } = anchorRef.current;
       const elapsedSeconds = (performance.now() - at) / 1000;
       applyGeometry(
-        tempoMap.secondsToTicks(
-          tempoMap.ticksToSeconds(tick) + elapsedSeconds * tempoMultiplier,
-        ),
+        tempoMap.secondsToTicks(tempoMap.ticksToSeconds(tick) + elapsedSeconds * tempoMultiplier),
       );
       frame = requestAnimationFrame(step);
     };
@@ -336,7 +346,8 @@ export function ScoreEditorView({
   inspectorOpen,
   onToggleInspector,
 }: ScoreEditorViewProps) {
-  useEditorShortcuts(store);
+  const clipboard = useClipboardPrompts(store);
+  useEditorShortcuts(store, playbackController, clipboard);
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
@@ -875,9 +886,19 @@ export function ScoreEditorView({
           state.toggleEvent(noteId);
           return;
         }
-        // Plain click: caret to the note's start, select it alone.
+        // Plain click: caret to the note's start, select the whole chord.
+        //
+        // The whole chord, not one arbitrary member: every note in a chord
+        // shares one bounding box, so "which note did you click" is not a
+        // question the geometry can answer. Adding and removing individual
+        // notes is the piano keyboard's job.
         const note = findEvent(state.score, noteId);
-        state.setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+        const chordIds = result ? eventIdsAtPoint(result.idToBBox, point) : [];
+        state.setSelection({
+          eventIds: chordIds.length > 0 ? chordIds : [noteId],
+          measureIds: [],
+          trackIds: [],
+        });
         if (note) {
           state.setActiveTrack(note.trackId);
           playbackController.seek(note.startTick);
@@ -1052,8 +1073,50 @@ export function ScoreEditorView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <ChoiceDialog
+        open={clipboard.pendingCut}
+        title="Cut these notes"
+        message="There is more music after them on this track."
+        choices={[
+          {
+            value: 'silence' as const,
+            label: 'Leave silence',
+            detail: 'The rest of the track stays where it is',
+            primary: true,
+          },
+          {
+            value: 'close' as const,
+            label: 'Close the gap',
+            detail: 'Later notes on this track move earlier to fill it',
+          },
+        ]}
+        onChoose={clipboard.resolveCut}
+        onCancel={clipboard.cancel}
+      />
+      <ChoiceDialog
+        open={clipboard.pendingPaste}
+        title="Paste over this music"
+        message="There is already something where this would land."
+        choices={[
+          {
+            value: 'replace' as const,
+            label: 'Replace',
+            detail: 'What is there now is removed',
+            primary: true,
+          },
+          {
+            value: 'insert' as const,
+            label: 'Insert',
+            detail: 'What is there now moves later on this track',
+          },
+        ]}
+        onChoose={clipboard.resolvePaste}
+        onCancel={clipboard.cancel}
+      />
       <EditorToolbar
         store={store}
+        onCut={clipboard.requestCut}
+        onPaste={clipboard.requestPaste}
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
         inspectorOpen={inspectorOpen}
@@ -1106,7 +1169,8 @@ export function ScoreEditorView({
             // the scroll box scrolls horizontally (trackpad swipe included).
             // Page mode lays out to exactly the viewport width, so asking for
             // it here would only risk a sub-pixel overflow.
-            minWidth: layoutMode === 'continuous' ? (layoutPlan?.totalWidth ?? 0) * zoom : undefined,
+            minWidth:
+              layoutMode === 'continuous' ? (layoutPlan?.totalWidth ?? 0) * zoom : undefined,
           }}
         >
           {/* Viewport-pinned drawing surface: a ZERO-SIZED sticky anchor

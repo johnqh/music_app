@@ -9,12 +9,12 @@ A ten-track score is unreadable when you are editing four of its parts. The exis
 
 Visibility is therefore a **view preference**, not a property of the music:
 
-| | drawn | sounds |
-| --- | --- | --- |
-| visible, unmuted | yes | yes |
-| **hidden** | **no** | **yes** |
-| muted | yes | no |
-| hidden + muted | no | no |
+|                  | drawn  | sounds  |
+| ---------------- | ------ | ------- |
+| visible, unmuted | yes    | yes     |
+| **hidden**       | **no** | **yes** |
+| muted            | yes    | no      |
+| hidden + muted   | no     | no      |
 
 Keeping hidden and muted separate is the point. You can hide an accompaniment you are not editing and still hear it in context, and the control for the other case already exists.
 
@@ -22,9 +22,9 @@ Keeping hidden and muted separate is the point. You can hide an accompaniment yo
 
 Two things materially shrink this work from its original framing.
 
-**The endpoint already exists.** `ProjectUpdateRequest` already carries `uiPrefs`, `ProjectRecord` already returns it, and `PUT /projects/:id` already persists it to a JSONB column. No new `music_api` route is needed. The channel was built and then never used: no production code in `music_lib` reads or writes `uiPrefs`, and `project-slice.ts`'s autosave sends only `{ name, score }`. The in-memory test fake (`src/test/store-context.ts`) *does* already round-trip it on create and update, so the fake needs no change — tests can assert persistence against it immediately.
+**The endpoint already exists.** `ProjectUpdateRequest` already carries `uiPrefs`, `ProjectRecord` already returns it, and `PUT /projects/:id` already persists it to a JSONB column. No new `music_api` route is needed. The channel was built and then never used: no production code in `music_lib` reads or writes `uiPrefs`, and `project-slice.ts`'s autosave sends only `{ name, score }`. The in-memory test fake (`src/test/store-context.ts`) _does_ already round-trip it on create and update, so the fake needs no change — tests can assert persistence against it immediately.
 
-**But the deployed API would silently drop the new field.** `music_api` pins `@sudobility/music_types@^0.1.0` and validates request bodies with `zValidator('json', projectUpdateRequestSchema)`. In 0.1.0 `projectUiPrefsSchema` requires `view` *and* is a `$strip` object — so a body carrying `{ zoom, visibleTrackIds }` is rejected outright for the missing `view`, and even one carrying `view` would have `visibleTrackIds` stripped before it reached the DB. **`music_api` must upgrade `music_types` and redeploy before the app ships**, and that ordering is a hard constraint rather than a nicety: without it the feature fails silently, which is the worst way for it to fail.
+**But the deployed API would silently drop the new field.** `music_api` pins `@sudobility/music_types@^0.1.0` and validates request bodies with `zValidator('json', projectUpdateRequestSchema)`. In 0.1.0 `projectUiPrefsSchema` requires `view` _and_ is a `$strip` object — so a body carrying `{ zoom, visibleTrackIds }` is rejected outright for the missing `view`, and even one carrying `view` would have `visibleTrackIds` stripped before it reached the DB. **`music_api` must upgrade `music_types` and redeploy before the app ships**, and that ordering is a hard constraint rather than a nicety: without it the feature fails silently, which is the worst way for it to fail.
 
 The upgrade itself is trivial, and was measured rather than assumed: bumping `music_api` to `music_types@0.3.0` in a scratch clone typechecks clean and passes all 84 tests with **zero** code changes.
 
@@ -50,7 +50,7 @@ export type ProjectUiPrefs = {
 };
 ```
 
-Absent-means-all is what keeps this backward compatible. An empty array is *not* a valid stored state (see the invariant below), so absent is unambiguous.
+Absent-means-all is what keeps this backward compatible. An empty array is _not_ a valid stored state (see the invariant below), so absent is unambiguous.
 
 ## The invariant: at least one visible track
 
@@ -69,21 +69,21 @@ export function selectVisibleTrackIds(state): string[];
 
 Every consumer reads through it. The setter refuses to store an empty list, and the checkbox for the last remaining visible track is disabled with a tooltip saying why, so the rule is visible before it is hit rather than only enforced after.
 
-**Interaction with the active track.** `selectActiveTrackId` already falls back to the first track when unset or stale; it now falls back to the first *visible* one. And per the brief, **selecting a track makes it visible** — choosing a hidden track from the selector checks it in the same action, because the alternative is choosing a track and seeing nothing happen.
+**Interaction with the active track.** `selectActiveTrackId` already falls back to the first track when unset or stale; it now falls back to the first _visible_ one. And per the brief, **selecting a track makes it visible** — choosing a hidden track from the selector checks it in the same action, because the alternative is choosing a track and seeing nothing happen.
 
 ## The control
 
-A new **`CheckableSelect`** in `@sudobility/components`, since it is a general shape and not a music one: pick one item, toggle many. It is `Select` with a checkbox in each row — the trigger shows the *chosen* item, each row's checkbox toggles that row's flag, and clicking the row's label chooses it.
+A new **`CheckableSelect`** in `@sudobility/components`, since it is a general shape and not a music one: pick one item, toggle many. It is `Select` with a checkbox in each row — the trigger shows the _chosen_ item, each row's checkbox toggles that row's flag, and clicking the row's label chooses it.
 
 It is a new component rather than a variant of the existing `MultiSelect`, whose whole model is "value is an array". Here there are two independent pieces of state — one selection and a set of flags — and bending a multi-select into that would make both harder to read.
 
 ```tsx
 <CheckableSelect
   value={activeTrackId}
-  onChange={setActiveTrack}          // also makes the track visible
+  onChange={setActiveTrack} // also makes the track visible
   checked={visibleTrackIds}
   onCheckedChange={setVisibleTracks} // refuses to empty the list
-  options={tracks.map(t => ({ value: t.id, label: t.name }))}
+  options={tracks.map((t) => ({ value: t.id, label: t.name }))}
 />
 ```
 
@@ -91,14 +91,14 @@ It goes on the **editing bar**, in the group with layout mode, and follows the b
 
 ## What visibility affects
 
-| Surface | Behaviour |
-| --- | --- |
-| Notation | Draws visible tracks only — `trackIds` into `computeLayout`/`render`. The track-info gutter follows automatically, since it iterates the plan. |
-| Active track | Falls back to the first *visible* track; choosing a hidden one reveals it. |
-| Piano keyboard | Unchanged — it already follows the active track, which is always visible. |
-| Playback | **Unchanged.** Hidden tracks still sound. |
-| Validation / issue count | Unchanged — a problem in a hidden track is still a problem with the piece. |
-| Export | **Asks**, see below. |
+| Surface                  | Behaviour                                                                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notation                 | Draws visible tracks only — `trackIds` into `computeLayout`/`render`. The track-info gutter follows automatically, since it iterates the plan. |
+| Active track             | Falls back to the first _visible_ track; choosing a hidden one reveals it.                                                                     |
+| Piano keyboard           | Unchanged — it already follows the active track, which is always visible.                                                                      |
+| Playback                 | **Unchanged.** Hidden tracks still sound.                                                                                                      |
+| Validation / issue count | Unchanged — a problem in a hidden track is still a problem with the piece.                                                                     |
+| Export                   | **Asks**, see below.                                                                                                                           |
 
 ## Export
 
@@ -120,7 +120,7 @@ Through the existing endpoint. `project-slice.ts`'s autosaver currently sends `{
 Two consequences worth stating:
 
 - **Changing visibility marks the project dirty** and triggers the autosave, exactly as an edit does. It is a persisted preference, so it must be.
-- **Changing visibility is not undoable.** It is not a score command and never enters the undo stack. Ctrl-Z after hiding a track undoes the last *musical* edit — which is right, but is the sort of thing that surprises people, so the checkbox state is plainly visible in the control at all times.
+- **Changing visibility is not undoable.** It is not a score command and never enters the undo stack. Ctrl-Z after hiding a track undoes the last _musical_ edit — which is right, but is the sort of thing that surprises people, so the checkbox state is plainly visible in the control at all times.
 
 ## Testing
 

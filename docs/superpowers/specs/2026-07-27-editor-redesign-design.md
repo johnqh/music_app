@@ -65,16 +65,16 @@ stay literal color strings: VexFlow draws to canvas/SVG attributes, not CSS, so
 custom properties do not work here (this constraint is already documented on the
 existing constants and is unchanged).
 
-| Role | Light | Dark |
-| --- | --- | --- |
-| `foreground` | `#3f3f46` | `#d4d4d8` |
-| `noteNormal` | `#3f3f46` | `#d4d4d8` |
-| `noteSelected` | `#000000` | `#ffffff` |
+| Role              | Light     | Dark      |
+| ----------------- | --------- | --------- |
+| `foreground`      | `#3f3f46` | `#d4d4d8` |
+| `noteNormal`      | `#3f3f46` | `#d4d4d8` |
+| `noteSelected`    | `#000000` | `#ffffff` |
 | `noteRegenerated` | `#8b5a2b` | `#d9a066` |
-| `notePlaying` | `#1565c0` | `#64b5f6` |
-| `staveActive` | `#000000` | `#ffffff` |
-| `staveInactive` | `#71717a` | `#8a8a93` |
-| `caret` | `#d32f2f` | `#ef5350` |
+| `notePlaying`     | `#1565c0` | `#64b5f6` |
+| `staveActive`     | `#000000` | `#ffffff` |
+| `staveInactive`   | `#71717a` | `#8a8a93` |
+| `caret`           | `#d32f2f` | `#ef5350` |
 
 These are starting values, each ≥4.5:1 against its mode's stave background
 (white / `#121212`). They may be nudged during implementation if a contrast
@@ -97,7 +97,7 @@ it (`noteEmphasisFor`):
 
 - **Notation** — a non-normal note draws with a thicker `lineWidth` (stems,
   flags, beams) and a `shadowBlur` halo tinted with its own color. The halo is
-  what reaches a *stemless* whole note, whose filled notehead no stroke width
+  what reaches a _stemless_ whole note, whose filled notehead no stroke width
   can thicken; without it that one case would have had no non-color cue.
 - **Piano roll** — a non-normal note's own border goes from 1px to 2px and
   darkens. It thickens the note's edge rather than drawing anything around it,
@@ -107,7 +107,7 @@ it (`noteEmphasisFor`):
 
 One emphasis level covers every non-normal state rather than three
 distinguishable ones. The perceptually important distinction is "is this note
-affected" versus "is it not"; *which* state comes from hue plus the announced
+affected" versus "is it not"; _which_ state comes from hue plus the announced
 summary. `selected` and `regenerated` are mutually exclusive (regenerated is a
 property of the whole selection), and `playing` is transient and accompanied by
 the moving caret.
@@ -212,7 +212,7 @@ subscription or a reconciliation effect.
 **Not persisted.** A track id is meaningful only within one project, so writing
 it to device-level `PrefsStorage` would carry a dead id across projects. It
 resets to "first track" on load, which is the specified default anyway. (The
-piano roll's collapsed state *is* persisted — that is device preference, not
+piano roll's collapsed state _is_ persisted — that is device preference, not
 project state.)
 
 Removed from `ui-slice`: `view: ViewMode` and `setView`. The `ViewMode` type
@@ -234,8 +234,8 @@ color with no further wiring.
 ### `generation-slice`
 
 `acceptCandidate` (`generation-slice.ts:248`) currently sets `eventIds: []`
-because "event ids never survive a splice". That reasoning applies to *old* ids;
-the candidate fragment's *new* ids are known. It changes to:
+because "event ids never survive a splice". That reasoning applies to _old_ ids;
+the candidate fragment's _new_ ids are known. It changes to:
 
 - collect every event id from `candidate.fragment.tracks[].measures[].voices[].events[]`
 - set `selection.eventIds` to those ids (measure remapping is unchanged)
@@ -276,15 +276,15 @@ No other controller change. `playPreview`/`stopPreview` and the
 `ScoreEditorView.handleClick` (`ScoreEditorView.tsx:495`) is rewritten to this
 table. "Caret" means `playbackController.seek(tick)`.
 
-| Gesture | Caret | Selection | Active track |
-| --- | --- | --- | --- |
-| Click empty stave / barline | → clicked tick | cleared | → clicked track |
-| Click a note | → note's `startTick` | that note only | → note's track |
-| Cmd-click | unchanged | notes from caret tick → clicked tick, active track | unchanged |
-| Cmd-shift-click | unchanged | same span, all tracks | unchanged |
-| Click measure gutter | unchanged | that measure index, active track | unchanged |
-| Cmd-shift-click measure gutter | unchanged | that measure index, all tracks | unchanged |
-| Drag | unchanged | rubber band (as today), plus autoscroll (§6) | unchanged |
+| Gesture                        | Caret                | Selection                                          | Active track    |
+| ------------------------------ | -------------------- | -------------------------------------------------- | --------------- |
+| Click empty stave / barline    | → clicked tick       | cleared                                            | → clicked track |
+| Click a note                   | → note's `startTick` | that note only                                     | → note's track  |
+| Cmd-click                      | unchanged            | notes from caret tick → clicked tick, active track | unchanged       |
+| Cmd-shift-click                | unchanged            | same span, all tracks                              | unchanged       |
+| Click measure gutter           | unchanged            | that measure index, active track                   | unchanged       |
+| Cmd-shift-click measure gutter | unchanged            | that measure index, all tracks                     | unchanged       |
+| Drag                           | unchanged            | rubber band (as today), plus autoscroll (§6)       | unchanged       |
 
 Three deliberate choices:
 
@@ -295,7 +295,7 @@ Three deliberate choices:
 - **Cmd-click with the caret never moved** ranges from tick 0, since
   `positionTick` starts at 0. No special case; that is the caret's real position.
 
-A measure gutter cell spans one measure *index* across the whole system. Because
+A measure gutter cell spans one measure _index_ across the whole system. Because
 measure ids are per-track, "that measure index, active track" resolves to
 `activeTrack.measures[index].id`, and the cmd-shift variant collects that index's
 measure id from every track.
@@ -431,6 +431,7 @@ Following the repos' existing convention — pure logic unit-tested directly,
 components tested against a real store via `createAppStore()`.
 
 **New pure-function tests**
+
 - `noteIdsInTickRange`: half-open boundary, reversed from/to, multi-track scope,
   empty span.
 - Color-role resolution: precedence ordering, multi-event-id notes (chords,
@@ -440,6 +441,7 @@ components tested against a real store via `createAppStore()`.
 - `selectActiveTrackId`: null → first track, stale id → first track, no tracks → null.
 
 **Renderer tests** (`canvas-renderer.test.ts`)
+
 - `setStyle` called with the expected color per role.
 - Stave stroke differs between active and inactive tracks.
 - Measure-number gutter geometry stays within the reclaimed `SYSTEM_GAP` and
@@ -447,6 +449,7 @@ components tested against a real store via `createAppStore()`.
 - A selected measure's gutter cell is tinted; an unselected one is not.
 
 **Component tests**
+
 - One test per row of the §5 gesture table, asserting caret / selection /
   active-track outcome against a real store.
 - Play clears the selection; pause and stop do not.
@@ -458,12 +461,14 @@ components tested against a real store via `createAppStore()`.
 - Collapse toggles the panel and persists.
 
 **Removed tests**
+
 - `overlay.test.ts` in `music_lib`.
 - View-toggle tests in `EditorToolbar.test.tsx` and `PianoRollToolbar.test.tsx`.
 - Track-filter tests in `PianoRollToolbar.test.tsx`.
 - Every `paintHighlights` assertion in `ScoreEditorView.test.tsx`.
 
 **E2E** (`music_app/e2e/`)
+
 - The `window.__scoresmith` handle still resolves ids to coordinates from the
   live render result, unchanged.
 - Specs asserting the notation/piano-roll mode switch are rewritten for the

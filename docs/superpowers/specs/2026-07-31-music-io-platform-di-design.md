@@ -9,29 +9,29 @@
 
 A no-DOM probe (Bun, which has no `window`/`document`/Web Audio) established what actually breaks today:
 
-| Subsystem | Result with no DOM |
-| --- | --- |
-| Package import (184 exports) | works — nothing touches the DOM at module load |
-| Domain model, queries, validation, quantization | works |
-| `computeLayout` | works |
-| MIDI export | works |
-| Zustand store, commands, undo | works |
-| `CanvasScoreRenderer.render` | **works** — 28 note bboxes, 1232 canvas ops |
-| MusicXML **import** | `ReferenceError: DOMParser is not defined` |
-| `downloadBlob` | needs `document` + `Blob` + `URL.createObjectURL` |
-| Tone playback | constructs, but needs Web Audio to make sound |
+| Subsystem                                       | Result with no DOM                                |
+| ----------------------------------------------- | ------------------------------------------------- |
+| Package import (184 exports)                    | works — nothing touches the DOM at module load    |
+| Domain model, queries, validation, quantization | works                                             |
+| `computeLayout`                                 | works                                             |
+| MIDI export                                     | works                                             |
+| Zustand store, commands, undo                   | works                                             |
+| `CanvasScoreRenderer.render`                    | **works** — 28 note bboxes, 1232 canvas ops       |
+| MusicXML **import**                             | `ReferenceError: DOMParser is not defined`        |
+| `downloadBlob`                                  | needs `document` + `Blob` + `URL.createObjectURL` |
+| Tone playback                                   | constructs, but needs Web Audio to make sound     |
 
 So this is mostly relocation, not redesign. Three seams already exist: `PlaybackEngine` is already an interface, the renderer already takes a context object, and the workers are already guarded by `typeof Worker` with a main-thread fallback.
 
 ## Decisions
 
-| Decision | Choice |
-| --- | --- |
+| Decision         | Choice                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
 | Package topology | **One** `music_io` with a `react-native` export condition, as `@sudobility/di` does. No separate `music_io_rn`. |
-| RN audio backend | `react-native-audio-api`, wired in this project (not stubbed). |
-| RN XML parser | `fast-xml-parser` (ESM), not `@xmldom/xmldom` (CJS-only). |
-| `@tonejs/midi` | Behind a `MidiCodec` interface, implementation in `music_io`. |
-| Scope | Libraries only. No RN app. |
+| RN audio backend | `react-native-audio-api`, wired in this project (not stubbed).                                                  |
+| RN XML parser    | `fast-xml-parser` (ESM), not `@xmldom/xmldom` (CJS-only).                                                       |
+| `@tonejs/midi`   | Behind a `MidiCodec` interface, implementation in `music_io`.                                                   |
+| Scope            | Libraries only. No RN app.                                                                                      |
 
 ### Why `react-native-audio-api`
 
@@ -51,10 +51,10 @@ It is Software Mansion's Web Audio implementation for RN, so Tone.js — which t
   "name": "@sudobility/music_io",
   "type": "module",
   "exports": {
-    ".":       { "react-native": "./dist/rn/index.js", "default": "./dist/web/index.js" },
-    "./web":   "./dist/web/index.js",
-    "./rn":    "./dist/rn/index.js",
-    "./mocks": "./dist/mocks/index.js"
+    ".": { "react-native": "./dist/rn/index.js", "default": "./dist/web/index.js" },
+    "./web": "./dist/web/index.js",
+    "./rn": "./dist/rn/index.js",
+    "./mocks": "./dist/mocks/index.js",
   },
   "dependencies": {},
   "peerDependencies": {
@@ -62,13 +62,13 @@ It is Software Mansion's Web Audio implementation for RN, so Tone.js — which t
     "tone": "^15.0.0",
     "@tonejs/midi": "^2.0.28",
     "react-native-audio-api": ">=0.13.0",
-    "fast-xml-parser": "^5.10.1"
+    "fast-xml-parser": "^5.10.1",
   },
   "peerDependenciesMeta": {
-    "tone":                   { "optional": true },
+    "tone": { "optional": true },
     "react-native-audio-api": { "optional": true },
-    "fast-xml-parser":        { "optional": true }
-  }
+    "fast-xml-parser": { "optional": true },
+  },
 }
 ```
 
@@ -174,15 +174,20 @@ export interface MidiCodec {
 export type MusicPlatform = { playback: PlaybackEngine };
 
 export function initializeMusicPlatform(platform: MusicPlatform): void;
-export function getMusicPlatform(): MusicPlatform;   // throws a named error if unset
-export function resetMusicPlatform(): void;          // tests
+export function getMusicPlatform(): MusicPlatform; // throws a named error if unset
+export function resetMusicPlatform(): void; // tests
 ```
 
 `music_io` separately exports the full bundle it can build, of which only `playback` is registered:
 
 ```ts
 // music_io — same shape from the web and rn entries
-export type MusicIo = { playback: PlaybackEngine; xmlParser: XmlParser; midiCodec: MidiCodec; fileExporter: FileExporter };
+export type MusicIo = {
+  playback: PlaybackEngine;
+  xmlParser: XmlParser;
+  midiCodec: MidiCodec;
+  fileExporter: FileExporter;
+};
 export function createMusicIo(): MusicIo;
 ```
 
@@ -190,12 +195,12 @@ Only `PlaybackEngine` goes in the registry, because only playback is a long-live
 
 The pure adapters take their service as an explicit final argument — they are pure functions, and a parameter needs no global state to test:
 
-| Before | After |
-| --- | --- |
-| `importMusicXml(xmlText)` | `importMusicXml(xmlText, parser: XmlParser)` |
+| Before                      | After                                         |
+| --------------------------- | --------------------------------------------- |
+| `importMusicXml(xmlText)`   | `importMusicXml(xmlText, parser: XmlParser)`  |
 | `importMidi(data, options)` | `importMidi(data, options, codec: MidiCodec)` |
-| `exportMidi(score)` | `exportMidi(score, codec: MidiCodec)` |
-| `analyzeMidi(data)` | `analyzeMidi(data, codec: MidiCodec)` |
+| `exportMidi(score)`         | `exportMidi(score, codec: MidiCodec)`         |
+| `analyzeMidi(data)`         | `analyzeMidi(data, codec: MidiCodec)`         |
 
 `exportMusicXml(score)` is unchanged — it is pure string building and never touched the DOM.
 
@@ -203,17 +208,17 @@ The worker-backed services (`midi-service.ts`, `quantize-service.ts`) already ac
 
 ## What moves
 
-| Thing | From | To |
-| --- | --- | --- |
-| `TonePlaybackEngine` | `music_lib/adapters/tone/` | `music_io/src/web/playback/` |
-| RN playback engine | — | `music_io/src/rn/playback/` (new, `react-native-audio-api`) |
-| Instrument voices (`instruments.ts`) | `music_lib/adapters/tone/` | `music_io/src/web/playback/` — they construct Tone nodes |
-| `DOMParser` call | `music_lib/adapters/musicxml/import.ts` | `music_io` web (`DOMParser`) + rn (`fast-xml-parser`, adapted to `XmlElement`) |
-| `downloadBlob` | `music_lib/services/import-export/` | `music_io` web (anchor + object URL) + rn (file write + share sheet) |
-| `@tonejs/midi` usage | `music_lib/adapters/midi/*` | `music_io` — `music_lib` maps to/from the neutral `MidiFile` |
-| `tone`, `@tonejs/midi` deps | `music_lib` | `music_io` peers |
-| `dexie` dep | `music_lib` | **deleted** — nothing imports it |
-| `vexflow` | — | **stays in `music_lib`** — the renderer takes a context object and draws with no DOM |
+| Thing                                | From                                    | To                                                                                   |
+| ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------ |
+| `TonePlaybackEngine`                 | `music_lib/adapters/tone/`              | `music_io/src/web/playback/`                                                         |
+| RN playback engine                   | —                                       | `music_io/src/rn/playback/` (new, `react-native-audio-api`)                          |
+| Instrument voices (`instruments.ts`) | `music_lib/adapters/tone/`              | `music_io/src/web/playback/` — they construct Tone nodes                             |
+| `DOMParser` call                     | `music_lib/adapters/musicxml/import.ts` | `music_io` web (`DOMParser`) + rn (`fast-xml-parser`, adapted to `XmlElement`)       |
+| `downloadBlob`                       | `music_lib/services/import-export/`     | `music_io` web (anchor + object URL) + rn (file write + share sheet)                 |
+| `@tonejs/midi` usage                 | `music_lib/adapters/midi/*`             | `music_io` — `music_lib` maps to/from the neutral `MidiFile`                         |
+| `tone`, `@tonejs/midi` deps          | `music_lib`                             | `music_io` peers                                                                     |
+| `dexie` dep                          | `music_lib`                             | **deleted** — nothing imports it                                                     |
+| `vexflow`                            | —                                       | **stays in `music_lib`** — the renderer takes a context object and draws with no DOM |
 
 `music_lib`'s remaining runtime dependencies: `immer`, `zod`, `vexflow`.
 
@@ -235,7 +240,7 @@ and the four `downloadBlob` call sites import from `@sudobility/music_io` instea
 
 - **`music_types`** — type-only; covered by compilation.
 - **`music_io`** — unit tests per implementation. The `rn` entry is exercised under Node with the native modules faked, so it is verified without a device.
-- **Shared contract tests** — one suite runs against *any* `MusicPlatform`, so web, rn and mocks are all held to the same behaviour rather than each being tested differently.
+- **Shared contract tests** — one suite runs against _any_ `MusicPlatform`, so web, rn and mocks are all held to the same behaviour rather than each being tested differently.
 - **`music_lib`** — all 893 existing tests keep passing, using `music_io/mocks`.
 - **`music_app`** — 353 unit tests and 13 e2e keep passing with **identical behaviour**. This is the primary regression gate: the web app must not change at all.
 

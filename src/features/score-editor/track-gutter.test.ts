@@ -15,15 +15,31 @@ function plan(): LayoutPlan {
       {
         track: { id: 't0' },
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 230, y: 28, width: 200, height: 100 } },
-          { measureIndex: 2, isFirstInSystem: true, box: { x: 230, y: 268, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 230, y: 28, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 2,
+            isFirstInSystem: true,
+            box: { x: 230, y: 268, width: 200, height: 100 },
+          },
         ],
       },
       {
         track: { id: 't1' },
         measures: [
-          { measureIndex: 0, isFirstInSystem: true, box: { x: 230, y: 148, width: 200, height: 100 } },
-          { measureIndex: 2, isFirstInSystem: true, box: { x: 230, y: 388, width: 200, height: 100 } },
+          {
+            measureIndex: 0,
+            isFirstInSystem: true,
+            box: { x: 230, y: 148, width: 200, height: 100 },
+          },
+          {
+            measureIndex: 2,
+            isFirstInSystem: true,
+            box: { x: 230, y: 388, width: 200, height: 100 },
+          },
         ],
       },
     ],

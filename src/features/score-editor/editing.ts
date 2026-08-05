@@ -34,7 +34,15 @@ import type { MusicalEvent } from '@sudobility/music_types';
 import type { ScoreSelection } from '@sudobility/music_lib';
 import type { ScoreCommand } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
-import { allNotes, findEvent, findTrack, playbackController, selectActiveTrackId } from '@sudobility/music_lib';
+import {
+  allNotes,
+  findEvent,
+  findTrack,
+  playbackController,
+  selectActiveTrackId,
+} from '@sudobility/music_lib';
+import { gmMaxPolyphony, gmSupportsChord, insertWithRippleCommand } from '@sudobility/music_lib';
+import type { EditMode } from '@sudobility/music_lib';
 import { ticksFor } from '@sudobility/music_lib';
 import {
   addNoteCommand,
@@ -45,6 +53,7 @@ import {
   deleteEventsCommand,
   toggleTieCommand,
 } from '@sudobility/music_lib';
+import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
 import {
   applyQuantizedCommand,
   collectQuantizeTargets,
@@ -99,7 +108,6 @@ export function selectedNoteIds(score: Score, selection: ScoreSelection): UUID[]
 
 type InsertTarget = { trackId: UUID; measureId: UUID; voiceIndex: number; startTick: number };
 
-
 /**
  * Resolves where an insert/rest action should target, from (in priority
  * order): the first selected event's own position; the first selected
@@ -111,14 +119,14 @@ export function resolveInsertTarget(
   score: Score,
   activeTrackId: UUID | null,
   caretTick: number,
+  voiceIndex = 0,
 ): InsertTarget | null {
   // The caret, not the selection. Everywhere else in this editor the caret is
   // the anchor -- a click sets it, playback starts from it -- and inserting
   // from the selection meant that clicking empty staff (which moves the caret
   // and clears the selection) put the next note at the very start of the
   // score, nowhere near where the user was looking.
-  const track =
-    (activeTrackId ? findTrack(score, activeTrackId) : null) ?? score.tracks[0] ?? null;
+  const track = (activeTrackId ? findTrack(score, activeTrackId) : null) ?? score.tracks[0] ?? null;
   if (!track || track.measures.length === 0) return null;
 
   const tick = Math.max(0, caretTick);
@@ -131,7 +139,7 @@ export function resolveInsertTarget(
   return {
     trackId: track.id,
     measureId: measure.id,
-    voiceIndex: 0,
+    voiceIndex,
     startTick: Math.min(tick, measure.startTick + measure.durationTicks - 1),
   };
 }
@@ -148,7 +156,12 @@ export function insertNoteAtCaret(
 ): void {
   const state = store.getState();
   if (!state.score) return;
-  const target = resolveInsertTarget(state.score, selectActiveTrackId(state), state.positionTick);
+  const target = resolveInsertTarget(
+    state.score,
+    selectActiveTrackId(state),
+    state.positionTick,
+    state.activeVoiceIndex,
+  );
   if (!target) return;
 
   const { articulation, duration, advanceCaret = false } = options;
@@ -171,6 +184,144 @@ export function insertNoteAtCaret(
   // Step the caret past what was just written, so a run of taps lays out a
   // melody instead of overwriting one position.
   if (advanceCaret) playbackController.seek(target.startTick + durationTicks);
+}
+
+/**
+ * How many notes already sound at `tick` on `trackId`, counting only those
+ * that start there — a chord is notes sharing a start, not notes overlapping.
+ */
+function chordSizeAt(score: Score, trackId: UUID, tick: number): number {
+  const track = findTrack(score, trackId);
+  if (!track) return 0;
+  let count = 0;
+  for (const measure of track.measures) {
+    for (const voice of measure.voices) {
+      for (const event of voice.events) {
+        if (isNoteEvent(event) && event.startTick === tick) count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Writes `pitches` as one chord at the caret: one shared start tick and one
+ * shared duration.
+ *
+ * The shared duration is the whole point, not a simplification. Notes at the
+ * same tick cluster by `startTick:durationTicks`, so same-start notes whose
+ * durations differ do not stack — the later one wins the span and the earlier
+ * is dropped. Writing three keys with three separately-measured tap lengths
+ * would therefore silently discard two of them.
+ *
+ * Refuses chords the instrument could not play (`gmMaxPolyphony`), counting
+ * notes already at the tick so a second pass cannot sneak past the limit.
+ * Returns whether anything was written.
+ */
+export function insertChordAtCaret(
+  store: EditorStoreApi,
+  pitches: readonly Pitch[],
+  options: {
+    duration?: DurationName;
+    advanceCaret?: boolean;
+    /**
+     * Overrides the store's `editMode` for this write.
+     *
+     * Editing an existing chord always stacks, whatever mode the toolbar is
+     * in: `replace` would clear the very chord being edited, and `insert`
+     * would shove it sideways. The mode describes entering new material, not
+     * amending what is already selected.
+     */
+    mode?: EditMode;
+  } = {},
+): boolean {
+  const state = store.getState();
+  if (!state.score || pitches.length === 0) return false;
+  const target = resolveInsertTarget(
+    state.score,
+    selectActiveTrackId(state),
+    state.positionTick,
+    state.activeVoiceIndex,
+  );
+  if (!target) return false;
+
+  const track = findTrack(state.score, target.trackId);
+  const program = track?.midiProgram ?? 0;
+  const existing = chordSizeAt(state.score, target.trackId, target.startTick);
+  const total = existing + pitches.length;
+
+  if (!gmSupportsChord(program, total)) {
+    const limit = gmMaxPolyphony(program);
+    store.getState().pushToast({
+      severity: 'warning',
+      message:
+        limit === 1
+          ? `${track?.instrumentName ?? 'This instrument'} plays one note at a time, so this chord was not added.`
+          : `${track?.instrumentName ?? 'This instrument'} plays at most ${limit} notes at once, so this chord was not added.`,
+    });
+    return false;
+  }
+
+  const { duration, advanceCaret = false } = options;
+  const durationTicks = ticksFor(duration ?? state.snapGrid, state.score.ppq);
+
+  const mode = options.mode ?? state.editMode;
+
+  // `replace` has to clear the span itself. Leaving it to reflow does not
+  // work: notes sharing a start AND a duration cluster into a chord, so a
+  // replacement whose length happens to match what is there would silently
+  // stack instead — making replace and stack the same mode most of the time.
+  if (mode === 'replace') {
+    // Scoped to the target voice, not the track. Clearing the span across
+    // every voice would delete the other line on the stave, which is the
+    // opposite of what a second voice is for.
+    const targetMeasure = findTrack(state.score, target.trackId)?.measures.find(
+      (measure) => measure.id === target.measureId,
+    );
+    const targetVoiceId = targetMeasure?.voices[target.voiceIndex]?.id;
+
+    const occupying = allNotes(state.score)
+      .filter(
+        (note) =>
+          note.trackId === target.trackId &&
+          // An absent voice has nothing to clear, and matching every voice
+          // would be worse than matching none.
+          note.voiceId === targetVoiceId &&
+          note.startTick < target.startTick + durationTicks &&
+          note.startTick + note.durationTicks > target.startTick,
+      )
+      .map((note) => note.id);
+    if (occupying.length > 0) dispatchTracked(store, deleteEventsCommand(occupying));
+  }
+
+  pitches.forEach((pitch, index) => {
+    // Only the first note of a chord opens a gap; its siblings land in the gap
+    // it made. Rippling per pitch would push the tail three beats for a triad.
+    const useRipple = mode === 'insert' && index === 0;
+    dispatchTracked(
+      store,
+      useRipple
+        ? insertWithRippleCommand({
+            trackId: target.trackId,
+            measureId: target.measureId,
+            voiceIndex: target.voiceIndex,
+            pitch,
+            startTick: target.startTick,
+            durationTicks,
+          })
+        : addNoteCommand({
+            trackId: target.trackId,
+            measureId: target.measureId,
+            voiceIndex: target.voiceIndex,
+            pitch,
+            startTick: target.startTick,
+            durationTicks,
+          }),
+    );
+  });
+
+  if (advanceCaret) playbackController.seek(target.startTick + durationTicks);
+  return true;
 }
 
 /**
@@ -275,6 +426,53 @@ export function deleteSelected(store: EditorStoreApi): void {
   if (ids.length === 0) return;
   dispatchTracked(store, deleteEventsCommand(ids));
   state.clearSelection();
+}
+
+/** Appends one empty measure to every track, so the barlines stay aligned. */
+export function addMeasure(store: EditorStoreApi): void {
+  if (!store.getState().score) return;
+  dispatchTracked(store, addMeasureCommand());
+}
+
+/**
+ * Removes the measure the caret is in, from every track.
+ *
+ * Refuses to remove the last one: a score with no measures has nothing to draw
+ * and no measure for the caret to sit in, and there would be no control left
+ * to undo it with except undo itself.
+ */
+export function deleteMeasureAtCaret(store: EditorStoreApi): void {
+  const state = store.getState();
+  if (!state.score) return;
+
+  const track = state.score.tracks[0];
+  if (!track || track.measures.length <= 1) {
+    state.pushToast({
+      severity: 'warning',
+      message: 'A score needs at least one measure, so this one was kept.',
+    });
+    return;
+  }
+
+  const tick = Math.max(0, state.positionTick);
+  const measure =
+    track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ??
+    track.measures[track.measures.length - 1];
+
+  dispatchTracked(store, deleteMeasureCommand(measure.index));
+}
+
+/**
+ * Deletes specific notes by id, leaving the selection alone.
+ *
+ * Distinct from `deleteSelected`, which clears the selection afterwards: the
+ * keyboard removes one note from a selected chord and the rest of that chord
+ * must stay selected, or every subsequent key press would fall back to entry
+ * mode mid-edit.
+ */
+export function deleteEvents(store: EditorStoreApi, eventIds: UUID[]): void {
+  if (eventIds.length === 0) return;
+  dispatchTracked(store, deleteEventsCommand(eventIds));
 }
 
 /** Duplicates the currently selected notes immediately after their own latest end tick, on the same track (voice 0 — MVP scope, see brief). No-op if no notes are selected. */

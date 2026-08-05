@@ -60,6 +60,8 @@ describe('autoscrollDelta', () => {
   });
 
   it('is exactly zero at the band boundary, so there is no dead nudge', () => {
-    expect(autoscrollDelta({ x: 400, y: 600 - AUTOSCROLL_EDGE_PX, box, layoutMode: 'page' }).dy).toBe(0);
+    expect(
+      autoscrollDelta({ x: 400, y: 600 - AUTOSCROLL_EDGE_PX, box, layoutMode: 'page' }).dy,
+    ).toBe(0);
   });
 });

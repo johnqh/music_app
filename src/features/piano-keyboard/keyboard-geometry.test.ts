@@ -102,14 +102,7 @@ describe('computeKeys', () => {
     // white key is more than two steps from a reference. Labelling all seven
     // per octave is legible only while the keys are wide, and this shrinks.
     const labelled = keys.filter((k) => k.label !== null);
-    expect(labelled.map((k) => k.label).slice(0, 6)).toEqual([
-      'C1',
-      'F1',
-      'C2',
-      'F2',
-      'C3',
-      'F3',
-    ]);
+    expect(labelled.map((k) => k.label).slice(0, 6)).toEqual(['C1', 'F1', 'C2', 'F2', 'C3', 'F3']);
     for (const key of keys) {
       if (key.label === null) continue;
       expect([0, 5]).toContain(key.midi % 12); // pitch class C or F

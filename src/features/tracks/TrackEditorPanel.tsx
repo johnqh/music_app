@@ -16,14 +16,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import {
-  Button,
-  Input,
-  SheetSelector,
-  Slider,
-  Tooltip,
-  cn,
-} from '@sudobility/components';
+import { Button, Input, SheetSelector, Slider, Tooltip, cn } from '@sudobility/components';
 import type { Clef, Track, UUID } from '@sudobility/music_types';
 import {
   GM_FAMILIES,

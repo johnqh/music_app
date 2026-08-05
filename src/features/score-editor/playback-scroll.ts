@@ -82,7 +82,10 @@ export function playbackScrollTarget({
     // Vertical is left completely alone: one long system means there is no
     // "next line" to follow, so any vertical move would be the caller fighting
     // the reader for the scrollbar.
-    return { left: Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin), top: scrollTop };
+    return {
+      left: Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin),
+      top: scrollTop,
+    };
   }
 
   // Page mode wraps every system to the viewport and does not scroll

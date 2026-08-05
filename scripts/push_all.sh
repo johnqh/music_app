@@ -26,6 +26,7 @@ PROJECTS=(
     "../music_types:60"
     "../music_api:0"
     "../music_client:60"
+    "../music_io:0"
     "../music_lib:60"
     "../music_app:0"
 )

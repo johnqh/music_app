@@ -15,12 +15,11 @@
  * match English, since the two going out of sync is silent — i18next falls back
  * to English for a missing key and shows the raw key for a missing file.
  */
-export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const;
+export const SUPPORTED_LANGUAGES = ['en'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 export const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
   en: 'English',
-  fr: 'Français',
 };
 
 export function isLanguageSupported(code: string): code is SupportedLanguage {
@@ -41,7 +40,6 @@ export function isLanguageSupported(code: string): code is SupportedLanguage {
  */
 const LANGUAGE_FLAGS: Record<SupportedLanguage, string> = {
   en: '\u{1F1FA}\u{1F1F8}',
-  fr: '\u{1F1EB}\u{1F1F7}',
 };
 
 export const LANGUAGE_OPTIONS: Array<{ code: string; name: string; flag: string }> =

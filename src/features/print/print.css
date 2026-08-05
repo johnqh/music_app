@@ -1,0 +1,31 @@
+/*
+ * Print rules for the print view.
+ *
+ * On screen this is an ordinary page; these apply only when printing. The
+ * browser owns pagination — each system is a block it may not break inside, so
+ * it fits as many whole systems per page as the chosen paper allows. Feature 6
+ * replaces this with explicit pagination once page turns must land on rests.
+ */
+@media print {
+  /* The chrome is for choosing what to print, not part of the printout. */
+  .print-chrome {
+    display: none !important;
+  }
+
+  .print-pages {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+  }
+
+  /* The rule the whole feature exists to guarantee. */
+  .print-pages > * {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* The printer's own margins, whatever paper it is. */
+  @page {
+    margin: 12mm;
+  }
+}

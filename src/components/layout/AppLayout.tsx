@@ -487,6 +487,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   type="button"
                   variant="ghost"
                   role="menuitem"
+                  onClick={() => {
+                    exportMenu.setOpen(false);
+                    onNavigate?.(`/project/${store.getState().projectId ?? ''}/print`);
+                  }}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Print…
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
                   onClick={handleExportMidi}
                   disabled={!score}
                   className={MENU_ITEM_CLASS}

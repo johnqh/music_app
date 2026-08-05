@@ -64,7 +64,15 @@ const STEM_TOP = 3;
 
 /** Filled notehead, tilted like an engraved one. */
 function NoteHead() {
-  return <ellipse cx={HEAD_X} cy={HEAD_Y} rx={3.6} ry={2.55} transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`} />;
+  return (
+    <ellipse
+      cx={HEAD_X}
+      cy={HEAD_Y}
+      rx={3.6}
+      ry={2.55}
+      transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`}
+    />
+  );
 }
 
 function Stem() {
@@ -277,10 +285,155 @@ export function InsertNoteIcon(props: GlyphProps) {
   return (
     <Glyph {...props}>
       <g transform="translate(-0.6 2) scale(0.86)">
-        <ellipse cx={HEAD_X} cy={HEAD_Y} rx={3.6} ry={2.55} transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`} />
-        <rect x={STEM_RIGHT - STEM_WIDTH} y={STEM_TOP} width={STEM_WIDTH} height={HEAD_Y - STEM_TOP} />
+        <ellipse
+          cx={HEAD_X}
+          cy={HEAD_Y}
+          rx={3.6}
+          ry={2.55}
+          transform={`rotate(-20 ${HEAD_X} ${HEAD_Y})`}
+        />
+        <rect
+          x={STEM_RIGHT - STEM_WIDTH}
+          y={STEM_TOP}
+          width={STEM_WIDTH}
+          height={HEAD_Y - STEM_TOP}
+        />
       </g>
       <PlusBadge />
+    </Glyph>
+  );
+}
+
+/** Add measure: an empty bar with a plus badge. */
+export function AddMeasureIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={3} y={7} width={1.4} height={10} />
+      <rect x={14} y={7} width={1.4} height={10} />
+      <rect x={3} y={11.3} width={12.4} height={1.2} />
+      <PlusBadge />
+    </Glyph>
+  );
+}
+
+/** Delete measure: the same bar, struck through. */
+export function DeleteMeasureIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={3} y={7} width={1.4} height={10} />
+      <rect x={14} y={7} width={1.4} height={10} />
+      <rect x={3} y={11.3} width={12.4} height={1.2} />
+      <path
+        d="M15 19 L22 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+    </Glyph>
+  );
+}
+
+/** Dotted: a notehead with the augmentation dot beside it. */
+export function DottedIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx={9} cy={HEAD_Y} rx={3.4} ry={2.4} transform={`rotate(-20 9 ${HEAD_Y})`} />
+      <rect x={11.4} y={4} width={STEM_WIDTH} height={HEAD_Y - 4} />
+      <circle cx={16.6} cy={HEAD_Y} r={1.7} />
+    </Glyph>
+  );
+}
+
+/** Triplet: three beamed heads under the numeral that names them. */
+export function TripletIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <text
+        x={12}
+        y={9}
+        textAnchor="middle"
+        fontSize={9}
+        fontStyle="italic"
+        fill="currentColor"
+        stroke="none"
+      >
+        3
+      </text>
+      {[5.5, 12, 18.5].map((cx) => (
+        <ellipse key={cx} cx={cx} cy={19} rx={2.3} ry={1.7} />
+      ))}
+      <rect x={4.5} y={12.5} width={15} height={1.4} />
+    </Glyph>
+  );
+}
+
+/**
+ * Insert mode: a note arriving between two that were already there, which is
+ * exactly what the mode does to the notes after the caret.
+ */
+export function InsertModeIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx={4.6} cy={HEAD_Y} rx={2.6} ry={1.9} />
+      <ellipse cx={19.4} cy={HEAD_Y} rx={2.6} ry={1.9} />
+      <path
+        d="M12 19 L12 6 M8.6 9.4 L12 6 L15.4 9.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Glyph>
+  );
+}
+
+/** Replace mode: a note landing on the one that was already in that place. */
+export function ReplaceModeIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <ellipse cx={12} cy={HEAD_Y} rx={3.4} ry={2.4} />
+      <path
+        d="M12 12.4 L12 4.5 M8.6 7.9 L12 4.5 L15.4 7.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Glyph>
+  );
+}
+
+/**
+ * Chord: three noteheads stacked on one stem — a triad as it is actually
+ * engraved, which is also exactly what the toggle produces.
+ *
+ * Heads sit a third apart (two staff positions) and share the stem, so the
+ * glyph reads as one chord rather than three notes that happen to be near each
+ * other.
+ */
+export function ChordIcon(props: GlyphProps) {
+  const spacing = 3.4;
+  return (
+    <Glyph {...props}>
+      {[0, 1, 2].map((step) => (
+        <ellipse
+          key={step}
+          cx={HEAD_X}
+          cy={HEAD_Y - step * spacing}
+          rx={3.4}
+          ry={2.4}
+          transform={`rotate(-20 ${HEAD_X} ${HEAD_Y - step * spacing})`}
+        />
+      ))}
+      <rect
+        x={STEM_RIGHT - STEM_WIDTH}
+        y={STEM_TOP}
+        width={STEM_WIDTH}
+        height={HEAD_Y - 2 * spacing - STEM_TOP}
+      />
     </Glyph>
   );
 }
@@ -382,7 +535,13 @@ export function ContinuousLayoutIcon(props: GlyphProps) {
 export function MetronomeIcon(props: GlyphProps) {
   return (
     <Glyph {...props}>
-      <path d="M9.2 3.4 L14.8 3.4 L18.6 20.6 L5.4 20.6 Z" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" />
+      <path
+        d="M9.2 3.4 L14.8 3.4 L18.6 20.6 L5.4 20.6 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
       <rect x={6.6} y={16.4} width={10.8} height={1.6} />
       <path d="M15.8 6.6 L10.6 17 L9.1 16.3 L14.3 5.9 Z" />
       <rect x={11.9} y={9.6} width={3.4} height={2.4} rx={0.5} transform="rotate(-24 13.6 10.8)" />

@@ -26,6 +26,7 @@
 ## File Structure
 
 **`music_types`** (interfaces only)
+
 - Create `src/platform/playback.ts` — `PlaybackEngine`, `PlaybackObserver`, `TransportPlaybackState`
 - Create `src/platform/xml.ts` — `XmlElement`, `XmlParser`, `XmlParseError`
 - Create `src/platform/file.ts` — `FileExporter`
@@ -34,6 +35,7 @@
 - Modify `src/index.ts` — re-export the barrel
 
 **`music_io`** (new package)
+
 - `src/web/index.ts`, `src/rn/index.ts`, `src/mocks/index.ts` — three entries
 - `src/web/playback/tone-engine.ts`, `src/web/playback/instruments.ts` — moved from music_lib
 - `src/web/xml/xml.web.ts`, `src/web/file/file.web.ts`, `src/shared/midi/codec.tonejs.ts`
@@ -41,11 +43,13 @@
 - `src/contract/platform-contract.ts` — the shared suite every implementation is held to
 
 **`music_lib`**
+
 - Create `src/platform/registry.ts`
 - Modify `src/services/playback/controller.ts`, the four adapters, two services, `src/index.ts`, `package.json`
 - Delete `src/adapters/tone/`, `src/services/import-export/download.ts`
 
 **`music_app`**
+
 - Modify `src/config/initialize.ts`, `src/components/layout/AppLayout.tsx`, `src/components/dialogs/DeveloperSettingsDialog.tsx`, the two import dialogs
 
 ---
@@ -55,6 +59,7 @@
 This runs first because it is the plan's only genuine unknown. It produces a written answer, not shipped code.
 
 **Files:**
+
 - Create: `~/projects/music_io/spikes/tone-on-rn-audio-api.md`
 
 - [ ] **Step 1: Create the package directory and install the two libraries**
@@ -78,8 +83,12 @@ import { AudioContext } from 'react-native-audio-api';
 
 const results = [];
 const check = (name, fn) => {
-  try { fn(); results.push(`OK    ${name}`); }
-  catch (e) { results.push(`BREAK ${name} -> ${e.constructor.name}: ${e.message}`); }
+  try {
+    fn();
+    results.push(`OK    ${name}`);
+  } catch (e) {
+    results.push(`BREAK ${name} -> ${e.constructor.name}: ${e.message}`);
+  }
 };
 
 const ctx = new AudioContext();
@@ -118,11 +127,13 @@ git commit -m "spike: whether Tone.js runs on react-native-audio-api"
 ## Task 2: Platform interfaces in `music_types`
 
 **Files:**
+
 - Create: `~/projects/music_types/src/platform/playback.ts`, `xml.ts`, `file.ts`, `midi.ts`, `index.ts`
 - Create: `~/projects/music_types/src/platform/platform.test.ts`
 - Modify: `~/projects/music_types/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `Score`, `ScoreRange` (already exported from `music_types`).
 - Produces: everything below, imported by every later task.
 
@@ -157,9 +168,13 @@ describe('platform interfaces', () => {
       header: { ppq: 480, tempos: [], timeSignatures: [] },
       tracks: [
         {
-          name: 'T', channel: 0, instrument: { number: 0 },
-          notes: [], controlChanges: { 7: [{ number: 7, ticks: 0, value: 1 }] },
-          durationTicks: 0, durationSeconds: 0,
+          name: 'T',
+          channel: 0,
+          instrument: { number: 0 },
+          notes: [],
+          controlChanges: { 7: [{ number: 7, ticks: 0, value: 1 }] },
+          durationTicks: 0,
+          durationSeconds: 0,
         },
       ],
       duration: 0,
@@ -179,6 +194,7 @@ describe('platform interfaces', () => {
 ```bash
 cd ~/projects/music_types && bunx vitest run src/platform/platform.test.ts
 ```
+
 Expected: FAIL — `Cannot find module './index.js'`.
 
 - [ ] **Step 3: Write `src/platform/playback.ts`**
@@ -289,7 +305,12 @@ export type MidiTrackData = {
 };
 
 export type MidiFile = {
-  header: { ppq: number; name?: string; tempos: MidiTempoEvent[]; timeSignatures: MidiTimeSignatureEvent[] };
+  header: {
+    ppq: number;
+    name?: string;
+    tempos: MidiTempoEvent[];
+    timeSignatures: MidiTimeSignatureEvent[];
+  };
   tracks: MidiTrackData[];
   /** Longest track duration in seconds; `analyzeMidi` reports it. */
   duration: number;
@@ -325,6 +346,7 @@ export * from './platform/index.js';
 ```bash
 cd ~/projects/music_types && bunx vitest run src/platform/platform.test.ts && bun run verify
 ```
+
 Expected: PASS, then verify clean. The DOM test needs jsdom — if `vitest.config.ts` has no `environment: 'jsdom'`, add `// @vitest-environment jsdom` as the first line of `platform.test.ts`.
 
 - [ ] **Step 9: Bump, commit, publish**
@@ -344,10 +366,12 @@ npm publish && git push
 ## Task 3: Scaffold the `music_io` package
 
 **Files:**
+
 - Create: `~/projects/music_io/{package.json,tsconfig.json,tsconfig.build.json,eslint.config.js,vitest.config.ts,.gitignore,CLAUDE.md}`
 - Create: `~/projects/music_io/src/{web,rn,mocks,shared,contract}/index.ts`
 
 **Interfaces:**
+
 - Consumes: `@sudobility/music_types` platform interfaces from Task 2.
 - Produces: `MusicIo` type and the three entry points every later task fills in.
 
@@ -360,11 +384,13 @@ npm publish && git push
   "description": "Platform implementations for ScoreSmith: playback, XML parsing, file export and MIDI codecs, for web and React Native",
   "type": "module",
   "exports": {
-    ".":       { "react-native": { "import": "./dist/rn/index.js",  "types": "./dist/rn/index.d.ts" },
-                 "default":      { "import": "./dist/web/index.js", "types": "./dist/web/index.d.ts" } },
-    "./web":   { "import": "./dist/web/index.js",   "types": "./dist/web/index.d.ts" },
-    "./rn":    { "import": "./dist/rn/index.js",    "types": "./dist/rn/index.d.ts" },
-    "./mocks": { "import": "./dist/mocks/index.js", "types": "./dist/mocks/index.d.ts" }
+    ".": {
+      "react-native": { "import": "./dist/rn/index.js", "types": "./dist/rn/index.d.ts" },
+      "default": { "import": "./dist/web/index.js", "types": "./dist/web/index.d.ts" },
+    },
+    "./web": { "import": "./dist/web/index.js", "types": "./dist/web/index.d.ts" },
+    "./rn": { "import": "./dist/rn/index.js", "types": "./dist/rn/index.d.ts" },
+    "./mocks": { "import": "./dist/mocks/index.js", "types": "./dist/mocks/index.d.ts" },
   },
   "files": ["dist/**/*", "CLAUDE.md"],
   "scripts": {
@@ -374,7 +400,7 @@ npm publish && git push
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "verify": "bun run typecheck && bun run lint && bun run test && bun run build",
-    "prepublishOnly": "bun run clean && bun run verify"
+    "prepublishOnly": "bun run clean && bun run verify",
   },
   "license": "BUSL-1.1",
   "dependencies": {},
@@ -383,13 +409,13 @@ npm publish && git push
     "@tonejs/midi": "^2.0.28",
     "fast-xml-parser": "^5.10.1",
     "react-native-audio-api": ">=0.13.0",
-    "tone": "^15.0.0"
+    "tone": "^15.0.0",
   },
   "peerDependenciesMeta": {
-    "fast-xml-parser":        { "optional": true },
+    "fast-xml-parser": { "optional": true },
     "react-native-audio-api": { "optional": true },
-    "tone":                   { "optional": true }
-  }
+    "tone": { "optional": true },
+  },
 }
 ```
 
@@ -454,6 +480,7 @@ describe('entry points', () => {
 ```bash
 cd ~/projects/music_io && bun run verify
 ```
+
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -470,11 +497,13 @@ Vite each resolve their own implementation from the same import specifier."
 ## Task 4: Web playback — move `TonePlaybackEngine` into `music_io`
 
 **Files:**
+
 - Create: `~/projects/music_io/src/web/playback/tone-engine.ts`, `instruments.ts`, `schedule.ts`, `midi.ts` (moved from music_lib)
 - Create: `~/projects/music_io/src/web/playback/tone-engine.test.ts` etc. (moved test files)
 - Modify: `~/projects/music_io/src/web/index.ts`
 
 **Interfaces:**
+
 - Consumes: `PlaybackEngine` from Task 2, `MusicIo` from Task 3.
 - Produces: `class TonePlaybackEngine implements PlaybackEngine`, exported from `@sudobility/music_io/web`.
 
@@ -489,6 +518,7 @@ cp ~/projects/music_lib/src/adapters/tone/{tone-engine,instruments,schedule,midi
 - [ ] **Step 2: Fix the imports**
 
 In every copied file, replace imports that reached into `music_lib`'s tree with package imports. The mechanical rules:
+
 - `from '../../domain/...'` and `from '../../services/playback/types.js'` → `from '@sudobility/music_types'`
 - Relative imports between the four copied files keep their `./name.js` form.
 
@@ -515,6 +545,7 @@ export function createMusicIo(): MusicIo {
 ```bash
 cd ~/projects/music_io && bunx vitest run src/web/playback
 ```
+
 Expected: PASS, with the same counts these files had in `music_lib`.
 
 - [ ] **Step 5: Commit**
@@ -531,11 +562,13 @@ reason music_lib could not be used from React Native."
 ## Task 5: Web XML parser and file exporter
 
 **Files:**
+
 - Create: `~/projects/music_io/src/web/xml/xml.web.ts`, `src/web/xml/xml.web.test.ts`
 - Create: `~/projects/music_io/src/web/file/file.web.ts`, `src/web/file/file.web.test.ts`
 - Modify: `~/projects/music_io/src/web/index.ts`
 
 **Interfaces:**
+
 - Consumes: `XmlParser`, `XmlElement`, `XmlParseError`, `FileExporter` from Task 2.
 - Produces: `class WebXmlParser implements XmlParser`, `class WebFileExporter implements FileExporter`.
 
@@ -551,7 +584,9 @@ import { WebXmlParser } from './xml.web.js';
 
 describe('WebXmlParser', () => {
   it('returns the root element', () => {
-    const root = new WebXmlParser().parse('<score-partwise version="4.0"><part id="P1"/></score-partwise>');
+    const root = new WebXmlParser().parse(
+      '<score-partwise version="4.0"><part id="P1"/></score-partwise>',
+    );
     expect(root.tagName).toBe('score-partwise');
     expect(root.getAttribute('version')).toBe('4.0');
     expect(root.children.length).toBe(1);
@@ -594,6 +629,7 @@ describe('WebFileExporter', () => {
 ```bash
 cd ~/projects/music_io && bunx vitest run src/web/xml src/web/file
 ```
+
 Expected: FAIL — modules not found.
 
 - [ ] **Step 3: Write `src/web/xml/xml.web.ts`**
@@ -651,6 +687,7 @@ export class WebFileExporter implements FileExporter {
 ```bash
 cd ~/projects/music_io && bunx vitest run src/web/xml src/web/file
 ```
+
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -667,10 +704,12 @@ rather than throwing, so the parser turns that into an XmlParseError."
 ## Task 6: The `@tonejs/midi` codec, shared by both platforms
 
 **Files:**
+
 - Create: `~/projects/music_io/src/shared/midi/codec.tonejs.ts`, `codec.tonejs.test.ts`
 - Modify: `~/projects/music_io/src/web/index.ts`
 
 **Interfaces:**
+
 - Consumes: `MidiCodec`, `MidiFile`, `MidiTrackData` from Task 2.
 - Produces: `class ToneJsMidiCodec implements MidiCodec`, and a complete `createMusicIo()` for web.
 
@@ -684,13 +723,26 @@ import type { MidiFile } from '@sudobility/music_types';
 import { ToneJsMidiCodec } from './codec.tonejs.js';
 
 const file: MidiFile = {
-  header: { ppq: 480, name: 'T', tempos: [{ ticks: 0, bpm: 120 }], timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }] },
-  tracks: [{
-    name: 'Piano', channel: 0, instrument: { number: 0 },
-    notes: [{ midi: 60, ticks: 0, durationTicks: 480, velocity: 0.8 }],
-    controlChanges: { 7: [{ number: 7, ticks: 0, value: 1 }], 10: [{ number: 10, ticks: 0, value: 0.5 }] },
-    durationTicks: 480, durationSeconds: 0.5,
-  }],
+  header: {
+    ppq: 480,
+    name: 'T',
+    tempos: [{ ticks: 0, bpm: 120 }],
+    timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }],
+  },
+  tracks: [
+    {
+      name: 'Piano',
+      channel: 0,
+      instrument: { number: 0 },
+      notes: [{ midi: 60, ticks: 0, durationTicks: 480, velocity: 0.8 }],
+      controlChanges: {
+        7: [{ number: 7, ticks: 0, value: 1 }],
+        10: [{ number: 10, ticks: 0, value: 0.5 }],
+      },
+      durationTicks: 480,
+      durationSeconds: 0.5,
+    },
+  ],
   duration: 0.5,
 };
 
@@ -708,7 +760,9 @@ describe('ToneJsMidiCodec', () => {
   it('preserves control changes keyed by CC number', () => {
     // The importer looks up sustain (64), volume (7) and pan (10) directly by
     // number; flattening them would silently break volume and pan on import.
-    const decoded = new ToneJsMidiCodec().decode(new ToneJsMidiCodec().encode(file).buffer as ArrayBuffer);
+    const decoded = new ToneJsMidiCodec().decode(
+      new ToneJsMidiCodec().encode(file).buffer as ArrayBuffer,
+    );
     expect(decoded.tracks[0].controlChanges[7]?.[0].value).toBeCloseTo(1, 2);
     expect(decoded.tracks[0].controlChanges[10]?.[0].value).toBeCloseTo(0.5, 2);
   });
@@ -720,13 +774,19 @@ describe('ToneJsMidiCodec', () => {
 ```bash
 cd ~/projects/music_io && bunx vitest run src/shared/midi
 ```
+
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write `src/shared/midi/codec.tonejs.ts`**
 
 ```ts
 import { Midi } from '@tonejs/midi';
-import type { MidiCodec, MidiControlChange, MidiFile, MidiTrackData } from '@sudobility/music_types';
+import type {
+  MidiCodec,
+  MidiControlChange,
+  MidiFile,
+  MidiTrackData,
+} from '@sudobility/music_types';
 
 /**
  * `@tonejs/midi` behind the neutral model.
@@ -754,12 +814,19 @@ export class ToneJsMidiCodec implements MidiCodec {
         channel: track.channel,
         instrument: { number: track.instrument.number, name: track.instrument.name },
         notes: track.notes.map((n) => ({
-          midi: n.midi, ticks: n.ticks, durationTicks: n.durationTicks, velocity: n.velocity,
+          midi: n.midi,
+          ticks: n.ticks,
+          durationTicks: n.durationTicks,
+          velocity: n.velocity,
         })),
         controlChanges: Object.fromEntries(
           Object.entries(track.controlChanges).map(([number, events]) => [
             Number(number),
-            (events ?? []).map((cc): MidiControlChange => ({ number: cc.number, ticks: cc.ticks, value: cc.value })),
+            (events ?? []).map((cc): MidiControlChange => ({
+              number: cc.number,
+              ticks: cc.ticks,
+              value: cc.value,
+            })),
           ]),
         ),
         durationTicks: track.durationTicks,
@@ -776,7 +843,10 @@ export class ToneJsMidiCodec implements MidiCodec {
       ppq: file.header.ppq,
       meta: [],
       tempos: file.header.tempos.map((t) => ({ ticks: t.ticks, bpm: t.bpm })),
-      timeSignatures: file.header.timeSignatures.map((t) => ({ ticks: t.ticks, timeSignature: t.timeSignature })),
+      timeSignatures: file.header.timeSignatures.map((t) => ({
+        ticks: t.ticks,
+        timeSignature: t.timeSignature,
+      })),
       keySignatures: [],
     });
 
@@ -786,10 +856,16 @@ export class ToneJsMidiCodec implements MidiCodec {
       midiTrack.channel = track.channel;
       midiTrack.instrument.number = track.instrument.number;
       for (const events of Object.values(track.controlChanges)) {
-        for (const cc of events) midiTrack.addCC({ number: cc.number, ticks: cc.ticks, value: cc.value });
+        for (const cc of events)
+          midiTrack.addCC({ number: cc.number, ticks: cc.ticks, value: cc.value });
       }
       for (const note of track.notes) {
-        midiTrack.addNote({ midi: note.midi, ticks: note.ticks, durationTicks: note.durationTicks, velocity: note.velocity });
+        midiTrack.addNote({
+          midi: note.midi,
+          ticks: note.ticks,
+          durationTicks: note.durationTicks,
+          velocity: note.velocity,
+        });
       }
     }
     return midi.toArray();
@@ -826,6 +902,7 @@ export function createMusicIo(): MusicIo {
 ```bash
 cd ~/projects/music_io && bun run verify
 ```
+
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -842,10 +919,12 @@ volume and pan directly by number."
 ## Task 7: Mocks entry and the shared contract suite
 
 **Files:**
+
 - Create: `~/projects/music_io/src/mocks/{playback.mock.ts,xml.mock.ts,file.mock.ts,midi.mock.ts,index.ts}`
 - Create: `~/projects/music_io/src/contract/platform-contract.ts`, `src/contract/web.contract.test.ts`
 
 **Interfaces:**
+
 - Consumes: everything from Tasks 2–6.
 - Produces: `createMusicIo()` from `@sudobility/music_io/mocks`; `runPlatformContract(name, factory)` used by web, rn and mocks.
 
@@ -872,7 +951,9 @@ export function runPlatformContract(name: string, createIo: () => MusicIo): void
     });
 
     it('parses XML and exposes the root element', () => {
-      const root = createIo().xmlParser.parse('<score-partwise version="4.0"><part id="P1"/></score-partwise>');
+      const root = createIo().xmlParser.parse(
+        '<score-partwise version="4.0"><part id="P1"/></score-partwise>',
+      );
       expect(root.tagName).toBe('score-partwise');
       expect(root.getAttribute('version')).toBe('4.0');
       expect(Array.from(root.children)[0].tagName).toBe('part');
@@ -885,12 +966,22 @@ export function runPlatformContract(name: string, createIo: () => MusicIo): void
     it('round-trips MIDI through the codec', () => {
       const io = createIo();
       const encoded = io.midiCodec.encode({
-        header: { ppq: 480, tempos: [{ ticks: 0, bpm: 120 }], timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }] },
-        tracks: [{
-          name: 'T', channel: 0, instrument: { number: 0 },
-          notes: [{ midi: 60, ticks: 0, durationTicks: 480, velocity: 0.8 }],
-          controlChanges: {}, durationTicks: 480, durationSeconds: 0.5,
-        }],
+        header: {
+          ppq: 480,
+          tempos: [{ ticks: 0, bpm: 120 }],
+          timeSignatures: [{ ticks: 0, timeSignature: [4, 4] }],
+        },
+        tracks: [
+          {
+            name: 'T',
+            channel: 0,
+            instrument: { number: 0 },
+            notes: [{ midi: 60, ticks: 0, durationTicks: 480, velocity: 0.8 }],
+            controlChanges: {},
+            durationTicks: 480,
+            durationSeconds: 0.5,
+          },
+        ],
         duration: 0.5,
       });
       expect(io.midiCodec.decode(encoded.buffer as ArrayBuffer).tracks[0].notes[0].midi).toBe(60);
@@ -899,11 +990,24 @@ export function runPlatformContract(name: string, createIo: () => MusicIo): void
     it('implements the whole PlaybackEngine interface', () => {
       const engine = createIo().playback;
       for (const method of [
-        'initialize', 'loadScore', 'play', 'pause', 'stop', 'seek', 'setTempoMultiplier',
-        'setLoop', 'setTrackMute', 'setTrackSolo', 'setMetronome', 'setMasterVolume',
-        'setObserver', 'dispose',
+        'initialize',
+        'loadScore',
+        'play',
+        'pause',
+        'stop',
+        'seek',
+        'setTempoMultiplier',
+        'setLoop',
+        'setTrackMute',
+        'setTrackSolo',
+        'setMetronome',
+        'setMasterVolume',
+        'setObserver',
+        'dispose',
       ]) {
-        expect(typeof (engine as unknown as Record<string, unknown>)[method], method).toBe('function');
+        expect(typeof (engine as unknown as Record<string, unknown>)[method], method).toBe(
+          'function',
+        );
       }
     });
   });
@@ -916,7 +1020,15 @@ export function runPlatformContract(name: string, createIo: () => MusicIo): void
 
 ```ts
 import { XmlParseError } from '@sudobility/music_types';
-import type { FileExporter, MidiFile, PlaybackEngine, PlaybackObserver, XmlElement, XmlParser, MidiCodec } from '@sudobility/music_types';
+import type {
+  FileExporter,
+  MidiFile,
+  PlaybackEngine,
+  PlaybackObserver,
+  XmlElement,
+  XmlParser,
+  MidiCodec,
+} from '@sudobility/music_types';
 import { ToneJsMidiCodec } from '../shared/midi/codec.tonejs.js';
 import type { MusicIo } from '../shared/types.js';
 
@@ -924,21 +1036,52 @@ import type { MusicIo } from '../shared/types.js';
 export class MockPlaybackEngine implements PlaybackEngine {
   readonly calls: string[] = [];
   observer: PlaybackObserver | null = null;
-  private record(name: string): void { this.calls.push(name); }
-  async initialize(): Promise<void> { this.record('initialize'); }
-  async loadScore(): Promise<void> { this.record('loadScore'); }
-  async play(): Promise<void> { this.record('play'); }
-  pause(): void { this.record('pause'); }
-  stop(): void { this.record('stop'); }
-  seek(): void { this.record('seek'); }
-  setTempoMultiplier(): void { this.record('setTempoMultiplier'); }
-  setLoop(): void { this.record('setLoop'); }
-  setTrackMute(): void { this.record('setTrackMute'); }
-  setTrackSolo(): void { this.record('setTrackSolo'); }
-  setMetronome(): void { this.record('setMetronome'); }
-  setMasterVolume(): void { this.record('setMasterVolume'); }
-  setObserver(observer: PlaybackObserver | null): void { this.observer = observer; this.record('setObserver'); }
-  dispose(): void { this.record('dispose'); }
+  private record(name: string): void {
+    this.calls.push(name);
+  }
+  async initialize(): Promise<void> {
+    this.record('initialize');
+  }
+  async loadScore(): Promise<void> {
+    this.record('loadScore');
+  }
+  async play(): Promise<void> {
+    this.record('play');
+  }
+  pause(): void {
+    this.record('pause');
+  }
+  stop(): void {
+    this.record('stop');
+  }
+  seek(): void {
+    this.record('seek');
+  }
+  setTempoMultiplier(): void {
+    this.record('setTempoMultiplier');
+  }
+  setLoop(): void {
+    this.record('setLoop');
+  }
+  setTrackMute(): void {
+    this.record('setTrackMute');
+  }
+  setTrackSolo(): void {
+    this.record('setTrackSolo');
+  }
+  setMetronome(): void {
+    this.record('setMetronome');
+  }
+  setMasterVolume(): void {
+    this.record('setMasterVolume');
+  }
+  setObserver(observer: PlaybackObserver | null): void {
+    this.observer = observer;
+    this.record('setObserver');
+  }
+  dispose(): void {
+    this.record('dispose');
+  }
 }
 
 /** Minimal XmlElement over a tiny hand-rolled parse, so mocks need no DOM. */
@@ -986,6 +1129,7 @@ runPlatformContract('mocks', createMockIo);
 ```bash
 cd ~/projects/music_io && bunx vitest run src/contract
 ```
+
 Expected: PASS for both.
 
 - [ ] **Step 4: Verify, commit and publish**
@@ -1004,11 +1148,13 @@ npm publish
 ## Task 8: `music_lib` — the platform registry
 
 **Files:**
+
 - Create: `~/projects/music_lib/src/platform/registry.ts`, `src/platform/registry.test.ts`
 - Modify: `~/projects/music_lib/src/services/playback/controller.ts:395-400`
 - Modify: `~/projects/music_lib/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `PlaybackEngine` from `@sudobility/music_types`.
 - Produces: `initializeMusicPlatform(platform: MusicPlatform): void`, `getMusicPlatform(): MusicPlatform`, `resetMusicPlatform(): void`, `type MusicPlatform = { playback: PlaybackEngine }`, and `class PlatformNotInitializedError extends Error`.
 
@@ -1019,7 +1165,12 @@ npm publish
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
 import { MockPlaybackEngine } from '@sudobility/music_io/mocks';
-import { PlatformNotInitializedError, getMusicPlatform, initializeMusicPlatform, resetMusicPlatform } from './registry.js';
+import {
+  PlatformNotInitializedError,
+  getMusicPlatform,
+  initializeMusicPlatform,
+  resetMusicPlatform,
+} from './registry.js';
 
 afterEach(() => resetMusicPlatform());
 
@@ -1049,6 +1200,7 @@ describe('music platform registry', () => {
 ```bash
 cd ~/projects/music_lib && bunx vitest run src/platform/registry.test.ts
 ```
+
 Expected: FAIL — module not found.
 
 - [ ] **Step 3: Write `src/platform/registry.ts`**
@@ -1068,7 +1220,9 @@ export type MusicPlatform = { playback: PlaybackEngine };
 
 export class PlatformNotInitializedError extends Error {
   constructor() {
-    super('The music platform has not been initialized. Call initializeMusicPlatform() from your app composition root before using playback.');
+    super(
+      'The music platform has not been initialized. Call initializeMusicPlatform() from your app composition root before using playback.',
+    );
     this.name = 'PlatformNotInitializedError';
   }
 }
@@ -1123,6 +1277,7 @@ cd ~/projects/music_io && bun link
 cd ~/projects/music_lib && bun link @sudobility/music_io
 bunx vitest run src/platform src/services/playback
 ```
+
 Expected: PASS. Playback controller tests that previously got a real Tone engine now need `initializeMusicPlatform({ playback: new MockPlaybackEngine() })` in a `beforeEach` — add it where they fail.
 
 - [ ] **Step 7: Commit**
@@ -1139,11 +1294,13 @@ playbackController call site working without an edit."
 ## Task 9: `music_lib` — MusicXML import takes an `XmlParser`
 
 **Files:**
+
 - Modify: `~/projects/music_lib/src/adapters/musicxml/import.ts` (13 internal signatures + the entry point)
 - Modify: `~/projects/music_lib/src/adapters/musicxml/import.test.ts`
 - Modify: `~/projects/music_lib/src/services/import-export/musicxml-service.ts`
 
 **Interfaces:**
+
 - Consumes: `XmlParser`, `XmlElement` from `@sudobility/music_types`; `MockXmlParser` from `@sudobility/music_io/mocks`.
 - Produces: `importMusicXml(xmlText: string, parser: XmlParser): MusicXmlImportResult`.
 
@@ -1169,6 +1326,7 @@ it('rejects malformed XML through the injected parser', () => {
 ```bash
 cd ~/projects/music_lib && bunx vitest run src/adapters/musicxml
 ```
+
 Expected: FAIL — `importMusicXml` takes one argument.
 
 - [ ] **Step 3: Change the entry point**
@@ -1206,6 +1364,7 @@ In `src/services/import-export/musicxml-service.ts`, add a `parser: XmlParser` p
 ```bash
 cd ~/projects/music_lib && bunx vitest run src/adapters/musicxml src/services/import-export
 ```
+
 Expected: PASS, same counts as before plus the new malformed-input test.
 
 - [ ] **Step 7: Commit**
@@ -1222,11 +1381,13 @@ real DOM Element satisfies the interface with no adapter."
 ## Task 10: `music_lib` — MIDI adapters take a `MidiCodec`
 
 **Files:**
+
 - Modify: `~/projects/music_lib/src/adapters/midi/{import,export,analyze}.ts` and their tests
 - Modify: `~/projects/music_lib/src/services/import-export/midi-service.ts`
 - Modify: `~/projects/music_lib/src/workers/midi-import.worker.ts`
 
 **Interfaces:**
+
 - Consumes: `MidiCodec`, `MidiFile`, `MidiTrackData` from `@sudobility/music_types`; `ToneJsMidiCodec` from `@sudobility/music_io/web`.
 - Produces: `exportMidi(score, codec)`, `importMidi(data, options, codec)`, `analyzeMidi(data, codec)`.
 
@@ -1246,6 +1407,7 @@ and pass `codec` as the new final argument at every call site.
 ```bash
 cd ~/projects/music_lib && bunx vitest run src/adapters/midi
 ```
+
 Expected: FAIL — wrong argument counts.
 
 - [ ] **Step 3: Rewrite `exportMidi` against the neutral model**
@@ -1299,6 +1461,7 @@ export function exportMidi(score: Score, codec: MidiCodec): Uint8Array {
 ```bash
 cd ~/projects/music_lib && bunx vitest run src/adapters/midi src/services/import-export src/workers
 ```
+
 Expected: PASS, same counts as before.
 
 - [ ] **Step 7: Commit**
@@ -1315,6 +1478,7 @@ up sustain, volume and pan directly by number."
 ## Task 11: `music_lib` — drop the platform dependencies
 
 **Files:**
+
 - Delete: `~/projects/music_lib/src/adapters/tone/` (4 modules + 4 tests), `src/services/import-export/download.ts` and its test
 - Modify: `~/projects/music_lib/src/index.ts`, `src/services/playback/types.ts`, `package.json`
 
@@ -1335,7 +1499,11 @@ Replace the body of `src/services/playback/types.ts` with:
  * implement them without depending on music_lib. Re-exported here so existing
  * importers keep one import site.
  */
-export type { PlaybackEngine, PlaybackObserver, TransportPlaybackState } from '@sudobility/music_types';
+export type {
+  PlaybackEngine,
+  PlaybackObserver,
+  TransportPlaybackState,
+} from '@sudobility/music_types';
 ```
 
 - [ ] **Step 3: Drop the dead exports and dependencies**
@@ -1391,6 +1559,7 @@ describe('music_lib is platform-free', () => {
 ```bash
 cd ~/projects/music_lib && bun run verify
 ```
+
 Expected: PASS. All previously-passing tests still pass; the two new guard tests pass.
 
 - [ ] **Step 6: Bump, commit, publish**
@@ -1415,6 +1584,7 @@ npm publish && git push
 ## Task 12: `music_app` — wire it up and prove parity
 
 **Files:**
+
 - Modify: `~/projects/music_app/src/config/initialize.ts`
 - Modify: `~/projects/music_app/src/components/layout/AppLayout.tsx:234,248,269`
 - Modify: `~/projects/music_app/src/components/dialogs/DeveloperSettingsDialog.tsx:133`
@@ -1422,6 +1592,7 @@ npm publish && git push
 - Modify: `~/projects/music_app/src/test/app-services.ts`
 
 **Interfaces:**
+
 - Consumes: `createMusicIo()` from `@sudobility/music_io`; `initializeMusicPlatform` from `@sudobility/music_lib`.
 
 - [ ] **Step 1: Install and wire the composition root**
@@ -1464,11 +1635,13 @@ In `src/test/app-services.ts`, `installTestAppServices()` must also call `initia
 ```bash
 cd ~/projects/music_app && bun run verify
 ```
+
 Expected: **353 tests pass**, 0 errors, clean build.
 
 ```bash
 lsof -ti:5173,8023 | xargs kill -9 2>/dev/null; bun run test:e2e
 ```
+
 Expected: **13 passed**.
 
 If either count differs, the refactor changed behaviour — stop and fix before committing rather than updating the expectation.
@@ -1489,11 +1662,13 @@ git push
 ## Task 13: React Native implementations
 
 **Files:**
+
 - Create: `~/projects/music_io/src/rn/playback/playback.rn.ts`, `src/rn/xml/xml.rn.ts`, `src/rn/file/file.rn.ts`
 - Create: `~/projects/music_io/src/rn/rn.contract.test.ts`
 - Modify: `~/projects/music_io/src/rn/index.ts`
 
 **Interfaces:**
+
 - Consumes: `runPlatformContract` from Task 7; the verdict recorded in Task 1.
 - Produces: `createMusicIo()` from `@sudobility/music_io/rn`.
 
@@ -1563,7 +1738,9 @@ export class RNXmlParser implements XmlParser {
       isArray: () => true,
     }).parse(text) as Record<string, unknown>;
 
-    const rootName = Object.keys(parsed).find((key) => !key.startsWith(ATTR_PREFIX) && key !== TEXT_KEY);
+    const rootName = Object.keys(parsed).find(
+      (key) => !key.startsWith(ATTR_PREFIX) && key !== TEXT_KEY,
+    );
     if (!rootName) throw new XmlParseError('The XML document has no root element.');
     const rootNode = (parsed[rootName] as unknown[])[0] as Record<string, unknown>;
     return new FxpElement(rootName, rootNode ?? {});
@@ -1659,6 +1836,7 @@ runPlatformContract('rn', createMusicIo);
 ```bash
 cd ~/projects/music_io && bunx vitest run src/rn
 ```
+
 Expected: PASS — the same suite web and mocks pass.
 
 - [ ] **Step 5: Verify, commit, publish**
@@ -1678,6 +1856,7 @@ npm version minor --no-git-tag-version && npm publish && git push
 ## Task 14: Documentation and link cleanup
 
 **Files:**
+
 - Create: `~/projects/music_io/CLAUDE.md`
 - Modify: `~/projects/music_lib/CLAUDE.md`, `~/projects/music_app/CLAUDE.md`, `~/projects/music_app/docs/architecture.md`, `~/projects/music_app/docs/parity-checklist.md`
 
@@ -1705,6 +1884,7 @@ cd ~/projects/music_lib && bun unlink @sudobility/music_io && bun install
 cd ~/projects/music_app && bun install
 bun run verify && bun run test:e2e
 ```
+
 Expected: 353 unit tests, 13 e2e, clean build — against the published packages rather than links.
 
 - [ ] **Step 5: Commit**
@@ -1719,20 +1899,20 @@ git add -A && git commit -m "docs: record the music_io platform boundary" && git
 
 **Spec coverage**
 
-| Spec section | Task |
-| --- | --- |
-| Topology / export map | 3 |
-| `PlaybackEngine` interface | 2 |
-| `XmlParser` / `XmlElement` | 2, 5, 13 |
-| `FileExporter` | 2, 5, 13 |
-| `MidiCodec` + neutral model | 2, 6 |
-| Registry vs parameters | 8, 9, 10 |
-| What moves (tone, DOMParser, downloadBlob, deps) | 4, 5, 11 |
-| `vexflow` stays | 11 (guard test excludes `adapters/vexflow`) |
-| App wiring | 12 |
-| Testing / contract suite | 7, 13 |
-| Sequencing (spike first) | 1 |
-| Out of scope: RN app, RN notation, ESM MIDI codec | not present, by design |
+| Spec section                                      | Task                                        |
+| ------------------------------------------------- | ------------------------------------------- |
+| Topology / export map                             | 3                                           |
+| `PlaybackEngine` interface                        | 2                                           |
+| `XmlParser` / `XmlElement`                        | 2, 5, 13                                    |
+| `FileExporter`                                    | 2, 5, 13                                    |
+| `MidiCodec` + neutral model                       | 2, 6                                        |
+| Registry vs parameters                            | 8, 9, 10                                    |
+| What moves (tone, DOMParser, downloadBlob, deps)  | 4, 5, 11                                    |
+| `vexflow` stays                                   | 11 (guard test excludes `adapters/vexflow`) |
+| App wiring                                        | 12                                          |
+| Testing / contract suite                          | 7, 13                                       |
+| Sequencing (spike first)                          | 1                                           |
+| Out of scope: RN app, RN notation, ESM MIDI codec | not present, by design                      |
 
 **Model correction against the spec.** The spec's `MidiTrackData` had `controlChanges: MidiControlChange[]` and no per-track durations. `@tonejs/midi` keys control changes **by CC number**, and `import.ts` looks up `controlChanges[7]`, `[10]` and `[64]` directly while `analyze.ts` reads `track.duration`. This plan uses `Record<number, MidiControlChange[]>` plus `durationTicks`/`durationSeconds`; the spec must be amended to match, and Task 2 is the authority.
 

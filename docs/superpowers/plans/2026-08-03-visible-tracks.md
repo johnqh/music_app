@@ -10,42 +10,44 @@
 
 ## Global Constraints
 
-- **Ship order is mandatory: `music_types` → `music_api` (deploy) → `music_lib` → `mail_box_components` → `music_app`.** `music_api` validates request bodies with `zValidator('json', projectUpdateRequestSchema)` against its *own* pinned `music_types`. On the currently-deployed `^0.1.0`, `projectUiPrefsSchema` requires `view` and is a `$strip` object — a body of `{ zoom, visibleTrackIds }` is rejected for the missing `view`, and even with `view` present `visibleTrackIds` is stripped before reaching the DB. Shipping the app first makes the feature fail *silently*.
+- **Ship order is mandatory: `music_types` → `music_api` (deploy) → `music_lib` → `mail_box_components` → `music_app`.** `music_api` validates request bodies with `zValidator('json', projectUpdateRequestSchema)` against its _own_ pinned `music_types`. On the currently-deployed `^0.1.0`, `projectUiPrefsSchema` requires `view` and is a `$strip` object — a body of `{ zoom, visibleTrackIds }` is rejected for the missing `view`, and even with `view` present `visibleTrackIds` is stripped before reaching the DB. Shipping the app first makes the feature fail _silently_.
 - **`visibleTrackIds` absent means all tracks visible.** No migration, no backfill. An empty array is never a valid stored value.
 - **At least one track is always visible.** Enforced in `music_lib`, not in the UI.
 - **Hidden ≠ muted.** Hidden tracks are not drawn but still sound. Nothing in this plan touches `PlaybackEngine`, `setTrackMute`, or `setTrackSolo`.
 - **No business logic in `music_app`.** Anything that reads or rewrites a `Score` belongs in `music_lib` (see `music_app/CLAUDE.md`).
-- **Changing visibility marks the project dirty** and rides the existing autosave debounce. It is *not* a score command and never enters the undo stack.
+- **Changing visibility marks the project dirty** and rides the existing autosave debounce. It is _not_ a score command and never enters the undo stack.
 - Every repo gates on `bun run verify` (typecheck + lint + test + build) before push.
 
 ---
 
 ## File Structure
 
-| File | Responsibility |
-| --- | --- |
-| `music_types/src/index.ts` | `ProjectUiPrefs` type + `projectUiPrefsSchema`: add `visibleTrackIds`, drop dead `view`. |
-| `music_api/package.json` | Bump `@sudobility/music_types` so the validator stops stripping the new field. |
-| `music_lib/src/store/slices/ui-slice.ts` | `visibleTrackIds` state, `setVisibleTracks`, and `setActiveTrack` revealing a hidden track. |
-| `music_lib/src/store/selectors.ts` | `selectVisibleTrackIds` (the invariant lives here); `selectActiveTrackId` composes over it. |
-| `music_lib/src/domain/score/queries.ts` | `scoreWithTracks` — the filtered copy that "export visible only" writes. |
-| `music_lib/src/store/slices/project-slice.ts` | Hydrate `uiPrefs` on open; send `uiPrefs` on autosave. |
-| `mail_box_components/src/ui/checkable-select.tsx` | `CheckableSelect`: one chosen value + a set of checked flags, in a portalled menu. |
-| `music_app/src/features/score-editor/TrackVisibilitySelect.tsx` | The toolbar control, wired to the store. |
-| `music_app/src/features/score-editor/ScoreEditorView.tsx` | Pass visible ids into `computeLayout`; mount the control. |
-| `music_app/src/components/dialogs/ExportScopeDialog.tsx` | The whole-score vs visible-only choice. |
-| `music_app/src/components/layout/AppLayout.tsx` | Route the two export handlers through that choice. |
-| `music_app/e2e/visible-tracks.spec.ts` | The round trip: hide, reload, still hidden. |
+| File                                                            | Responsibility                                                                              |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `music_types/src/index.ts`                                      | `ProjectUiPrefs` type + `projectUiPrefsSchema`: add `visibleTrackIds`, drop dead `view`.    |
+| `music_api/package.json`                                        | Bump `@sudobility/music_types` so the validator stops stripping the new field.              |
+| `music_lib/src/store/slices/ui-slice.ts`                        | `visibleTrackIds` state, `setVisibleTracks`, and `setActiveTrack` revealing a hidden track. |
+| `music_lib/src/store/selectors.ts`                              | `selectVisibleTrackIds` (the invariant lives here); `selectActiveTrackId` composes over it. |
+| `music_lib/src/domain/score/queries.ts`                         | `scoreWithTracks` — the filtered copy that "export visible only" writes.                    |
+| `music_lib/src/store/slices/project-slice.ts`                   | Hydrate `uiPrefs` on open; send `uiPrefs` on autosave.                                      |
+| `mail_box_components/src/ui/checkable-select.tsx`               | `CheckableSelect`: one chosen value + a set of checked flags, in a portalled menu.          |
+| `music_app/src/features/score-editor/TrackVisibilitySelect.tsx` | The toolbar control, wired to the store.                                                    |
+| `music_app/src/features/score-editor/ScoreEditorView.tsx`       | Pass visible ids into `computeLayout`; mount the control.                                   |
+| `music_app/src/components/dialogs/ExportScopeDialog.tsx`        | The whole-score vs visible-only choice.                                                     |
+| `music_app/src/components/layout/AppLayout.tsx`                 | Route the two export handlers through that choice.                                          |
+| `music_app/e2e/visible-tracks.spec.ts`                          | The round trip: hide, reload, still hidden.                                                 |
 
 ---
 
 ### Task 1: `music_types` — the field
 
 **Files:**
+
 - Modify: `~/projects/music_types/src/index.ts:473` (type), `:510-513` (schema)
 - Test: `~/projects/music_types/src/api.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `type ProjectUiPrefs = { zoom: number; visibleTrackIds?: string[] }` and `projectUiPrefsSchema`, both exported from the package root. Every later task depends on these names.
 
@@ -54,23 +56,23 @@
 In `~/projects/music_types/src/api.test.ts`, add:
 
 ```ts
-  it('accepts uiPrefs carrying visibleTrackIds', () => {
-    const parsed = projectUpdateRequestSchema.parse({
-      uiPrefs: { zoom: 1, visibleTrackIds: ['t1', 't2'] },
-    });
-    expect(parsed.uiPrefs?.visibleTrackIds).toEqual(['t1', 't2']);
+it('accepts uiPrefs carrying visibleTrackIds', () => {
+  const parsed = projectUpdateRequestSchema.parse({
+    uiPrefs: { zoom: 1, visibleTrackIds: ['t1', 't2'] },
   });
+  expect(parsed.uiPrefs?.visibleTrackIds).toEqual(['t1', 't2']);
+});
 
-  it('accepts uiPrefs without visibleTrackIds, meaning all tracks visible', () => {
-    const parsed = projectUpdateRequestSchema.parse({ uiPrefs: { zoom: 1 } });
-    expect(parsed.uiPrefs?.visibleTrackIds).toBeUndefined();
-  });
+it('accepts uiPrefs without visibleTrackIds, meaning all tracks visible', () => {
+  const parsed = projectUpdateRequestSchema.parse({ uiPrefs: { zoom: 1 } });
+  expect(parsed.uiPrefs?.visibleTrackIds).toBeUndefined();
+});
 
-  it('rejects an empty visibleTrackIds, which would mean a blank page', () => {
-    expect(() =>
-      projectUpdateRequestSchema.parse({ uiPrefs: { zoom: 1, visibleTrackIds: [] } }),
-    ).toThrow();
-  });
+it('rejects an empty visibleTrackIds, which would mean a blank page', () => {
+  expect(() =>
+    projectUpdateRequestSchema.parse({ uiPrefs: { zoom: 1, visibleTrackIds: [] } }),
+  ).toThrow();
+});
 ```
 
 Then fix the two existing tests that assert the dead `view` field. At `~/projects/music_types/src/api.test.ts:43`, change `uiPrefs: { view: 'notation', zoom: 1 },` to `uiPrefs: { zoom: 1 },`. Delete the whole `it('rejects an update with an invalid uiPrefs view', ...)` case beginning at line 63 — the field it guards no longer exists.
@@ -146,37 +148,39 @@ Expected: `0.4.0`
 ### Task 2: `music_api` — stop stripping the field
 
 **Files:**
+
 - Modify: `~/projects/music_api/package.json:22`
 - Test: `~/projects/music_api/src/routes/projects.test.ts` (or the existing project route test file — find it with `ls ~/projects/music_api/src/routes/*.test.ts`)
 
 **Interfaces:**
+
 - Consumes: `projectUiPrefsSchema` from Task 1.
 - Produces: a deployed API that persists `uiPrefs.visibleTrackIds`. No new route, no new export.
 
-**Why this task exists:** the route already stores `uiPrefs` into a JSONB column (`src/services/projects.ts:84,102`). The problem is upstream of it — `zValidator('json', projectUpdateRequestSchema)` at `src/routes/projects.ts:38` runs the *old* schema, which requires `view` and strips unknown keys. Without this bump the app's writes are rejected or silently truncated.
+**Why this task exists:** the route already stores `uiPrefs` into a JSONB column (`src/services/projects.ts:84,102`). The problem is upstream of it — `zValidator('json', projectUpdateRequestSchema)` at `src/routes/projects.ts:38` runs the _old_ schema, which requires `view` and strips unknown keys. Without this bump the app's writes are rejected or silently truncated.
 
 - [ ] **Step 1: Write the failing test**
 
 Add to the project routes test file:
 
 ```ts
-  it('persists uiPrefs.visibleTrackIds through an update', async () => {
-    const created = await createTestProject({ name: 'Vis', score: testScore() });
+it('persists uiPrefs.visibleTrackIds through an update', async () => {
+  const created = await createTestProject({ name: 'Vis', score: testScore() });
 
-    const res = await app.request(`/projects/${created.id}`, {
-      method: 'PUT',
-      headers: authHeaders(),
-      body: JSON.stringify({ uiPrefs: { zoom: 1, visibleTrackIds: ['t1'] } }),
-    });
-    expect(res.status).toBe(200);
-
-    // Read it back rather than trusting the response: the bug this guards
-    // against is the validator stripping the field on its way to the DB, which
-    // a response echoing the request body would hide.
-    const reread = await app.request(`/projects/${created.id}`, { headers: authHeaders() });
-    const body = await reread.json();
-    expect(body.uiPrefs.visibleTrackIds).toEqual(['t1']);
+  const res = await app.request(`/projects/${created.id}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ uiPrefs: { zoom: 1, visibleTrackIds: ['t1'] } }),
   });
+  expect(res.status).toBe(200);
+
+  // Read it back rather than trusting the response: the bug this guards
+  // against is the validator stripping the field on its way to the DB, which
+  // a response echoing the request body would hide.
+  const reread = await app.request(`/projects/${created.id}`, { headers: authHeaders() });
+  const body = await reread.json();
+  expect(body.uiPrefs.visibleTrackIds).toEqual(['t1']);
+});
 ```
 
 Match the surrounding file's helpers — read the existing tests in that file first and reuse whatever they use to build a project and auth headers (`createTestProject`/`authHeaders`/`testScore` above are placeholders for the names already in that file).
@@ -222,11 +226,13 @@ Then deploy, and confirm against the deployed instance before starting Task 3 �
 ### Task 3: `music_lib` — the resolver and the invariant
 
 **Files:**
+
 - Modify: `~/projects/music_lib/src/store/slices/ui-slice.ts`
 - Modify: `~/projects/music_lib/src/store/selectors.ts:125-134`
 - Test: `~/projects/music_lib/src/store/selectors.test.ts`, `~/projects/music_lib/src/store/slices/ui-slice.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ProjectUiPrefs` from Task 1.
 - Produces:
   - `UiSlice.visibleTrackIds: string[] | null` — `null` means "all visible".
@@ -437,32 +443,32 @@ Expected: PASS.
 Add to `~/projects/music_lib/src/store/slices/ui-slice.test.ts`, following the file's existing store-construction helper:
 
 ```ts
-  it('setVisibleTracks stores the list and marks dirty', () => {
-    const store = createTestStore();
-    store.getState().setVisibleTracks(['a', 'b']);
-    expect(store.getState().visibleTrackIds).toEqual(['a', 'b']);
-    expect(store.getState().dirty).toBe(true);
-  });
+it('setVisibleTracks stores the list and marks dirty', () => {
+  const store = createTestStore();
+  store.getState().setVisibleTracks(['a', 'b']);
+  expect(store.getState().visibleTrackIds).toEqual(['a', 'b']);
+  expect(store.getState().dirty).toBe(true);
+});
 
-  it('setVisibleTracks refuses an empty list', () => {
-    const store = createTestStore();
-    store.getState().setVisibleTracks(['a']);
-    store.getState().setVisibleTracks([]);
-    expect(store.getState().visibleTrackIds).toEqual(['a']);
-  });
+it('setVisibleTracks refuses an empty list', () => {
+  const store = createTestStore();
+  store.getState().setVisibleTracks(['a']);
+  store.getState().setVisibleTracks([]);
+  expect(store.getState().visibleTrackIds).toEqual(['a']);
+});
 
-  it('setActiveTrack reveals a hidden track', () => {
-    const store = createTestStore();
-    store.getState().setVisibleTracks(['a']);
-    store.getState().setActiveTrack('b');
-    expect(store.getState().visibleTrackIds).toEqual(['a', 'b']);
-  });
+it('setActiveTrack reveals a hidden track', () => {
+  const store = createTestStore();
+  store.getState().setVisibleTracks(['a']);
+  store.getState().setActiveTrack('b');
+  expect(store.getState().visibleTrackIds).toEqual(['a', 'b']);
+});
 
-  it('setActiveTrack does not touch visibility when nothing is hidden', () => {
-    const store = createTestStore();
-    store.getState().setActiveTrack('b');
-    expect(store.getState().visibleTrackIds).toBeNull();
-  });
+it('setActiveTrack does not touch visibility when nothing is hidden', () => {
+  const store = createTestStore();
+  store.getState().setActiveTrack('b');
+  expect(store.getState().visibleTrackIds).toBeNull();
+});
 ```
 
 - [ ] **Step 8: Run them**
@@ -498,11 +504,13 @@ defensible outcome."
 ### Task 4: `music_lib` — persistence and the export filter
 
 **Files:**
+
 - Modify: `~/projects/music_lib/src/store/slices/project-slice.ts:59-63` (save), `:104-113` (adopt)
 - Modify: `~/projects/music_lib/src/domain/score/queries.ts`
 - Test: `~/projects/music_lib/src/store/slices/project-slice.test.ts`, `~/projects/music_lib/src/domain/score/queries.test.ts`
 
 **Interfaces:**
+
 - Consumes: `selectVisibleTrackIds` and `UiSlice.visibleTrackIds` from Task 3; `ProjectUiPrefs` from Task 1.
 - Produces: `scoreWithTracks(score: Score, trackIds: string[]): Score`, exported from the package root via the existing `export * from './domain/score/queries.js'`.
 
@@ -511,44 +519,44 @@ defensible outcome."
 Add to `~/projects/music_lib/src/store/slices/project-slice.test.ts`, using the file's existing `testStoreContext()` fake:
 
 ```ts
-  it('sends visibleTrackIds on autosave', async () => {
-    const { store } = await openTestProject();
-    store.getState().setVisibleTracks(['a']);
-    await store.getState().saveNow();
+it('sends visibleTrackIds on autosave', async () => {
+  const { store } = await openTestProject();
+  store.getState().setVisibleTracks(['a']);
+  await store.getState().saveNow();
 
-    const record = await context.client.getProject(store.getState().projectId!, 'token');
-    expect(record.uiPrefs?.visibleTrackIds).toEqual(['a']);
-  });
+  const record = await context.client.getProject(store.getState().projectId!, 'token');
+  expect(record.uiPrefs?.visibleTrackIds).toEqual(['a']);
+});
 
-  it('omits visibleTrackIds when nothing is hidden', async () => {
-    const { store } = await openTestProject();
-    store.getState().markDirty();
-    await store.getState().saveNow();
+it('omits visibleTrackIds when nothing is hidden', async () => {
+  const { store } = await openTestProject();
+  store.getState().markDirty();
+  await store.getState().saveNow();
 
-    const record = await context.client.getProject(store.getState().projectId!, 'token');
-    expect(record.uiPrefs?.visibleTrackIds).toBeUndefined();
-  });
+  const record = await context.client.getProject(store.getState().projectId!, 'token');
+  expect(record.uiPrefs?.visibleTrackIds).toBeUndefined();
+});
 
-  it('hydrates visibleTrackIds when opening a project', async () => {
-    const created = await context.client.createProject(
-      { name: 'P', score: threeTrackScore(), uiPrefs: { zoom: 1, visibleTrackIds: ['b'] } },
-      'token',
-    );
-    await store.getState().openProject(created.id);
-    expect(store.getState().visibleTrackIds).toEqual(['b']);
-  });
+it('hydrates visibleTrackIds when opening a project', async () => {
+  const created = await context.client.createProject(
+    { name: 'P', score: threeTrackScore(), uiPrefs: { zoom: 1, visibleTrackIds: ['b'] } },
+    'token',
+  );
+  await store.getState().openProject(created.id);
+  expect(store.getState().visibleTrackIds).toEqual(['b']);
+});
 
-  it('resets visibility to all-visible when opening a project that hid nothing', async () => {
-    // Without the reset, switching projects would carry the previous
-    // project's hidden tracks into a score whose ids mean nothing.
-    const created = await context.client.createProject(
-      { name: 'P', score: threeTrackScore() },
-      'token',
-    );
-    store.getState().setVisibleTracks(['a']);
-    await store.getState().openProject(created.id);
-    expect(store.getState().visibleTrackIds).toBeNull();
-  });
+it('resets visibility to all-visible when opening a project that hid nothing', async () => {
+  // Without the reset, switching projects would carry the previous
+  // project's hidden tracks into a score whose ids mean nothing.
+  const created = await context.client.createProject(
+    { name: 'P', score: threeTrackScore() },
+    'token',
+  );
+  store.getState().setVisibleTracks(['a']);
+  await store.getState().openProject(created.id);
+  expect(store.getState().visibleTrackIds).toBeNull();
+});
 ```
 
 Adapt `openTestProject`/`context`/`store` to the helpers already in that file.
@@ -563,23 +571,23 @@ Expected: FAIL — nothing sends or hydrates `uiPrefs`.
 In `~/projects/music_lib/src/store/slices/project-slice.ts`, replace the `updateProject` call at line 59:
 
 ```ts
-          const visibleTrackIds = get().visibleTrackIds;
-          const saved = await context.client.updateProject(
-            record.id,
-            {
-              name: record.name,
-              score,
-              // zoom rides along because ProjectUiPrefs requires it; changing
-              // it deliberately does NOT mark the project dirty, so it
-              // persists opportunistically on the next real save rather than
-              // adding a write on every zoom click.
-              uiPrefs: {
-                zoom: get().zoom,
-                ...(visibleTrackIds ? { visibleTrackIds } : {}),
-              },
-            },
-            token
-          );
+const visibleTrackIds = get().visibleTrackIds;
+const saved = await context.client.updateProject(
+  record.id,
+  {
+    name: record.name,
+    score,
+    // zoom rides along because ProjectUiPrefs requires it; changing
+    // it deliberately does NOT mark the project dirty, so it
+    // persists opportunistically on the next real save rather than
+    // adding a write on every zoom click.
+    uiPrefs: {
+      zoom: get().zoom,
+      ...(visibleTrackIds ? { visibleTrackIds } : {}),
+    },
+  },
+  token,
+);
 ```
 
 - [ ] **Step 4: Hydrate on adopt**
@@ -587,11 +595,11 @@ In `~/projects/music_lib/src/store/slices/project-slice.ts`, replace the `update
 In the same file, inside `adopt`'s `set((state) => {...})` block (after `state.saveState = 'saved';`):
 
 ```ts
-        // Reset, not merge: a track id means nothing outside the project it
-        // came from, so carrying the outgoing project's hidden set into the
-        // incoming one would hide arbitrary tracks.
-        state.visibleTrackIds = record.uiPrefs?.visibleTrackIds ?? null;
-        if (record.uiPrefs?.zoom) state.zoom = record.uiPrefs.zoom;
+// Reset, not merge: a track id means nothing outside the project it
+// came from, so carrying the outgoing project's hidden set into the
+// incoming one would hide arbitrary tracks.
+state.visibleTrackIds = record.uiPrefs?.visibleTrackIds ?? null;
+if (record.uiPrefs?.zoom) state.zoom = record.uiPrefs.zoom;
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
@@ -687,23 +695,29 @@ git push && npm publish
 ### Task 5: `mail_box_components` — `CheckableSelect`
 
 **Files:**
+
 - Create: `~/projects/mail_box_components/src/ui/checkable-select.tsx`
 - Create: `~/projects/mail_box_components/src/__tests__/checkable-select.test.tsx`
 - Modify: `~/projects/mail_box_components/src/forms/inputs/index.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks. It is a generic control and knows nothing about tracks or music.
 - Produces:
 
 ```ts
-export interface CheckableSelectOption { value: string; label: string; disabled?: boolean }
+export interface CheckableSelectOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
 export interface CheckableSelectProps {
   options: CheckableSelectOption[];
   value: string;
   onChange: (value: string) => void;
   checked: string[];
   onCheckedChange: (checked: string[]) => void;
-  minChecked?: number;          // default 1
+  minChecked?: number; // default 1
   ariaLabel?: string;
   className?: string;
   placeholder?: string;
@@ -997,12 +1011,14 @@ git push && npm publish
 ### Task 6: `music_app` — the toolbar control
 
 **Files:**
+
 - Create: `~/projects/music_app/src/features/score-editor/TrackVisibilitySelect.tsx`
 - Create: `~/projects/music_app/src/features/score-editor/TrackVisibilitySelect.test.tsx`
 - Modify: `~/projects/music_app/src/features/score-editor/EditorToolbar.tsx` (mount it in the layout-mode group's row, before the `VerticalDivider` at line 432)
 - Modify: `~/projects/music_app/package.json` (dependency bumps)
 
 **Interfaces:**
+
 - Consumes: `CheckableSelect` (Task 5); `selectVisibleTrackIds`, `selectActiveTrackId`, `setVisibleTracks`, `setActiveTrack` (Tasks 3-4).
 - Produces: `<TrackVisibilitySelect store={store} />`.
 
@@ -1182,10 +1198,12 @@ no-op taking up toolbar width."
 ### Task 7: `music_app` — draw only the visible tracks
 
 **Files:**
+
 - Modify: `~/projects/music_app/src/features/score-editor/ScoreEditorView.tsx:481-484`
 - Test: `~/projects/music_app/src/features/score-editor/ScoreEditorView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `selectVisibleTrackIds` (Task 3).
 - Produces: nothing new.
 
@@ -1194,25 +1212,25 @@ no-op taking up toolbar width."
 Add to `~/projects/music_app/src/features/score-editor/ScoreEditorView.test.tsx`, in the style of the existing `computeLayout`-based assertions around line 551:
 
 ```tsx
-  it('lays out only the visible tracks', () => {
-    const store = storeWithThreeTracks();
-    const [first, second] = store.getState().score!.tracks;
-    store.getState().setVisibleTracks([first.id]);
-    renderEditor(store);
+it('lays out only the visible tracks', () => {
+  const store = storeWithThreeTracks();
+  const [first, second] = store.getState().score!.tracks;
+  store.getState().setVisibleTracks([first.id]);
+  renderEditor(store);
 
-    const plan = layoutPlanFromRender();
-    const drawn = new Set(plan.systems.flatMap((s) => s.staves.map((st) => st.trackId)));
-    expect(drawn.has(first.id)).toBe(true);
-    expect(drawn.has(second.id)).toBe(false);
-  });
+  const plan = layoutPlanFromRender();
+  const drawn = new Set(plan.systems.flatMap((s) => s.staves.map((st) => st.trackId)));
+  expect(drawn.has(first.id)).toBe(true);
+  expect(drawn.has(second.id)).toBe(false);
+});
 
-  it('lays out every track when nothing is hidden', () => {
-    const store = storeWithThreeTracks();
-    renderEditor(store);
-    const plan = layoutPlanFromRender();
-    const drawn = new Set(plan.systems.flatMap((s) => s.staves.map((st) => st.trackId)));
-    expect(drawn.size).toBe(3);
-  });
+it('lays out every track when nothing is hidden', () => {
+  const store = storeWithThreeTracks();
+  renderEditor(store);
+  const plan = layoutPlanFromRender();
+  const drawn = new Set(plan.systems.flatMap((s) => s.staves.map((st) => st.trackId)));
+  expect(drawn.size).toBe(3);
+});
 ```
 
 Use whatever mechanism the surrounding tests already use to reach the rendered plan (the file computes plans directly via `computeLayout` in several places — mirror the closest existing example, and read the real `LayoutPlan` shape in `music_lib/src/adapters/vexflow/layout.ts` rather than assuming `systems`/`staves`/`trackId` field names).
@@ -1227,24 +1245,24 @@ Expected: FAIL — the second track is still laid out.
 In `~/projects/music_app/src/features/score-editor/ScoreEditorView.tsx`, add near the other store reads:
 
 ```tsx
-  const visibleTrackIds = useAppStore(selectVisibleTrackIds);
+const visibleTrackIds = useAppStore(selectVisibleTrackIds);
 ```
 
 (matching the file's existing store-read idiom), import `selectVisibleTrackIds` from `@sudobility/music_lib` alongside `computeLayout`, and replace the `layoutPlan` memo at line 481:
 
 ```tsx
-  const layoutPlan = useMemo(() => {
-    if (!displayScore) return null;
-    return computeLayout(displayScore, {
-      zoom,
-      layoutMode,
-      width: viewWidth,
-      theme: renderTheme,
-      // `computeLayout` already renders a subset and drops ids that do not
-      // resolve, so hiding a track costs one option rather than a code path.
-      trackIds: visibleTrackIds,
-    });
-  }, [displayScore, zoom, layoutMode, renderTheme, viewWidth, visibleTrackIds]);
+const layoutPlan = useMemo(() => {
+  if (!displayScore) return null;
+  return computeLayout(displayScore, {
+    zoom,
+    layoutMode,
+    width: viewWidth,
+    theme: renderTheme,
+    // `computeLayout` already renders a subset and drops ids that do not
+    // resolve, so hiding a track costs one option rather than a code path.
+    trackIds: visibleTrackIds,
+  });
+}, [displayScore, zoom, layoutMode, renderTheme, viewWidth, visibleTrackIds]);
 ```
 
 `selectVisibleTrackIds` is memoized, so its result is reference-stable and safe as a dependency — it will not re-run this memo on unrelated store updates.
@@ -1273,12 +1291,14 @@ memo dependency -- it will not re-run the layout on unrelated store updates."
 ### Task 8: `music_app` — the export choice
 
 **Files:**
+
 - Create: `~/projects/music_app/src/components/dialogs/ExportScopeDialog.tsx`
 - Create: `~/projects/music_app/src/components/dialogs/ExportScopeDialog.test.tsx`
 - Modify: `~/projects/music_app/src/components/layout/AppLayout.tsx:230-257`
 - Test: `~/projects/music_app/src/components/layout/AppLayout.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `scoreWithTracks` (Task 4), `selectVisibleTrackIds` (Task 3).
 - Produces: `<ExportScopeDialog open hiddenCount onChoose onCancel />` where `onChoose: (scope: 'all' | 'visible') => void`.
 
@@ -1294,25 +1314,19 @@ import { ExportScopeDialog } from './ExportScopeDialog';
 
 describe('ExportScopeDialog', () => {
   it('says how many tracks are hidden', () => {
-    render(
-      <ExportScopeDialog open hiddenCount={6} onChoose={() => {}} onCancel={() => {}} />,
-    );
+    render(<ExportScopeDialog open hiddenCount={6} onChoose={() => {}} onCancel={() => {}} />);
     expect(screen.getByText(/6 hidden tracks/)).toBeInTheDocument();
   });
 
   it('says it in the singular for one', () => {
-    render(
-      <ExportScopeDialog open hiddenCount={1} onChoose={() => {}} onCancel={() => {}} />,
-    );
+    render(<ExportScopeDialog open hiddenCount={1} onChoose={() => {}} onCancel={() => {}} />);
     expect(screen.getByText(/1 hidden track\b/)).toBeInTheDocument();
   });
 
   it('reports the whole-score choice', async () => {
     const user = userEvent.setup();
     const onChoose = vi.fn();
-    render(
-      <ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={() => {}} />,
-    );
+    render(<ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={() => {}} />);
     await user.click(screen.getByRole('button', { name: 'Whole score' }));
     expect(onChoose).toHaveBeenCalledWith('all');
   });
@@ -1320,9 +1334,7 @@ describe('ExportScopeDialog', () => {
   it('reports the visible-only choice', async () => {
     const user = userEvent.setup();
     const onChoose = vi.fn();
-    render(
-      <ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={() => {}} />,
-    );
+    render(<ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={() => {}} />);
     await user.click(screen.getByRole('button', { name: 'Visible tracks only' }));
     expect(onChoose).toHaveBeenCalledWith('visible');
   });
@@ -1331,9 +1343,7 @@ describe('ExportScopeDialog', () => {
     const user = userEvent.setup();
     const onChoose = vi.fn();
     const onCancel = vi.fn();
-    render(
-      <ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={onCancel} />,
-    );
+    render(<ExportScopeDialog open hiddenCount={2} onChoose={onChoose} onCancel={onCancel} />);
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancel).toHaveBeenCalled();
     expect(onChoose).not.toHaveBeenCalled();
@@ -1414,50 +1424,50 @@ Expected: PASS.
 Add to `~/projects/music_app/src/components/layout/AppLayout.test.tsx`:
 
 ```tsx
-  it('exports without asking when nothing is hidden', async () => {
-    const user = userEvent.setup();
-    const store = storeWithThreeTracks();
-    renderAppLayout(store);
-    await openExportMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
-    expect(screen.queryByText('Export hidden tracks?')).toBeNull();
-    expect(savedFiles()).toHaveLength(1);
-  });
+it('exports without asking when nothing is hidden', async () => {
+  const user = userEvent.setup();
+  const store = storeWithThreeTracks();
+  renderAppLayout(store);
+  await openExportMenu(user);
+  await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
+  expect(screen.queryByText('Export hidden tracks?')).toBeNull();
+  expect(savedFiles()).toHaveLength(1);
+});
 
-  it('asks when tracks are hidden, and exports the whole score on that choice', async () => {
-    const user = userEvent.setup();
-    const store = storeWithThreeTracks();
-    store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
-    renderAppLayout(store);
-    await openExportMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
+it('asks when tracks are hidden, and exports the whole score on that choice', async () => {
+  const user = userEvent.setup();
+  const store = storeWithThreeTracks();
+  store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
+  renderAppLayout(store);
+  await openExportMenu(user);
+  await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
 
-    expect(await screen.findByText('Export hidden tracks?')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Whole score' }));
-    expect(exportedTrackCount()).toBe(3);
-  });
+  expect(await screen.findByText('Export hidden tracks?')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Whole score' }));
+  expect(exportedTrackCount()).toBe(3);
+});
 
-  it('exports only the visible tracks on that choice', async () => {
-    const user = userEvent.setup();
-    const store = storeWithThreeTracks();
-    store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
-    renderAppLayout(store);
-    await openExportMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
-    await user.click(screen.getByRole('button', { name: 'Visible tracks only' }));
-    expect(exportedTrackCount()).toBe(1);
-  });
+it('exports only the visible tracks on that choice', async () => {
+  const user = userEvent.setup();
+  const store = storeWithThreeTracks();
+  store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
+  renderAppLayout(store);
+  await openExportMenu(user);
+  await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
+  await user.click(screen.getByRole('button', { name: 'Visible tracks only' }));
+  expect(exportedTrackCount()).toBe(1);
+});
 
-  it('cancelling writes no file', async () => {
-    const user = userEvent.setup();
-    const store = storeWithThreeTracks();
-    store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
-    renderAppLayout(store);
-    await openExportMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(savedFiles()).toHaveLength(0);
-  });
+it('cancelling writes no file', async () => {
+  const user = userEvent.setup();
+  const store = storeWithThreeTracks();
+  store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]);
+  renderAppLayout(store);
+  await openExportMenu(user);
+  await user.click(screen.getByRole('menuitem', { name: /MIDI/ }));
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(savedFiles()).toHaveLength(0);
+});
 ```
 
 Build `savedFiles()`/`exportedTrackCount()` on the `fileExporter` fake that `installTestAppServices()` already wires up — read `src/test/app-services.ts` to see what it records, and decode the saved MIDI bytes with `getAppServices().io.midiCodec.decode` to count tracks. Match `openExportMenu`/`renderAppLayout` to whatever the file already does to open that menu.
@@ -1472,63 +1482,63 @@ Expected: FAIL — no dialog appears and the whole score is always exported.
 In `~/projects/music_app/src/components/layout/AppLayout.tsx`, add near the other hooks:
 
 ```tsx
-  const visibleTrackIds = useAppStore(selectVisibleTrackIds);
-  const hiddenCount = (score?.tracks.length ?? 0) - visibleTrackIds.length;
-  const [pendingExport, setPendingExport] = useState<null | ((scope: ExportScope) => void)>(null);
+const visibleTrackIds = useAppStore(selectVisibleTrackIds);
+const hiddenCount = (score?.tracks.length ?? 0) - visibleTrackIds.length;
+const [pendingExport, setPendingExport] = useState<null | ((scope: ExportScope) => void)>(null);
 
-  /**
-   * Runs `write` against the score the user asked for, asking first only when
-   * the two possible answers actually differ.
-   */
-  const withExportScope = (write: (score: Score) => Promise<void>) => {
-    if (!score) return;
-    if (hiddenCount <= 0) {
-      void write(score);
-      return;
-    }
-    // Stored as a thunk-returning setter: React would otherwise call a
-    // function passed to setState as an updater.
-    setPendingExport(() => (scope: ExportScope) => {
-      setPendingExport(null);
-      void write(scope === 'all' ? score : scoreWithTracks(score, visibleTrackIds));
-    });
-  };
+/**
+ * Runs `write` against the score the user asked for, asking first only when
+ * the two possible answers actually differ.
+ */
+const withExportScope = (write: (score: Score) => Promise<void>) => {
+  if (!score) return;
+  if (hiddenCount <= 0) {
+    void write(score);
+    return;
+  }
+  // Stored as a thunk-returning setter: React would otherwise call a
+  // function passed to setState as an updater.
+  setPendingExport(() => (scope: ExportScope) => {
+    setPendingExport(null);
+    void write(scope === 'all' ? score : scoreWithTracks(score, visibleTrackIds));
+  });
+};
 ```
 
 Rewrite the two handlers to take the score as an argument and go through it:
 
 ```tsx
-  const handleExportMidi = (): void => {
-    withExportScope(async (target) => {
-      try {
-        const bytes = exportMidi(target, getAppServices().io.midiCodec);
-        await getAppServices().io.fileExporter.save(
-          `${midiSafeFilename(target.metadata.title)}.mid`,
-          bytes,
-          'audio/midi',
-        );
-      } catch (err) {
-        reportError(err, { context: 'MIDI export failed', store });
-      }
-    });
-    exportMenu.setOpen(false);
-  };
+const handleExportMidi = (): void => {
+  withExportScope(async (target) => {
+    try {
+      const bytes = exportMidi(target, getAppServices().io.midiCodec);
+      await getAppServices().io.fileExporter.save(
+        `${midiSafeFilename(target.metadata.title)}.mid`,
+        bytes,
+        'audio/midi',
+      );
+    } catch (err) {
+      reportError(err, { context: 'MIDI export failed', store });
+    }
+  });
+  exportMenu.setOpen(false);
+};
 
-  const handleExportMusicXml = (): void => {
-    withExportScope(async (target) => {
-      try {
-        const xml = exportMusicXml(target);
-        await getAppServices().io.fileExporter.save(
-          `${musicXmlSafeFilename(target.metadata.title)}.musicxml`,
-          xml,
-          'application/vnd.recordare.musicxml+xml',
-        );
-      } catch (err) {
-        reportError(err, { context: 'MusicXML export failed', store });
-      }
-    });
-    exportMenu.setOpen(false);
-  };
+const handleExportMusicXml = (): void => {
+  withExportScope(async (target) => {
+    try {
+      const xml = exportMusicXml(target);
+      await getAppServices().io.fileExporter.save(
+        `${musicXmlSafeFilename(target.metadata.title)}.musicxml`,
+        xml,
+        'application/vnd.recordare.musicxml+xml',
+      );
+    } catch (err) {
+      reportError(err, { context: 'MusicXML export failed', store });
+    }
+  });
+  exportMenu.setOpen(false);
+};
 ```
 
 Leave `handleExportProjectJson` alone: a project export is the project, not a view of it.
@@ -1536,12 +1546,12 @@ Leave `handleExportProjectJson` alone: a project export is the project, not a vi
 Then mount the dialog beside the other dialogs in the returned tree:
 
 ```tsx
-      <ExportScopeDialog
-        open={pendingExport !== null}
-        hiddenCount={hiddenCount}
-        onChoose={(scope) => pendingExport?.(scope)}
-        onCancel={() => setPendingExport(null)}
-      />
+<ExportScopeDialog
+  open={pendingExport !== null}
+  hiddenCount={hiddenCount}
+  onChoose={(scope) => pendingExport?.(scope)}
+  onCancel={() => setPendingExport(null)}
+/>
 ```
 
 Add the imports: `ExportScopeDialog` and its `ExportScope` type from `../dialogs/ExportScopeDialog`, `scoreWithTracks` and `selectVisibleTrackIds` from `@sudobility/music_lib`, `Score` type from `@sudobility/music_types`, and `useState` from `react` if not already imported.
@@ -1570,9 +1580,11 @@ Project JSON export is untouched: that is the project, not a view of it."
 ### Task 9: `music_app` — the round trip
 
 **Files:**
+
 - Create: `~/projects/music_app/e2e/visible-tracks.spec.ts`
 
 **Interfaces:**
+
 - Consumes: everything above.
 - Produces: nothing.
 
@@ -1591,7 +1603,10 @@ test('a hidden track stays hidden across a reload', async ({ page }) => {
   await openProject(page, projectId);
 
   await page.getByLabel('Visible tracks').click();
-  await page.getByRole('checkbox', { name: /^Show / }).nth(1).uncheck();
+  await page
+    .getByRole('checkbox', { name: /^Show / })
+    .nth(1)
+    .uncheck();
   await page.keyboard.press('Escape');
 
   // Wait for the autosave to land before reloading, or the assertion races it.
@@ -1644,7 +1659,7 @@ git push
 
 - **The canvas track-info gutter still draws literal `M`/`S` text** (`music_lib`'s `drawTrackInfoGutter`). Pre-existing, unrelated, untouched.
 - **`music_client` needs no change.** `updateProject` passes `ProjectUpdateRequest` straight through; adding a field to that type is enough. If its tests pin a literal `uiPrefs` shape, Task 4's dependency bump will surface it there.
-- **Zoom becomes persisted per project** as a side effect of Task 4 — `ProjectUiPrefs.zoom` is required, so sending `uiPrefs` means sending it, and hydrating on open follows. Changing zoom deliberately does *not* mark the project dirty, so this adds no writes; it rides the next real save. Flag it to the user rather than treating it as free.
+- **Zoom becomes persisted per project** as a side effect of Task 4 — `ProjectUiPrefs.zoom` is required, so sending `uiPrefs` means sending it, and hydrating on open follows. Changing zoom deliberately does _not_ mark the project dirty, so this adds no writes; it rides the next real save. Flag it to the user rather than treating it as free.
 - **Hidden tracks and the piano keyboard** need no work: the keyboard follows the active track, which the Task 3 selector guarantees is visible.
 
 **Type consistency.** `visibleTrackIds` is `string[] | null` in the store (null = all) and `string[] | undefined` on the wire (absent = all) — the boundary conversion happens in exactly two places, both in Task 4 (`?? null` on adopt, spread-if-present on save). `selectVisibleTrackIds` returns `string[]` everywhere and is the only thing consumers read. `setVisibleTracks` takes `string[]` in Tasks 3, 5 and 6 alike; `CheckableSelect`'s `onCheckedChange` has the matching `(checked: string[]) => void`.

@@ -41,7 +41,7 @@ store — the key layout is arithmetic and is unit-tested directly.
 
 The piano roll modelled pitch as one uniform row per semitone. A real keyboard
 cannot: white keys tile edge to edge and black keys straddle the boundary
-*between* two whites, overlapping both.
+_between_ two whites, overlapping both.
 
 ```
  ┌─┬─┬─┬─┬─┬─┬─┐
@@ -148,11 +148,11 @@ A lit key is `theme.notePlaying` from the shared `render-theme.ts`, so the
 keyboard, the notation and the score agree on what "sounding" looks like.
 
 **Gated on `playbackState === 'playing'`.** This is required, not cosmetic: the
-Tone engine clears active notes on `stop()` but *not* on `pause()`, so without
+Tone engine clears active notes on `stop()` but _not_ on `pause()`, so without
 the gate a pause would leave whatever was mid-chord stuck lit indefinitely.
 
 **Non-color cue** (spec §27, matching the treatment the notation and the score
-already use): a lit key renders *pressed* — translated 2px down and given an
+already use): a lit key renders _pressed_ — translated 2px down and given an
 inset shadow, and marked `data-playing="true"` for tests. That is the
 physically correct metaphor for a struck key, it survives grayscale, and it
 means lighting is never carried by hue alone.
@@ -190,18 +190,18 @@ and its test move to `piano-keyboard/`. `isBlackKey`/`noteLabel` move into
 
 Still available elsewhere:
 
-| Capability | Now reached via |
-| --- | --- |
-| Quantize | `EditorToolbar` (has its own grid select) |
-| Velocity | `InspectorPanel`'s Velocity field |
-| Loop from selection | the transport's Loop button (`toggleLoop` uses the selection when there is one) |
-| Delete / transpose / duration / accidental / tie | notation toolbar and keyboard shortcuts |
+| Capability                                       | Now reached via                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| Quantize                                         | `EditorToolbar` (has its own grid select)                                       |
+| Velocity                                         | `InspectorPanel`'s Velocity field                                               |
+| Loop from selection                              | the transport's Loop button (`toggleLoop` uses the selection when there is one) |
+| Delete / transpose / duration / accidental / tie | notation toolbar and keyboard shortcuts                                         |
 
 Genuinely lost:
 
 - **Dragging a note to move or resize it.** Transposition survives via arrow
   keys and duration via the toolbar, but there is no longer any mouse gesture
-  that changes a note's *start tick*. `moveNotesCommand` and
+  that changes a note's _start tick_. `moveNotesCommand` and
   `resizeNotesCommand` keep working; nothing in the UI calls them.
 - **Voice reassignment.** The voice-lane strip was the only surface for
   `changeVoiceCommand`.
@@ -212,6 +212,7 @@ regression. Re-exposing them on the notation view is a plausible follow-up.
 ## 6. Testing
 
 **`keyboard-geometry.test.ts`** (pure):
+
 - exactly 88 keys, 52 white and 36 black;
 - the whites, taken in array order, tile left to right with no gap and no
   overlap and ascend in midi;
@@ -222,10 +223,11 @@ regression. Re-exposing them on the notation view is a plausible follow-up.
 - the first key is A0 and the last is C8.
 
 **`PianoKeyboardView.test.tsx`** (real store):
+
 - renders 88 keys;
 - a sounding note on the active track lights its key, and the key reports itself
   as pressed for the non-color cue;
-- a sounding note on a *different* track lights nothing;
+- a sounding note on a _different_ track lights nothing;
 - pausing goes dark while `activeNoteIds` is still populated — the regression
   the `playbackState` gate exists to prevent;
 - stopped shows nothing;

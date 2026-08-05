@@ -20,6 +20,7 @@ import { DashboardPage } from '@/features/projects/DashboardPage';
 import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
+import { PrintView } from '@/features/print/PrintView';
 import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
 
@@ -60,6 +61,21 @@ function DashboardRoute({ store }: { store: EditorStoreApi }) {
 
 function SettingsRoute({ store }: { store: EditorStoreApi }) {
   return <SettingsPage store={store} />;
+}
+
+/**
+ * The print view for an already-open project.
+ *
+ * Deliberately does not open the project itself: you reach print from inside
+ * the editor, so it is already open. Navigating straight to the URL with
+ * nothing open shows the view's own empty state rather than silently loading —
+ * one fewer path that can fail, and one fewer place that resets undo history.
+ */
+function PrintRoute({ store }: { store: EditorStoreApi }) {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const lang = useCurrentLanguage();
+  return <PrintView store={store} onBack={() => navigate(`/${lang}/project/${id ?? ''}`)} />;
 }
 
 function ProjectRoute({ store }: { store: EditorStoreApi }) {
@@ -112,6 +128,7 @@ export function AppRouter({ store = useAppStore }: AppRouterProps) {
             <Route path="settings" element={<SettingsRoute store={store} />} />
           </Route>
           <Route path="project/:id" element={<ProjectRoute store={store} />} />
+          <Route path="project/:id/print" element={<PrintRoute store={store} />} />
         </Route>
         <Route path="*" element={<Navigate to="/en" replace />} />
       </Routes>

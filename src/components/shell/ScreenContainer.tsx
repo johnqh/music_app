@@ -86,6 +86,11 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
 
   const pageConfigOverrides = usePageConfig();
   const page: AppPageProps = {
+    // `layoutMode`, not just `maxWidth`: the mode goes into building_blocks'
+    // LayoutProvider, which is what the topbar, breadcrumbs and footer read for
+    // their own width. Widening only the content area is what left the logo
+    // indented 176px while the page's cards started at 32px.
+    layoutMode: 'full',
     maxWidth: 'full',
     contentPadding: 'none',
     contentClassName: 'w-full min-w-0',

@@ -199,16 +199,16 @@ describe('TrackEditorPanel', () => {
     render(<TrackEditorPanel store={store} />);
 
     act(() =>
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[0].id, {
-            midiProgram: 40,
-            instrumentName: 'Violin',
-          }),
-        ),
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[0].id, {
+          midiProgram: 40,
+          instrumentName: 'Violin',
+        }),
+      ),
     );
 
-    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent('Violin');
+    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent(
+      'Violin',
+    );
   });
 });

@@ -29,6 +29,7 @@ import {
   transposeSemitone,
 } from '@/features/score-editor/editing';
 import { playbackController } from '@sudobility/music_lib';
+import type { ClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 import type { PlaybackController } from '@sudobility/music_lib';
 
 /** The slice of `PlaybackController` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
@@ -56,6 +57,12 @@ function isModified(event: KeyboardEvent): boolean {
 export function useEditorShortcuts(
   store: EditorStoreApi,
   controller: PlaybackToggle = playbackController,
+  /**
+   * Cut/paste prompts. Optional so a test — or a host that renders the editor
+   * without dialogs — still gets working shortcuts, falling back to the store
+   * actions' own defaults.
+   */
+  clipboard?: ClipboardPrompts,
 ): void {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -93,13 +100,18 @@ export function useEditorShortcuts(
 
       if (isModified(event) && event.key.toLowerCase() === 'x') {
         event.preventDefault();
-        store.getState().cutSelection();
+        // Routed through the prompt hook, not straight to the store: cutting
+        // has two possible outcomes and the shortcut must offer the same
+        // choice the toolbar button does.
+        if (clipboard) clipboard.requestCut();
+        else store.getState().cutSelection();
         return;
       }
 
       if (isModified(event) && event.key.toLowerCase() === 'v') {
         event.preventDefault();
-        store.getState().paste();
+        if (clipboard) clipboard.requestPaste();
+        else store.getState().paste();
         return;
       }
 
@@ -131,5 +143,5 @@ export function useEditorShortcuts(
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [store, controller]);
+  }, [store, controller, clipboard]);
 }

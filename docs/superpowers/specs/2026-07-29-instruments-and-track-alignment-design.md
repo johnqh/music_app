@@ -28,7 +28,7 @@ icons, keyboard header, alignment). **No `music_types` change** — see §1.
   Every track is now representable in MIDI, so a confirm dialog would never
   fire, and an unreachable code path is worse than none.
 - No per-instrument sample libraries. Playback keeps synthesising through
-  Tone.js; the catalogue selects a synth *category*, not a sampled voice.
+  Tone.js; the catalogue selects a synth _category_, not a sampled voice.
 - The generation panel keeps its curated six-instrument checklist (§2.3).
 
 ---
@@ -40,10 +40,22 @@ table plus lookups.
 
 ```ts
 export type GmFamily =
-  | 'piano' | 'chromatic-percussion' | 'organ' | 'guitar'
-  | 'bass' | 'strings' | 'ensemble' | 'brass' | 'reed' | 'pipe'
-  | 'synth-lead' | 'synth-pad' | 'synth-effects' | 'ethnic'
-  | 'percussive' | 'sound-effects';
+  | 'piano'
+  | 'chromatic-percussion'
+  | 'organ'
+  | 'guitar'
+  | 'bass'
+  | 'strings'
+  | 'ensemble'
+  | 'brass'
+  | 'reed'
+  | 'pipe'
+  | 'synth-lead'
+  | 'synth-pad'
+  | 'synth-effects'
+  | 'ethnic'
+  | 'percussive'
+  | 'sound-effects';
 
 export type GmInstrument = {
   /** 0-127, matching `Track.midiProgram`. */
@@ -80,8 +92,8 @@ looks like and what it does.
 (`categoryForProgram`). But there are only six voices —
 `piano | electric-piano | strings | bass | synth-lead | drum-kit` — and the
 mapping only distinguishes five program ranges. Its own comment is explicit:
-everything else, *"organ, guitar, brass, reed, pipe, ensemble, sound
-effects…"*, falls back to `'piano'` because "there is no dedicated voice for
+everything else, _"organ, guitar, brass, reed, pipe, ensemble, sound
+effects…"_, falls back to `'piano'` because "there is no dedicated voice for
 those families yet".
 
 Left alone, that means a user can pick Trumpet from the new catalogue and hear
@@ -130,7 +142,7 @@ export function InstrumentIcon(props: { program: number; className?: string }): 
 ```
 
 **Emoji, not an SVG set.** This app's chrome is already emoji throughout —
-`◀◀ ▶ ■ 💾 ↶ ↷ 🌓 ⚙ ✕ ▴ ▾` — so a bespoke SVG set would be the *inconsistent*
+`◀◀ ▶ ■ 💾 ↶ ↷ 🌓 ⚙ ✕ ▴ ▾` — so a bespoke SVG set would be the _inconsistent_
 choice, and ~36 hand-drawn instrument glyphs is an illustration project with
 ongoing upkeep for a label-sized affordance. Recorded here because it is a
 deliberate trade, not an oversight: emoji render differently across platforms
@@ -197,7 +209,7 @@ export type StaveRect = { trackId: UUID; top: number; height: number };
 ```
 
 Client coordinates rather than content coordinates, because the consumer is a
-*sibling column* with its own origin and its own top offset (the editor toolbar
+_sibling column_ with its own origin and its own top offset (the editor toolbar
 sits above the staves but not above the track panel). Each side converts
 against its own bounding box and neither needs to know the other's layout.
 
