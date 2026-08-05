@@ -64,12 +64,23 @@ import type {
   Articulation,
   Clef,
   KeySignature,
+  Measure,
   NoteEvent,
+  Pitch,
   PitchStep,
+  Score,
   TimeSignature,
 } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
-import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
+import {
+  findEvent,
+  findMeasure,
+  findTrack,
+  gmWrittenTransposition,
+  soundingPitch,
+  transposeKeySignature,
+  transposePitch,
+} from '@sudobility/music_lib';
 import {
   changeAccidental as dispatchAccidental,
   changeArticulation as dispatchArticulation,
@@ -297,9 +308,20 @@ function CommitSlider({
   );
 }
 
+/** The measure holding `note`, found by its track and tick, for the key signature. */
+function measureOfNote(score: Score, note: NoteEvent): Measure | null {
+  const track = findTrack(score, note.trackId);
+  return (
+    track?.measures.find(
+      (m) => note.startTick >= m.startTick && note.startTick < m.startTick + m.durationTicks,
+    ) ?? null
+  );
+}
+
 function NoteTab({ store }: { store: EditorStoreApi }) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
+  const pitchDisplay = store((s) => s.pitchDisplay);
 
   if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
   const noteIds = selectedNoteIds(score, selection);
@@ -315,9 +337,24 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
     );
   }
 
-  const step = commonValue(notes.map((n) => n.pitch.step));
-  const accidentalStr = commonValue(notes.map((n) => String(n.pitch.accidental)));
-  const octave = commonValue(notes.map((n) => n.pitch.octave));
+  /**
+   * The pitch as the reader sees it: sounding in concert mode, and the
+   * player's own written pitch otherwise. Zero shift for a non-transposing
+   * instrument, so the common path returns the stored object untouched.
+   */
+  const shown = (note: NoteEvent): Pitch => {
+    const semitones =
+      pitchDisplay === 'written'
+        ? gmWrittenTransposition(findTrack(score, note.trackId)?.midiProgram ?? 0)
+        : 0;
+    if (semitones === 0) return note.pitch;
+    const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
+    return transposePitch(note.pitch, semitones, transposeKeySignature(key, semitones));
+  };
+
+  const step = commonValue(notes.map((n) => shown(n).step));
+  const accidentalStr = commonValue(notes.map((n) => String(shown(n).accidental)));
+  const octave = commonValue(notes.map((n) => shown(n).octave));
   const durationTicks = commonValue(notes.map((n) => n.durationTicks));
   const startTick = commonValue(notes.map((n) => n.startTick));
   const velocity = commonValue(notes.map((n) => n.velocity));
@@ -330,7 +367,14 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
     patch: Partial<{ step: PitchStep; accidental: Accidental; octave: number }>,
   ): void => {
     for (const note of notes) {
-      store.getState().dispatchCommand(changePitchCommand([note.id], { ...note.pitch, ...patch }));
+      // The patch is against what the user is *reading*, so apply it there and
+      // convert once. Never a round trip: the stored pitch is replaced
+      // outright, not fed back through the lens.
+      const edited = { ...shown(note), ...patch };
+      const program = findTrack(score, note.trackId)?.midiProgram ?? 0;
+      const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
+      const next = pitchDisplay === 'written' ? soundingPitch(edited, program, key) : edited;
+      store.getState().dispatchCommand(changePitchCommand([note.id], next));
     }
   };
 

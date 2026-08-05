@@ -922,14 +922,12 @@ describe('instrument picker', () => {
     const store = makeStore();
     const score = store.getState().score!;
     act(() => {
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[0].id, {
-            midiProgram: 40,
-            instrumentName: 'Violin',
-          }),
-        );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[0].id, {
+          midiProgram: 40,
+          instrumentName: 'Violin',
+        }),
+      );
     });
 
     render(<TrackPanel store={store} />);
@@ -1146,14 +1144,12 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[1].id, {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          }),
-        );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[1].id, {
+          midiProgram: 56,
+          instrumentName: 'Trumpet',
+        }),
+      );
       store.getState().setActiveTrack(score.tracks[1].id);
     });
 
@@ -1166,22 +1162,18 @@ describe('header names the active instrument', () => {
     const store = makeStore(twoTrackScore());
     const score = store.getState().score!;
     act(() => {
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[0].id, {
-            midiProgram: 40,
-            instrumentName: 'Violin',
-          }),
-        );
-      store
-        .getState()
-        .dispatchCommand(
-          changeTrackPropsCommand(score.tracks[1].id, {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          }),
-        );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[0].id, {
+          midiProgram: 40,
+          instrumentName: 'Violin',
+        }),
+      );
+      store.getState().dispatchCommand(
+        changeTrackPropsCommand(score.tracks[1].id, {
+          midiProgram: 56,
+          instrumentName: 'Trumpet',
+        }),
+      );
       store.getState().setActiveTrack(score.tracks[0].id);
     });
     const { container } = render(<PianoKeyboardView store={store} />);

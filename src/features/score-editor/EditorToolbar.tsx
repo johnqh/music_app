@@ -205,6 +205,7 @@ export function EditorToolbar({
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
   const editMode = store((s) => s.editMode);
+  const pitchDisplay = store((s) => s.pitchDisplay);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrackId = store(selectActiveTrackId);
   const activeTrack = score?.tracks.find((t) => t.id === activeTrackId) ?? null;
@@ -723,6 +724,28 @@ export function EditorToolbar({
               className={TOGGLE_BUTTON_CLASS}
             >
               <ContinuousLayoutIcon className={ICON_GLYPH_CLASS} />
+            </Button>
+          </Tooltip>
+        </div>
+        <div role="group" aria-label="Pitch display" className="flex items-center gap-0.5">
+          <Tooltip
+            placement="bottom"
+            content="Show each player's written pitch, or what the score sounds"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              // The label names what clicking *does*, not the current state,
+              // which is what a button should say — so the two names below are
+              // two states of one control, not two controls.
+              aria-label={pitchDisplay === 'written' ? 'Show concert pitch' : 'Show written pitch'}
+              aria-pressed={pitchDisplay === 'written'}
+              onClick={() =>
+                store.getState().setPitchDisplay(pitchDisplay === 'written' ? 'concert' : 'written')
+              }
+              className={TOGGLE_BUTTON_CLASS}
+            >
+              {pitchDisplay === 'written' ? 'Wrt' : 'Con'}
             </Button>
           </Tooltip>
         </div>

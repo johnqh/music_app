@@ -52,6 +52,7 @@ import {
   findEvent,
   selectionSummaryLabel,
   shiftDiatonic,
+  writtenScore,
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
@@ -355,6 +356,7 @@ export function ScoreEditorView({
   const activeNoteIds = store((s) => s.activeNoteIds);
   const previewFragment = store((s) => s.previewFragment);
   const themeMode = store((s) => s.themeMode);
+  const pitchDisplay = store((s) => s.pitchDisplay);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
   const visibleTrackIds = store(selectVisibleTrackIds);
@@ -471,15 +473,29 @@ export function ScoreEditorView({
    */
   const displayScore = useMemo(() => {
     const previewed = score && previewFragment ? scoreWithCandidate(score, previewFragment) : score;
-    if (!previewed || !pitchDragRef.current || pitchDragSteps === 0) return previewed;
     // Live feedback for a pitch drag: the note is drawn where it would land, so
     // the reader aims at a staff position rather than guessing.
-    return scoreWithPitch(
-      previewed,
-      pitchDragRef.current.eventId,
-      shiftDiatonic(pitchDragRef.current.pitch, pitchDragSteps),
-    );
-  }, [score, previewFragment, pitchDragSteps]);
+    const dragged =
+      previewed && pitchDragRef.current && pitchDragSteps !== 0
+        ? scoreWithPitch(
+            previewed,
+            pitchDragRef.current.eventId,
+            shiftDiatonic(pitchDragRef.current.pitch, pitchDragSteps),
+          )
+        : previewed;
+
+    // Written pitch goes on **last**, over everything above. The drag preview
+    // splices in a *sounding* pitch (it comes from the stored score, so the
+    // command it will dispatch is right), and transposing afterwards moves the
+    // dragged note with the rest of the staff. Applying the lens first would
+    // draw that one note an instrument's transposition too low.
+    //
+    // `writtenScore` returns its input object in concert mode and for a score
+    // with nothing transposing, so `computeLayout`'s identity cache below is
+    // untouched unless the lens is actually doing something.
+    if (!dragged || pitchDisplay !== 'written') return dragged;
+    return writtenScore(dragged);
+  }, [score, previewFragment, pitchDragSteps, pitchDisplay]);
 
   /**
    * The current score's system/measure geometry (spec §26), memoized on

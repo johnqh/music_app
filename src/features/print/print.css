@@ -1,10 +1,9 @@
 /*
  * Print rules for the print view.
  *
- * On screen this is an ordinary page; these apply only when printing. The
- * browser owns pagination — each system is a block it may not break inside, so
- * it fits as many whole systems per page as the chosen paper allows. Feature 6
- * replaces this with explicit pagination once page turns must land on rests.
+ * On screen this is an ordinary page; these apply only when printing.
+ * Pagination is ours, not the browser's: `paginate` in music_lib chooses which
+ * systems share a page, and each page block breaks after itself.
  */
 @media print {
   /* The chrome is for choosing what to print, not part of the printout. */
@@ -18,14 +17,18 @@
     max-width: none;
   }
 
-  /* The rule the whole feature exists to guarantee. */
-  .print-pages > * {
-    break-inside: avoid;
-    page-break-inside: avoid;
+  /* The rule the whole feature exists to guarantee: a break after each page we
+     chose, and never inside a system (PrintSystem carries that itself). */
+  .print-page {
+    break-after: page;
+    page-break-after: always;
   }
 
-  /* The printer's own margins, whatever paper it is. */
-  @page {
-    margin: 12mm;
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
+
+  /* No @page here: it is emitted by PrintView from PAGE_MARGIN_MM, so the
+     margin the printer uses and the margin the packer assumed cannot drift. */
 }

@@ -3,16 +3,17 @@
 **Status:** approved 2026-08-04
 **Goal:** print the score, or one track, on whatever paper is in the printer — with page breaks never falling through a system.
 
-This is the first of six features that together produce properly engraved parts. It is useful on its own: after it, you can print.
+This is the first of seven features that together produce properly engraved parts. It is useful on its own: after it, you can print.
 
-| #     | Feature                  | Lands                   |
-| ----- | ------------------------ | ----------------------- |
-| **1** | **Print view**           | **you can print**       |
-| 2     | Instrument transposition | correct written pitches |
-| 3     | Multi-measure rests      | a usable part           |
-| 4     | Rehearsal marks          | rehearsable             |
-| 5     | Cue notes                | playable entries        |
-| 6     | Page-turn optimisation   | performance-ready       |
+| #     | Feature                  | Lands                    |
+| ----- | ------------------------ | ------------------------ |
+| **1** | **Print view**           | **you can print**        |
+| 2     | Instrument transposition | correct written pitches  |
+| 3     | Multi-measure rests      | a usable part            |
+| 4     | Rehearsal marks          | rehearsable              |
+| 5     | Cue notes                | playable entries         |
+| 6     | Page-turn optimisation   | performance-ready        |
+| 7     | Written-pitch editing    | enter a part as it reads |
 
 Rehearsal marks and cues are **derived heuristically at extraction time**, not authored — so none of them needs an editor affordance or a stored field.
 

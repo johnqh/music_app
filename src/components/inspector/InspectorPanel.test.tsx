@@ -141,3 +141,48 @@ describe('InspectorPanel', () => {
     expect(store.getState().canUndo).toBe(false);
   });
 });
+
+describe('written-pitch display', () => {
+  function clarinetStore() {
+    const store = createAppStore({ context: testStoreContext() });
+    const base = twinkleScore();
+    store.getState().setScore({
+      ...base,
+      tracks: base.tracks.map((t) => ({ ...t, midiProgram: 71 })),
+    });
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    return store;
+  }
+
+  const stepTrigger = () => screen.getByRole('combobox', { name: 'Pitch step' });
+
+  it('reads out the sounding pitch in concert mode', () => {
+    const store = clarinetStore();
+    render(<InspectorPanel store={store} />);
+    expect(stepTrigger()).toHaveTextContent('C');
+  });
+
+  it('reads out the written pitch in written mode', () => {
+    // A clarinet sounding C reads D.
+    const store = clarinetStore();
+    store.getState().setPitchDisplay('written');
+    render(<InspectorPanel store={store} />);
+    expect(stepTrigger()).toHaveTextContent('D');
+  });
+
+  it('stores the sounding pitch when a written one is entered', async () => {
+    // The input half of the lens: choose E in written mode, store D. Driven
+    // through the real Radix control rather than by calling the handler,
+    // because that is where an earlier select bug hid.
+    const user = userEvent.setup();
+    const store = clarinetStore();
+    store.getState().setPitchDisplay('written');
+    render(<InspectorPanel store={store} />);
+
+    await user.click(stepTrigger());
+    await user.click(screen.getByRole('option', { name: 'E' }));
+
+    expect(allNotes(store.getState().score!)[0].pitch.step).toBe('D');
+  });
+});

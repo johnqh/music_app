@@ -485,3 +485,18 @@ describe('selection-only controls say so', () => {
     expect(screen.getByLabelText('Paste')).toBeEnabled();
   });
 });
+
+describe('pitch display', () => {
+  it('toggles between concert and written pitch', async () => {
+    const user = userEvent.setup();
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    renderToolbar(store);
+
+    await user.click(screen.getByRole('button', { name: 'Show written pitch' }));
+    expect(store.getState().pitchDisplay).toBe('written');
+
+    await user.click(screen.getByRole('button', { name: 'Show concert pitch' }));
+    expect(store.getState().pitchDisplay).toBe('concert');
+  });
+});

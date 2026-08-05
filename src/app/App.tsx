@@ -81,6 +81,7 @@ function AuthGate({ store }: { store: EditorStoreApi }) {
 export function App({ store = useAppStore }: AppProps) {
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
+  const pitchDisplay = store((s) => s.pitchDisplay);
 
   const [queryClient] = useState(() => new QueryClient());
 
@@ -137,6 +138,7 @@ export function App({ store = useAppStore }: AppProps) {
       if (cancelled) return;
       if (prefs.themeMode) store.getState().setThemeMode(prefs.themeMode);
       if (prefs.developerMode !== undefined) store.getState().setDeveloperMode(prefs.developerMode);
+      if (prefs.pitchDisplay) store.getState().setPitchDisplay(prefs.pitchDisplay);
       prefsLoaded.current = true;
     });
     return () => {
@@ -148,8 +150,8 @@ export function App({ store = useAppStore }: AppProps) {
   useEffect(() => {
     if (!prefsLoaded.current) return;
     const { prefsStorage } = getAppServices();
-    void savePrefs(prefsStorage, { themeMode, developerMode });
-  }, [themeMode, developerMode]);
+    void savePrefs(prefsStorage, { themeMode, developerMode, pitchDisplay });
+  }, [themeMode, developerMode, pitchDisplay]);
 
   return (
     <ErrorBoundary>

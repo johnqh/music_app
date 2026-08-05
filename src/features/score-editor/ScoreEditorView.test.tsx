@@ -12,7 +12,8 @@ import {
   pitchToMidi,
   tickForPoint,
 } from '@sudobility/music_lib';
-import { allNotes, findEvent } from '@sudobility/music_lib';
+import { allNotes, findEvent, shiftDiatonic, writtenScore } from '@sudobility/music_lib';
+import { scoreWithPitch } from '@/features/score-editor/pitch-drag';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import type { BBox, RenderTheme } from '@sudobility/music_lib';
 import { CanvasScoreRenderer, createMock2DContext } from '@sudobility/music_lib';
@@ -1221,5 +1222,70 @@ describe('ScoreEditorView visible tracks', () => {
     act(() => store.getState().setVisibleTracks([first.id]));
 
     expect(drawnTrackIds(renderSpy)).toEqual([first.id]);
+  });
+});
+
+describe('written-pitch display', () => {
+  /** A one-track clarinet score: reads a tone above what it sounds. */
+  function clarinetStore() {
+    const store = createAppStore({ context: testStoreContext() });
+    const base = twinkleScore();
+    store.getState().setScore({
+      ...base,
+      tracks: base.tracks.map((t) => ({ ...t, midiProgram: 71 })),
+    });
+    return store;
+  }
+
+  it('defaults to concert pitch, changing nothing', () => {
+    const store = clarinetStore();
+    expect(store.getState().pitchDisplay).toBe('concert');
+    render(<ScoreEditorView store={store} />);
+    expect(store.getState().score!.tracks[0].measures[0].keySignature.fifths).toBe(0);
+  });
+
+  it('never writes the transposed score back to the store', () => {
+    // The guard that matters: the lens must not become the model.
+    const store = clarinetStore();
+    const before = JSON.stringify(store.getState().score);
+    act(() => store.getState().setPitchDisplay('written'));
+    render(<ScoreEditorView store={store} />);
+    expect(JSON.stringify(store.getState().score)).toBe(before);
+  });
+
+  it('keeps the selection across a toggle', () => {
+    // Ids survive the transformation, so nothing has to be remapped.
+    const store = clarinetStore();
+    const noteId = allNotes(store.getState().score!)[0].id;
+    act(() => store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] }));
+    render(<ScoreEditorView store={store} />);
+
+    act(() => store.getState().setPitchDisplay('written'));
+    expect(store.getState().selection.eventIds).toEqual([noteId]);
+  });
+
+  it('draws the written key signature, two sharps for a clarinet in concert C', () => {
+    // Canvas ink cannot be read directly, so assert the score the renderer is
+    // handed: this is the whole observable point of the feature.
+    const store = clarinetStore();
+    expect(store.getState().score!.tracks[0].measures[0].keySignature.fifths).toBe(0);
+    expect(writtenScore(store.getState().score!).tracks[0].measures[0].keySignature.fifths).toBe(2);
+  });
+
+  it('transposes a pitch-drag preview with the rest of the staff', () => {
+    // The ordering bug: the drag preview splices in a *sounding* pitch, so the
+    // written transform has to run after it. Applying the lens first would draw
+    // the dragged note an instrument's transposition below its own staff.
+    const store = clarinetStore();
+    const note = allNotes(store.getState().score!)[0];
+    const dragged = scoreWithPitch(store.getState().score!, note.id, shiftDiatonic(note.pitch, 1));
+    const shown = writtenScore(dragged);
+    const shownNote = allNotes(shown).find((n) => n.id === note.id)!;
+    const shownNeighbour = allNotes(shown).find((n) => n.id !== note.id)!;
+    const soundingNeighbour = allNotes(store.getState().score!).find((n) => n.id !== note.id)!;
+
+    // Every note on the staff moved by the same transposition, dragged or not.
+    expect(pitchToMidi(shownNeighbour.pitch) - pitchToMidi(soundingNeighbour.pitch)).toBe(2);
+    expect(pitchToMidi(shownNote.pitch) - pitchToMidi(shiftDiatonic(note.pitch, 1))).toBe(2);
   });
 });

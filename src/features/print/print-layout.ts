@@ -22,7 +22,13 @@ export const PRINT_WIDTH = 1000;
 /** Backing-store scale. Roughly 300dpi once scaled onto the page. */
 export const PRINT_SCALE = 3;
 
-export type PrintPage = {
+/**
+ * One system's slice of the layout: the vertical band to draw for it.
+ *
+ * Not a page — a page is a *set* of these, chosen by `paginate` in music_lib.
+ * The two were the same thing until page turns had to land on rests.
+ */
+export type PrintSystemSlice = {
   systemIndex: number;
   top: number;
   bottom: number;
@@ -57,7 +63,7 @@ export function printRenderOptions(trackIds: string[]): Omit<CanvasRenderOptions
  * `gutterTop`, not `yTop`: measure numbers are drawn above the stave, and
  * slicing at `yTop` would cut them off.
  */
-export function printSystems(plan: LayoutPlan): PrintPage[] {
+export function printSystems(plan: LayoutPlan): PrintSystemSlice[] {
   return plan.systems.map((system, systemIndex) => ({
     systemIndex,
     top: system.gutterTop,
