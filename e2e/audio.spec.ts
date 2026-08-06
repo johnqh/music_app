@@ -88,5 +88,24 @@ test.describe('audio', () => {
     expect(bytes.subarray(0, 4).toString()).toBe('RIFF');
     expect(bytes.subarray(8, 12).toString()).toBe('WAVE');
     expect(bytes.length).toBeGreaterThan(44);
+
+    // --- and as MP3 ------------------------------------------------------
+    // The least-verified path otherwise: `encodeMp3` is only unit-tested to
+    // "produces bytes", because checking an mp3 decodes needs a decoder in the
+    // test environment. Here at least the frame header is real.
+    const mp3Download = page.waitForEvent('download');
+    await page.getByLabel('Export menu').click();
+    await page.getByRole('menuitem', { name: 'Audio (MP3)…' }).click();
+    const mp3File = await mp3Download;
+
+    const mp3Chunks: Buffer[] = [];
+    for await (const chunk of await mp3File.createReadStream()) mp3Chunks.push(chunk as Buffer);
+    const mp3 = Buffer.concat(mp3Chunks);
+
+    expect(mp3.length).toBeGreaterThan(0);
+    expect(mp3File.suggestedFilename()).toMatch(/\.mp3$/);
+    // An MPEG audio frame starts with eleven set bits: 0xFF then 0xE0-0xFF.
+    expect(mp3[0]).toBe(0xff);
+    expect(mp3[1] & 0xe0).toBe(0xe0);
   });
 });

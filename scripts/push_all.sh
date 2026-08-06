@@ -22,12 +22,27 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Wait times let CI/CD finish publishing to npm before dependent packages
 # fetch the new version. music_api is private (never published) and
 # music_app is the terminal consumer, so neither needs a wait.
+#
+# 150s, not 60s: publishing happens in CI on push, and 60s has lost the race
+# more than once — music_app then installs the *previous* music_lib and fails
+# typecheck on exports that exist in the source it was just built against. The
+# failure looks like a code error and is not one.
+#
+# A poll ("wait until npm serves the version we just pushed") would be strictly
+# better than any fixed sleep, but the sleep lives in the shared
+# ../workflows/scripts/push_projects.sh, which building_blocks and sudojo_app
+# also source — so that change belongs there, deliberately, not as a side
+# effect of a music_app run.
+#
+# Note also that `bun add <pkg>@<version>` frequently cannot resolve a
+# just-published version for minutes after npm and curl both show it; `bun
+# update` resolves it where `bun add` and `bun install` do not.
 PROJECTS=(
-    "../music_types:60"
+    "../music_types:150"
     "../music_api:0"
-    "../music_client:60"
+    "../music_client:150"
     "../music_io:0"
-    "../music_lib:60"
+    "../music_lib:150"
     "../music_app:0"
 )
 

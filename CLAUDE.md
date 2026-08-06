@@ -27,6 +27,8 @@ The ScoreSmith web app: routing, pages, and UI only. One of six repos in the Sco
 - `src/config/initialize.ts` — the composition root's actual construction: `createMusicIo()` and `initializeMusicPlatform()` (first, since `music_lib` resolves its playback engine from that registry on first use), `FetchNetworkClient` (the one `fetch()` call site in the app), `MusicClient`, Firebase/e2e `AuthBackend`, `PrefsStorage`, and `music_lib`'s `StoreContext` — see [docs/architecture.md](docs/architecture.md#the-store-context-injection-pattern)
 - `src/components/` — `layout/` (AppLayout, TrackPanel, Toasts), `transport/` (TransportBar), `inspector/`, `dialogs/` (MidiImportWizard, MusicXmlImportDialog, ShortcutHelpDialog, DeveloperSettingsDialog), `shell/`
 - `src/features/` — `score-editor/` (ScoreEditorView, EditorToolbar, useEditorShortcuts, hit-test, render-theme), `piano-keyboard/` (PianoKeyboardView, keyboard-geometry, playing-pitches), `generation/` (GenerationPanel, RegenerationPanel, CandidateList, preview), `projects/` (DashboardPage)
+- `src/features/snapshots/` — `snapshot-tree.ts` (pure tree layout for the picker), `SnapshotDialogs.tsx` (create + guarded open)
+- `src/features/community/` — `CommunityPage.tsx` and `PublishedView.tsx`, the two routes that render **signed out**
 - `src/stubs/` — stand-ins for `@sudobility/building_blocks`' optional peer deps this app doesn't install (`subscription-components`, `devops-components`, `subscription_lib`), aliased in `vite.config.ts`. This is the sudobility "stubs system" pattern — see that package's own CLAUDE.md; every stub module is a no-op/empty-state implementation, never partially wired.
 - `src/test/` — `app-services.ts` (`installTestAppServices`/`resetTestAppServices`: wires `music_lib`'s `testStoreContext()` fakes into `getAppServices()` so components under test never hit real Firebase/network), `setup.ts`
 - `e2e/` — Playwright specs + `helpers.ts` + `global-setup.ts` (truncates the `music_test` DB)
@@ -56,6 +58,28 @@ The ScoreSmith web app: routing, pages, and UI only. One of six repos in the Sco
 - **Track editing lives beside the keyboard** (`TrackEditorPanel`), at the same `TRACK_INFO_WIDTH`, editing the active track only — the same subject the keyboard shows. It may scroll internally; that's fine because it mirrors nothing. Rows clip; hover and the active row lift above their neighbours to reach hidden controls. Reported on the existing rAF-throttled scroll path — don't move it onto a per-frame path.
 - `vite.config.ts` sets `resolve.dedupe: ['react','react-dom','zustand']`. Normally redundant, but a local `bun link` of music_lib during cross-repo work exposes its dev-installed copies and two React instances break every hook — don't remove it.
 - `vite.config.ts` excludes `@sudobility/music_lib` from dev-mode dep pre-bundling (esbuild's prebundler doesn't handle the lib's `new Worker(new URL(...))` calls) — don't "fix" that exclusion without checking the MIDI-import/quantize workers still resolve in dev.
+
+### Snapshots and publishing
+
+- **Creating a snapshot flushes the live score first.** `createSnapshot` on the server copies the **projects row**, and autosave is debounced — so `AppLayout` PUTs the current score before asking for a snapshot. Delete that line and snapshots silently pin stale (or, right after generation, _empty_) music. The API integration tests cannot catch it: they snapshot a project created through the API, whose row is current by construction. Only the e2e sees it.
+- **Snapshot history is a tree, not a list.** Every snapshot has `parentId`; the live project carries `parentSnapshotId`. Opening v1 while v2 exists branches — v2 survives, and the next snapshot is v1's child. There is deliberately **no PATCH/PUT/DELETE route** on a snapshot: immutability is enforced by the absence of a route, not by a check somebody can forget, and a test asserts all three 404.
+- **The router sits above the auth gate.** `App.tsx` renders `BrowserRouter` with `/:lang/community` and `/:lang/p/:publicId` matched _before_ a catch-all whose element is `AuthGate`. Restructuring routing so the gate wraps everything again would silently make published links require a login. `music_api` mounts `/api/v1/public` **outside** `authMiddleware` for the same reason.
+- **The public payload is built field by field** (`toPublished` in `music_api`), never spread from the row — so a column added to `snapshots` later cannot leak `user_id` or an email onto a public page. A test asserts the raw response body contains no `@`.
+- **The e2e DB truncation needs `CASCADE`** now that `snapshots` references `projects`. Without it the `TRUNCATE` fails outright, every run inherits the previous run's projects, and it surfaces much later as a strict-mode violation on a duplicated project name in an unrelated spec.
+
+### Audio and written pitch
+
+- **Analysis lives in `music_lib`, codecs in `music_io`.** Pitch tracking (YIN), segmentation and tempo detection are pure functions over a `Float32Array` — testable with a synthesised tone and no browser. Decoding/encoding and `Tone.Offline` rendering need a real audio context and sit behind `AudioCodec`/`AudioRenderer` on `MusicIo`. `renderOffline` has **no unit test by design**: vitest has no `OfflineAudioContext`, so its only verification is the e2e round trip.
+- **Import is monophonic, and the dialog says so.** One line at a time; chords and mixes are not attempted. Voice is not special — a vocal file takes the same path as a flute one.
+- **Transcription emits unquantised ticks against the _detected_ tempo.** Correcting the tempo in the dialog rescales them; getting that backwards is silent, so the arithmetic has its own tests. Notes always land on a **new** track via `addTranscribedTrackCommand`, which is one command so an import is one undo step.
+- **`writtenScore` is applied LAST in `displayScore`.** The pitch-drag preview splices in a _sounding_ pitch (it comes from the stored score, so the command it dispatches is right); transposing afterwards moves the dragged note with the rest of the staff. Applying the lens first draws that one note an instrument's transposition too low. `writtenScore` returns its input object unchanged in concert mode, so `computeLayout`'s identity cache is untouched unless the lens is on.
+- **Sounding pitch survives written→sounding exactly; spelling does not.** Measured: 0 pitch changes and 567 spelling changes over 1323 combinations. That is why stored notes are never round-tripped through the display — display transforms one way, input the other way once, at entry.
+
+### Drag to move notes
+
+- **Option/Alt + drag moves; plain drag still pitch-drags.** The modifier is the whole disambiguation, which is why Option+press works on any note and selects it if needed. Pitch is never changed by a move: vertical means _which track_, never _what pitch_.
+- **The pointer handlers are memoized with deliberately narrow deps.** Anything read inside them that changes per-frame must go through a ref (`dropTargetRef` beside `dropTarget`, as `pitchDragRef` sits beside `pitchDragSteps`). Adding a branch that reads `layoutPlan` or state directly captures a stale value — this shipped as a bug once and only the e2e caught it.
+- **The drop indicator never mutates the score.** A live note preview would splice into another track's measures and force a full relayout every frame.
 
 ## Related Projects
 

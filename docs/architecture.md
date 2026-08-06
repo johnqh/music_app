@@ -266,3 +266,41 @@ bunx playwright install chromium
 **`bun run test:e2e` hangs, or fails to reach `music_api`.** The e2e suite needs a local Postgres reachable at the `DATABASE_URL` in `playwright.config.ts` (default `postgres://localhost:5432/music_test`) and a sibling `../music_api` checkout — Playwright's `webServer` config boots `bun --cwd ../music_api src/index.ts` itself, so `music_api`'s own dependencies must already be installed (`bun install` there first). If port `5173` or `8023` is already in use by another process, stop it first — Playwright's `reuseExistingServer` will otherwise happily reuse _whatever_ is already listening there, which may not be this project.
 
 **Generation/regeneration fails outside e2e.** Real (non-test-mode) `music_api` needs a valid `OPENAI_API_KEY` (and `OPENAI_MODEL`) in its environment, and `music_app` needs real Firebase project config (`VITE_FIREBASE_*`) so `getToken()` returns a real ID token `music_api` can verify — without both, generation calls fail with an auth or upstream-AI error rather than silently falling back to anything local (there is no more offline mock provider post the server-backed rewrite).
+
+## Snapshots, publishing, and the public surface
+
+`music_api` holds a `snapshots` table beside `projects`: a full copy of the
+score, a `parentId` making the history a **tree**, and nullable
+`public_id`/`publisher_name` that make it shareable. `projects` gains
+`parent_snapshot_id` — where the live work sits in that tree.
+
+Two route groups, and the split is the security boundary:
+
+```
+/api/v1/*          authMiddleware — projects, snapshots, publish/unpublish
+/api/v1/public/*   NO middleware  — GET a published snapshot, GET the community list
+```
+
+The public group is mounted **before** and **outside** the authenticated router
+in `src/index.ts`. Its payloads are built field by field so no column added
+later can leak an owner id or email onto a public page.
+
+On the client, `music_app`'s router sits **above** the auth gate: two routes
+(`/:lang/community`, `/:lang/p/:publicId`) render for a visitor with no account,
+and everything else falls through to a catch-all whose element is `AuthGate`.
+
+## Audio
+
+The platform split follows the same rule as everything else, and the line is
+worth stating precisely:
+
+- **`music_lib`** — pitch tracking, note segmentation, tempo detection, and
+  `renderEvents` (which tracks sound, when, how loudly). Pure over samples or a
+  score; testable with a synthesised tone and no browser.
+- **`music_io`** — `AudioCodec` (decode wav/mp3/mpa, encode wav/mp3) and
+  `AudioRenderer` (`Tone.Offline` through the same instruments playback uses).
+  Both need a real audio context.
+
+So an export reads: `renderEvents(score)` → `audioRenderer.render` →
+`encodeWav`/`encodeMp3` → `fileExporter.save`. An import reverses it:
+`audioCodec.decode` → `transcribe` → `addTranscribedTrackCommand`.
