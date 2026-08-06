@@ -195,7 +195,7 @@ type ScoresmithHandle = {
  * viewport point at the bbox center, scrolling the box into view first if
  * needed. Runs entirely in-page; returns null when the id isn't in `map`.
  */
-async function viewportPointForId(
+export async function viewportPointForId(
   page: Page,
   map: 'idToBBox' | 'measureIdToBBox',
   id: string,

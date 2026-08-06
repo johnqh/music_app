@@ -121,3 +121,25 @@ export function measureIndexAtGutterPoint(plan: LayoutPlan, point: Point): numbe
   }
   return null;
 }
+
+/**
+ * The track whose stave band contains `point`, in **content** coordinates.
+ *
+ * The sibling of `trackIdAtGutterPoint`, which does the same y-band search but
+ * is x-constrained to the gutter and reads *viewport* coordinates — the one
+ * place in the editor where the two spaces differ, because the gutter is
+ * painted pinned to the viewport's left edge. A drop can land anywhere on the
+ * staff, so it needs the ordinary content-space search.
+ */
+export function trackIdAtContentPoint(plan: LayoutPlan, point: Point): string | null {
+  for (const system of plan.systems) {
+    const measureIndex = system.measureIndices[0];
+    if (measureIndex === undefined) continue;
+    for (const trackLayout of plan.trackLayouts) {
+      const box = trackLayout.measures.find((m) => m.measureIndex === measureIndex)?.box;
+      if (!box) continue;
+      if (point.y >= box.y && point.y < box.y + box.height) return trackLayout.track.id;
+    }
+  }
+  return null;
+}

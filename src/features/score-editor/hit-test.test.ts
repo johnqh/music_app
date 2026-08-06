@@ -8,7 +8,9 @@ import {
   eventIdsInBox,
   measureIdAtPoint,
   pointInBBox,
+  trackIdAtContentPoint,
 } from '@/features/score-editor/hit-test';
+import { computeLayout, testRenderTheme, twoTrackScore } from '@sudobility/music_lib';
 import type { BBox, LayoutPlan } from '@sudobility/music_lib';
 
 const box: BBox = { x: 10, y: 10, width: 20, height: 10 };
@@ -209,5 +211,44 @@ describe('eventIdsAtPoint', () => {
 
   it('returns an empty list when nothing is under the point', () => {
     expect(eventIdsAtPoint(new Map([['a', box]]), { x: 0, y: 0 })).toEqual([]);
+  });
+});
+
+describe('trackIdAtContentPoint', () => {
+  const twoTrackPlan = () =>
+    computeLayout(twoTrackScore(), {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 1200,
+      theme: testRenderTheme(),
+    });
+
+  it('finds the track whose stave band contains the point', () => {
+    const plan = twoTrackPlan();
+    const [a, b] = plan.trackLayouts;
+    const boxA = a.measures[0].box;
+    const boxB = b.measures[0].box;
+
+    expect(trackIdAtContentPoint(plan, { x: boxA.x + 10, y: boxA.y + boxA.height / 2 })).toBe(
+      a.track.id,
+    );
+    expect(trackIdAtContentPoint(plan, { x: boxB.x + 10, y: boxB.y + boxB.height / 2 })).toBe(
+      b.track.id,
+    );
+  });
+
+  it('is null above the first stave', () => {
+    expect(trackIdAtContentPoint(twoTrackPlan(), { x: 100, y: -500 })).toBeNull();
+  });
+
+  it('works anywhere across the width, unlike the gutter hit test', () => {
+    // `trackIdAtGutterPoint` is x-constrained to the gutter and reads viewport
+    // coordinates, because the gutter is pinned to the viewport. A drop can
+    // land anywhere on the staff, in content coordinates.
+    const plan = twoTrackPlan();
+    const box = plan.trackLayouts[1].measures[0].box;
+    expect(trackIdAtContentPoint(plan, { x: box.x + box.width - 5, y: box.y + 5 })).toBe(
+      plan.trackLayouts[1].track.id,
+    );
   });
 });

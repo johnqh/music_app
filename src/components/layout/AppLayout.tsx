@@ -47,7 +47,7 @@
  * skin -- the honest characterization is still "kept native", just with a
  * documented, checked reason rather than an assumed one.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
@@ -79,6 +79,9 @@ import { ExportScopeDialog } from '@/components/dialogs/ExportScopeDialog';
 import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
+import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
+import { snapshotTree } from '@/features/snapshots/snapshot-tree';
+import type { SnapshotSummary } from '@sudobility/music_types';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -186,6 +189,63 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const themeMenu = useMenu<HTMLDivElement>();
   const settingsMenu = useMenu<HTMLDivElement>();
   const issuesMenu = useMenu<HTMLDivElement>();
+  const projectMenu = useMenu<HTMLDivElement>();
+
+  // Snapshots go through `getAppServices().musicClient` directly, the way the
+  // dashboard and every export in this file already reach the backend. The
+  // app has no React Query provider around this subtree to hang hooks off.
+  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
+  const [parentSnapshotId, setParentSnapshotId] = useState<string | null>(null);
+  const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
+  const [openSnapshotOpen, setOpenSnapshotOpen] = useState(false);
+
+  const refreshSnapshots = useCallback(async () => {
+    const projectId = store.getState().projectId;
+    if (!projectId) return;
+    const { musicClient, auth } = getAppServices();
+    const token = await auth.getToken();
+    if (!token) return;
+    setSnapshots(await musicClient.listSnapshots(projectId, token));
+    const project = await musicClient.getProject(projectId, token);
+    setParentSnapshotId(project.parentSnapshotId ?? null);
+  }, [store]);
+
+  const createSnapshot = useCallback(
+    async (name: string) => {
+      const projectId = store.getState().projectId;
+      if (!projectId) return;
+      const { musicClient, auth } = getAppServices();
+      const token = await auth.getToken();
+      if (!token) return;
+
+      // Push the live score first. `createSnapshot` copies the *server's*
+      // project row, and autosave is debounced — so without this a snapshot
+      // pins whatever the server last happened to receive rather than what is
+      // on screen, which for a freshly generated score is nothing at all.
+      const current = store.getState().score;
+      if (current) await musicClient.updateProject(projectId, { score: current }, token);
+
+      await musicClient.createSnapshot(projectId, name, token);
+      setCreateSnapshotOpen(false);
+      await refreshSnapshots();
+    },
+    [store, refreshSnapshots],
+  );
+
+  const openSnapshot = useCallback(
+    async (snapshotId: string) => {
+      const { musicClient, auth } = getAppServices();
+      const token = await auth.getToken();
+      if (!token) return;
+      // The server replaces the live project and hands back the result, so the
+      // editor takes its score straight from the response rather than reloading.
+      const project = await musicClient.openSnapshot(snapshotId, token);
+      store.getState().setScore(project.score);
+      setOpenSnapshotOpen(false);
+      await refreshSnapshots();
+    },
+    [store, refreshSnapshots],
+  );
   const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -466,6 +526,52 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     onChange={(e) => void handleImportJsonFile(e)}
                   />
                 </label>
+              </div>
+            )}
+          </div>
+
+          <div ref={projectMenu.ref} className="relative">
+            <button
+              type="button"
+              aria-label="Project menu"
+              aria-haspopup="menu"
+              aria-expanded={projectMenu.open}
+              onClick={() => {
+                projectMenu.setOpen((v) => !v);
+                void refreshSnapshots();
+              }}
+              className={TEXT_BUTTON_CLASS}
+            >
+              Project
+            </button>
+            {projectMenu.open && (
+              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => {
+                    projectMenu.setOpen(false);
+                    setCreateSnapshotOpen(true);
+                  }}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Create snapshot…
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => {
+                    projectMenu.setOpen(false);
+                    setOpenSnapshotOpen(true);
+                  }}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Open snapshot…
+                </Button>
               </div>
             )}
           </div>
@@ -771,6 +877,25 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       </div>
 
       <Toasts store={store} />
+
+      <CreateSnapshotDialog
+        open={createSnapshotOpen}
+        snapshotCount={snapshots.length}
+        onCreate={(name) => void createSnapshot(name)}
+        onClose={() => setCreateSnapshotOpen(false)}
+      />
+
+      <OpenSnapshotDialog
+        open={openSnapshotOpen}
+        nodes={snapshotTree(snapshots, parentSnapshotId)}
+        onOpen={(id) => void openSnapshot(id)}
+        onSnapshotFirst={() => {
+          // The non-destructive escape: keep the work, then choose again.
+          setOpenSnapshotOpen(false);
+          setCreateSnapshotOpen(true);
+        }}
+        onClose={() => setOpenSnapshotOpen(false)}
+      />
 
       <MidiImportWizard
         open={dialogs.midiImport === true}

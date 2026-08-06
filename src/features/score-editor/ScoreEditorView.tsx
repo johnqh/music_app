@@ -50,12 +50,16 @@ import type { Pitch, Score } from '@sudobility/music_types';
 import {
   changePitchCommand,
   findEvent,
+  relocateNotesCommand,
   selectionSummaryLabel,
   shiftDiatonic,
+  ticksFor,
   writtenScore,
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
+import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
+import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
@@ -357,6 +361,8 @@ export function ScoreEditorView({
   const previewFragment = store((s) => s.previewFragment);
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
+  const editMode = store((s) => s.editMode);
+  const snapGrid = store((s) => s.snapGrid);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
   const visibleTrackIds = store(selectVisibleTrackIds);
@@ -396,6 +402,21 @@ export function ScoreEditorView({
    * would not be (a new score identity invalidates the cached layout).
    */
   const pitchDragRef = useRef<{ eventId: string; pitch: Pitch; startY: number } | null>(null);
+  const noteDragRef = useRef<{ anchorId: string; anchorTick: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  /**
+   * The same value as `dropTarget`, for the pointer handlers to read.
+   *
+   * `handlePointerUp` is memoized on deps that deliberately exclude anything
+   * changing per pointer-move, so reading the state there would capture
+   * whatever it was when the handler was built — null. Same split as
+   * `pitchDragRef` vs `pitchDragSteps`.
+   */
+  const dropTargetRef = useRef<DropTarget | null>(null);
+  const setDropTargetBoth = useCallback((target: DropTarget | null) => {
+    dropTargetRef.current = target;
+    setDropTarget(target);
+  }, []);
   const [pitchDragSteps, setPitchDragSteps] = useState(0);
   const suppressNextClickRef = useRef(false);
   /**
@@ -960,9 +981,30 @@ export function ScoreEditorView({
       // drag, not a selection box. Requiring the note to be selected first is
       // what keeps an ordinary click-and-drag on the staff a box select.
       const state = store.getState();
+      const result = resultRef.current;
+
+      // Option/Alt starts a move. Checked before the pitch-drag branch,
+      // because the same press on the same note would otherwise start a pitch
+      // drag — the modifier is the whole disambiguation.
+      if (event.altKey && result && !previewFragment) {
+        const hitId = eventIdAtPoint(result.idToBBox, point);
+        const hitEvent = hitId && state.score ? findEvent(state.score, hitId) : null;
+        if (hitId && hitEvent && isNoteEvent(hitEvent)) {
+          // Works on any note: an explicit modifier leaves no ambiguity with
+          // box select, so requiring a prior selection would be friction for
+          // nothing.
+          if (!state.selection.eventIds.includes(hitId)) {
+            store.getState().setSelection({ eventIds: [hitId], measureIds: [], trackIds: [] });
+          }
+          noteDragRef.current = { anchorId: hitId, anchorTick: hitEvent.startTick };
+          setDropTargetBoth(null);
+          containerRef.current?.setPointerCapture?.(event.pointerId);
+          return;
+        }
+      }
+
       const onlySelected =
         state.selection.eventIds.length === 1 ? state.selection.eventIds[0] : null;
-      const result = resultRef.current;
       if (onlySelected && result && !previewFragment) {
         const hit = eventIdAtPoint(result.idToBBox, point);
         const hitEvent = state.score ? findEvent(state.score, onlySelected) : null;
@@ -978,11 +1020,31 @@ export function ScoreEditorView({
       dragStateRef.current = { start: point, moved: false, additive: event.shiftKey };
       containerRef.current?.setPointerCapture?.(event.pointerId);
     },
-    [pointFromEvent],
+    [pointFromEvent, setDropTargetBoth],
   );
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const noteDrag = noteDragRef.current;
+      if (noteDrag) {
+        const point = pointFromEvent(event);
+        const currentScore = store.getState().score;
+        if (!point || !layoutPlan || !currentScore) return;
+        // Recomputed per move but only re-renders the indicator when the
+        // resolved track or tick actually changes; it never touches the score,
+        // so nothing relayouts.
+        setDropTargetBoth(
+          resolveDrop(
+            layoutPlan,
+            currentScore,
+            noteDrag,
+            point,
+            ticksFor(snapGrid, currentScore.ppq),
+          ),
+        );
+        return;
+      }
+
       const pitchDrag = pitchDragRef.current;
       if (pitchDrag) {
         const point = pointFromEvent(event);
@@ -1016,11 +1078,41 @@ export function ScoreEditorView({
         autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
       }
     },
-    [pointFromEvent, stepAutoscroll],
+    [pointFromEvent, stepAutoscroll, layoutPlan, snapGrid, setDropTargetBoth],
   );
 
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const noteDrag = noteDragRef.current;
+      if (noteDrag) {
+        containerRef.current?.releasePointerCapture?.(event.pointerId);
+        noteDragRef.current = null;
+        const target = dropTargetRef.current;
+        setDropTargetBoth(null);
+
+        const state = store.getState();
+        const anchor = state.score ? findEvent(state.score, noteDrag.anchorId) : null;
+        const fromTrackId = anchor && isNoteEvent(anchor) ? anchor.trackId : null;
+        const ids = state.selection.eventIds;
+        // A drop that changes neither track nor tick is not worth an undo entry.
+        const changed =
+          target !== null && (target.deltaTicks !== 0 || target.trackId !== fromTrackId);
+
+        if (target && changed && ids.length > 0) {
+          suppressNextClickRef.current = true;
+          // One command for the whole gesture, so undo restores both the
+          // source and the destination in a single step.
+          store.getState().dispatchCommand(
+            relocateNotesCommand([...ids], {
+              targetTrackId: target.trackId,
+              deltaTicks: target.deltaTicks,
+              collision: collisionForEditMode(editMode),
+            }),
+          );
+        }
+        return;
+      }
+
       const pitchDrag = pitchDragRef.current;
       if (pitchDrag) {
         containerRef.current?.releasePointerCapture?.(event.pointerId);
@@ -1068,7 +1160,15 @@ export function ScoreEditorView({
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [pointFromEvent, store, previewFragment, stopAutoscroll, pitchDragSteps],
+    [
+      pointFromEvent,
+      store,
+      previewFragment,
+      stopAutoscroll,
+      pitchDragSteps,
+      editMode,
+      setDropTargetBoth,
+    ],
   );
 
   /**
@@ -1213,6 +1313,9 @@ export function ScoreEditorView({
             className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
           />
         )}
+        {dropTarget && layoutPlan && (
+          <DropIndicator plan={layoutPlan} target={dropTarget} zoom={zoom} />
+        )}
         <PlaybackCaret
           store={store}
           plan={layoutPlan}
@@ -1224,5 +1327,41 @@ export function ScoreEditorView({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Where an Option+drag would land: the target stave tinted.
+ *
+ * Deliberately not a preview of the notes themselves. Splicing notes into
+ * another track's measures changes those measures' contents and forces a full
+ * relayout — the per-frame cost the playback work exists to avoid. This draws
+ * from geometry the plan already has, and never touches the score.
+ */
+function DropIndicator({
+  plan,
+  target,
+  zoom,
+}: {
+  plan: LayoutPlan;
+  target: DropTarget;
+  zoom: number;
+}) {
+  const trackLayout = plan.trackLayouts.find((t) => t.track.id === target.trackId);
+  const box = trackLayout?.measures[0]?.box;
+  if (!box) return null;
+
+  return (
+    <div
+      data-testid="drop-indicator"
+      aria-hidden
+      className="pointer-events-none absolute bg-sky-400/20 ring-1 ring-sky-500"
+      style={{
+        left: box.x * zoom,
+        top: box.y * zoom,
+        width: box.width * zoom,
+        height: box.height * zoom,
+      }}
+    />
   );
 }
