@@ -14,13 +14,16 @@ export type CreateSnapshotDialogProps = {
   open: boolean;
   /** How many snapshots the project already has, for the default name. */
   snapshotCount: number;
-  onCreate: (name: string) => void;
+  /** The name this user last published under, pre-filled when publishing. */
+  defaultPublisherName?: string;
+  onCreate: (name: string, publisherName?: string) => void;
   onClose: () => void;
 };
 
 export function CreateSnapshotDialog({
   open,
   snapshotCount,
+  defaultPublisherName,
   onCreate,
   onClose,
 }: CreateSnapshotDialogProps) {
@@ -28,11 +31,17 @@ export function CreateSnapshotDialog({
   // better than "Version 2.1.1".
   const suggested = `Version ${snapshotCount + 1}`;
   const [name, setName] = useState(suggested);
+  const [publish, setPublish] = useState(false);
+  const [publisherName, setPublisherName] = useState(defaultPublisherName ?? '');
 
   // Re-suggest whenever the dialog reopens; the count has usually moved.
   useEffect(() => {
-    if (open) setName(suggested);
-  }, [open, suggested]);
+    if (open) {
+      setName(suggested);
+      setPublish(false);
+      setPublisherName(defaultPublisherName ?? '');
+    }
+  }, [open, suggested, defaultPublisherName]);
 
   const trimmed = name.trim();
 
@@ -52,6 +61,33 @@ export function CreateSnapshotDialog({
             className="rounded border border-theme-border bg-theme-surface px-2 py-1"
           />
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            aria-label="Publish"
+            checked={publish}
+            onChange={(e) => setPublish(e.target.checked)}
+          />
+          <span className="text-theme-text-secondary">
+            Publish — anyone with the link can listen
+          </span>
+        </label>
+
+        {publish && (
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-theme-text-secondary">Publisher name</span>
+            <input
+              aria-label="Publisher name"
+              value={publisherName}
+              onChange={(e) => setPublisherName(e.target.value)}
+              className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+            />
+            <span className="text-xs text-theme-text-secondary">
+              Shown on Community. Never your email address.
+            </span>
+          </label>
+        )}
+
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
@@ -62,7 +98,11 @@ export function CreateSnapshotDialog({
             // Guarded rather than disabled: a disabled button gives no reason.
             onClick={() => {
               if (trimmed.length === 0) return;
-              onCreate(trimmed);
+              const publisher = publisherName.trim();
+              // Publishing without a name would put an unattributable row on a
+              // public page, so it is guarded exactly like a blank title.
+              if (publish && publisher.length === 0) return;
+              onCreate(trimmed, publish ? publisher : undefined);
             }}
           >
             Create snapshot

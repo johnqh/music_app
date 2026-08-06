@@ -116,22 +116,35 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
   return <AppLayout store={store} onNavigate={localizedNavigate} />;
 }
 
+/**
+ * The signed-in route table, rendered behind the auth gate.
+ *
+ * Public routes are declared in `App.tsx` and matched *before* this, so the
+ * gate never sees them — which is what lets a stranger open a shared snapshot.
+ */
+export function AppRoutes({ store = useAppStore }: AppRouterProps) {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/en" replace />} />
+      <Route path="/:lang" element={<LanguageValidator />}>
+        <Route element={<ScreenContainerLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="projects" element={<DashboardRoute store={store} />} />
+          <Route path="settings" element={<SettingsRoute store={store} />} />
+        </Route>
+        <Route path="project/:id" element={<ProjectRoute store={store} />} />
+        <Route path="project/:id/print" element={<PrintRoute store={store} />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/en" replace />} />
+    </Routes>
+  );
+}
+
+/** Kept so existing callers and tests that mount the whole router still work. */
 export function AppRouter({ store = useAppStore }: AppRouterProps) {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Navigate to="/en" replace />} />
-        <Route path="/:lang" element={<LanguageValidator />}>
-          <Route element={<ScreenContainerLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="projects" element={<DashboardRoute store={store} />} />
-            <Route path="settings" element={<SettingsRoute store={store} />} />
-          </Route>
-          <Route path="project/:id" element={<ProjectRoute store={store} />} />
-          <Route path="project/:id/print" element={<PrintRoute store={store} />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/en" replace />} />
-      </Routes>
+      <AppRoutes store={store} />
     </BrowserRouter>
   );
 }

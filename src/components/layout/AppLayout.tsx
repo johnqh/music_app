@@ -54,6 +54,9 @@ import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
+import { addTranscribedTrackCommand, renderEvents, transcribe } from '@sudobility/music_lib';
+import type { Transcription } from '@sudobility/music_lib';
+import { dispatchTracked } from '@/features/score-editor/editing';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
@@ -79,6 +82,7 @@ import { ExportScopeDialog } from '@/components/dialogs/ExportScopeDialog';
 import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
+import { AudioImportDialog } from '@/components/dialogs/AudioImportDialog';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
 import { snapshotTree } from '@/features/snapshots/snapshot-tree';
 import type { SnapshotSummary } from '@sudobility/music_types';
@@ -198,6 +202,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [parentSnapshotId, setParentSnapshotId] = useState<string | null>(null);
   const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
   const [openSnapshotOpen, setOpenSnapshotOpen] = useState(false);
+  const [publisherName, setPublisherName] = useState<string | undefined>(undefined);
+  const [audioImportOpen, setAudioImportOpen] = useState(false);
+  const [audioAnalysis, setAudioAnalysis] = useState<Transcription | undefined>(undefined);
+  const [audioName, setAudioName] = useState('Audio');
 
   const refreshSnapshots = useCallback(async () => {
     const projectId = store.getState().projectId;
@@ -206,12 +214,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     const token = await auth.getToken();
     if (!token) return;
     setSnapshots(await musicClient.listSnapshots(projectId, token));
+    setPublisherName((await musicClient.lastPublisherName(token)).publisherName ?? undefined);
     const project = await musicClient.getProject(projectId, token);
     setParentSnapshotId(project.parentSnapshotId ?? null);
   }, [store]);
 
   const createSnapshot = useCallback(
-    async (name: string) => {
+    async (name: string, publisher?: string) => {
       const projectId = store.getState().projectId;
       if (!projectId) return;
       const { musicClient, auth } = getAppServices();
@@ -225,8 +234,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       const current = store.getState().score;
       if (current) await musicClient.updateProject(projectId, { score: current }, token);
 
-      await musicClient.createSnapshot(projectId, name, token);
+      const snapshot = await musicClient.createSnapshot(projectId, name, token);
       setCreateSnapshotOpen(false);
+
+      if (publisher) {
+        const published = await musicClient.publishSnapshot(snapshot.id, publisher, token);
+        const url = `${window.location.origin}/en/p/${published.publicId ?? ''}`;
+        store.getState().pushToast({ message: `Published: ${url}`, severity: 'success' });
+      }
+
       await refreshSnapshots();
     },
     [store, refreshSnapshots],
@@ -318,6 +334,73 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     } catch (err) {
       reportError(err, { context: 'Project JSON import failed', store });
     }
+  };
+
+  /** Decode and analyse the picked file; the dialog then shows what was heard. */
+  const handleAudioFile = (file: File): void => {
+    void (async () => {
+      try {
+        setAudioAnalysis(undefined);
+        setAudioName(file.name.replace(/\.[^.]+$/, ''));
+        const audio = await getAppServices().io.audioCodec.decode(await file.arrayBuffer());
+        setAudioAnalysis(transcribe(audio, store.getState().score?.ppq ?? 480));
+      } catch (err) {
+        reportError(err, { context: 'Audio import failed', store });
+      }
+    })();
+  };
+
+  /**
+   * Writes the transcription onto a new track, in one undoable step.
+   *
+   * Ticks are rescaled when the tempo was corrected: they were emitted against
+   * the *detected* value, so halving the tempo has to halve them too or the
+   * notes land in the wrong bars.
+   */
+  const handleAudioImport = (bpm: number): void => {
+    const analysis = audioAnalysis;
+    if (!analysis || !store.getState().score) return;
+
+    const scale = analysis.bpm === 0 ? 1 : bpm / analysis.bpm;
+    dispatchTracked(
+      store,
+      addTranscribedTrackCommand({
+        name: audioName,
+        notes: analysis.notes.map((n) => ({
+          midi: n.midi,
+          startTick: Math.round(n.startTick * scale),
+          durationTicks: Math.max(1, Math.round(n.durationTicks * scale)),
+        })),
+      }),
+    );
+    setAudioImportOpen(false);
+    setAudioAnalysis(undefined);
+  };
+
+  /**
+   * Render the score offline and save it.
+   *
+   * `renderEvents` decides what sounds (mute, solo, timing); `audioRenderer`
+   * schedules it through the same instruments playback uses, so the file
+   * matches what you just heard.
+   */
+  const handleExportAudio = (format: 'wav' | 'mp3'): void => {
+    withExportScope(async (target) => {
+      try {
+        const { audioCodec, audioRenderer, fileExporter } = getAppServices().io;
+        const plan = renderEvents(target);
+        const audio = await audioRenderer.render(plan.events, plan.durationSec);
+        const bytes = format === 'wav' ? audioCodec.encodeWav(audio) : audioCodec.encodeMp3(audio);
+        await fileExporter.save(
+          `${midiSafeFilename(target.metadata.title)}.${format}`,
+          new Uint8Array(bytes),
+          format === 'wav' ? 'audio/wav' : 'audio/mpeg',
+        );
+      } catch (err) {
+        reportError(err, { context: `${format.toUpperCase()} export failed`, store });
+      }
+    });
+    exportMenu.setOpen(false);
   };
 
   const handleExportMidi = (): void => {
@@ -516,6 +599,20 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 >
                   MusicXML…
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => {
+                    importMenu.setOpen(false);
+                    setAudioAnalysis(undefined);
+                    setAudioImportOpen(true);
+                  }}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Audio…
+                </Button>
                 <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
                   Project JSON…
                   <input
@@ -601,6 +698,26 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   className={MENU_ITEM_CLASS}
                 >
                   Print…
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => handleExportAudio('wav')}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Audio (WAV)…
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => handleExportAudio('mp3')}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  Audio (MP3)…
                 </Button>
                 <Button
                   type="button"
@@ -878,10 +995,22 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
       <Toasts store={store} />
 
+      <AudioImportDialog
+        open={audioImportOpen}
+        {...(audioAnalysis ? { analysis: audioAnalysis } : {})}
+        onFile={handleAudioFile}
+        onImport={handleAudioImport}
+        onClose={() => {
+          setAudioImportOpen(false);
+          setAudioAnalysis(undefined);
+        }}
+      />
+
       <CreateSnapshotDialog
         open={createSnapshotOpen}
         snapshotCount={snapshots.length}
-        onCreate={(name) => void createSnapshot(name)}
+        {...(publisherName ? { defaultPublisherName: publisherName } : {})}
+        onCreate={(name, publisher) => void createSnapshot(name, publisher)}
         onClose={() => setCreateSnapshotOpen(false)}
       />
 

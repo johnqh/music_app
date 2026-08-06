@@ -18,7 +18,8 @@ describe('CreateSnapshotDialog', () => {
     await user.clear(screen.getByLabelText('Snapshot name'));
     await user.type(screen.getByLabelText('Snapshot name'), 'Before the coda');
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
-    expect(onCreate).toHaveBeenCalledWith('Before the coda');
+    // Second argument is the publisher name: undefined unless publishing.
+    expect(onCreate).toHaveBeenCalledWith('Before the coda', undefined);
   });
 
   it('refuses an empty name', async () => {
@@ -123,5 +124,55 @@ describe('OpenSnapshotDialog', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Open' }));
     expect(onOpen).not.toHaveBeenCalled();
+  });
+});
+
+describe('CreateSnapshotDialog publishing', () => {
+  it('offers a Publish checkbox, off by default', () => {
+    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('checkbox', { name: /publish/i })).not.toBeChecked();
+  });
+
+  it('asks for a publisher name only when publishing', async () => {
+    const user = userEvent.setup();
+    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByLabelText('Publisher name')).toBeNull();
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    expect(screen.getByLabelText('Publisher name')).toBeVisible();
+  });
+
+  it('reports the publisher name alongside the snapshot name', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <CreateSnapshotDialog
+        open
+        snapshotCount={0}
+        defaultPublisherName="Jane"
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).toHaveBeenCalledWith('Version 1', 'Jane');
+  });
+
+  it('will not publish without a publisher name', async () => {
+    // An unattributable row on a public page.
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it('still creates an unpublished snapshot with no publisher name', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).toHaveBeenCalledWith('Version 1', undefined);
   });
 });

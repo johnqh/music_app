@@ -13,9 +13,12 @@ import { Spinner, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { applyDocumentTheme, type ColorSchemeMode, resolveColorScheme } from '@/app/theme';
-import { AppRouter } from '@/app/router';
+import { AppRoutes } from '@/app/router';
 import { AuthProvider, useAuth } from '@/app/AuthContext';
 import { SignInScreen } from '@/app/SignInScreen';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { CommunityPage } from '@/features/community/CommunityPage';
+import { PublishedView } from '@/features/community/PublishedView';
 import { loadPrefs, savePrefs, useAppStore } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
@@ -75,7 +78,7 @@ function AuthGate({ store }: { store: EditorStoreApi }) {
     );
   }
   if (!user) return <SignInScreen />;
-  return <AppRouter store={store} />;
+  return <AppRoutes store={store} />;
 }
 
 export function App({ store = useAppStore }: AppProps) {
@@ -157,7 +160,16 @@ export function App({ store = useAppStore }: AppProps) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AuthGate store={store} />
+          <BrowserRouter>
+            <Routes>
+              {/* No auth gate on these two: being reachable signed-out is the
+                  whole feature. Matched before the catch-all, so the gate
+                  never sees them. */}
+              <Route path="/:lang/community" element={<CommunityPage />} />
+              <Route path="/:lang/p/:publicId" element={<PublishedView />} />
+              <Route path="*" element={<AuthGate store={store} />} />
+            </Routes>
+          </BrowserRouter>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
