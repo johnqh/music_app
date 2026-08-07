@@ -51,6 +51,9 @@ import {
   changePitchCommand,
   findEvent,
   relocateNotesCommand,
+  appendTrackCommand,
+  createId,
+  gmInstrument,
   selectionSummaryLabel,
   shiftDiatonic,
   ticksFor,
@@ -58,6 +61,9 @@ import {
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { scoreWithCandidate } from '@/features/generation/preview';
+import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
+import { dispatchTracked } from '@/features/score-editor/editing';
+import { getAppServices } from '@/config/initialize';
 import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
@@ -404,6 +410,72 @@ export function ScoreEditorView({
   const pitchDragRef = useRef<{ eventId: string; pitch: Pitch; startY: number } | null>(null);
   const noteDragRef = useRef<{ anchorId: string; anchorTick: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [generateTrackOpen, setGenerateTrackOpen] = useState(false);
+  const [generateTrackPending, setGenerateTrackPending] = useState(false);
+  const [generateTrackError, setGenerateTrackError] = useState<string | null>(null);
+
+  /**
+   * Generates one track and appends it, matched to the score already open.
+   *
+   * The whole-score `generate` action replaces the score, which is the wrong
+   * verb here — so this calls the provider directly and merges with
+   * `appendTrackCommand`, which re-homes the result onto this score's grid and
+   * makes the whole thing one undo step.
+   */
+  const generateTrack = useCallback(
+    async (prompt: string, midiProgram: number) => {
+      const current = store.getState().score;
+      if (!current) return;
+
+      setGenerateTrackPending(true);
+      setGenerateTrackError(null);
+      try {
+        const { musicClient, auth } = getAppServices();
+        const token = await auth.getToken();
+        if (!token) throw new Error('Not signed in');
+
+        const first = current.tracks[0];
+        const instrumentName = gmInstrument(midiProgram)?.name ?? 'Piano';
+        const result = await musicClient.generateScore(
+          {
+            prompt,
+            // Matched to the open score, or the new track will not line up
+            // with the music it is meant to accompany.
+            durationMeasures: first?.measures.length ?? 8,
+            ...(first?.measures[0]
+              ? {
+                  timeSignature: first.measures[0].timeSignature,
+                  keySignature: first.measures[0].keySignature,
+                }
+              : {}),
+            ...(current.tempoMap[0] ? { tempo: current.tempoMap[0].bpm } : {}),
+            tracks: [
+              {
+                name: instrumentName,
+                instrumentName,
+                midiProgram,
+                clef: midiProgram >= 32 && midiProgram <= 39 ? 'bass' : 'treble',
+              },
+            ],
+          },
+          token,
+        );
+
+        const generated = result.score.tracks[0];
+        if (!generated) throw new Error('The model returned no track');
+
+        const id = createId();
+        dispatchTracked(store, appendTrackCommand({ ...generated, id }));
+        store.getState().setActiveTrack(id);
+        setGenerateTrackOpen(false);
+      } catch (err) {
+        setGenerateTrackError(err instanceof Error ? err.message : 'Generation failed');
+      } finally {
+        setGenerateTrackPending(false);
+      }
+    },
+    [store],
+  );
   /**
    * The same value as `dropTarget`, for the pointer handlers to read.
    *
@@ -1237,6 +1309,18 @@ export function ScoreEditorView({
         onLayoutModeChange={setLayoutMode}
         inspectorOpen={inspectorOpen}
         onToggleInspector={onToggleInspector}
+        onGenerateTrack={() => {
+          setGenerateTrackError(null);
+          setGenerateTrackOpen(true);
+        }}
+      />
+
+      <GenerateTrackDialog
+        open={generateTrackOpen}
+        pending={generateTrackPending}
+        error={generateTrackError}
+        onGenerate={(prompt, midiProgram) => void generateTrack(prompt, midiProgram)}
+        onClose={() => setGenerateTrackOpen(false)}
       />
       <div
         ref={scrollBoxRef}

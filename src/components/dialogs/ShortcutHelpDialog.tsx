@@ -3,9 +3,10 @@
  * listing the exact shortcut table `useEditorShortcuts.ts` implements
  * (spec §7).
  *
- * Adopts the library `Button` (library sweep 2) for the Close icon button.
+ * The one dialog with nothing to confirm, so it passes `actions={[]}` and takes
+ * `FormModal`'s own top-bar close as its only control.
  */
-import { Button, Dialog } from '@sudobility/components';
+import { FormModal } from '@sudobility/components';
 
 export type ShortcutHelpDialogProps = {
   open: boolean;
@@ -30,37 +31,29 @@ const SHORTCUTS: Array<{ keys: string; action: string }> = [
 
 export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
   return (
-    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
-      <div role="dialog" aria-labelledby="shortcut-help-title" className="relative p-6">
-        <h2 id="shortcut-help-title" className="text-lg font-semibold text-theme-text-primary">
-          Keyboard shortcuts
-        </h2>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Close"
-          onClick={onClose}
-          className="absolute right-4 top-4 h-auto w-auto p-1"
-        >
-          &times;
-        </Button>
-        <table aria-label="Keyboard shortcuts" className="mt-4 w-full border-collapse text-sm">
-          <tbody>
-            {SHORTCUTS.map((s) => (
-              <tr key={s.keys} className="border-b border-theme-border last:border-b-0">
-                <th
-                  scope="row"
-                  className="whitespace-nowrap py-1.5 pr-4 text-left font-mono font-normal text-theme-text-primary"
-                >
-                  {s.keys}
-                </th>
-                <td className="py-1.5 text-theme-text-secondary">{s.action}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Dialog>
+    <FormModal
+      open={open}
+      title="Keyboard shortcuts"
+      onClose={onClose}
+      size="small"
+      closeAriaLabel="Close"
+      actions={[]}
+    >
+      <table aria-label="Keyboard shortcuts" className="w-full border-collapse text-sm">
+        <tbody>
+          {SHORTCUTS.map((s) => (
+            <tr key={s.keys} className="border-b border-theme-border last:border-b-0">
+              <th
+                scope="row"
+                className="whitespace-nowrap py-1.5 pr-4 text-left font-mono font-normal text-theme-text-primary"
+              >
+                {s.keys}
+              </th>
+              <td className="py-1.5 text-theme-text-secondary">{s.action}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </FormModal>
   );
 }

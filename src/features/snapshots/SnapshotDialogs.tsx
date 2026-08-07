@@ -6,7 +6,7 @@
  * destructive path always has a non-destructive escape.
  */
 import { useEffect, useState } from 'react';
-import { Button, Dialog } from '@sudobility/components';
+import { FormModal } from '@sudobility/components';
 import { LIVE_NODE_ID } from '@/features/snapshots/snapshot-tree';
 import type { TreeNode } from '@/features/snapshots/snapshot-tree';
 
@@ -46,9 +46,30 @@ export function CreateSnapshotDialog({
   const trimmed = name.trim();
 
   return (
-    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
-      <h2 className="px-1 pt-1 text-lg font-semibold text-theme-text-primary">Create snapshot</h2>
-      <div className="flex flex-col gap-4 p-1">
+    <FormModal
+      open={open}
+      title="Create snapshot"
+      onClose={onClose}
+      size="small"
+      closeAriaLabel="Close dialog"
+      actions={[
+        { label: 'Cancel', onClick: onClose, variant: 'ghost' },
+        {
+          label: 'Create snapshot',
+          variant: 'primary',
+          // Guarded rather than disabled: a disabled button gives no reason.
+          onClick: () => {
+            if (trimmed.length === 0) return;
+            const publisher = publisherName.trim();
+            // Publishing without a name would put an unattributable row on a
+            // public page, so it is guarded exactly like a blank title.
+            if (publish && publisher.length === 0) return;
+            onCreate(trimmed, publish ? publisher : undefined);
+          },
+        },
+      ]}
+    >
+      <div className="flex flex-col gap-4">
         <p className="text-sm text-theme-text-secondary">
           Pins the project as it is now. A snapshot never changes once saved.
         </p>
@@ -87,29 +108,8 @@ export function CreateSnapshotDialog({
             </span>
           </label>
         )}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            // Guarded rather than disabled: a disabled button gives no reason.
-            onClick={() => {
-              if (trimmed.length === 0) return;
-              const publisher = publisherName.trim();
-              // Publishing without a name would put an unattributable row on a
-              // public page, so it is guarded exactly like a blank title.
-              if (publish && publisher.length === 0) return;
-              onCreate(trimmed, publish ? publisher : undefined);
-            }}
-          >
-            Create snapshot
-          </Button>
-        </div>
       </div>
-    </Dialog>
+    </FormModal>
   );
 }
 
@@ -136,9 +136,25 @@ export function OpenSnapshotDialog({
   const byId = new Map(nodes.map((n) => [n.id, n]));
 
   return (
-    <Dialog isOpen={open} onClose={onClose} size="lg" showCloseButton={false}>
-      <h2 className="px-1 pt-1 text-lg font-semibold text-theme-text-primary">Open snapshot</h2>
-      <div className="flex flex-col gap-4 p-1">
+    <FormModal
+      open={open}
+      title="Open snapshot"
+      onClose={onClose}
+      size="large"
+      closeAriaLabel="Close dialog"
+      actions={[
+        { label: 'Snapshot current work first', onClick: onSnapshotFirst, variant: 'ghost' },
+        { label: 'Cancel', onClick: onClose, variant: 'ghost' },
+        {
+          label: 'Open',
+          variant: 'primary',
+          onClick: () => {
+            if (selected && selected !== LIVE_NODE_ID) onOpen(selected);
+          },
+        },
+      ]}
+    >
+      <div className="flex flex-col gap-4">
         <p className="text-sm text-amber-700 dark:text-amber-400">
           Your current work will be replaced by the snapshot you open. Nothing else is lost — every
           snapshot stays where it is.
@@ -197,27 +213,7 @@ export function OpenSnapshotDialog({
             ),
           )}
         </div>
-
-        <div className="flex justify-between gap-2">
-          <Button type="button" variant="ghost" onClick={onSnapshotFirst}>
-            Snapshot current work first
-          </Button>
-          <div className="flex gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => {
-                if (selected && selected !== LIVE_NODE_ID) onOpen(selected);
-              }}
-            >
-              Open
-            </Button>
-          </div>
-        </div>
       </div>
-    </Dialog>
+    </FormModal>
   );
 }

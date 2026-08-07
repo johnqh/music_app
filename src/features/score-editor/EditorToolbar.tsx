@@ -36,7 +36,12 @@ import { isNoteEvent } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import { addTrackCommand, gmMaxPolyphony, selectActiveTrackId } from '@sudobility/music_lib';
+import {
+  addTrackCommand,
+  createId,
+  gmMaxPolyphony,
+  selectActiveTrackId,
+} from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { durationParts, withBase, withModifier } from '@/features/score-editor/duration-modifiers';
@@ -103,6 +108,8 @@ export type EditorToolbarProps = {
   /** Inspector visibility. Omitted when the view is rendered without a surrounding layout, in which case no toggle shows. */
   inspectorOpen?: boolean;
   onToggleInspector?: () => void;
+  /** Opens the generate-track modal. Omitted when no host provides one. */
+  onGenerateTrack?: () => void;
   /**
    * Cut and paste go through the view's prompt hook rather than the store, so
    * the button and the keyboard shortcut ask the same question. Optional so
@@ -202,6 +209,7 @@ export function EditorToolbar({
   onToggleInspector,
   onCut,
   onPaste,
+  onGenerateTrack,
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
@@ -340,18 +348,33 @@ export function EditorToolbar({
             then what to do to it". */}
         <div role="group" aria-label="Tracks" className="flex items-center gap-0.5">
           <TrackVisibilitySelect store={store} />
-          <Tooltip placement="bottom" content="Add Track">
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label="Add Track"
-              onClick={() => dispatchTracked(store, addTrackCommand({ name: 'New track' }))}
-              disabled={!score}
-              className={TOGGLE_BUTTON_CLASS}
-            >
-              +
-            </Button>
-          </Tooltip>
+          <Select
+            value=""
+            onValueChange={(value) => {
+              if (value === 'blank') {
+                const id = createId();
+                dispatchTracked(store, addTrackCommand({ id, name: 'New track' }));
+                // Active immediately: you added it to work on it.
+                store.getState().setActiveTrack(id);
+              } else if (value === 'generate') {
+                onGenerateTrack?.();
+              }
+            }}
+          >
+            <Tooltip placement="bottom" content="Add Track">
+              <SelectTrigger
+                aria-label="Add Track"
+                disabled={!score}
+                className="h-auto w-auto px-2 py-1"
+              >
+                <span>+</span>
+              </SelectTrigger>
+            </Tooltip>
+            <SelectContent>
+              <SelectItem value="blank">Blank Track</SelectItem>
+              <SelectItem value="generate">Generate Track</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <VerticalDivider />

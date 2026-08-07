@@ -13,7 +13,7 @@
  * exact same accessible name with no visible-text change.
  */
 import { useState } from 'react';
-import { Button, Checkbox, Dialog, cn } from '@sudobility/components';
+import { Button, Checkbox, FormModal, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
@@ -138,13 +138,19 @@ export function DeveloperSettingsDialog({
   };
 
   return (
-    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
-      <div role="dialog" aria-labelledby="dev-settings-title" className="p-6">
-        <h2 id="dev-settings-title" className="text-lg font-semibold text-theme-text-primary">
-          Developer settings
-        </h2>
-
-        <div className="mt-4 flex flex-col">
+    <>
+      <FormModal
+        open={open}
+        title="Developer settings"
+        onClose={onClose}
+        size="small"
+        closeAriaLabel="Close"
+        // Every setting here applies on change, so there is nothing to confirm
+        // and the top-bar close is the only exit -- a footer "Close" beside it
+        // would just be a second control with the same name.
+        actions={[]}
+      >
+        <div className="flex flex-col">
           <DevToggle
             label="Enable generation diagnostics"
             checked={devSettings.enableDiagnostics}
@@ -271,13 +277,7 @@ export function DeveloperSettingsDialog({
             </Button>
           </div>
         )}
-
-        <div className="mt-6 flex justify-end">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      </div>
+      </FormModal>
 
       <ConfirmDialog
         open={confirmingReset}
@@ -287,6 +287,6 @@ export function DeveloperSettingsDialog({
         onCancel={() => setConfirmingReset(false)}
         onConfirm={() => void handleResetDatabase()}
       />
-    </Dialog>
+    </>
   );
 }

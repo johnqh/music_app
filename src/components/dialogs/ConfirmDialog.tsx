@@ -5,11 +5,11 @@
  * MIDI/MusicXML import. Re-skinned onto @sudobility/components' dialog
  * primitive (same props/labels as the MUI-era version).
  *
- * Adopts the library `Button` (library sweep 2) for Cancel/Confirm --
- * `variant="ghost"`/`"destructive"`/`"primary"` forward `autoFocus` and
- * every other `ButtonHTMLAttributes` unchanged.
+ * On `FormModal` like every other dialog here, through its `actions` footer:
+ * the single-CTA form cannot render a destructive confirm, and a red button is
+ * the whole point of a delete prompt.
  */
-import { Button, Dialog } from '@sudobility/components';
+import { FormModal } from '@sudobility/components';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -34,26 +34,26 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Dialog isOpen={open} onClose={onCancel} size="sm">
-      <div role="dialog" aria-labelledby="confirm-dialog-title" className="p-6">
-        <h2 id="confirm-dialog-title" className="text-lg font-semibold text-theme-text-primary">
-          {title}
-        </h2>
-        <p className="mt-3 text-sm text-theme-text-secondary">{message}</p>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            {cancelLabel}
-          </Button>
-          <Button
-            type="button"
-            autoFocus
-            variant={destructive ? 'destructive' : 'primary'}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
+    <FormModal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      size="small"
+      // Not `cancelLabel`: the footer already has a button by that name, and
+      // two controls sharing an accessible name is ambiguous to a screen
+      // reader and an outright strict-mode failure in tests.
+      closeAriaLabel="Close dialog"
+      actions={[
+        { label: cancelLabel, onClick: onCancel, variant: 'ghost' },
+        {
+          label: confirmLabel,
+          onClick: onConfirm,
+          variant: destructive ? 'destructive' : 'primary',
+          autoFocus: true,
+        },
+      ]}
+    >
+      <p className="text-sm text-theme-text-secondary">{message}</p>
+    </FormModal>
   );
 }

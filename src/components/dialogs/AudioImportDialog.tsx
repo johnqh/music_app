@@ -6,7 +6,7 @@
  * by importing a band recording and concluding the feature is broken.
  */
 import { useEffect, useState } from 'react';
-import { Button, Dialog } from '@sudobility/components';
+import { FormModal } from '@sudobility/components';
 import type { Transcription } from '@sudobility/music_lib';
 
 export type AudioImportDialogProps = {
@@ -34,11 +34,18 @@ export function AudioImportDialog({
   }, [analysis]);
 
   return (
-    <Dialog isOpen={open} onClose={onClose} size="sm" showCloseButton={false}>
-      {/* role/aria-label so the contents can be scoped: "Tempo" and "Import"
-          are both ambiguous against the transport and the Import menu. */}
-      <div role="dialog" aria-label="Import audio" className="flex flex-col gap-4 p-1">
-        <h2 className="text-lg font-semibold text-theme-text-primary">Import audio</h2>
+    <FormModal
+      open={open}
+      title="Import audio"
+      onClose={onClose}
+      onSave={() => onImport(bpm)}
+      canSave={Boolean(analysis)}
+      saveLabel="Import"
+      size="small"
+    >
+      {/* FormModal renders the title and names its own dialog, so this carries
+          neither -- a heading here would print "Import audio" twice. */}
+      <div className="flex flex-col gap-4">
         <p className="text-sm text-theme-text-secondary">
           Turns a recording into notes on a new track. Works on <strong>one melodic line</strong> at
           a time — singing, humming, or a single-note instrument. Chords and full mixes will not
@@ -80,23 +87,7 @@ export function AudioImportDialog({
             </label>
           </>
         )}
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!analysis}
-            onClick={() => {
-              if (analysis) onImport(bpm);
-            }}
-          >
-            Import
-          </Button>
-        </div>
       </div>
-    </Dialog>
+    </FormModal>
   );
 }

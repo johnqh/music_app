@@ -10,7 +10,7 @@
  * prompt whose options do the same thing is a click the user cannot get wrong
  * and therefore should not be shown.
  */
-import { Button, Dialog } from '@sudobility/components';
+import { Button, FormModal } from '@sudobility/components';
 
 export type DialogChoice<T extends string> = {
   value: T;
@@ -40,14 +40,20 @@ export function ChoiceDialog<T extends string>({
   onCancel,
 }: ChoiceDialogProps<T>) {
   return (
-    <Dialog isOpen={open} onClose={onCancel} size="sm" showCloseButton={false}>
-      <div role="dialog" aria-labelledby="choice-dialog-title" className="p-6">
-        <h2 id="choice-dialog-title" className="text-lg font-semibold text-theme-text-primary">
-          {title}
-        </h2>
-        <p className="mt-2 text-sm text-theme-text-secondary">{message}</p>
+    <FormModal
+      open={open}
+      title={title}
+      onClose={onCancel}
+      size="small"
+      closeAriaLabel="Close dialog"
+      // The choices are the content, not the footer: each is a full-width
+      // two-line button, which a footer row of peer actions cannot carry.
+      actions={[{ label: 'Cancel', onClick: onCancel, variant: 'ghost' }]}
+    >
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-theme-text-secondary">{message}</p>
 
-        <div className="mt-6 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           {choices.map((choice) => (
             <Button
               key={choice.value}
@@ -64,13 +70,7 @@ export function ChoiceDialog<T extends string>({
             </Button>
           ))}
         </div>
-
-        <div className="mt-4 flex justify-end">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
       </div>
-    </Dialog>
+    </FormModal>
   );
 }

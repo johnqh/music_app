@@ -513,20 +513,49 @@ describe('tracks group', () => {
     expect(groups[0]).toHaveAccessibleName('Tracks');
   });
 
-  it('adds a track', async () => {
+  it('offers Blank Track and Generate Track', async () => {
+    const user = userEvent.setup();
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    renderToolbar(store);
+
+    await user.click(screen.getByRole('combobox', { name: 'Add Track' }));
+    expect(screen.getByRole('option', { name: 'Blank Track' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Generate Track' })).toBeVisible();
+  });
+
+  it('Blank Track adds a track and makes it active', async () => {
+    // Active immediately: you added it to work on it.
     const user = userEvent.setup();
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(twinkleScore());
     const before = store.getState().score!.tracks.length;
     renderToolbar(store);
 
-    await user.click(screen.getByRole('button', { name: 'Add Track' }));
-    expect(store.getState().score!.tracks).toHaveLength(before + 1);
+    await user.click(screen.getByRole('combobox', { name: 'Add Track' }));
+    await user.click(screen.getByRole('option', { name: 'Blank Track' }));
+
+    const tracks = store.getState().score!.tracks;
+    expect(tracks).toHaveLength(before + 1);
+    expect(store.getState().activeTrackId).toBe(tracks[tracks.length - 1].id);
+  });
+
+  it('Generate Track asks its host to open the modal', async () => {
+    // The toolbar does not generate; the view owns the request and the merge.
+    const user = userEvent.setup();
+    const onGenerateTrack = vi.fn();
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    renderToolbar(store, { onGenerateTrack });
+
+    await user.click(screen.getByRole('combobox', { name: 'Add Track' }));
+    await user.click(screen.getByRole('option', { name: 'Generate Track' }));
+    expect(onGenerateTrack).toHaveBeenCalled();
   });
 
   it('cannot add a track with no score open', () => {
     const store = createAppStore({ context: testStoreContext() });
     renderToolbar(store);
-    expect(screen.getByRole('button', { name: 'Add Track' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Add Track' })).toBeDisabled();
   });
 });

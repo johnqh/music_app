@@ -6,7 +6,7 @@
  * surprise someone who hid tracks precisely to extract a subset — so the
  * question is asked exactly when the two answers differ, and never otherwise.
  */
-import { Button, Dialog } from '@sudobility/components';
+import { FormModal } from '@sudobility/components';
 
 export type ExportScope = 'all' | 'visible';
 
@@ -25,26 +25,21 @@ export function ExportScopeDialog({
   onCancel,
 }: ExportScopeDialogProps) {
   return (
-    <Dialog isOpen={open} onClose={onCancel} size="sm" showCloseButton={false}>
-      <div role="dialog" aria-labelledby="export-scope-title" className="p-6">
-        <h2 id="export-scope-title" className="text-lg font-semibold text-theme-text-primary">
-          Export hidden tracks?
-        </h2>
-        <p className="mt-2 text-sm text-theme-text-secondary">
-          This score has {hiddenCount} hidden {hiddenCount === 1 ? 'track' : 'tracks'}.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="button" variant="outline" onClick={() => onChoose('visible')}>
-            Visible tracks only
-          </Button>
-          <Button type="button" variant="primary" onClick={() => onChoose('all')}>
-            Whole score
-          </Button>
-        </div>
-      </div>
-    </Dialog>
+    <FormModal
+      open={open}
+      title="Export hidden tracks?"
+      onClose={onCancel}
+      size="small"
+      closeAriaLabel="Close dialog"
+      actions={[
+        { label: 'Cancel', onClick: onCancel, variant: 'ghost' },
+        { label: 'Visible tracks only', onClick: () => onChoose('visible'), variant: 'outline' },
+        { label: 'Whole score', onClick: () => onChoose('all'), variant: 'primary' },
+      ]}
+    >
+      <p className="text-sm text-theme-text-secondary">
+        This score has {hiddenCount} hidden {hiddenCount === 1 ? 'track' : 'tracks'}.
+      </p>
+    </FormModal>
   );
 }
