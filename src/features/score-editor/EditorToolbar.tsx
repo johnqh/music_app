@@ -36,12 +36,13 @@ import { isNoteEvent } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import { gmMaxPolyphony, selectActiveTrackId } from '@sudobility/music_lib';
+import { addTrackCommand, gmMaxPolyphony, selectActiveTrackId } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { durationParts, withBase, withModifier } from '@/features/score-editor/duration-modifiers';
 import type { BaseDuration } from '@/features/score-editor/duration-modifiers';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
+import { dispatchTracked } from '@/features/score-editor/editing';
 import type { ReactElement } from 'react';
 import {
   ClipboardIcon,
@@ -334,6 +335,27 @@ export function EditorToolbar({
         // page sliding away with blank space under the keyboard panel.
         className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-1"
       >
+        {/* Tracks first: which track you are on decides where every other
+            control in this bar acts, so it reads left-to-right as "this track,
+            then what to do to it". */}
+        <div role="group" aria-label="Tracks" className="flex items-center gap-0.5">
+          <TrackVisibilitySelect store={store} />
+          <Tooltip placement="bottom" content="Add Track">
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Add Track"
+              onClick={() => dispatchTracked(store, addTrackCommand({ name: 'New track' }))}
+              disabled={!score}
+              className={TOGGLE_BUTTON_CLASS}
+            >
+              +
+            </Button>
+          </Tooltip>
+        </div>
+
+        <VerticalDivider />
+
         {/* One click does two things -- arms the length for the next note AND
           retypes the selection -- and the pressed state only ever showed the
           first. The tooltip has to say both, or the second looks like the
@@ -654,10 +676,6 @@ export function EditorToolbar({
             <SelectItem value="delete-measure">Delete measure at caret</SelectItem>
           </SelectContent>
         </Select>
-
-        <VerticalDivider />
-
-        <TrackVisibilitySelect store={store} />
 
         <VerticalDivider />
       </div>

@@ -22,7 +22,6 @@ import {
   GM_FAMILIES,
   GM_FAMILY_LABELS,
   TRACK_INFO_WIDTH,
-  addTrackCommand,
   changeClefCommand,
   changeTrackPropsCommand,
   deleteTrackCommand,
@@ -86,10 +85,6 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
     store.getState().dispatchCommand(changeTrackPropsCommand(track.id, props));
   };
 
-  const addTrack = (): void => {
-    store.getState().dispatchCommand(addTrackCommand({ name: 'New track' }));
-  };
-
   const header = (
     <div
       className="flex shrink-0 items-center gap-1 border-b border-theme-border px-2 py-1"
@@ -98,19 +93,6 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
       <span className="flex-1 truncate text-xs font-medium text-theme-text-primary">
         {track ? track.name : 'No track'}
       </span>
-      <Tooltip content="Add track">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Add track"
-          disabled={!score}
-          onClick={addTrack}
-          className={ICON_BUTTON_CLASS}
-        >
-          +
-        </Button>
-      </Tooltip>
       <Tooltip content="Delete track">
         <Button
           type="button"

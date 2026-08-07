@@ -76,6 +76,7 @@ import {
   findEvent,
   findMeasure,
   findTrack,
+  selectActiveTrackId,
   gmWrittenTransposition,
   soundingPitch,
   transposeKeySignature,
@@ -591,14 +592,27 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
 
 function TrackTab({ store }: { store: EditorStoreApi }) {
   const score = store((s) => s.score);
-  const selection = store((s) => s.selection);
+  const activeTrackId = store(selectActiveTrackId);
 
-  // Computed unconditionally (rather than after the "no score"/"no
-  // selection" early returns below) so the volume/pan drag-draft hooks
-  // just below can be called unconditionally too, per the rules of hooks.
-  const tracks = score
-    ? selection.trackIds.map((id) => findTrack(score, id)).filter((t) => t !== null)
-    : [];
+  /**
+   * Follows the **active** track, not `selection.trackIds`.
+   *
+   * Clicking the track gutter sets both, but any later click on a note or the
+   * stave replaces the whole selection and wipes `trackIds` — so the panel
+   * emptied as soon as you touched the music you were inspecting. The active
+   * track is sticky, and `selectActiveTrackId` falls back to the first track
+   * when it is unset or stale, so there is always exactly one to show.
+   *
+   * Kept as an array so the multi-value rendering below is unchanged; in
+   * practice it now always holds one, as it always did — nothing ever put
+   * more than one id in `selection.trackIds`.
+   *
+   * Computed unconditionally (rather than after the "no score" early return
+   * below) so the volume/pan drag-draft hooks just below can be called
+   * unconditionally too, per the rules of hooks.
+   */
+  const active = score && activeTrackId ? findTrack(score, activeTrackId) : null;
+  const tracks = active ? [active] : [];
   const volume = commonValue(tracks.map((t) => t.volume));
   const pan = commonValue(tracks.map((t) => t.pan));
 
@@ -621,8 +635,7 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
   const solo = commonValue(tracks.map((t) => t.solo));
 
   const patchAll = (patch: Record<string, unknown>): void => {
-    for (const id of selection.trackIds)
-      store.getState().dispatchCommand(changeTrackPropsCommand(id, patch));
+    for (const t of tracks) store.getState().dispatchCommand(changeTrackPropsCommand(t.id, patch));
   };
 
   return (
@@ -675,8 +688,8 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
         ariaLabel="Track clef"
         options={CLEFS.map((c) => ({ value: c, label: c }))}
         onChange={(value) => {
-          for (const id of selection.trackIds)
-            store.getState().dispatchCommand(changeClefCommand(id, value as Clef));
+          for (const t of tracks)
+            store.getState().dispatchCommand(changeClefCommand(t.id, value as Clef));
         }}
       />
 

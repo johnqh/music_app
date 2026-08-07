@@ -123,14 +123,12 @@ describe('TrackEditorPanel', () => {
     expect(store.getState().score!.tracks[0].solo).toBe(true);
   });
 
-  it('adds a track', async () => {
+  it('offers no way to add a track', () => {
+    // Adding lives on the editor toolbar now — one control, not two that
+    // differed only by the case of their label.
     const store = makeStore();
-    const before = store.getState().score!.tracks.length;
     render(<TrackEditorPanel store={store} />);
-
-    await userEvent.setup().click(screen.getByLabelText('Add track'));
-
-    expect(store.getState().score!.tracks).toHaveLength(before + 1);
+    expect(screen.queryByRole('button', { name: /add track/i })).toBeNull();
   });
 
   it('deletes the active track after confirming', async () => {

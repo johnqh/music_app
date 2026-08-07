@@ -17,5 +17,5 @@ export const CONSTANTS = {
   SUPPORT_EMAIL: import.meta.env.VITE_SUPPORT_EMAIL || 'support@sudobility.com',
 
   // API
-  API_URL: import.meta.env.VITE_API_URL || 'http://localhost:8022',
+  API_URL: import.meta.env.VITE_API_URL || 'http://localhost:8032',
 } as const;

@@ -500,3 +500,33 @@ describe('pitch display', () => {
     expect(store.getState().pitchDisplay).toBe('concert');
   });
 });
+
+describe('tracks group', () => {
+  it('is the first group on the bar', () => {
+    // Which track you are on decides where every other control acts, so it
+    // reads left-to-right as "this track, then what to do to it".
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    renderToolbar(store);
+
+    const groups = screen.getAllByRole('group');
+    expect(groups[0]).toHaveAccessibleName('Tracks');
+  });
+
+  it('adds a track', async () => {
+    const user = userEvent.setup();
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore());
+    const before = store.getState().score!.tracks.length;
+    renderToolbar(store);
+
+    await user.click(screen.getByRole('button', { name: 'Add Track' }));
+    expect(store.getState().score!.tracks).toHaveLength(before + 1);
+  });
+
+  it('cannot add a track with no score open', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    renderToolbar(store);
+    expect(screen.getByRole('button', { name: 'Add Track' })).toBeDisabled();
+  });
+});

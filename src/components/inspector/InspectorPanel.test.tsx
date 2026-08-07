@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
@@ -88,17 +88,38 @@ describe('InspectorPanel', () => {
     expect(updatedB.velocity).toBe(99);
   });
 
-  it('track tab shows "Mixed" when selected tracks have different clefs, and a single track shows its concrete clef', () => {
+  it('track tab follows the active track, not the selection', async () => {
+    // It used to read `selection.trackIds`, which any click on a note or the
+    // stave wipes — so the panel emptied the moment you touched the music you
+    // were inspecting. The active track is sticky, so it does not.
     const store = makeStore(twoTrackScore());
     const [treble, bass] = store.getState().score!.tracks;
     expect(treble.clef).not.toBe(bass.clef);
 
-    store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [treble.id, bass.id] });
+    store.getState().setActiveTrack(bass.id);
+    const user = userEvent.setup();
+    render(<InspectorPanel store={store} />);
+    // The panel opens on Note. Radix tabs act on pointer events, so a bare
+    // fireEvent.click does not switch them — same as its Select.
+    await user.click(screen.getByRole('tab', { name: 'Track' }));
+    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(bass.clef);
+  });
+
+  it('keeps showing a track after the selection is cleared', async () => {
+    // The whole point of the change.
+    const store = makeStore(twoTrackScore());
+    const [treble] = store.getState().score!.tracks;
+    store.getState().setActiveTrack(treble.id);
+    const user = userEvent.setup();
     render(<InspectorPanel store={store} />);
 
-    // Same Radix-Select equivalence as the pitch-step "Mixed" case above.
-    const select = screen.getByRole('combobox', { name: 'Track clef' });
-    expect(select).toHaveTextContent('Mixed');
+    // Clearing the selection sends the panel back to the Note tab, so the
+    // real flow is: clear, then return to Track. That is exactly the case
+    // that used to show "Select a track to inspect its properties".
+    act(() => store.getState().clearSelection());
+    await user.click(screen.getByRole('tab', { name: 'Track' }));
+    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(treble.clef);
+    expect(screen.queryByText(/Select a track to inspect/i)).toBeNull();
   });
 
   it('dragging the track-tab volume slider dispatches exactly one command, not one per drag tick', async () => {

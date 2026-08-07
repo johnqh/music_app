@@ -23,7 +23,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 5039,
   },
   // Exclude music_lib from dev-mode dep pre-bundling: esbuild's prebundle
   // doesn't process the lib's `new Worker(new URL(...))` calls, breaking the
