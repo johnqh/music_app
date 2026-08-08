@@ -36,7 +36,7 @@ type JobClient = {
 function fakeClient(over: Partial<JobClient> = {}, generating = false): JobClient {
   let status: 'ready' | 'generating' = generating ? 'generating' : 'ready';
   // Advances whenever a job would have written the score.
-  let stamp = 't0';
+  const stamp = 't0';
   return {
     createJob: vi.fn(async () => {
       status = 'generating';
