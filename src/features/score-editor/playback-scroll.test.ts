@@ -351,3 +351,76 @@ describe('playbackScrollTarget: continuous mode follows the caret, not every mea
     expect(measure.box.x - target.left).toBeGreaterThanOrEqual(TRACK_INFO_WIDTH);
   });
 });
+
+describe('playbackScrollTarget: following never scrolls the music off the screen', () => {
+  /**
+   * The invariant that matters: wherever it scrolls to, the system being
+   * played has to be somewhere in the viewport afterwards.
+   */
+  function assertPlayingSystemVisible(p: LayoutPlan, viewportHeight: number, startScrollTop = 0) {
+    let scrollTop = startScrollTop;
+    // The guarantee is about where *following* leaves the reader. A reader who
+    // has scrolled the music off screen themselves is left alone deliberately,
+    // so nothing is asserted until following has actually moved the box.
+    let hasScrolled = false;
+    const measureCount = p.systems.at(-1)!.measureIndices.at(-1)! + 1;
+    for (let measureIndex = 0; measureIndex < measureCount; measureIndex++) {
+      const target = playbackScrollTarget({
+        ...BASE,
+        plan: p,
+        layoutMode: 'page',
+        measureIndex,
+        viewportHeight,
+        scrollTop,
+      });
+      if (target) {
+        scrollTop = target.top;
+        hasScrolled = true;
+      }
+      if (!hasScrolled) continue;
+
+      const system = p.systems.find((s) => s.measureIndices.includes(measureIndex))!;
+      const visibleTop = scrollTop;
+      const visibleBottom = scrollTop + viewportHeight;
+      const overlaps = system.yTop < visibleBottom && system.yBottom > visibleTop;
+      expect(
+        overlaps,
+        `measure ${measureIndex}: line spans ${system.yTop}-${system.yBottom}, ` +
+          `viewport shows ${visibleTop}-${visibleBottom}`,
+      ).toBe(true);
+    }
+  }
+
+  it('keeps the playing line on screen when the reader has scrolled off a system boundary', () => {
+    // The bug, and why it needs a reader who has scrolled by hand: a scroll
+    // position sitting in the gap *between* two systems makes
+    // `systemAtViewportTop` answer with the system above, so the carried offset
+    // came out nearly a whole system tall and the wrap overshot by a line —
+    // leaving the music playing above the top of the viewport. A run that
+    // starts at 0 never sees it, because every scroll it makes lands exactly on
+    // a system top and stays aligned.
+    const p = plan();
+    const gap = Math.round((p.systems[0].yBottom + p.systems[1].yTop) / 2);
+    assertPlayingSystemVisible(p, 500, gap);
+  });
+
+  it('keeps the playing line on screen from an aligned start too', () => {
+    assertPlayingSystemVisible(plan(), 500);
+  });
+
+  it('keeps it on screen for a viewport shorter than one system', () => {
+    assertPlayingSystemVisible(plan(), 300);
+  });
+
+  it('keeps it on screen for a viewport taller than several systems', () => {
+    assertPlayingSystemVisible(
+      computeLayout(stressScore(1, 24), {
+        zoom: 1,
+        layoutMode: 'page',
+        width: 900,
+        theme: testRenderTheme(),
+      }),
+      900,
+    );
+  });
+});

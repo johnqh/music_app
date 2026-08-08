@@ -144,8 +144,25 @@ export function playbackScrollTarget({
   // Same system: the music has not wrapped, so nothing vertical needs to move.
   if (!current || current === target) return null;
 
-  // Carry the reader's offset into the system across to the new one. Clamped at
-  // zero only; the scroll box clamps the far end itself.
-  const offsetIntoSystem = scrollTop - current.yTop * zoom;
+  // Carry the reader's offset into the system across to the new one, but never
+  // so far that the music leaves the screen.
+  //
+  // The clamp is what makes this safe. `systemAtViewportTop` answers with the
+  // system *above* when the scroll position has landed in the gap between two
+  // systems — which is exactly where the previous wrap tends to leave it — so
+  // the raw offset came out close to a whole system tall. The next wrap then
+  // overshot by that much and the line being played ended up above the top of
+  // the viewport, with the music audible but nowhere on screen. Worse, each
+  // overshoot parked the reader in another gap, so the error repeated on every
+  // wrap and the page raced a line ahead of the music.
+  //
+  // Bounding the offset to what the target system can actually give up keeps
+  // the intent — a reader watching track 3 goes on watching track 3 — while
+  // guaranteeing the system stays in view. A system shorter than the viewport
+  // has nothing to give up, so it simply aligns to the top.
+  const targetHeight = (target.yBottom - target.yTop) * zoom;
+  const maxOffset = Math.max(0, targetHeight - viewportHeight);
+  const rawOffset = scrollTop - current.yTop * zoom;
+  const offsetIntoSystem = Math.min(Math.max(rawOffset, 0), maxOffset);
   return { left, top: Math.max(0, target.yTop * zoom + offsetIntoSystem) };
 }
