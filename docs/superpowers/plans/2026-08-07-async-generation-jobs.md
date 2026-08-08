@@ -28,6 +28,7 @@
 **`music_types`** (`src/index.ts`) — job and project-status types plus Zod schemas. One file; this package is a single barrel by convention.
 
 **`music_api`**
+
 - `src/db/schema.ts` — `generationJobs` table, `projects.status` column.
 - `src/db/index.ts` — idempotent DDL for both.
 - `src/services/jobs/store.ts` — CRUD for job rows, owner-scoped. No provider calls.
@@ -39,10 +40,12 @@
 - `src/services/generation/prompts.ts` — style/mood/complexity on the regenerate prompt.
 
 **`music_lib`**
+
 - `src/domain/generation/replacement-region.ts` — the pure per-scope region functions.
 - `src/services/regeneration/controller.ts` — a range-taking entry point the selection-based one delegates to.
 
 **`music_app`**
+
 - `src/features/generation/ReplaceMusicDialog.tsx` — one modal, parameterised by scope.
 - `src/features/generation/GenerateScoreDialog.tsx` — the dashboard modal (GenerationPanel's fields).
 - `src/features/generation/useGenerationJob.ts` — start/cancel/poll.
@@ -54,10 +57,12 @@
 ## Task 1: Job and project-status types in `music_types`
 
 **Files:**
+
 - Modify: `~/projects/music_types/src/index.ts`
 - Test: `~/projects/music_types/src/generation-schema.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: `ProjectStatus`, `GenerationJobKind`, `GenerationJobStatus`, `GenerationJob`, `CreateGenerationJobRequest`, `generationJobSchema`, `createGenerationJobRequestSchema`. `ProjectSummary` gains `status: ProjectStatus`. `RegenerateRegionRequest` gains `style?`, `mood?`, `complexity?`.
 
@@ -87,15 +92,13 @@ describe('createGenerationJobRequestSchema', () => {
       'replace-measures',
       'replace-track',
     ] as const) {
-      expect(
-        createGenerationJobRequestSchema.safeParse({ ...valid(), kind }).success
-      ).toBe(true);
+      expect(createGenerationJobRequestSchema.safeParse({ ...valid(), kind }).success).toBe(true);
     }
   });
 
   it('rejects an unknown kind', () => {
     expect(
-      createGenerationJobRequestSchema.safeParse({ ...valid(), kind: 'transcribe' }).success
+      createGenerationJobRequestSchema.safeParse({ ...valid(), kind: 'transcribe' }).success,
     ).toBe(false);
   });
 
@@ -127,7 +130,7 @@ describe('generationJobSchema', () => {
           ...valid(),
           status,
           finishedAt: '2026-08-07T00:01:00.000Z',
-        }).success
+        }).success,
       ).toBe(true);
     }
   });
@@ -176,11 +179,7 @@ export const projectStatusSchema = z.enum(['ready', 'generating']);
 
 /** Which of the five generation entry points produced a job. */
 export type GenerationJobKind =
-  | 'generate-score'
-  | 'generate-track'
-  | 'replace-notes'
-  | 'replace-measures'
-  | 'replace-track';
+  'generate-score' | 'generate-track' | 'replace-notes' | 'replace-measures' | 'replace-track';
 
 export const generationJobKindSchema = z.enum([
   'generate-score',
@@ -253,7 +252,7 @@ Add the matching fields to the `RegenerateRegionRequest` type, after `candidateC
 Add `status` to `ProjectSummary` (line 531):
 
 ```ts
-  status: ProjectStatus;
+status: ProjectStatus;
 ```
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -279,11 +278,13 @@ git commit -m "feat(types): generation job types and project status"
 ## Task 2: Database schema for jobs and project status
 
 **Files:**
+
 - Modify: `~/projects/music_api/src/db/schema.ts`
 - Modify: `~/projects/music_api/src/db/index.ts`
 - Test: `~/projects/music_api/src/db/integration.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1's `GenerationJobKind`, `GenerationJobStatus`, `ProjectStatus`.
 - Produces: `generationJobs` Drizzle table; `projects.status` column.
 
@@ -397,16 +398,16 @@ export const generationJobs = pgTable(
   (table) => [
     index('generation_jobs_project_id_idx').on(table.projectId),
     index('generation_jobs_status_idx').on(table.status),
-  ]
+  ],
 );
 ```
 
 In `src/db/index.ts`, inside `initDatabase()`, after the existing `ALTER TABLE` lines:
 
 ```ts
-  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ready'`;
+await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ready'`;
 
-  await sql`
+await sql`
     CREATE TABLE IF NOT EXISTS generation_jobs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id TEXT NOT NULL,
@@ -420,8 +421,8 @@ In `src/db/index.ts`, inside `initDatabase()`, after the existing `ALTER TABLE` 
       finished_at TIMESTAMPTZ
     )
   `;
-  await sql`CREATE INDEX IF NOT EXISTS generation_jobs_project_id_idx ON generation_jobs(project_id)`;
-  await sql`CREATE INDEX IF NOT EXISTS generation_jobs_status_idx ON generation_jobs(status)`;
+await sql`CREATE INDEX IF NOT EXISTS generation_jobs_project_id_idx ON generation_jobs(project_id)`;
+await sql`CREATE INDEX IF NOT EXISTS generation_jobs_status_idx ON generation_jobs(status)`;
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -453,10 +454,12 @@ git commit -m "test(e2e): truncate generation_jobs"
 ## Task 3: Job store (owner-scoped CRUD, no provider calls)
 
 **Files:**
+
 - Create: `~/projects/music_api/src/services/jobs/store.ts`
 - Create: `~/projects/music_api/src/services/jobs/store.integration.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2's `generationJobs`, `projects`.
 - Produces:
   - `createJob(db, userId, req: CreateGenerationJobRequest): Promise<GenerationJob>` — inserts the job **and** sets the project `generating`, in one transaction.
@@ -489,7 +492,11 @@ describe('job store', () => {
 
   it('hides another user’s job exactly like a missing one', async () => {
     const project = await seedProject('u1');
-    const job = await createJob(db, 'u1', { projectId: project.id, kind: 'generate-track', request: {} });
+    const job = await createJob(db, 'u1', {
+      projectId: project.id,
+      kind: 'generate-track',
+      request: {},
+    });
 
     expect(await getJob(db, 'u2', job.id)).toBeNull();
     expect(await getJob(db, 'u1', job.id)).not.toBeNull();
@@ -500,13 +507,17 @@ describe('job store', () => {
     await createJob(db, 'u1', { projectId: project.id, kind: 'generate-track', request: {} });
 
     await expect(
-      createJob(db, 'u1', { projectId: project.id, kind: 'replace-track', request: {} })
+      createJob(db, 'u1', { projectId: project.id, kind: 'replace-track', request: {} }),
     ).rejects.toThrow(/already generating/i);
   });
 
   it('finishing a job records status, error and a finish time', async () => {
     const project = await seedProject('u1');
-    const job = await createJob(db, 'u1', { projectId: project.id, kind: 'generate-track', request: {} });
+    const job = await createJob(db, 'u1', {
+      projectId: project.id,
+      kind: 'generate-track',
+      request: {},
+    });
 
     await finishJob(db, job.id, { status: 'failed', error: 'provider exploded' });
 
@@ -597,7 +608,7 @@ export class ProjectBusyError extends Error {
 export async function createJob(
   db: Db,
   userId: string,
-  req: CreateGenerationJobRequest
+  req: CreateGenerationJobRequest,
 ): Promise<GenerationJob> {
   return db.transaction(async (tx) => {
     const [project] = await tx
@@ -639,7 +650,7 @@ export async function getJobRequest(db: Db, id: string): Promise<unknown> {
 export async function finishJob(
   db: Db,
   id: string,
-  outcome: { status: GenerationJobStatus; result?: unknown; error?: string }
+  outcome: { status: GenerationJobStatus; result?: unknown; error?: string },
 ): Promise<void> {
   await db
     .update(generationJobs)
@@ -660,7 +671,7 @@ export async function projectStatus(db: Db, projectId: string): Promise<ProjectS
 export async function setProjectStatus(
   db: Db,
   projectId: string,
-  status: ProjectStatus
+  status: ProjectStatus,
 ): Promise<void> {
   await db.update(projects).set({ status }).where(eq(projects.id, projectId));
 }
@@ -688,11 +699,13 @@ git commit -m "feat(api): owner-scoped generation job store"
 ## Task 4: Applying a job result to a score
 
 **Files:**
+
 - Create: `~/projects/music_api/src/services/jobs/apply.ts`
 - Create: `~/projects/music_api/src/services/jobs/apply.test.ts`
 - Modify: `~/projects/music_api/package.json`
 
 **Interfaces:**
+
 - Consumes: `@sudobility/music_lib`'s `applyCandidate` and `appendTrackCommand`, and `music_types`' `Score`/`ScoreFragment`. A `ScoreCommand` is `{id, label, timestamp, execute(score): Score, undo(score): Score}` — `execute` is pure, so applying one server-side is just calling it. No store, no helper.
 - Produces: `applyJobResult(score: Score, kind: GenerationJobKind, result: unknown): Score`.
 
@@ -718,8 +731,16 @@ import { applyJobResult } from './apply';
 
 describe('applyJobResult', () => {
   it('replaces the whole score for a generate-score job', () => {
-    const before = createEmptyScore({ title: 'Old', measures: 2, tracks: [{ name: 'A', instrumentName: 'Piano', clef: 'treble' }] });
-    const generated = createEmptyScore({ title: 'New', measures: 4, tracks: [{ name: 'B', instrumentName: 'Piano', clef: 'treble' }] });
+    const before = createEmptyScore({
+      title: 'Old',
+      measures: 2,
+      tracks: [{ name: 'A', instrumentName: 'Piano', clef: 'treble' }],
+    });
+    const generated = createEmptyScore({
+      title: 'New',
+      measures: 4,
+      tracks: [{ name: 'B', instrumentName: 'Piano', clef: 'treble' }],
+    });
 
     const after = applyJobResult(before, 'generate-score', { score: generated, warnings: [] });
 
@@ -728,8 +749,16 @@ describe('applyJobResult', () => {
   });
 
   it('appends a track for a generate-track job, leaving existing tracks alone', () => {
-    const before = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'Keys', instrumentName: 'Piano', clef: 'treble' }] });
-    const generated = createEmptyScore({ title: 'G', measures: 2, tracks: [{ name: 'Bass', instrumentName: 'Acoustic Bass', clef: 'bass' }] });
+    const before = createEmptyScore({
+      title: 'S',
+      measures: 2,
+      tracks: [{ name: 'Keys', instrumentName: 'Piano', clef: 'treble' }],
+    });
+    const generated = createEmptyScore({
+      title: 'G',
+      measures: 2,
+      tracks: [{ name: 'Bass', instrumentName: 'Acoustic Bass', clef: 'bass' }],
+    });
 
     const after = applyJobResult(before, 'generate-track', { score: generated, warnings: [] });
 
@@ -739,7 +768,11 @@ describe('applyJobResult', () => {
   });
 
   it('splices the single candidate fragment in for a replace job', () => {
-    const before = createEmptyScore({ title: 'S', measures: 4, tracks: [{ name: 'Keys', instrumentName: 'Piano', clef: 'treble' }] });
+    const before = createEmptyScore({
+      title: 'S',
+      measures: 4,
+      tracks: [{ name: 'Keys', instrumentName: 'Piano', clef: 'treble' }],
+    });
     const trackId = before.tracks[0].id;
     const result = {
       candidates: [
@@ -759,9 +792,13 @@ describe('applyJobResult', () => {
   });
 
   it('throws when a replace job produced no candidate, rather than silently no-oping', () => {
-    const before = createEmptyScore({ title: 'S', measures: 2, tracks: [{ name: 'K', instrumentName: 'Piano', clef: 'treble' }] });
+    const before = createEmptyScore({
+      title: 'S',
+      measures: 2,
+      tracks: [{ name: 'K', instrumentName: 'Piano', clef: 'treble' }],
+    });
     expect(() => applyJobResult(before, 'replace-notes', { candidates: [], warnings: [] })).toThrow(
-      /no candidate/i
+      /no candidate/i,
     );
   });
 });
@@ -835,10 +872,12 @@ git commit -m "feat(api): apply job results via music_lib commands"
 ## Task 5: The job runner, with cancellation checks
 
 **Files:**
+
 - Create: `~/projects/music_api/src/services/jobs/runner.ts`
 - Create: `~/projects/music_api/src/services/jobs/runner.integration.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 3's store functions, Task 4's `applyJobResult`.
 - Produces: `runJob(db, jobId, deps): Promise<void>` where `deps = { generate, regenerate }` — both injectable so tests never call OpenAI. Also `stillWanted(db, projectId): Promise<boolean>`.
 
@@ -860,7 +899,10 @@ describe('runJob', () => {
       request: {},
     });
 
-    await runJob(db, job.id, { generate: async () => generatedTrackResult(), regenerate: notCalled });
+    await runJob(db, job.id, {
+      generate: async () => generatedTrackResult(),
+      regenerate: notCalled,
+    });
 
     expect(await projectStatus(db, project.id)).toBe('ready');
     expect((await getJob(db, 'u1', job.id))?.status).toBe('done');
@@ -965,7 +1007,10 @@ type Db = PostgresJsDatabase<typeof schema>;
 
 export type RunnerDeps = {
   generate: (request: unknown) => Promise<GenerateScoreResult>;
-  regenerate: (request: unknown, stillWanted: () => Promise<boolean>) => Promise<RegenerateRegionResult>;
+  regenerate: (
+    request: unknown,
+    stillWanted: () => Promise<boolean>,
+  ) => Promise<RegenerateRegionResult>;
 };
 
 /** Whether the job's result is still wanted. The single cancellation predicate. */
@@ -1039,10 +1084,12 @@ git commit -m "feat(api): job runner with cooperative cancellation"
 ## Task 6: Between-step cancellation for chunked regeneration
 
 **Files:**
+
 - Modify: `~/projects/music_api/src/services/generation/chunked-regenerate.ts`
 - Test: `~/projects/music_api/src/services/generation/chunked-regenerate.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 5's `stillWanted`-shaped predicate.
 - Produces: `regenerateChunked` gains an optional third-argument option `stillWanted?: () => Promise<boolean>`, checked between chunks.
 
@@ -1103,7 +1150,7 @@ export type ChunkedOptions = {
 and inside the sequential chunk loop, before each iteration after the first:
 
 ```ts
-    if (index > 0 && options?.stillWanted && !(await options.stillWanted())) break;
+if (index > 0 && options?.stillWanted && !(await options.stillWanted())) break;
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
@@ -1124,11 +1171,13 @@ git commit -m "feat(api): stop chunked regeneration when cancelled"
 ## Task 7: Boot recovery for orphaned jobs
 
 **Files:**
+
 - Create: `~/projects/music_api/src/services/jobs/recover.ts`
 - Create: `~/projects/music_api/src/services/jobs/recover.integration.test.ts`
 - Modify: `~/projects/music_api/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2's tables.
 - Produces: `recoverOrphanedJobs(db): Promise<number>` — returns how many were swept.
 
@@ -1142,7 +1191,11 @@ import { createJob, getJob, projectStatus } from './store';
 describe('recoverOrphanedJobs', () => {
   it('fails a running job and releases its project', async () => {
     const project = await seedProject('u1');
-    const job = await createJob(db, 'u1', { projectId: project.id, kind: 'generate-track', request: {} });
+    const job = await createJob(db, 'u1', {
+      projectId: project.id,
+      kind: 'generate-track',
+      request: {},
+    });
 
     const swept = await recoverOrphanedJobs(db);
 
@@ -1154,7 +1207,11 @@ describe('recoverOrphanedJobs', () => {
 
   it('leaves finished jobs and their projects alone', async () => {
     const project = await seedProject('u1');
-    const job = await createJob(db, 'u1', { projectId: project.id, kind: 'generate-track', request: {} });
+    const job = await createJob(db, 'u1', {
+      projectId: project.id,
+      kind: 'generate-track',
+      request: {},
+    });
     await finishJob(db, job.id, { status: 'done' });
     await setProjectStatus(db, project.id, 'ready');
 
@@ -1231,6 +1288,7 @@ git commit -m "feat(api): release jobs orphaned by a restart"
 ## Task 8: Job routes, and rejecting writes to a generating project
 
 **Files:**
+
 - Create: `~/projects/music_api/src/routes/jobs.ts`
 - Create: `~/projects/music_api/src/routes/jobs.integration.test.ts`
 - Modify: `~/projects/music_api/src/routes/index.ts`
@@ -1238,6 +1296,7 @@ git commit -m "feat(api): release jobs orphaned by a restart"
 - Modify: `~/projects/music_api/src/routes/projects.integration.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 3, 5, 6.
 - Produces: `POST /api/v1/jobs`, `GET /api/v1/jobs/:id`, `POST /api/v1/jobs/:id/cancel`. `updateProject` throws `ProjectGeneratingError` when the project is `generating`.
 
@@ -1457,12 +1516,14 @@ git commit -m "feat(api): job routes and generating-project immutability"
 ## Task 9: Client methods and hooks for jobs
 
 **Files:**
+
 - Modify: `~/projects/music_client/src/network/music-client.ts`
 - Modify: `~/projects/music_client/src/hooks/use-generation.ts`
 - Modify: `~/projects/music_client/src/hooks/query-keys.ts`
 - Test: `~/projects/music_client/src/network/music-client.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1's `GenerationJob`, `CreateGenerationJobRequest`.
 - Produces:
   - `MusicClient.createJob(req, token): Promise<GenerationJob>`
@@ -1483,7 +1544,7 @@ describe('job endpoints', () => {
 
     await client.createJob(
       { projectId: 'p1', kind: 'replace-notes', request: { instruction: 'x' } },
-      'tok'
+      'tok',
     );
 
     expect(net.lastCall.url).toBe('http://api/api/v1/jobs');
@@ -1554,11 +1615,13 @@ git commit -m "feat(client): generation job endpoints and polling hook"
 ## Task 10: Region derivation in `music_lib`
 
 **Files:**
+
 - Create: `~/projects/music_lib/src/domain/generation/replacement-region.ts`
 - Create: `~/projects/music_lib/src/domain/generation/replacement-region.test.ts`
 - Modify: `~/projects/music_lib/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `Score`, `ScoreSelection`, `ScoreRange` from `music_types`.
 - Produces:
 
@@ -1579,7 +1642,7 @@ export function replacementRegion(
   score: Score,
   selection: ScoreSelection,
   activeTrackId: string | null,
-  scope: ReplaceScope
+  scope: ReplaceScope,
 ): ReplacementRegion | null;
 ```
 
@@ -1593,7 +1656,9 @@ import { createEmptyScore } from '../score/create.js';
 import { replacementRegion } from './replacement-region.js';
 
 /** A 4/4, 4-measure, 2-track score with one quarter note on each beat of track 0. */
-function scoreWithNotes() { /* build with the same helpers the sibling tests use */ }
+function scoreWithNotes() {
+  /* build with the same helpers the sibling tests use */
+}
 
 describe('replacementRegion — notes', () => {
   it('spans exactly the selected notes, without snapping to the measure', () => {
@@ -1766,7 +1831,7 @@ function withCounts(
   score: Score,
   range: ScoreRange,
   measureAligned: boolean,
-  selectedIds: Set<string>
+  selectedIds: Set<string>,
 ): ReplacementRegion {
   const inRange = notesInRange(score, range);
   return {
@@ -1781,7 +1846,7 @@ export function replacementRegion(
   score: Score,
   selection: ScoreSelection,
   activeTrackId: string | null,
-  scope: ReplaceScope
+  scope: ReplaceScope,
 ): ReplacementRegion | null {
   if (scope === 'track') {
     const track = activeTrackId ? findTrack(score, activeTrackId) : null;
@@ -1792,7 +1857,7 @@ export function replacementRegion(
       score,
       { startTick: 0, endTick: last.startTick + last.durationTicks, trackIds: [track.id] },
       true,
-      new Set()
+      new Set(),
     );
   }
 
@@ -1805,7 +1870,7 @@ export function replacementRegion(
       ...new Set(
         selection.measureIds
           .map((id) => score.tracks.find((t) => t.measures.some((m) => m.id === id))?.id)
-          .filter((id): id is string => id !== undefined)
+          .filter((id): id is string => id !== undefined),
       ),
     ];
     return withCounts(
@@ -1816,7 +1881,7 @@ export function replacementRegion(
         trackIds,
       },
       true,
-      new Set()
+      new Set(),
     );
   }
 
@@ -1833,7 +1898,7 @@ export function replacementRegion(
       trackIds: [...new Set(notes.map((n) => n.trackId))],
     },
     false,
-    new Set(notes.map((n) => n.id))
+    new Set(notes.map((n) => n.id)),
   );
 }
 ```
@@ -1864,10 +1929,12 @@ git commit -m "feat(lib): per-scope replacement region derivation"
 ## Task 11: A range-taking regeneration request builder
 
 **Files:**
+
 - Modify: `~/projects/music_lib/src/services/regeneration/controller.ts`
 - Modify: `~/projects/music_lib/src/services/regeneration/controller.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 10's `ReplacementRegion`.
 - Produces: `prepareRegenerationRequestForRange(score, range, instruction, options)`. The existing `prepareRegenerationRequest(score, selection, instruction, options)` delegates to it. `PrepareRegenerationOptions` gains `style?`, `mood?`, `complexity?`, and `measureAligned?: boolean` (default `true`).
 
@@ -1965,7 +2032,9 @@ Split the existing `prepareRegenerationRequest` so the selection→range step is
 
 ```ts
 export type PrepareRegenerationOptions = {
-  constraints?: Partial<Omit<RegenerationConstraints, 'preserveTimeSignatures' | 'preserveTempoEvents'>>;
+  constraints?: Partial<
+    Omit<RegenerationConstraints, 'preserveTimeSignatures' | 'preserveTempoEvents'>
+  >;
   style?: string;
   mood?: string;
   complexity?: 'simple' | 'moderate' | 'complex';
@@ -1989,8 +2058,10 @@ export function prepareRegenerationRequestForRange(
   score: Score,
   range: ScoreRange,
   instruction: string,
-  options: PrepareRegenerationOptions = {}
-): PreparedRegenerationRequest { /* extract the existing context/fragment body, unchanged */ }
+  options: PrepareRegenerationOptions = {},
+): PreparedRegenerationRequest {
+  /* extract the existing context/fragment body, unchanged */
+}
 ```
 
 `prepareRegenerationRequest` becomes: compute the range via `selectionToRange`, note whether that changed anything, then delegate, overriding `expandedToFullMeasures`.
@@ -2018,10 +2089,12 @@ git commit -m "feat(types): preserveMeasureCount is optional"
 ## Task 12: Style, mood and complexity in the regenerate prompt
 
 **Files:**
+
 - Modify: `~/projects/music_api/src/services/generation/prompts.ts`
 - Test: `~/projects/music_api/src/services/generation/prompts.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1's new request fields.
 - Produces: `buildRegeneratePrompt` emits `Style:`, `Mood:`, `Complexity:` lines and states an exact tick span for a non-measure-aligned region.
 
@@ -2030,7 +2103,11 @@ git commit -m "feat(types): preserveMeasureCount is optional"
 ```ts
 describe('buildRegeneratePrompt', () => {
   it('includes style and mood when given', () => {
-    const prompt = buildRegeneratePrompt({ ...validRequest(), style: 'baroque', mood: 'melancholy' });
+    const prompt = buildRegeneratePrompt({
+      ...validRequest(),
+      style: 'baroque',
+      mood: 'melancholy',
+    });
     const text = JSON.stringify(prompt);
     expect(text).toContain('Style: baroque');
     expect(text).toContain('Mood: melancholy');
@@ -2131,10 +2208,12 @@ Note: `music_api` also needs `bun update @sudobility/music_types @sudobility/mus
 ## Task 14: The job hook in the app
 
 **Files:**
+
 - Create: `~/projects/music_app/src/features/generation/useGenerationJob.ts`
 - Create: `~/projects/music_app/src/features/generation/useGenerationJob.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 9's client methods.
 - Produces: `useProjectGeneration(projectId)` returning `{ generating, jobId, error, start(kind, request), cancel() }`.
 
@@ -2144,7 +2223,9 @@ Note: `music_api` also needs `bun update @sudobility/music_types @sudobility/mus
 describe('useProjectGeneration', () => {
   it('reports generating once a job has been started', async () => {
     const client = fakeClient({ createJob: async () => runningJob('j1') });
-    const { result } = renderHook(() => useProjectGeneration('p1'), { wrapper: wrapperWith(client) });
+    const { result } = renderHook(() => useProjectGeneration('p1'), {
+      wrapper: wrapperWith(client),
+    });
 
     await act(() => result.current.start('replace-notes', { instruction: 'x' }));
 
@@ -2157,7 +2238,9 @@ describe('useProjectGeneration', () => {
       createJob: async () => runningJob('j1'),
       getJob: async () => ({ ...runningJob('j1'), status: 'done' as const }),
     });
-    const { result } = renderHook(() => useProjectGeneration('p1'), { wrapper: wrapperWith(client) });
+    const { result } = renderHook(() => useProjectGeneration('p1'), {
+      wrapper: wrapperWith(client),
+    });
 
     await act(() => result.current.start('replace-notes', {}));
     await waitFor(() => expect(result.current.generating).toBe(false));
@@ -2166,9 +2249,15 @@ describe('useProjectGeneration', () => {
   it('surfaces a failed job’s error rather than silently going idle', async () => {
     const client = fakeClient({
       createJob: async () => runningJob('j1'),
-      getJob: async () => ({ ...runningJob('j1'), status: 'failed' as const, error: 'provider exploded' }),
+      getJob: async () => ({
+        ...runningJob('j1'),
+        status: 'failed' as const,
+        error: 'provider exploded',
+      }),
     });
-    const { result } = renderHook(() => useProjectGeneration('p1'), { wrapper: wrapperWith(client) });
+    const { result } = renderHook(() => useProjectGeneration('p1'), {
+      wrapper: wrapperWith(client),
+    });
 
     await act(() => result.current.start('replace-notes', {}));
     await waitFor(() => expect(result.current.error).toBe('provider exploded'));
@@ -2177,7 +2266,9 @@ describe('useProjectGeneration', () => {
   it('cancel calls the endpoint and clears local generating state immediately', async () => {
     const cancelJob = vi.fn(async () => undefined);
     const client = fakeClient({ createJob: async () => runningJob('j1'), cancelJob });
-    const { result } = renderHook(() => useProjectGeneration('p1'), { wrapper: wrapperWith(client) });
+    const { result } = renderHook(() => useProjectGeneration('p1'), {
+      wrapper: wrapperWith(client),
+    });
 
     await act(() => result.current.start('replace-notes', {}));
     await act(() => result.current.cancel());
@@ -2215,11 +2306,13 @@ git commit -m "feat(app): project generation job hook"
 ## Task 15: The generating overlay
 
 **Files:**
+
 - Create: `~/projects/music_app/src/components/layout/GeneratingOverlay.tsx`
 - Create: `~/projects/music_app/src/components/layout/GeneratingOverlay.test.tsx`
 - Modify: `~/projects/music_app/src/components/layout/AppLayout.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 14's hook.
 - Produces: `<GeneratingOverlay onCancel={() => void} />`.
 
@@ -2279,12 +2372,14 @@ git commit -m "feat(app): generating overlay and autosave suppression"
 ## Task 16: The Replace modal and the three buttons
 
 **Files:**
+
 - Create: `~/projects/music_app/src/features/generation/ReplaceMusicDialog.tsx`
 - Create: `~/projects/music_app/src/features/generation/ReplaceMusicDialog.test.tsx`
 - Modify: `~/projects/music_app/src/components/inspector/InspectorPanel.tsx`
 - Modify: `~/projects/music_app/src/components/inspector/InspectorPanel.test.tsx`
 
 **Interfaces:**
+
 - Consumes: Task 10's `replacementRegion`, Task 11's builder, Task 14's hook.
 - Produces: `<ReplaceMusicDialog open scope onClose onSubmit />`.
 
@@ -2431,6 +2526,7 @@ git commit -m "feat(app): Replace Notes/Measures/Track"
 ## Task 17: Delete the candidate machinery
 
 **Files:**
+
 - Delete: `CandidateList.tsx`, `CandidateList.test.tsx`, `preview.ts`, `preview.test.ts`, `RegenerationPanel.tsx`, `RegenerationPanel.test.tsx` (all under `src/features/generation/`)
 - Modify: `src/features/score-editor/ScoreEditorView.tsx`, `src/components/layout/AppLayout.tsx`, `src/components/transport/TransportBar.tsx`
 
@@ -2473,6 +2569,7 @@ git commit -m "refactor(app): delete candidate preview machinery"
 ## Task 18: Dashboard Generate Score
 
 **Files:**
+
 - Create: `~/projects/music_app/src/features/generation/GenerateScoreDialog.tsx`
 - Create: `~/projects/music_app/src/features/generation/GenerateScoreDialog.test.tsx`
 - Modify: `~/projects/music_app/src/features/projects/DashboardPage.tsx`
@@ -2557,6 +2654,7 @@ git commit -m "feat(app): dashboard Generate Score and project status badges"
 ## Task 19: End-to-end
 
 **Files:**
+
 - Create: `~/projects/music_app/e2e/generation-jobs.spec.ts`
 
 - [ ] **Step 1: Write the specs**

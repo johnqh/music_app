@@ -13,12 +13,12 @@ A job fixes both. The server owns the work, the browser owns nothing, and waitin
 
 ## The four things that generate
 
-| Action | Scope of replacement | Where it lives |
-| --- | --- | --- |
-| **Generate Track** | a new track, spanning the whole score | toolbar `+` menu (exists today) |
-| **Replace Notes** | the selected notes' exact tick span | Note tab |
-| **Replace Measures** | the selected measures | Measure tab |
-| **Replace Track** | the active track, whole score length | Track tab |
+| Action               | Scope of replacement                  | Where it lives                  |
+| -------------------- | ------------------------------------- | ------------------------------- |
+| **Generate Track**   | a new track, spanning the whole score | toolbar `+` menu (exists today) |
+| **Replace Notes**    | the selected notes' exact tick span   | Note tab                        |
+| **Replace Measures** | the selected measures                 | Measure tab                     |
+| **Replace Track**    | the active track, whole score length  | Track tab                       |
 
 Plus **Generate Score** on the dashboard, which creates a new project rather than editing one. It is a job like the others: it creates the project immediately — named from the prompt, holding an empty score, status `generating` — and the job fills it in. Whole-score generation is the slowest of the five, so it is the one that most needs to be walked away from, and creating the project up front means it appears in the projects list with its badge from the first second rather than materialising minutes later out of nowhere.
 
@@ -36,17 +36,17 @@ What this deletes from the app: `CandidateList.tsx`, `preview.ts`, `Regeneration
 
 A `generation_jobs` table:
 
-| Column | Notes |
-| --- | --- |
-| `id` | uuid |
-| `user_id` | owner; every read is scoped to it |
-| `project_id` | always set — see Generate Score, which creates its project first |
-| `kind` | `generate-score` \| `generate-track` \| `replace-notes` \| `replace-measures` \| `replace-track` |
-| `request` | the full provider request, jsonb — everything needed to run it without consulting the project again |
-| `status` | `running` \| `done` \| `failed` \| `cancelled` |
-| `result` | the produced `Score` or `ScoreFragment`, jsonb, null until done |
-| `error` | message, null unless failed |
-| `created_at` / `finished_at` | |
+| Column                       | Notes                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `id`                         | uuid                                                                                                |
+| `user_id`                    | owner; every read is scoped to it                                                                   |
+| `project_id`                 | always set — see Generate Score, which creates its project first                                    |
+| `kind`                       | `generate-score` \| `generate-track` \| `replace-notes` \| `replace-measures` \| `replace-track`    |
+| `request`                    | the full provider request, jsonb — everything needed to run it without consulting the project again |
+| `status`                     | `running` \| `done` \| `failed` \| `cancelled`                                                      |
+| `result`                     | the produced `Score` or `ScoreFragment`, jsonb, null until done                                     |
+| `error`                      | message, null unless failed                                                                         |
+| `created_at` / `finished_at` |                                                                                                     |
 
 The request is stored whole and the job never re-reads the project. That is what makes the result well-defined: it was generated against a known input, and (see below) that input cannot have changed.
 
@@ -66,7 +66,7 @@ POST /jobs ──► job: running, project: generating ──► provider ──
 
 The status check on completion is the whole cancellation mechanism. Cancel does not need to reach into a running provider call; it writes `ready` to the project, and the finishing job sees that and throws its result away.
 
-**Multi-step jobs check between steps.** Regeneration already splits a large selection along its measure grid into sequential chunks, each prompted with the previous chunk's regenerated tail as context (`chunked-regenerate.ts`). Dropping to one candidate does not remove this: candidates were the *parallel* axis, chunks are the *sequential* one, so a long selection is still many steps. Each step re-reads the project status and continues **only while it is still `generating`** — a cancel during a long chunked run stops it at the next boundary instead of paying for the remaining chunks.
+**Multi-step jobs check between steps.** Regeneration already splits a large selection along its measure grid into sequential chunks, each prompted with the previous chunk's regenerated tail as context (`chunked-regenerate.ts`). Dropping to one candidate does not remove this: candidates were the _parallel_ axis, chunks are the _sequential_ one, so a long selection is still many steps. Each step re-reads the project status and continues **only while it is still `generating`** — a cancel during a long chunked run stops it at the next boundary instead of paying for the remaining chunks.
 
 A tick-exact Replace Notes region spans at most one measure and is therefore always a single chunk; the check costs nothing there and matters for Replace Track on a long score.
 
@@ -102,11 +102,11 @@ No websockets or SSE. Polling a handful of rows every few seconds is proportiona
 
 Pure functions in `music_lib`, one per scope, all returning the same shape: a tick range, the track ids it covers, and whether that range is measure-aligned.
 
-| Scope | Range | Tracks | Measure-aligned |
-| --- | --- | --- | --- |
-| Notes | min start → max end of the selected notes | tracks owning those notes | **no** |
-| Measures | span of the selected measures | tracks of the selected measure ids | yes |
-| Track | 0 → score length | the active track | yes |
+| Scope    | Range                                     | Tracks                             | Measure-aligned |
+| -------- | ----------------------------------------- | ---------------------------------- | --------------- |
+| Notes    | min start → max end of the selected notes | tracks owning those notes          | **no**          |
+| Measures | span of the selected measures             | tracks of the selected measure ids | yes             |
+| Track    | 0 → score length                          | the active track                   | yes             |
 
 **Notes is the one that does not fit the existing pipeline.** `prepareRegenerationRequest` always snaps a selection out to full-measure boundaries; "replace only these notes" forbids exactly that. The fix is a range-taking entry point that the existing selection-based function delegates to, so the snapping policy stays in one place rather than becoming a boolean each caller can get wrong.
 
