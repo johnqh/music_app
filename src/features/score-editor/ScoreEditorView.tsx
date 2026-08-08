@@ -15,15 +15,6 @@
  * visible systems (O(visible)), so there is no visible-set state to
  * invalidate.
  *
- * Candidate preview (spec §13): while `generation-slice.previewFragment` is
- * set, the component draws `scoreWithCandidate(score, previewFragment)`
- * (`features/generation/preview.ts`) instead of the bare committed score —
- * see `displayScore`'s doc comment for why this is required, not just an
- * optimization. Clicking the canvas while previewing is a no-op (see
- * `handleClick`/`handlePointerUp`): the ids on screen may belong to the
- * spliced-in candidate rather than the committed score, so a click there
- * must never be allowed to drive a selection/edit.
- *
  * `renderTheme` picks between `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`
  * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
@@ -44,7 +35,7 @@ import {
   computeLayout,
   tickForPoint,
 } from '@sudobility/music_lib';
-import type { LayoutPlan, ScoreFragment } from '@sudobility/music_lib';
+import type { LayoutPlan } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { Pitch, Score } from '@sudobility/music_types';
 import {
@@ -60,7 +51,6 @@ import {
   writtenScore,
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
-import { scoreWithCandidate } from '@/features/generation/preview';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import { dispatchTracked } from '@/features/score-editor/editing';
 import { getAppServices } from '@/config/initialize';
@@ -104,20 +94,6 @@ const CONTAINER_MIN_HEIGHT = 400;
 const DRAG_THRESHOLD = 3;
 /** Padding (px) kept between the scrolled-to measure and the viewport edge. */
 const SCROLL_MARGIN = 40;
-
-/** Every event id (note or rest) referenced by a preview fragment's measures, for the highlight overlay's `previewIds`. */
-function previewEventIds(fragment: ScoreFragment | null): string[] {
-  if (!fragment) return [];
-  const ids: string[] = [];
-  for (const trackFragment of fragment.tracks) {
-    for (const measure of trackFragment.measures) {
-      for (const voice of measure.voices) {
-        for (const event of voice.events) ids.push(event.id);
-      }
-    }
-  }
-  return ids;
-}
 
 /** The id of the measure `positionTick` currently falls in, read off the score's first track (every track shares the same measure grid — see `store/selectors.ts`'s `selectCurrentMeasureBeat`, same convention). */
 function currentMeasureId(score: Score, positionTick: number): string | null {
@@ -364,7 +340,6 @@ export function ScoreEditorView({
   const selection = store((s) => s.selection);
   const zoom = store((s) => s.zoom);
   const activeNoteIds = store((s) => s.activeNoteIds);
-  const previewFragment = store((s) => s.previewFragment);
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const editMode = store((s) => s.editMode);
@@ -520,23 +495,23 @@ export function ScoreEditorView({
     [themeMode],
   );
 
-  const previewIds = useMemo(() => previewEventIds(previewFragment), [previewFragment]);
 
   /**
-   * Per-note colors for this frame. Preview-candidate ids color as
-   * `regenerated` alongside a genuinely-regenerated selection: an unaccepted
-   * candidate is the same "this is generated material" signal, and without
-   * it a preview would be indistinguishable from committed notes (the old
-   * dotted overlay stroke used to carry that).
+   * Per-note colors for this frame.
+   *
+   * The `regenerated` role survives the removal of candidate previews:
+   * `selectionRegenerated` still marks material a generation just produced,
+   * which is the signal the colour was for. Only the preview half is gone,
+   * because a result now lands committed rather than as an overlay.
    */
   const noteColors = useMemo(
     () =>
       buildNoteColors({
-        selectedIds: [...selection.eventIds, ...previewIds],
+        selectedIds: selection.eventIds,
         playingIds: activeNoteIds,
-        regenerated: selectionRegenerated || previewIds.length > 0,
+        regenerated: selectionRegenerated,
       }),
-    [selection.eventIds, previewIds, activeNoteIds, selectionRegenerated],
+    [selection.eventIds, activeNoteIds, selectionRegenerated],
   );
 
   const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
@@ -549,23 +524,14 @@ export function ScoreEditorView({
   selectedMeasureIdsRef.current = selectedMeasureIds;
 
   /**
-   * The score actually drawn: the committed score, or — while a
-   * regeneration candidate is being previewed (spec §13) — the committed
-   * score with the candidate's fragment spliced in via
-   * `features/generation/preview.ts`'s `scoreWithCandidate`. Splicing is
-   * required, not optional: a fragment's event/measure ids are always
-   * freshly generated (`mock-transforms.ts`'s `rng.id(...)`), so they exist
-   * only inside *this* spliced score's render result — rendering the
-   * committed score and merely asking the highlight overlay to color
-   * `previewIds` (the old, broken behavior — Task 19 review C1) can never
-   * find a matching element, since none of those ids appear anywhere in
-   * the committed score to begin with. Memoized on exactly `score`/
-   * `previewFragment` so switching which candidate is active (or clearing
-   * the preview) doesn't rebuild this on every unrelated render (e.g. a
-   * selection-only change elsewhere).
+   * The score actually drawn.
+   *
+   * Memoized on `score` plus the pitch-drag and written-pitch state, so an
+   * unrelated render (a selection-only change) does not rebuild it — a new
+   * score identity invalidates `computeLayout`'s cache.
    */
   const displayScore = useMemo(() => {
-    const previewed = score && previewFragment ? scoreWithCandidate(score, previewFragment) : score;
+    const previewed = score;
     // Live feedback for a pitch drag: the note is drawn where it would land, so
     // the reader aims at a staff position rather than guessing.
     const dragged =
@@ -588,7 +554,7 @@ export function ScoreEditorView({
     // untouched unless the lens is actually doing something.
     if (!dragged || pitchDisplay !== 'written') return dragged;
     return writtenScore(dragged);
-  }, [score, previewFragment, pitchDragSteps, pitchDisplay]);
+  }, [score, pitchDragSteps, pitchDisplay]);
 
   /**
    * The current score's system/measure geometry (spec §26), memoized on
@@ -902,8 +868,6 @@ export function ScoreEditorView({
       // ignore canvas clicks entirely while previewing;
       // accepting/rejecting/switching candidates is done from the
       // generation panel, not by clicking the notation.
-      if (previewFragment) return;
-
       // Geometric hit-testing (canvas has no per-glyph DOM): everything below
       // resolves the click point in content coordinates against the drawn
       // window's bbox maps and the layout plan.
@@ -1026,7 +990,7 @@ export function ScoreEditorView({
       state.clearSelection();
       seekToEventPoint(event);
     },
-    [store, previewFragment, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
+    [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
   );
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
@@ -1058,7 +1022,7 @@ export function ScoreEditorView({
       // Option/Alt starts a move. Checked before the pitch-drag branch,
       // because the same press on the same note would otherwise start a pitch
       // drag — the modifier is the whole disambiguation.
-      if (event.altKey && result && !previewFragment) {
+      if (event.altKey && result) {
         const hitId = eventIdAtPoint(result.idToBBox, point);
         const hitEvent = hitId && state.score ? findEvent(state.score, hitId) : null;
         if (hitId && hitEvent && isNoteEvent(hitEvent)) {
@@ -1077,7 +1041,7 @@ export function ScoreEditorView({
 
       const onlySelected =
         state.selection.eventIds.length === 1 ? state.selection.eventIds[0] : null;
-      if (onlySelected && result && !previewFragment) {
+      if (onlySelected && result) {
         const hit = eventIdAtPoint(result.idToBBox, point);
         const hitEvent = state.score ? findEvent(state.score, onlySelected) : null;
         // A rest has no pitch to drag.
@@ -1211,21 +1175,16 @@ export function ScoreEditorView({
 
       if (drag.moved) {
         suppressNextClickRef.current = true;
-        // Same preview guard as `handleClick`: a drag-box selection while
-        // previewing would otherwise select against the spliced-in
-        // candidate's ids rather than the committed score's.
-        if (!previewFragment) {
-          const point = pointFromEvent(event) ?? drag.start;
-          const box = boxFromPoints(drag.start, point);
-          const result = resultRef.current;
-          if (result) {
-            const hitIds = eventIdsInBox(result.idToBBox, box);
-            const state = store.getState();
-            const nextIds = drag.additive
-              ? Array.from(new Set([...state.selection.eventIds, ...hitIds]))
-              : hitIds;
-            state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
-          }
+        const point = pointFromEvent(event) ?? drag.start;
+        const box = boxFromPoints(drag.start, point);
+        const result = resultRef.current;
+        if (result) {
+          const hitIds = eventIdsInBox(result.idToBBox, box);
+          const state = store.getState();
+          const nextIds = drag.additive
+            ? Array.from(new Set([...state.selection.eventIds, ...hitIds]))
+            : hitIds;
+          state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
         }
       }
 
@@ -1235,7 +1194,6 @@ export function ScoreEditorView({
     [
       pointFromEvent,
       store,
-      previewFragment,
       stopAutoscroll,
       pitchDragSteps,
       editMode,

@@ -137,3 +137,75 @@ describe('DashboardPage', () => {
     expect(rows.map((r) => r.name)).toEqual(['Original']);
   });
 });
+
+describe('DashboardPage generation', () => {
+  it('offers Generate Score', () => {
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+    expect(screen.getByRole('button', { name: 'Generate Score' })).toBeVisible();
+  });
+
+  it('opens the whole-score dialog, which the sidebar no longer carries', async () => {
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Generate Score' }));
+
+    expect(screen.getByRole('dialog', { name: 'Generate a new score' })).toBeInTheDocument();
+  });
+
+  it('marks a generating project in the list', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'generating');
+
+    render(<DashboardPage store={store} />);
+
+    expect(await screen.findByText('Generating…')).toBeVisible();
+  });
+
+  it('shows no badge on a ready project', async () => {
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'Calm Song', score: createEmptyScore({ title: 'Calm Song' }) },
+      'tok',
+    );
+
+    render(<DashboardPage store={store} />);
+
+    expect(await screen.findByText('Calm Song')).toBeVisible();
+    expect(screen.queryByText('Generating…')).not.toBeInTheDocument();
+  });
+
+  it('offers Cancel on a generating project, so a job can be abandoned without opening it', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'generating');
+
+    render(<DashboardPage store={store} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel generation' }));
+
+    await waitFor(() =>
+      expect(context.fakeClient.storedRecord(project.id)?.status).toBe('ready'),
+    );
+  });
+
+  it('creates the project up front so it appears while it generates', async () => {
+    // Created immediately rather than on completion: otherwise it would
+    // materialise in this list minutes later out of nowhere.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Generate Score' }));
+    await userEvent.type(screen.getByLabelText('Prompt'), 'a gentle waltz');
+    await userEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(await screen.findByText('Generating…')).toBeVisible();
+  });
+});

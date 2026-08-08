@@ -17,8 +17,7 @@ import { scoreWithPitch } from '@/features/score-editor/pitch-drag';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import type { BBox, RenderTheme } from '@sudobility/music_lib';
 import { CanvasScoreRenderer, createMock2DContext } from '@sudobility/music_lib';
-import { extractFragment, playbackController } from '@sudobility/music_lib';
-import type { ScoreFragment } from '@sudobility/music_lib';
+import { playbackController } from '@sudobility/music_lib';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
@@ -120,31 +119,6 @@ function measureFreePoint(score: Score, measureId: string): { clientX: number; c
  * (C1 regression coverage: a candidate's ids never coincide with the
  * committed score's).
  */
-function fakePreviewFragment(score: Score): ScoreFragment {
-  const track = score.tracks[0];
-  const measure = track.measures[0];
-  const range = {
-    startTick: measure.startTick,
-    endTick: measure.startTick + measure.durationTicks,
-    trackIds: [track.id],
-  };
-  const fragment = extractFragment(score, range);
-  return {
-    ...fragment,
-    tracks: fragment.tracks.map((t) => ({
-      ...t,
-      measures: t.measures.map((m) => ({
-        ...m,
-        id: `${m.id}-preview`,
-        voices: m.voices.map((v) => ({
-          ...v,
-          id: `${v.id}-preview`,
-          events: v.events.map((e) => ({ ...e, id: `${e.id}-preview` })),
-        })),
-      })),
-    })),
-  };
-}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -372,40 +346,6 @@ describe('ScoreEditorView', () => {
     const opts = renderSpy.mock.calls.at(-1)![2];
     expect(opts.activeTrackId).toBe(score.tracks[0].id);
     expect(opts.selectedMeasureIds?.has(measureId)).toBe(true);
-  });
-});
-
-describe('ScoreEditorView: candidate preview (spec §13)', () => {
-  it('draws the spliced preview score, so the fragment ids have bboxes', () => {
-    const store = makeStore();
-    const fragment = fakePreviewFragment(store.getState().score!);
-    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
-    render(<ScoreEditorView store={store} />);
-
-    act(() => {
-      store.getState().setPreviewFragment(fragment);
-    });
-
-    const result = renderSpy.mock.results.at(-1)!.value;
-    const previewEventId = fragment.tracks[0].measures[0].voices[0].events[0].id;
-    expect(result.idToBBox.get(previewEventId)).toBeDefined();
-  });
-
-  it('ignores canvas clicks entirely while previewing (no selection, no seek)', () => {
-    const store = makeStore();
-    const score = store.getState().score!;
-    const fragment = fakePreviewFragment(score);
-    render(<ScoreEditorView store={store} />);
-    act(() => {
-      store.getState().setPreviewFragment(fragment);
-    });
-
-    const [first] = allNotes(score);
-    clickNote(score, first.id);
-    fireEvent.click(interactionSurface(), { clientX: 150, clientY: 60 });
-
-    expect(store.getState().selection.eventIds).toEqual([]);
-    expect(playbackController.seek).not.toHaveBeenCalled();
   });
 });
 

@@ -46,6 +46,7 @@
 import { useEffect, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
+  Button,
   Checkbox,
   Input,
   Select,
@@ -76,6 +77,7 @@ import {
   findEvent,
   findMeasure,
   findTrack,
+  replacementRegion,
   selectActiveTrackId,
   gmWrittenTransposition,
   soundingPitch,
@@ -103,11 +105,74 @@ import {
 } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { ReplaceScope } from '@sudobility/music_lib';
+import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
+import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
 
 export type InspectorPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
+  /**
+   * Starts a replacement job. Omitted in isolation tests, where the buttons
+   * still render and disable correctly but do nothing.
+   */
+  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
 };
+
+/**
+ * The Replace button each tab carries, plus its modal.
+ *
+ * Disabled when `replacementRegion` returns null — nothing selected for that
+ * scope — which is the single source of truth for "is there anything to
+ * replace", shared with the region the job will actually use.
+ */
+function ReplaceButton({
+  store,
+  scope,
+  label,
+  onReplace,
+}: {
+  store: EditorStoreApi;
+  scope: ReplaceScope;
+  label: string;
+  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const score = store((s) => s.score);
+  const selection = store((s) => s.selection);
+  const activeTrackId = store(selectActiveTrackId);
+
+  const region = score ? replacementRegion(score, selection, activeTrackId, scope) : null;
+  const trackLabel =
+    score && region?.range.trackIds.length === 1
+      ? (findTrack(score, region.range.trackIds[0])?.name ?? undefined)
+      : undefined;
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        disabled={region === null}
+        onClick={() => setOpen(true)}
+        className="w-full px-3 py-1.5 text-sm"
+      >
+        {label}
+      </Button>
+      <ReplaceMusicDialog
+        open={open}
+        scope={scope}
+        region={region}
+        trackLabel={trackLabel}
+        onClose={() => setOpen(false)}
+        onSubmit={(submission) => {
+          setOpen(false);
+          onReplace?.(scope, submission);
+        }}
+      />
+    </>
+  );
+}
 
 /** Sentinel distinguishing "every selected object agrees" from "differing values" (spec §20's "mixed"). */
 const MIXED = Symbol('mixed');
@@ -309,6 +374,11 @@ function CommitSlider({
   );
 }
 
+type TabProps = {
+  store: EditorStoreApi;
+  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+};
+
 /** The measure holding `note`, found by its track and tick, for the key signature. */
 function measureOfNote(score: Score, note: NoteEvent): Measure | null {
   const track = findTrack(score, note.trackId);
@@ -319,7 +389,7 @@ function measureOfNote(score: Score, note: NoteEvent): Measure | null {
   );
 }
 
-function NoteTab({ store }: { store: EditorStoreApi }) {
+function NoteTab({ store, onReplace }: TabProps) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const pitchDisplay = store((s) => s.pitchDisplay);
@@ -486,11 +556,13 @@ function NoteTab({ store }: { store: EditorStoreApi }) {
           onChange={() => dispatchToggleTie(store, 'tieStop')}
         />
       </div>
+
+      <ReplaceButton store={store} scope="notes" label="Replace Notes" onReplace={onReplace} />
     </div>
   );
 }
 
-function MeasureTab({ store }: { store: EditorStoreApi }) {
+function MeasureTab({ store, onReplace }: TabProps) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
 
@@ -582,15 +654,17 @@ function MeasureTab({ store }: { store: EditorStoreApi }) {
         />
       </div>
 
-      <p className="text-xs text-theme-text-secondary">
-        This selection also drives the Regenerate panel — use it to generate alternatives for these
-        measures.
-      </p>
+      <ReplaceButton
+        store={store}
+        scope="measures"
+        label="Replace Measures"
+        onReplace={onReplace}
+      />
     </div>
   );
 }
 
-function TrackTab({ store }: { store: EditorStoreApi }) {
+function TrackTab({ store, onReplace }: TabProps) {
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
 
@@ -730,6 +804,8 @@ function TrackTab({ store }: { store: EditorStoreApi }) {
           onChange={(checked) => patchAll({ solo: checked })}
         />
       </div>
+
+      <ReplaceButton store={store} scope="track" label="Replace Track" onReplace={onReplace} />
     </div>
   );
 }
@@ -752,7 +828,7 @@ const TABS: Array<{ value: InspectorTab; label: string }> = [
   { value: 'track', label: 'Track' },
 ];
 
-export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
+export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPanelProps) {
   const selection = store((s) => s.selection);
   const [tab, setTab] = useState<InspectorTab>(() => defaultTabFor(selection));
 
@@ -775,13 +851,13 @@ export function InspectorPanel({ store = useAppStore }: InspectorPanelProps) {
           ))}
         </TabsList>
         <TabsContent value="note">
-          <NoteTab store={store} />
+          <NoteTab store={store} onReplace={onReplace} />
         </TabsContent>
         <TabsContent value="measure">
-          <MeasureTab store={store} />
+          <MeasureTab store={store} onReplace={onReplace} />
         </TabsContent>
         <TabsContent value="track">
-          <TrackTab store={store} />
+          <TrackTab store={store} onReplace={onReplace} />
         </TabsContent>
       </Tabs>
     </div>

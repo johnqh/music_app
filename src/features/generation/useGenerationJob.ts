@@ -44,7 +44,7 @@ export type UseProjectGenerationOptions = {
 
 export function useProjectGeneration(
   projectId: string | null,
-  options: UseProjectGenerationOptions = {}
+  options: UseProjectGenerationOptions = {},
 ): ProjectGeneration {
   const { store = useAppStore, onApplied, pollMs = POLL_MS } = options;
 
@@ -84,7 +84,7 @@ export function useProjectGeneration(
         setGenerating(false);
       }
     },
-    [projectId, services, store]
+    [projectId, services, store],
   );
 
   const cancel = useCallback(async (): Promise<void> => {

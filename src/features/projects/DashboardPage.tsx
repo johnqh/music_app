@@ -46,6 +46,9 @@ import { parseScore } from '@sudobility/music_types';
 import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { getAppServices } from '@/config/initialize';
+import { createEmptyScore } from '@sudobility/music_lib';
+import type { GenerateScoreRequest } from '@sudobility/music_types';
+import { GenerateScoreDialog } from '@/features/generation/GenerateScoreDialog';
 import { CONSTANTS } from '@/config/constants';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
@@ -76,6 +79,31 @@ async function clientAndToken() {
   return { client: musicClient, token };
 }
 
+/** How often the list refetches while any project is generating. Minutes of work, so seconds of latency cost nothing. */
+const GENERATION_POLL_MS = 3000;
+
+/**
+ * The placeholder a Generate Score project holds until its job fills it in.
+ *
+ * Created up front rather than on completion so the project appears in this
+ * list with its badge from the first second, instead of materialising minutes
+ * later out of nowhere. Matches the requested shape so the editor can open it
+ * meaningfully even mid-generation.
+ */
+function emptyScoreFor(request: GenerateScoreRequest) {
+  return createEmptyScore({
+    title: request.title?.trim() || 'Untitled',
+    measures: request.durationMeasures,
+    tracks: request.tracks.map((t) => ({
+      name: t.name,
+      instrumentName: t.instrumentName,
+      clef: t.clef,
+    })),
+    ...(request.timeSignature ? { timeSignature: request.timeSignature } : {}),
+    ...(request.keySignature ? { keySignature: request.keySignature } : {}),
+  });
+}
+
 const TEXT_INPUT_CLASS = 'px-3 py-1.5 text-sm';
 
 const SELECT_TRIGGER_CLASS = 'h-auto w-auto px-3 py-1.5 text-sm';
@@ -91,6 +119,8 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [creatingGeneration, setCreatingGeneration] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -107,6 +137,52 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /**
+   * Poll only while something is actually generating, and stop when nothing
+   * is — a dashboard that refetched forever would keep a request loop alive
+   * for the whole session.
+   */
+  const anyGenerating = projects.some((p) => p.status === 'generating');
+  useEffect(() => {
+    if (!anyGenerating) return;
+    const timer = setInterval(() => void refresh(), GENERATION_POLL_MS);
+    return () => clearInterval(timer);
+  }, [anyGenerating, refresh]);
+
+  const cancelGeneration = async (projectId: string): Promise<void> => {
+    try {
+      const { client, token } = await clientAndToken();
+      // The job id is not on the summary; the project's running job is the
+      // only one it can have, so the server resolves it from the project.
+      await client.cancelProjectGeneration(projectId, token);
+      await refresh();
+    } catch (err) {
+      reportError(err, { context: 'Failed to cancel generation', store });
+    }
+  };
+
+  /** Creates the project immediately, then starts a job against it: it shows up in this list with its badge from the first second rather than materialising minutes later. */
+  const startWholeScoreGeneration = async (request: GenerateScoreRequest): Promise<void> => {
+    setCreatingGeneration(true);
+    try {
+      const { client, token } = await clientAndToken();
+      const project = await client.createProject(
+        { name: request.title?.trim() || request.prompt.slice(0, 60), score: emptyScoreFor(request) },
+        token,
+      );
+      await client.createJob(
+        { projectId: project.id, kind: 'generate-score', request },
+        token,
+      );
+      setGenerateOpen(false);
+      await refresh();
+    } catch (err) {
+      reportError(err, { context: 'Failed to start generation', store });
+    } finally {
+      setCreatingGeneration(false);
+    }
+  };
 
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -200,8 +276,24 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         <span className="text-xs text-theme-text-secondary">
           Updated {formatDate(project.updatedAt)}
         </span>
+        {project.status === 'generating' && (
+          <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">
+            Generating…
+          </span>
+        )}
       </Button>
       <div className="flex gap-1 border-t border-theme-border p-2">
+        {project.status === 'generating' && (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Cancel generation"
+            onClick={() => void cancelGeneration(project.id)}
+            className="px-3 py-1"
+          >
+            Cancel generation
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -289,6 +381,17 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           </Button>
         )}
 
+        <Tooltip content="Generate a whole score with AI">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Generate Score"
+            onClick={() => setGenerateOpen(true)}
+            className="px-3 py-1.5"
+          >
+            Generate Score
+          </Button>
+        </Tooltip>
         <Tooltip content="Import MIDI">
           <Button
             type="button"
@@ -399,6 +502,12 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           setMusicXmlImportOpen(false);
           onNavigate?.(`/project/${projectId}`);
         }}
+      />
+      <GenerateScoreDialog
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        submitting={creatingGeneration}
+        onSubmit={(request) => void startWholeScoreGeneration(request)}
       />
     </div>
   );

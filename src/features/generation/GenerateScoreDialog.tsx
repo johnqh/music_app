@@ -54,6 +54,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   Button,
+  FormModal,
   Checkbox,
   Input,
   Select,
@@ -68,12 +69,14 @@ import { variants } from '@sudobility/design';
 
 import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
 import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@sudobility/music_types';
-import { useAppStore } from '@sudobility/music_lib';
-import type { GenerationStoreApi } from '@/features/generation/preview';
 
-export type GenerationPanelProps = {
-  /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
-  store?: GenerationStoreApi;
+export type GenerateScoreDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  /** Receives the assembled request; the dashboard creates the project and starts the job. */
+  onSubmit: (request: GenerateScoreRequest) => void;
+  /** True while the project is being created, to disable the CTA. */
+  submitting?: boolean;
 };
 
 /** Spec §32, verbatim. */
@@ -209,10 +212,7 @@ function LabeledInput({
   );
 }
 
-export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
-  const pending = store((s) => s.pending);
-  const error = store((s) => s.error);
-
+export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = false }: GenerateScoreDialogProps) {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
@@ -239,7 +239,7 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
   const durationMeasures = Number(measures);
   const tracks = INSTRUMENT_OPTIONS.filter((opt) => instruments.has(opt.key)).map(toRequestTrack);
   const canGenerate =
-    !pending &&
+    !submitting &&
     prompt.trim() !== '' &&
     tracks.length > 0 &&
     Number.isFinite(durationMeasures) &&
@@ -272,23 +272,29 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
       ...(mood && { mood }),
       ...(tempo.trim() !== '' && Number.isFinite(Number(tempo)) && { tempo: Number(tempo) }),
     };
-    void store.getState().generate(request);
-  };
-
-  const handleCancel = (): void => {
-    store.getState().cancel();
+    onSubmit(request);
   };
 
   return (
-    <div aria-label="Generation panel" className="flex flex-col gap-4 p-4">
-      <h3 className="text-sm font-semibold text-theme-text-primary">Generate a new score</h3>
-
-      {error && (
-        <div role="alert" className="rounded-md bg-red-600 px-3 py-2 text-sm text-white">
-          {error}
-        </div>
-      )}
-
+    <FormModal
+      open={open}
+      title="Generate a new score"
+      onClose={onClose}
+      size="large"
+      closeAriaLabel="Close dialog"
+      actions={[
+        { label: 'Cancel', onClick: onClose, variant: 'ghost' },
+        {
+          label: 'Generate',
+          onClick: handleGenerate,
+          variant: 'primary',
+          disabled: !canGenerate,
+          loading: submitting,
+          loadingLabel: 'Creating…',
+        },
+      ]}
+    >
+      <div className="flex flex-col gap-4">
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">Prompt</span>
@@ -441,38 +447,7 @@ export function GenerationPanel({ store = useAppStore }: GenerationPanelProps) {
         </Select>
       </div>
 
-      {pending && (
-        <div
-          role="progressbar"
-          aria-label="Generating"
-          className="h-1 w-full overflow-hidden rounded-full bg-theme-bg-secondary"
-        >
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="primary"
-          aria-label="Generate"
-          disabled={!canGenerate}
-          onClick={handleGenerate}
-        >
-          Generate
-        </Button>
-        {pending && (
-          <Button
-            type="button"
-            variant="outline"
-            aria-label="Cancel"
-            onClick={handleCancel}
-            className="px-3 py-1.5"
-          >
-            Cancel
-          </Button>
-        )}
       </div>
-    </div>
+    </FormModal>
   );
 }

@@ -68,8 +68,6 @@ import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
-import { GenerationPanel } from '@/features/generation/GenerationPanel';
-import { RegenerationPanel } from '@/features/generation/RegenerationPanel';
 import { TransportBar } from '@/components/transport/TransportBar';
 import { TrackEditorPanel } from '@/features/tracks/TrackEditorPanel';
 import { Toasts } from '@/components/layout/Toasts';
@@ -187,7 +185,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const score = store((s) => s.score);
   const validationIssues = store((s) => s.validationIssues);
-  const generationMode = store((s) => s.mode);
   const projectId = store((s) => s.projectId);
 
   /**
@@ -896,20 +893,16 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-theme-border"
             style={{ width: SIDE_PANEL_WIDTH }}
           >
-            {/* shrink-0 on every child: this column is height-bounded now
-                (h-screen root), and flex children would otherwise compress
-                to fit — visually stacking the panels onto each other —
-                instead of overflowing into the column's own scrollbar. */}
+            {/* The generation panels are gone: whole-score generation moved
+                to the dashboard, and region regeneration is now the
+                Inspector's three Replace buttons, each submitting a job. */}
             <div className="shrink-0">
-              <InspectorPanel store={store} />
-            </div>
-            <div className="shrink-0 border-t border-theme-border" />
-            <div className="shrink-0">
-              {generationMode === 'generate' ? (
-                <GenerationPanel store={store} />
-              ) : (
-                <RegenerationPanel store={store} />
-              )}
+              <InspectorPanel
+                store={store}
+                onReplace={(scope, submission) =>
+                  void generation.start(scope === 'notes' ? 'replace-notes' : scope === 'measures' ? 'replace-measures' : 'replace-track', submission)
+                }
+              />
             </div>
           </div>
         )}
