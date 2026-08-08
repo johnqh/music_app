@@ -10,11 +10,14 @@
  * threw that away and snapped back to track 1 every time the music wrapped.
  * Both modes therefore preserve vertical position, by different means:
  *
- * - **Page mode** keeps the *offset within the system*. If track 3 sits at the
- *   top of the viewport, it still does after the wrap, because the new system's
- *   top replaces the old one's and the reader's offset into it is carried over.
+ * - **Page mode** scrolls only when the system being played is not already on
+ *   screen, and then keeps the *offset within the system*: if track 3 sits at
+ *   the top of the viewport, it still does after the wrap, because the new
+ *   system's top replaces the old one's and the reader's offset into it is
+ *   carried over.
  * - **Continuous mode** is one very wide system, so following the music is
- *   purely horizontal and vertical scroll is left completely alone.
+ *   purely horizontal and vertical scroll is left completely alone. It too
+ *   moves only when the playing measure is reaching the edge of the viewport.
  */
 import { TRACK_INFO_WIDTH } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
@@ -27,8 +30,16 @@ export type PlaybackScrollParams = {
   measureIndex: number;
   /** The measure's box in logical (unzoomed) content coordinates. */
   measureX: number;
+  /** The measure's width in logical (unzoomed) content coordinates. */
+  measureWidth: number;
+  /** Current horizontal scroll position, in on-screen px. */
+  scrollLeft: number;
+  /** Visible width of the scroll box, in on-screen px. */
+  viewportWidth: number;
   /** Current vertical scroll position, in on-screen px. */
   scrollTop: number;
+  /** Visible height of the scroll box, in on-screen px. */
+  viewportHeight: number;
   /** Breathing room left before the target, in on-screen px. */
   margin: number;
 };
@@ -58,6 +69,14 @@ function systemAtViewportTop(plan: LayoutPlan, scrollTop: number, zoom: number) 
 /**
  * Where to scroll for the measure now playing, or `null` to leave the scroll
  * box alone.
+ *
+ * Every "no move needed" path returns `null` rather than the current scroll
+ * position, and that distinction is load-bearing: the caller scrolls with
+ * `behavior: 'smooth'`, and issuing *any* `scrollTo` — even one naming the
+ * position the box is already heading to — cancels the animation in flight and
+ * strands it wherever it had reached. Returning the current position once per
+ * measure therefore killed each scroll a moment after it started, and the sheet
+ * appeared not to follow the music at all.
  */
 export function playbackScrollTarget({
   plan,
@@ -65,7 +84,11 @@ export function playbackScrollTarget({
   zoom,
   measureIndex,
   measureX,
+  measureWidth,
+  scrollLeft,
+  viewportWidth,
   scrollTop,
+  viewportHeight,
   margin,
 }: PlaybackScrollParams): PlaybackScrollTarget | null {
   const target = systemOf(plan, measureIndex);
@@ -82,10 +105,19 @@ export function playbackScrollTarget({
     // Vertical is left completely alone: one long system means there is no
     // "next line" to follow, so any vertical move would be the caller fighting
     // the reader for the scrollbar.
-    return {
-      left: Math.max(0, measureX * zoom - TRACK_INFO_WIDTH * zoom - margin),
-      top: scrollTop,
-    };
+    const gutter = TRACK_INFO_WIDTH * zoom;
+    const measureLeft = measureX * zoom;
+    const measureRight = (measureX + measureWidth) * zoom;
+
+    // Only move once the music is actually reaching the edge of what the reader
+    // can see. This used to re-target every measure, which both fought the
+    // reader for the scrollbar and meant a fresh smooth-scroll animation was
+    // started before the previous one had travelled anywhere.
+    const firstVisible = scrollLeft + gutter + margin;
+    const lastVisible = scrollLeft + viewportWidth - margin;
+    if (measureLeft >= firstVisible && measureRight <= lastVisible) return null;
+
+    return { left: Math.max(0, measureLeft - gutter - margin), top: scrollTop };
   }
 
   // Page mode wraps every system to the viewport and does not scroll
@@ -94,9 +126,23 @@ export function playbackScrollTarget({
   // reader to bring it back.
   const left = 0;
 
+  // Already on screen in full: leave it alone. Wrapping to a new system is not
+  // by itself a reason to scroll — a viewport tall enough to show several
+  // systems was being yanked up a line every time the music crossed into the
+  // next one, long before the caret was anywhere near the bottom of what the
+  // reader could see. Only a target the reader cannot actually see justifies
+  // moving the page under them.
+  //
+  // A system taller than the viewport can never satisfy this (a multi-track
+  // score is the normal case), so that falls through to the offset-carrying
+  // path below, which is what it is there for.
+  const targetTop = target.yTop * zoom;
+  const targetBottom = target.yBottom * zoom;
+  if (targetTop >= scrollTop && targetBottom <= scrollTop + viewportHeight) return null;
+
   const current = systemAtViewportTop(plan, scrollTop, zoom);
   // Same system: the music has not wrapped, so nothing vertical needs to move.
-  if (!current || current === target) return { left, top: scrollTop };
+  if (!current || current === target) return null;
 
   // Carry the reader's offset into the system across to the new one. Clamped at
   // zero only; the scroll box clamps the far end itself.

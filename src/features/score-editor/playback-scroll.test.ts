@@ -18,7 +18,21 @@ function plan(layoutMode: 'page' | 'continuous' = 'page'): LayoutPlan {
   });
 }
 
-const BASE = { zoom: 1, measureX: 0, margin: 40 };
+// A viewport shorter than one system of this 4-track score: the existing
+// cases are all about a reader who cannot see a whole system at once, which
+// is what makes carrying their offset across a wrap the right behaviour.
+// `scrollLeft: 0` with a narrow viewport likewise puts the measures these
+// tests pick well off the right-hand edge, so horizontal following applies.
+const BASE = {
+  zoom: 1,
+  measureX: 0,
+  measureWidth: 100,
+  scrollLeft: 0,
+  viewportWidth: 900,
+  scrollTop: 0,
+  margin: 40,
+  viewportHeight: 200,
+};
 
 describe('playbackScrollTarget: page mode', () => {
   it('keeps the same track at the top of the viewport across a wrap', () => {
@@ -193,5 +207,145 @@ describe('playbackScrollTarget: horizontal following', () => {
         scrollTop: 0,
       }),
     ).toBeNull();
+  });
+});
+
+describe('playbackScrollTarget: page mode only scrolls when it has to', () => {
+  /** A single-track score, whose systems are short enough that several fit on screen. */
+  function shortSystems(): LayoutPlan {
+    return computeLayout(stressScore(1, 24), {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: testRenderTheme(),
+    });
+  }
+
+  it('does not move when the system being played is already fully on screen', () => {
+    // The bug: crossing into the next system scrolled it to the top of the
+    // viewport even when the reader could already see it, so a tall window
+    // jumped a line ahead of the caret every wrap.
+    const p = shortSystems();
+    const [first, second] = p.systems;
+    expect(second).toBeDefined();
+    const viewportHeight = Math.ceil(second.yBottom) + 50; // both systems visible at once
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      viewportHeight,
+      plan: p,
+      layoutMode: 'page',
+      measureIndex: second.measureIndices[0],
+      scrollTop: 0,
+    })!;
+
+    expect(target.top).toBe(0);
+    expect(first.yTop).toBe(p.systems[0].yTop); // sanity: reader is at the top
+  });
+
+  it('does scroll once the system being played has fallen off the bottom', () => {
+    const p = shortSystems();
+    const last = p.systems[p.systems.length - 1];
+    expect(p.systems.length).toBeGreaterThan(2);
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      viewportHeight: 300,
+      plan: p,
+      layoutMode: 'page',
+      measureIndex: last.measureIndices[0],
+      scrollTop: 0,
+    })!;
+
+    expect(target.top).toBeGreaterThan(0);
+  });
+
+  it('still carries the offset when a system is taller than the viewport', () => {
+    // Multi-track scores can never be "fully visible", and for them preserving
+    // which track sits at the top is the whole point.
+    const p = plan();
+    const [first, second] = p.systems;
+    const track3 = p.trackLayouts[2].measures.find(
+      (m) => m.measureIndex === first.measureIndices[0],
+    )!;
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      viewportHeight: 200,
+      plan: p,
+      layoutMode: 'page',
+      measureIndex: second.measureIndices[0],
+      scrollTop: track3.box.y,
+    })!;
+
+    const nextTrack3 = p.trackLayouts[2].measures.find(
+      (m) => m.measureIndex === second.measureIndices[0],
+    )!;
+    expect(target.top).toBeCloseTo(nextTrack3.box.y, 5);
+  });
+});
+
+describe('playbackScrollTarget: continuous mode follows the caret, not every measure', () => {
+  it('does not move while the playing measure is comfortably on screen', () => {
+    // Re-targeting every measure fought the reader for the scrollbar and
+    // restarted the smooth-scroll animation before it had travelled anywhere.
+    const p = plan('continuous');
+    const measure = p.trackLayouts[0].measures[6];
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      plan: p,
+      layoutMode: 'continuous',
+      measureIndex: measure.measureIndex,
+      measureX: measure.box.x,
+      measureWidth: measure.box.width,
+      // Scrolled so this measure sits in the middle of a wide viewport.
+      scrollLeft: Math.max(0, measure.box.x - 600),
+      viewportWidth: 1400,
+      scrollTop: 0,
+    })!;
+
+    expect(target.left).toBe(Math.max(0, measure.box.x - 600));
+  });
+
+  it('scrolls once the playing measure reaches the right-hand edge', () => {
+    const p = plan('continuous');
+    const measure = p.trackLayouts[0].measures[6];
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      plan: p,
+      layoutMode: 'continuous',
+      measureIndex: measure.measureIndex,
+      measureX: measure.box.x,
+      measureWidth: measure.box.width,
+      // Viewport ends just as this measure starts: it is about to leave view.
+      scrollLeft: Math.max(0, measure.box.x - 880),
+      viewportWidth: 900,
+      scrollTop: 0,
+    })!;
+
+    expect(target.left).toBeCloseTo(Math.max(0, measure.box.x - TRACK_INFO_WIDTH - 40), 5);
+  });
+
+  it('scrolls a measure that is hidden behind the pinned gutter, not just one off the right edge', () => {
+    // The gutter is painted over the sheet, so "on screen" starts after it.
+    const p = plan('continuous');
+    const measure = p.trackLayouts[0].measures[6];
+
+    const target = playbackScrollTarget({
+      ...BASE,
+      plan: p,
+      layoutMode: 'continuous',
+      measureIndex: measure.measureIndex,
+      measureX: measure.box.x,
+      measureWidth: measure.box.width,
+      // Measure sits just inside the viewport's left edge — behind the gutter.
+      scrollLeft: measure.box.x - 10,
+      viewportWidth: 1400,
+      scrollTop: 0,
+    })!;
+
+    expect(measure.box.x - target.left).toBeGreaterThanOrEqual(TRACK_INFO_WIDTH);
   });
 });

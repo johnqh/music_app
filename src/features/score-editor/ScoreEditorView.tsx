@@ -299,7 +299,11 @@ function PlaybackCaret({
       zoom,
       measureIndex,
       measureX: bbox.x,
+      measureWidth: bbox.width,
+      scrollLeft: scrollBox.scrollLeft,
+      viewportWidth: scrollBox.clientWidth,
       scrollTop: scrollBox.scrollTop,
+      viewportHeight: scrollBox.clientHeight,
       margin: SCROLL_MARGIN,
     });
     if (!target) return;
