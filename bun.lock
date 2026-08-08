@@ -15,7 +15,7 @@
         "@sudobility/di_web": "^0.1.216",
         "@sudobility/music_client": "^0.4.7",
         "@sudobility/music_io": "^0.6.14",
-        "@sudobility/music_lib": "^1.7.12",
+        "@sudobility/music_lib": "^1.7.13",
         "@sudobility/music_types": "^0.11.5",
         "@sudobility/seo_lib": "^0.0.34",
         "@sudobility/types": "^1.9.64",
@@ -421,7 +421,7 @@
 
     "@sudobility/music_io": ["@sudobility/music_io@0.6.14", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7" }, "peerDependencies": { "@sudobility/music_lib": "^1.7.12", "@sudobility/music_types": "^0.11.5", "@tonejs/midi": "^2.0.28", "fast-xml-parser": "", "react-native-audio-api": ">=0.13.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0", "tone": "^15" }, "optionalPeers": ["fast-xml-parser", "react-native-audio-api", "react-native-fs", "react-native-share", "tone"] }, "sha512-knYGSdBUveCqEmp3/3gLD0B4tC/JmTFVANXzUsPMIcBUK2j0JuesSWY7x/PzZ/ewKl7ZyZwwwdFCwopduTHpTg=="],
 
-    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.12", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.7", "@sudobility/music_types": "^0.11.5", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-9e0L/bBPE3iXIr9pLwBgeTRbKoJnKMmfP2IqVHwFGjcxAQsg+wI5ptR+yAd6XccgPPyPCkTHbjpA4j8wecv64Q=="],
+    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.13", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.7", "@sudobility/music_types": "^0.11.5", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-uDB+bxtrf6Ieb5HivKnGGwINZ3gVtkA+A6xmm2X+2SV9I1j4q89FkKbaUdT4TpZVrdoY1rhGlYaBHPzGtm48qQ=="],
 
     "@sudobility/music_types": ["@sudobility/music_types@0.11.5", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-fgtGtbbH7jgZV8LM4y/rkF/zTYZtjFbQGFfwtQxecYqOetqfPEervRN+zsqbV5GzVzdTSYVSfjNuU0w/sB9oyA=="],
 
