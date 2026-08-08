@@ -39,10 +39,13 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # update` resolves it where `bun add` and `bun install` do not.
 PROJECTS=(
     "../music_types:150"
-    "../music_api:0"
     "../music_client:150"
     "../music_io:0"
+    # music_api after music_lib: the job runner applies generated fragments
+    # with music_lib's commands, so the backend is now a consumer of the
+    # domain library rather than only of music_types.
     "../music_lib:150"
+    "../music_api:0"
     "../music_app:0"
 )
 
