@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createAppStore, testStoreContext, twinkleScore } from '@sudobility/music_lib';
 import type { GenerationJob, GenerationJobStatus } from '@sudobility/music_types';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
+import type { UseProjectGenerationOptions } from '@/features/generation/useGenerationJob';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 function job(status: GenerationJobStatus, error: string | null = null): GenerationJob {
@@ -17,13 +18,20 @@ function job(status: GenerationJobStatus, error: string | null = null): Generati
   };
 }
 
-function fakeClient(over: Partial<Record<'createJob' | 'getJob' | 'cancelJob', unknown>> = {}) {
+/** The three methods the hook uses, as spies — typed so a signature change here is a test failure, not a silent `never`. */
+type JobClient = {
+  createJob: ReturnType<typeof vi.fn>;
+  getJob: ReturnType<typeof vi.fn>;
+  cancelJob: ReturnType<typeof vi.fn>;
+};
+
+function fakeClient(over: Partial<JobClient> = {}): JobClient {
   return {
     createJob: vi.fn(async () => job('running')),
     getJob: vi.fn(async () => job('running')),
     cancelJob: vi.fn(async () => undefined),
     ...over,
-  } as never;
+  };
 }
 
 function makeStore(): EditorStoreApi {
@@ -32,10 +40,10 @@ function makeStore(): EditorStoreApi {
   return store;
 }
 
-function opts(client: unknown, extra: Record<string, unknown> = {}) {
+function opts(client: JobClient, extra: Record<string, unknown> = {}) {
   return {
     store: makeStore(),
-    client: client as never,
+    client: client as unknown as UseProjectGenerationOptions['client'],
     getToken: async () => 'tok',
     pollMs: 5,
     ...extra,
@@ -67,7 +75,7 @@ describe('useProjectGeneration', () => {
 
     expect(client.createJob).toHaveBeenCalledWith(
       { projectId: 'p1', kind: 'replace-track', request: { instruction: 'swing' } },
-      'tok'
+      'tok',
     );
   });
 
@@ -79,25 +87,21 @@ describe('useProjectGeneration', () => {
     const saveNow = vi.fn(async () => undefined);
     store.setState({ saveNow } as never);
 
-    const { result } = renderHook(() =>
-      useProjectGeneration('p1', { ...opts(client), store })
-    );
+    const { result } = renderHook(() => useProjectGeneration('p1', { ...opts(client), store }));
     await act(async () => {
       await result.current.start('replace-notes', {});
     });
 
     expect(saveNow).toHaveBeenCalled();
     expect(saveNow.mock.invocationCallOrder[0]).toBeLessThan(
-      client.createJob.mock.invocationCallOrder[0]
+      client.createJob.mock.invocationCallOrder[0],
     );
   });
 
   it('stops reporting generating once the job is done, and reports it applied', async () => {
     const onApplied = vi.fn();
     const client = fakeClient({ getJob: vi.fn(async () => job('done')) });
-    const { result } = renderHook(() =>
-      useProjectGeneration('p1', { ...opts(client), onApplied })
-    );
+    const { result } = renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
 
     await act(async () => {
       await result.current.start('replace-notes', {});
@@ -157,7 +161,7 @@ describe('useProjectGeneration', () => {
       () =>
         new Promise<void>((res) => {
           resolveCancel = res;
-        })
+        }),
     );
     const client = fakeClient({ cancelJob });
     const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));

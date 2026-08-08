@@ -74,6 +74,8 @@ import { TransportBar } from '@/components/transport/TransportBar';
 import { TrackEditorPanel } from '@/features/tracks/TrackEditorPanel';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
+import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
+import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
@@ -186,6 +188,18 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const score = store((s) => s.score);
   const validationIssues = store((s) => s.validationIssues);
   const generationMode = store((s) => s.mode);
+  const projectId = store((s) => s.projectId);
+
+  /**
+   * Reloads the project after a job applies its result server-side. The score
+   * in the store is stale by definition at that point — the server wrote it.
+   */
+  const generation = useProjectGeneration(projectId, {
+    store,
+    onApplied: () => {
+      if (projectId) void store.getState().openProject(projectId);
+    },
+  });
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const importMenu = useMenu<HTMLDivElement>();
@@ -860,12 +874,20 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           {/* The inspector toggle lives on the editor toolbar. It used to sit on
               a strip of its own alongside a track-panel toggle; with that gone
               the strip was a blank row holding one button. */}
-          <div className="min-h-0 flex-1">
+          {/* `relative` so the generating overlay can cover exactly the
+              editor — the app bar stays usable, so you can navigate away. */}
+          <div className="relative min-h-0 flex-1">
             <ScoreEditorView
               store={store}
               inspectorOpen={inspectorOpen}
               onToggleInspector={() => setInspectorOpen((v) => !v)}
             />
+            {generation.generating && (
+              <GeneratingOverlay
+                onCancel={() => void generation.cancel()}
+                error={generation.error}
+              />
+            )}
           </div>
         </div>
 
