@@ -54,7 +54,12 @@ import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
-import { addTranscribedTrackCommand, modToScore, renderEvents, transcribe } from '@sudobility/music_lib';
+import {
+  addTranscribedTrackCommand,
+  modToScore,
+  renderEvents,
+  transcribe,
+} from '@sudobility/music_lib';
 import type { Transcription } from '@sudobility/music_lib';
 import { dispatchTracked } from '@/features/score-editor/editing';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
