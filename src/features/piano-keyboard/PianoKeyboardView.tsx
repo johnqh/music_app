@@ -27,6 +27,7 @@ import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editin
 import { chordSelection } from '@/features/piano-keyboard/selection-editing';
 import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
+import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
@@ -154,14 +155,79 @@ const LABEL_GUTTER = 14;
 const FALLBACK_WIDTH = 1000;
 const FALLBACK_KEY_HEIGHT = 96;
 
+type KeyRowProps = {
+  store: EditorStoreApi;
+  keys: ReturnType<typeof computeKeys>;
+  score: Score | null;
+  activeTrackId: string | null;
+  heldKeys: ReadonlySet<number>;
+  selectedMidis: ReadonlySet<number>;
+  litColor: string;
+  selectedColor: string;
+  onPress: (midi: number) => void;
+  onRelease: (midi: number) => void;
+};
+
+/**
+ * The keys, and the ONLY part of the keyboard that subscribes to
+ * `activeNoteIds`.
+ *
+ * Same rule the playback caret and the transport readouts follow: the store
+ * reports sounding notes on every note-on and note-off, and reading that in
+ * the panel above re-rendered the whole 400-line component — reconciling all
+ * 88 keys — for each one, on the same thread Tone.js schedules from and the
+ * caret animates on. The keys themselves are already `memo`'d on primitives,
+ * so only the one or two that actually change do any work.
+ */
+const PianoKeyRow = memo(function PianoKeyRow({
+  store,
+  keys,
+  score,
+  activeTrackId,
+  heldKeys,
+  selectedMidis,
+  litColor,
+  selectedColor,
+  onPress,
+  onRelease,
+}: KeyRowProps) {
+  const activeNoteIds = store((s) => s.activeNoteIds);
+  const playbackState = store((s) => s.state);
+
+  /**
+   * Gated on `playbackState`, not just on `activeNoteIds` being non-empty:
+   * the Tone engine clears active notes on `stop()` but NOT on `pause()`, so
+   * without the gate a pause would leave whatever was mid-chord stuck lit.
+   */
+  const lit = useMemo(() => {
+    if (playbackState !== 'playing' || !score) return new Set<number>();
+    return playingPitchesForTrack(score, activeNoteIds, activeTrackId);
+  }, [playbackState, score, activeNoteIds, activeTrackId]);
+
+  return (
+    <>
+      {keys.map((key) => (
+        <PianoKeyDiv
+          key={key.midi}
+          {...key}
+          isLit={lit.has(key.midi) || heldKeys.has(key.midi)}
+          litColor={litColor}
+          isSelected={selectedMidis.has(key.midi)}
+          selectedColor={selectedColor}
+          onPress={onPress}
+          onRelease={onRelease}
+        />
+      ))}
+    </>
+  );
+});
+
 export function PianoKeyboardView({
   store = useAppStore,
   collapsed = false,
   onToggleCollapsed = () => undefined,
 }: PianoKeyboardViewProps) {
   const score = store((s) => s.score);
-  const activeNoteIds = store((s) => s.activeNoteIds);
-  const playbackState = store((s) => s.state);
   const activeTrackId = store(selectActiveTrackId);
   const themeMode = store((s) => s.themeMode);
 
@@ -320,16 +386,6 @@ export function PianoKeyboardView({
   );
 
   /**
-   * Gated on `playbackState`, not just on `activeNoteIds` being non-empty:
-   * the Tone engine clears active notes on `stop()` but NOT on `pause()`, so
-   * without the gate a pause would leave whatever was mid-chord stuck lit.
-   */
-  const lit = useMemo(() => {
-    if (playbackState !== 'playing' || !score) return new Set<number>();
-    return playingPitchesForTrack(score, activeNoteIds, activeTrackId);
-  }, [playbackState, score, activeNoteIds, activeTrackId]);
-
-  /**
    * The instrument, not the literal word "Piano": the keyboard is a view of
    * whichever track is active, and that track is frequently not a piano.
    * Falls back to the track's own name when the program has no catalogue entry
@@ -386,18 +442,18 @@ export function PianoKeyboardView({
           className="relative"
           style={{ width: keyboardWidth(whiteKeyWidth), height: box.height + LABEL_GUTTER }}
         >
-          {keys.map((key) => (
-            <PianoKeyDiv
-              key={key.midi}
-              {...key}
-              isLit={lit.has(key.midi) || heldKeys.has(key.midi)}
-              litColor={theme.notePlaying}
-              isSelected={selectedMidis.has(key.midi)}
-              selectedColor={theme.noteSelected}
-              onPress={pressKey}
-              onRelease={releaseKey}
-            />
-          ))}
+          <PianoKeyRow
+            store={store}
+            keys={keys}
+            score={score}
+            activeTrackId={activeTrackId}
+            heldKeys={heldKeys}
+            selectedMidis={selectedMidis}
+            litColor={theme.notePlaying}
+            selectedColor={theme.noteSelected}
+            onPress={pressKey}
+            onRelease={releaseKey}
+          />
         </div>
       </div>
     </div>
