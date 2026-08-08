@@ -92,7 +92,13 @@ describe('ReplaceMusicDialog', () => {
 
   it('cannot submit without an instruction', async () => {
     render(
-      <ReplaceMusicDialog open scope="track" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="track"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
     expect(screen.getByRole('button', { name: 'Replace' })).toBeDisabled();
   });
@@ -107,7 +113,13 @@ describe('ReplaceMusicDialog', () => {
   it('submits the instruction and the complexity default', async () => {
     const onSubmit = vi.fn();
     render(
-      <ReplaceMusicDialog open scope="track" region={region()} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <ReplaceMusicDialog
+        open
+        scope="track"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByLabelText('Instruction'), 'make it swing');
@@ -121,7 +133,13 @@ describe('ReplaceMusicDialog', () => {
   it('omits style and mood when left unset, rather than sending a sentinel', async () => {
     const onSubmit = vi.fn();
     render(
-      <ReplaceMusicDialog open scope="track" region={region()} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <ReplaceMusicDialog
+        open
+        scope="track"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByLabelText('Instruction'), 'x');
@@ -135,7 +153,13 @@ describe('ReplaceMusicDialog', () => {
   it('submits the preservation constraints', async () => {
     const onSubmit = vi.fn();
     render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.type(screen.getByLabelText('Instruction'), 'x');
@@ -152,7 +176,13 @@ describe('ReplaceMusicDialog', () => {
   it('fills the instruction from a preset', async () => {
     const onSubmit = vi.fn();
     render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Preset instructions' }));
@@ -163,14 +193,26 @@ describe('ReplaceMusicDialog', () => {
 
   it('offers no candidate-count field', () => {
     render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
     expect(screen.queryByLabelText(/candidate/i)).not.toBeInTheDocument();
   });
 
   it('offers none of the fields the region already fixes', () => {
     render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
     for (const name of [/measures/i, /tempo/i, /time signature/i, /key/i]) {
       expect(screen.queryByLabelText(name)).not.toBeInTheDocument();
@@ -179,7 +221,13 @@ describe('ReplaceMusicDialog', () => {
 
   it('clears a stale instruction when reopened, so it cannot apply to different music', async () => {
     const { rerender } = render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
     await userEvent.type(screen.getByLabelText('Instruction'), 'for the old selection');
 
@@ -193,7 +241,13 @@ describe('ReplaceMusicDialog', () => {
       />,
     );
     rerender(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
 
     expect(screen.getByLabelText('Instruction')).toHaveValue('');
@@ -201,7 +255,13 @@ describe('ReplaceMusicDialog', () => {
 
   it('names its close button distinctly from the footer Cancel', () => {
     render(
-      <ReplaceMusicDialog open scope="notes" region={region()} onClose={vi.fn()} onSubmit={vi.fn()} />,
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
     );
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();

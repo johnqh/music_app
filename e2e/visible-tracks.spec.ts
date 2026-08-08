@@ -9,12 +9,7 @@
  * silently discarded on its way to the database while every other test passed.
  */
 import { expect, test } from '@playwright/test';
-import {
-  collectPageErrors,
-  generateWholeScore,
-  gotoDashboard,
-  waitForNotation,
-} from './helpers';
+import { collectPageErrors, generateWholeScore, gotoDashboard, waitForNotation } from './helpers';
 
 test.describe('visible tracks', () => {
   test('a hidden track stays hidden across a reload', async ({ page }) => {
@@ -23,7 +18,9 @@ test.describe('visible tracks', () => {
     await gotoDashboard(page);
     await generateWholeScore(page, {
       title: 'Visible Tracks Check',
-      prompt: 'Create a calm piano study', measures: 8 });
+      prompt: 'Create a calm piano study',
+      measures: 8,
+    });
     await waitForNotation(page);
 
     // A second track, so there is something that can be hidden while leaving

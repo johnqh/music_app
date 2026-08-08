@@ -174,10 +174,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         { name: request.title?.trim() || 'Generated score', score: emptyScoreFor(request) },
         token,
       );
-      await client.createJob(
-        { projectId: project.id, kind: 'generate-score', request },
-        token,
-      );
+      await client.createJob({ projectId: project.id, kind: 'generate-score', request }, token);
       setGenerateOpen(false);
       await refresh();
     } catch (err) {

@@ -86,8 +86,6 @@ test.describe('generation jobs', () => {
     // one database, so another worker's project may also be generating.
     await page.getByRole('button', { name: `Cancel generation: ${title}` }).click();
 
-    await expect(
-      page.getByRole('button', { name: `Cancel generation: ${title}` }),
-    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: `Cancel generation: ${title}` })).toHaveCount(0);
   });
 });

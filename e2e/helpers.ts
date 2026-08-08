@@ -134,10 +134,7 @@ export async function createNewProject(page: Page, name = 'E2E Project'): Promis
  * same contract as before — a generated score is open in the editor when this
  * returns.
  */
-export async function generateWholeScore(
-  page: Page,
-  options: GenerationOptions,
-): Promise<string> {
+export async function generateWholeScore(page: Page, options: GenerationOptions): Promise<string> {
   await gotoDashboard(page);
   await page.getByRole('button', { name: 'Generate Score', exact: true }).click();
 
@@ -442,7 +439,6 @@ export async function readPlaybackState(
     return { state: s.state, positionTick: s.positionTick };
   });
 }
-
 
 export type NoteGroup = { id: string };
 

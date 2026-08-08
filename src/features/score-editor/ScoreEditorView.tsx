@@ -494,7 +494,6 @@ export function ScoreEditorView({
     [themeMode],
   );
 
-
   /**
    * Per-note colors from the *low-frequency* inputs only.
    *
@@ -1243,14 +1242,7 @@ export function ScoreEditorView({
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [
-      pointFromEvent,
-      store,
-      stopAutoscroll,
-      pitchDragSteps,
-      editMode,
-      setDropTargetBoth,
-    ],
+    [pointFromEvent, store, stopAutoscroll, pitchDragSteps, editMode, setDropTargetBoth],
   );
 
   /**

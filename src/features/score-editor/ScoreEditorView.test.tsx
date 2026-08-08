@@ -943,8 +943,7 @@ describe('playback repaint cost', () => {
 
     expect(renderSpy.mock.calls.length).toBeGreaterThan(before);
     const options = renderSpy.mock.calls.at(-1)?.[2] as
-      | { noteColors?: Map<string, string> }
-      | undefined;
+      { noteColors?: Map<string, string> } | undefined;
     expect(options?.noteColors?.get(first.id)).toBe('playing');
   });
 
@@ -960,8 +959,7 @@ describe('playback repaint cost', () => {
     await flushRepaintFrame();
 
     const options = renderSpy.mock.calls.at(-1)?.[2] as
-      | { noteColors?: Map<string, string> }
-      | undefined;
+      { noteColors?: Map<string, string> } | undefined;
     expect(options?.noteColors?.get(first.id)).not.toBe('playing');
   });
 

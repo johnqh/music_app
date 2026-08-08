@@ -280,9 +280,7 @@ describe('useProjectGeneration — generation started elsewhere', () => {
           : { status: 'ready', updatedAt: 't1' };
       }),
     });
-    const { result } = renderHook(() =>
-      useProjectGeneration('p1', { ...opts(client), onApplied }),
-    );
+    const { result } = renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
 
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
     expect(result.current.generating).toBe(false);

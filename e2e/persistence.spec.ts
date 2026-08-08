@@ -4,12 +4,7 @@
  * the dashboard and reopening it from the project grid.
  */
 import { expect, test } from '@playwright/test';
-import {
-  collectPageErrors,
-  generateWholeScore,
-  gotoDashboard,
-  readScoreSummary,
-} from './helpers';
+import { collectPageErrors, generateWholeScore, gotoDashboard, readScoreSummary } from './helpers';
 
 test.describe('project persistence: save and reopen', () => {
   test('saves a project and reopens it with the score intact', async ({ page }) => {

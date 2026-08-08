@@ -212,7 +212,12 @@ function LabeledInput({
   );
 }
 
-export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = false }: GenerateScoreDialogProps) {
+export function GenerateScoreDialog({
+  open,
+  onClose,
+  onSubmit,
+  submitting = false,
+}: GenerateScoreDialogProps) {
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
@@ -297,171 +302,175 @@ export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = fals
       ]}
     >
       <div className="flex flex-col gap-4">
-      {/* Named up front: every generated project would otherwise be called
+        {/* Named up front: every generated project would otherwise be called
           "Generated score", which is useless the moment you have two. */}
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-theme-text-secondary">Title</span>
-        <Input
-          value={title}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-          placeholder="Generated score"
-          aria-label="Title"
-          className="px-2 py-1.5 text-sm"
-        />
-      </label>
-
-      <div className="flex items-start gap-2">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-xs text-theme-text-secondary">Prompt</span>
-          <TextArea
-            value={prompt}
-            onChange={setPrompt}
-            rows={3}
-            textareaProps={{ 'aria-label': 'Prompt' }}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-theme-text-secondary">Title</span>
+          <Input
+            value={title}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+            placeholder="Generated score"
+            aria-label="Title"
+            className="px-2 py-1.5 text-sm"
           />
         </label>
-        <div ref={presetRef} className="relative shrink-0">
-          <Button
-            type="button"
-            variant="outline"
-            aria-label="Preset prompts"
-            aria-haspopup="menu"
-            aria-expanded={presetOpen}
-            onClick={() => setPresetOpen((open) => !open)}
-            className="px-3 py-1.5"
-          >
-            Presets
-          </Button>
-          {presetOpen && (
-            <div
-              role="menu"
-              className={cn(
-                variants.card.default.base(),
-                'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
-              )}
-            >
-              {PRESET_PROMPTS.map((text) => (
-                <Button
-                  key={text}
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => handlePresetSelect(text)}
-                  className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
-                >
-                  {text}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
-      <div className="flex gap-2">
-        <Select
-          value={style === '' ? NONE_VALUE : style}
-          onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}
-        >
-          <SelectTrigger aria-label="Style" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE_VALUE}>No style</SelectItem>
-            {STYLE_OPTIONS.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={mood === '' ? NONE_VALUE : mood}
-          onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
-        >
-          <SelectTrigger aria-label="Mood" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE_VALUE}>No mood</SelectItem>
-            {MOOD_OPTIONS.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={complexity}
-          onValueChange={(v) => setComplexity(v as NonNullable<GenerateScoreRequest['complexity']>)}
-        >
-          <SelectTrigger aria-label="Complexity" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {COMPLEXITY_OPTIONS.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div role="group" aria-label="Instrumentation" className="flex flex-col gap-2">
-        <span className="text-sm text-theme-text-primary">Instrumentation</span>
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {INSTRUMENT_OPTIONS.map((opt) => (
-            <Checkbox
-              key={opt.key}
-              label={`Include ${opt.label}`}
-              checked={instruments.has(opt.key)}
-              onChange={() => toggleInstrument(opt.key)}
+        <div className="flex items-start gap-2">
+          <label className="flex flex-1 flex-col gap-1">
+            <span className="text-xs text-theme-text-secondary">Prompt</span>
+            <TextArea
+              value={prompt}
+              onChange={setPrompt}
+              rows={3}
+              textareaProps={{ 'aria-label': 'Prompt' }}
             />
-          ))}
+          </label>
+          <div ref={presetRef} className="relative shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Preset prompts"
+              aria-haspopup="menu"
+              aria-expanded={presetOpen}
+              onClick={() => setPresetOpen((open) => !open)}
+              className="px-3 py-1.5"
+            >
+              Presets
+            </Button>
+            {presetOpen && (
+              <div
+                role="menu"
+                className={cn(
+                  variants.card.default.base(),
+                  'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
+                )}
+              >
+                {PRESET_PROMPTS.map((text) => (
+                  <Button
+                    key={text}
+                    type="button"
+                    variant="ghost"
+                    role="menuitem"
+                    onClick={() => handlePresetSelect(text)}
+                    className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
+                  >
+                    {text}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="flex gap-2">
-        <LabeledInput label="Measures" value={measures} onChange={setMeasures} min={1} />
-        <LabeledInput label="Tempo" value={tempo} onChange={setTempo} min={1} />
-      </div>
+        <div className="flex gap-2">
+          <Select
+            value={style === '' ? NONE_VALUE : style}
+            onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}
+          >
+            <SelectTrigger aria-label="Style" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No style</SelectItem>
+              {STYLE_OPTIONS.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={mood === '' ? NONE_VALUE : mood}
+            onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
+          >
+            <SelectTrigger aria-label="Mood" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No mood</SelectItem>
+              {MOOD_OPTIONS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={complexity}
+            onValueChange={(v) =>
+              setComplexity(v as NonNullable<GenerateScoreRequest['complexity']>)
+            }
+          >
+            <SelectTrigger aria-label="Complexity" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {COMPLEXITY_OPTIONS.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      <div className="flex gap-2">
-        <Select value={String(keyFifths)} onValueChange={(v) => setKeyFifths(Number(v))}>
-          <SelectTrigger aria-label="Key" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {KEY_FIFTHS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.fifths} value={String(opt.fifths)}>
-                {opt.label}
-              </SelectItem>
+        <div role="group" aria-label="Instrumentation" className="flex flex-col gap-2">
+          <span className="text-sm text-theme-text-primary">Instrumentation</span>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {INSTRUMENT_OPTIONS.map((opt) => (
+              <Checkbox
+                key={opt.key}
+                label={`Include ${opt.label}`}
+                checked={instruments.has(opt.key)}
+                onChange={() => toggleInstrument(opt.key)}
+              />
             ))}
-          </SelectContent>
-        </Select>
-        <Select value={keyMode} onValueChange={(v) => setKeyMode(v as KeySignature['mode'])}>
-          <SelectTrigger aria-label="Mode" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="major">major</SelectItem>
-            <SelectItem value="minor">minor</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>
-          <SelectTrigger aria-label="Time signature" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
-              <SelectItem key={key} value={key}>
-                {key}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+          </div>
+        </div>
 
+        <div className="flex gap-2">
+          <LabeledInput label="Measures" value={measures} onChange={setMeasures} min={1} />
+          <LabeledInput label="Tempo" value={tempo} onChange={setTempo} min={1} />
+        </div>
+
+        <div className="flex gap-2">
+          <Select value={String(keyFifths)} onValueChange={(v) => setKeyFifths(Number(v))}>
+            <SelectTrigger aria-label="Key" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {KEY_FIFTHS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.fifths} value={String(opt.fifths)}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={keyMode} onValueChange={(v) => setKeyMode(v as KeySignature['mode'])}>
+            <SelectTrigger aria-label="Mode" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="major">major</SelectItem>
+              <SelectItem value="minor">minor</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>
+            <SelectTrigger
+              aria-label="Time signature"
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {key}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </FormModal>
   );

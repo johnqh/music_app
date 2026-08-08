@@ -268,7 +268,11 @@ export function ReplaceMusicDialog({
             checked={preserveBoundaryNotes}
             onChange={setPreserveBoundaryNotes}
           />
-          <Checkbox label="Preserve harmony" checked={preserveHarmony} onChange={setPreserveHarmony} />
+          <Checkbox
+            label="Preserve harmony"
+            checked={preserveHarmony}
+            onChange={setPreserveHarmony}
+          />
           <Checkbox label="Preserve rhythm" checked={preserveRhythm} onChange={setPreserveRhythm} />
           <Checkbox label="Preserve melody" checked={preserveMelody} onChange={setPreserveMelody} />
         </div>

@@ -193,9 +193,7 @@ describe('DashboardPage generation', () => {
       await screen.findByRole('button', { name: 'Cancel generation: Busy Song' }),
     );
 
-    await waitFor(() =>
-      expect(context.fakeClient.storedRecord(project.id)?.status).toBe('ready'),
-    );
+    await waitFor(() => expect(context.fakeClient.storedRecord(project.id)?.status).toBe('ready'));
   });
 
   it('creates the project up front so it appears while it generates', async () => {
