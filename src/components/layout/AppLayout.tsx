@@ -233,9 +233,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * the server with nothing to regenerate against.
    */
   /** The region the last Replace targeted, so its result can be marked once applied. */
-  const lastReplacedRangeRef = useRef<{ startTick: number; endTick: number; trackIds: string[] } | null>(
-    null,
-  );
+  const lastReplacedRangeRef = useRef<{
+    startTick: number;
+    endTick: number;
+    trackIds: string[];
+  } | null>(null);
 
   const startReplacement = useCallback(
     async (scope: ReplaceScope, submission: ReplaceSubmission): Promise<void> => {
