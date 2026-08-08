@@ -54,7 +54,7 @@ import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
-import { addTranscribedTrackCommand, renderEvents, transcribe } from '@sudobility/music_lib';
+import { addTranscribedTrackCommand, modToScore, renderEvents, transcribe } from '@sudobility/music_lib';
 import type { Transcription } from '@sudobility/music_lib';
 import { dispatchTracked } from '@/features/score-editor/editing';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -405,6 +405,32 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     }
   };
 
+  /**
+   * Imports an Amiga tracker module as a new project.
+   *
+   * Straight through rather than via a wizard: a `.MOD` states every note and
+   * every instrument outright, so unlike MIDI or audio there is nothing to
+   * estimate and nothing to confirm. A file that is not a module throws in the
+   * codec and surfaces as a toast — a garbage score would look like it
+   * imported and quietly not be the music.
+   */
+  const handleImportModFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    importMenu.setOpen(false);
+    try {
+      const bytes = await file.arrayBuffer();
+      const mod = getAppServices().io.modCodec.decode(bytes);
+      const imported = modToScore(mod);
+      await store.getState().newProject({ name: mod.title || file.name, score: imported });
+      const newId = store.getState().projectId;
+      if (newId) onNavigate?.(`/project/${newId}`);
+    } catch (err) {
+      reportError(err, { context: 'Module import failed', store });
+    }
+  };
+
   const commitImportJson = async (): Promise<void> => {
     const json = confirmingImportJson;
     setConfirmingImportJson(null);
@@ -699,6 +725,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 >
                   Audio…
                 </Button>
+                {/* A native <label> wrapping a hidden file input, like the
+                    others here: `Button` renders a <button>, which cannot
+                    drive a file picker. */}
+                <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
+                  Module (.MOD)…
+                  <input
+                    type="file"
+                    accept=".mod,audio/mod,application/octet-stream"
+                    hidden
+                    aria-label="Module file input"
+                    onChange={(e) => void handleImportModFile(e)}
+                  />
+                </label>
                 <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
                   Project JSON…
                   <input
