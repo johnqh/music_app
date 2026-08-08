@@ -306,9 +306,12 @@ function PlaybackCaret({
       viewportHeight: scrollBox.clientHeight,
       margin: SCROLL_MARGIN,
     });
+    // Marked handled whether or not it produces a move: the decision is made
+    // once per measure, and re-running it on every 30Hz position report would
+    // put work back on the thread Tone.js schedules on.
+    lastScrolledMeasureRef.current = measureId;
     if (!target) return;
 
-    lastScrolledMeasureRef.current = measureId;
     if (typeof scrollBox.scrollTo === 'function') {
       scrollBox.scrollTo({
         left: target.left,

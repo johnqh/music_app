@@ -69,15 +69,17 @@ describe('playbackScrollTarget: page mode', () => {
     const system = p.systems[0];
     expect(system.measureIndices.length).toBeGreaterThan(1);
 
-    const target = playbackScrollTarget({
-      ...BASE,
-      plan: p,
-      layoutMode: 'page',
-      measureIndex: system.measureIndices[1],
-      scrollTop: 137,
-    })!;
-
-    expect(target.top).toBe(137);
+    // `null`, not the current position: any scrollTo would cancel a smooth
+    // scroll still in flight from the previous measure.
+    expect(
+      playbackScrollTarget({
+        ...BASE,
+        plan: p,
+        layoutMode: 'page',
+        measureIndex: system.measureIndices[1],
+        scrollTop: 137,
+      }),
+    ).toBeNull();
   });
 
   it('scales the preserved offset with zoom', () => {
@@ -230,16 +232,16 @@ describe('playbackScrollTarget: page mode only scrolls when it has to', () => {
     expect(second).toBeDefined();
     const viewportHeight = Math.ceil(second.yBottom) + 50; // both systems visible at once
 
-    const target = playbackScrollTarget({
-      ...BASE,
-      viewportHeight,
-      plan: p,
-      layoutMode: 'page',
-      measureIndex: second.measureIndices[0],
-      scrollTop: 0,
-    })!;
-
-    expect(target.top).toBe(0);
+    expect(
+      playbackScrollTarget({
+        ...BASE,
+        viewportHeight,
+        plan: p,
+        layoutMode: 'page',
+        measureIndex: second.measureIndices[0],
+        scrollTop: 0,
+      }),
+    ).toBeNull();
     expect(first.yTop).toBe(p.systems[0].yTop); // sanity: reader is at the top
   });
 
@@ -292,20 +294,20 @@ describe('playbackScrollTarget: continuous mode follows the caret, not every mea
     const p = plan('continuous');
     const measure = p.trackLayouts[0].measures[6];
 
-    const target = playbackScrollTarget({
-      ...BASE,
-      plan: p,
-      layoutMode: 'continuous',
-      measureIndex: measure.measureIndex,
-      measureX: measure.box.x,
-      measureWidth: measure.box.width,
-      // Scrolled so this measure sits in the middle of a wide viewport.
-      scrollLeft: Math.max(0, measure.box.x - 600),
-      viewportWidth: 1400,
-      scrollTop: 0,
-    })!;
-
-    expect(target.left).toBe(Math.max(0, measure.box.x - 600));
+    expect(
+      playbackScrollTarget({
+        ...BASE,
+        plan: p,
+        layoutMode: 'continuous',
+        measureIndex: measure.measureIndex,
+        measureX: measure.box.x,
+        measureWidth: measure.box.width,
+        // Scrolled so this measure sits in the middle of a wide viewport.
+        scrollLeft: Math.max(0, measure.box.x - 600),
+        viewportWidth: 1400,
+        scrollTop: 0,
+      }),
+    ).toBeNull();
   });
 
   it('scrolls once the playing measure reaches the right-hand edge', () => {

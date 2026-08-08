@@ -459,26 +459,51 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     return spy;
   }
 
-  it('scrolls the scroll box to the active measure when playing', () => {
-    const store = makeStore();
-    const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
+  /**
+   * A score long enough to wrap, in a viewport short enough that following it
+   * has to move. Scrolling only happens when the music is not already on
+   * screen, so a test that wants a scroll has to arrange for one — a measure
+   * the reader can already see is deliberately left alone.
+   */
+  function playingOffScreen() {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(stressScore(1, 40));
+    const view = render(<ScoreEditorView store={store} />);
+    const box = view.getByTestId('score-editor-scroll');
+    Object.defineProperty(box, 'clientHeight', { value: 200, configurable: true });
+    Object.defineProperty(box, 'scrollTop', { value: 0, configurable: true, writable: true });
+    const plan = computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: THEME,
+    });
+    // The first measure of a system well below a 200px-tall viewport.
+    const offScreenMeasure = plan.systems[3].measureIndices[0];
+    const tick = store.getState().score!.tracks[0].measures[offScreenMeasure].startTick;
+    return { store, box, tick, view };
+  }
+
+  it('scrolls the scroll box to the active measure when it is not already on screen', () => {
+    const { store, box, tick } = playingOffScreen();
+    const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
+    act(() => store.getState().setPositionTick(tick));
 
     expect(scrollToSpy).toHaveBeenCalled();
   });
 
   it('does not re-scroll for position changes within the same measure', () => {
-    const store = makeStore();
-    const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
+    const { store, box, tick } = playingOffScreen();
+    const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
+    act(() => store.getState().setPositionTick(tick));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
 
-    // A small tick advance that's still within the same (first) measure.
-    act(() => store.getState().setPositionTick(10));
+    // A small tick advance that's still within the same measure.
+    act(() => store.getState().setPositionTick(tick + 10));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -508,9 +533,9 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
 
     act(() => store.getState().setPlaybackState('playing'));
 
-    // Old behaviour scrolled to track 1's stave — 0 here, once the margin is
-    // subtracted — regardless of where the reader had scrolled to.
-    expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ top: insideFirstSystem }));
+    // Nothing to do: the music is in the system the reader is already looking
+    // at, and any scrollTo here would cancel a smooth scroll still in flight.
+    expect(scrollToSpy).not.toHaveBeenCalled();
     expect(insideFirstSystem).toBeGreaterThan(0);
   });
 
@@ -518,11 +543,11 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
     vi.stubGlobal('matchMedia', matchMediaSpy);
 
-    const store = makeStore();
-    const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const scrollToSpy = mockScrollTo(getByTestId('score-editor-scroll'));
+    const { store, box, tick } = playingOffScreen();
+    const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
+    act(() => store.getState().setPositionTick(tick));
 
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
     vi.unstubAllGlobals();
@@ -1263,5 +1288,33 @@ describe('written-pitch display', () => {
     // Every note on the staff moved by the same transposition, dragged or not.
     expect(pitchToMidi(shownNeighbour.pitch) - pitchToMidi(soundingNeighbour.pitch)).toBe(2);
     expect(pitchToMidi(shownNote.pitch) - pitchToMidi(shiftDiatonic(note.pitch, 1))).toBe(2);
+  });
+});
+
+describe('ScoreEditorView: following playback never cancels its own smooth scroll', () => {
+  it('issues no scrollTo for a measure that needs no move', () => {
+    // The bug: every measure produced a scrollTo, even one naming the position
+    // the box was already at. `behavior: 'smooth'` means such a call aborts the
+    // animation still running from the previous measure and strands it partway,
+    // so the sheet crept a little and then stopped following the music.
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(stressScore(1, 40));
+    const { getByTestId } = render(<ScoreEditorView store={store} />);
+
+    const box = getByTestId('score-editor-scroll');
+    Object.defineProperty(box, 'clientHeight', { value: 5000, configurable: true }); // whole score visible
+    Object.defineProperty(box, 'clientWidth', { value: 1200, configurable: true });
+    Object.defineProperty(box, 'scrollTop', { value: 0, configurable: true, writable: true });
+    Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true, writable: true });
+    const scrollTo = vi.fn();
+    Object.defineProperty(box, 'scrollTo', { value: scrollTo, configurable: true, writable: true });
+
+    act(() => store.getState().setPlaybackState('playing'));
+    const measures = store.getState().score!.tracks[0].measures;
+    for (let i = 0; i < 10; i++) {
+      act(() => store.getState().setPositionTick(measures[i].startTick + 1));
+    }
+
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
