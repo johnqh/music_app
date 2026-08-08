@@ -369,3 +369,39 @@ describe('useProjectGeneration — unlock ordering', () => {
     await waitFor(() => expect(result.current.generating).toBe(false));
   });
 });
+
+describe('useProjectGeneration — poll failures', () => {
+  it('stays quiet for a network failure, which fetch reports as a TypeError', async () => {
+    // "Failed to fetch" is a TypeError by spec, so treating TypeError as a
+    // programming error logged console errors and put a spurious message in
+    // the overlay every time a page navigated away mid-poll.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    });
+
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
+
+    await waitFor(() => expect(client.getProjectStatus).toHaveBeenCalled());
+    expect(result.current.error).toBeNull();
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('surfaces a genuine programming error, which would otherwise hide forever', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => {
+        throw new TypeError('client.getProjectStatus is not a function');
+      }),
+    });
+
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
+
+    await waitFor(() => expect(result.current.error).toMatch(/is not a function/));
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});

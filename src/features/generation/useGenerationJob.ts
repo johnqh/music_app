@@ -175,12 +175,18 @@ export function useProjectGeneration(
         // A transient poll failure is not a finished job — keep polling rather
         // than unlocking an editor whose project is still generating.
         //
-        // But a TypeError here is a programming error, not a blip (a stale
-        // bundle missing a client method once hid behind this catch for a
-        // whole test run), so it is surfaced rather than swallowed.
-        if (err instanceof TypeError) {
+        // A *programming* error is different: a stale bundle missing a client
+        // method once hid behind this catch for a whole debugging session, so
+        // that is surfaced rather than swallowed.
+        //
+        // Matched on the message, not `instanceof TypeError`: fetch rejects
+        // with a TypeError for ordinary network failures too ("Failed to
+        // fetch"), and treating a page navigating away as a bug logged errors
+        // and put a spurious message in the overlay.
+        const message = err instanceof Error ? err.message : '';
+        if (/is not a function|undefined is not an object|Cannot read propert/.test(message)) {
           console.error('[generation] poll failed', err);
-          setError(err.message);
+          setError(message);
         }
       }
     };
