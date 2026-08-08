@@ -53,7 +53,7 @@ import { Button, Tooltip, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
-import { scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
+import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { addTranscribedTrackCommand, renderEvents, transcribe } from '@sudobility/music_lib';
 import type { Transcription } from '@sudobility/music_lib';
 import { dispatchTracked } from '@/features/score-editor/editing';
@@ -201,7 +201,26 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const generation = useProjectGeneration(projectId, {
     store,
     onApplied: async () => {
-      if (projectId) await store.getState().openProject(projectId);
+      if (!projectId) return;
+      await store.getState().openProject(projectId);
+
+      // Mark what the generation actually wrote, so it colours as generated
+      // material rather than landing indistinguishable from the rest. The
+      // candidate-accept workflow used to do this; a job applies server-side,
+      // so the notes are found by the region that was asked for.
+      const range = lastReplacedRangeRef.current;
+      const next = store.getState().score;
+      if (!range || !next) return;
+      lastReplacedRangeRef.current = null;
+      const written = allNotes(next)
+        .filter(
+          (n) =>
+            range.trackIds.includes(n.trackId) &&
+            n.startTick < range.endTick &&
+            n.startTick + n.durationTicks > range.startTick,
+        )
+        .map((n) => n.id);
+      if (written.length > 0) store.getState().selectRegenerated(written);
     },
   });
 
@@ -213,6 +232,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * continue seamlessly — is derived here. Sending the settings alone leaves
    * the server with nothing to regenerate against.
    */
+  /** The region the last Replace targeted, so its result can be marked once applied. */
+  const lastReplacedRangeRef = useRef<{ startTick: number; endTick: number; trackIds: string[] } | null>(
+    null,
+  );
+
   const startReplacement = useCallback(
     async (scope: ReplaceScope, submission: ReplaceSubmission): Promise<void> => {
       const state = store.getState();
@@ -241,6 +265,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           : scope === 'measures'
             ? 'replace-measures'
             : 'replace-track';
+      lastReplacedRangeRef.current = region.range;
       await generation.start(kind, request);
     },
     [generation, store],
