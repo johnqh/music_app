@@ -11,7 +11,6 @@
 import { expect, test } from '@playwright/test';
 import {
   collectPageErrors,
-  createNewProject,
   generateWholeScore,
   gotoDashboard,
   waitForNotation,
@@ -22,13 +21,17 @@ test.describe('visible tracks', () => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
-    await createNewProject(page, 'Visible Tracks Check');
-    await generateWholeScore(page, { prompt: 'Create a calm piano study', measures: 8 });
+    await generateWholeScore(page, {
+      title: 'Visible Tracks Check',
+      prompt: 'Create a calm piano study', measures: 8 });
     await waitForNotation(page);
 
     // A second track, so there is something that can be hidden while leaving
     // one visible — the control does not appear below two tracks.
-    await page.getByRole('button', { name: 'Add track' }).click();
+    // "+" opens a menu now (Blank Track / Generate Track), rather than adding
+    // a track outright.
+    await page.getByRole('combobox', { name: 'Add Track' }).click();
+    await page.getByRole('option', { name: 'Blank Track' }).click();
     await expect(page.getByRole('region', { name: 'Track editor' })).toBeVisible();
 
     const control = page.getByLabel('Visible tracks');

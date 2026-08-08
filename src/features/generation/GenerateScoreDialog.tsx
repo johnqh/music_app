@@ -213,6 +213,7 @@ function LabeledInput({
 }
 
 export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = false }: GenerateScoreDialogProps) {
+  const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
@@ -263,6 +264,7 @@ export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = fals
     if (!canGenerate) return;
     const request: GenerateScoreRequest = {
       prompt,
+      ...(title.trim() !== '' && { title: title.trim() }),
       durationMeasures,
       tracks,
       complexity,
@@ -295,6 +297,19 @@ export function GenerateScoreDialog({ open, onClose, onSubmit, submitting = fals
       ]}
     >
       <div className="flex flex-col gap-4">
+      {/* Named up front: every generated project would otherwise be called
+          "Generated score", which is useless the moment you have two. */}
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-theme-text-secondary">Title</span>
+        <Input
+          value={title}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+          placeholder="Generated score"
+          aria-label="Title"
+          className="px-2 py-1.5 text-sm"
+        />
+      </label>
+
       <div className="flex items-start gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">Prompt</span>

@@ -189,7 +189,9 @@ describe('DashboardPage generation', () => {
     context.fakeClient.setProjectStatus(project.id, 'generating');
 
     render(<DashboardPage store={store} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Cancel generation' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Cancel generation: Busy Song' }),
+    );
 
     await waitFor(() =>
       expect(context.fakeClient.storedRecord(project.id)?.status).toBe('ready'),

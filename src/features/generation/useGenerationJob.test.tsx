@@ -23,13 +23,33 @@ type JobClient = {
   createJob: ReturnType<typeof vi.fn>;
   getJob: ReturnType<typeof vi.fn>;
   cancelJob: ReturnType<typeof vi.fn>;
+  cancelProjectGeneration: ReturnType<typeof vi.fn>;
+  getProjectStatus: ReturnType<typeof vi.fn>;
 };
 
-function fakeClient(over: Partial<JobClient> = {}): JobClient {
+/**
+ * A stateful double that mirrors the server's actual sequencing: creating a
+ * job flips the project to `generating` in the same transaction, and
+ * cancelling releases it. A stateless fake reported `ready` on the very first
+ * poll after submitting, which looked like a bug in the hook and was not.
+ */
+function fakeClient(over: Partial<JobClient> = {}, generating = false): JobClient {
+  let status: 'ready' | 'generating' = generating ? 'generating' : 'ready';
+  // Advances whenever a job would have written the score.
+  let stamp = 't0';
   return {
-    createJob: vi.fn(async () => job('running')),
+    createJob: vi.fn(async () => {
+      status = 'generating';
+      return job('running');
+    }),
     getJob: vi.fn(async () => job('running')),
-    cancelJob: vi.fn(async () => undefined),
+    cancelJob: vi.fn(async () => {
+      status = 'ready';
+    }),
+    cancelProjectGeneration: vi.fn(async () => {
+      status = 'ready';
+    }),
+    getProjectStatus: vi.fn(async () => ({ status, updatedAt: stamp })),
     ...over,
   };
 }
@@ -100,19 +120,33 @@ describe('useProjectGeneration', () => {
 
   it('stops reporting generating once the job is done, and reports it applied', async () => {
     const onApplied = vi.fn();
-    const client = fakeClient({ getJob: vi.fn(async () => job('done')) });
+    let polls = 0;
+    const client = fakeClient({
+      getJob: vi.fn(async () => job('done')),
+      // Generating for the first poll, then done — the job landed.
+      getProjectStatus: vi.fn(async () => {
+        polls += 1;
+        // Generating, then ready with a newer stamp: the job wrote the score.
+        return polls <= 1
+          ? { status: 'generating', updatedAt: 't0' }
+          : { status: 'ready', updatedAt: 't1' };
+      }),
+    });
     const { result } = renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
 
     await act(async () => {
       await result.current.start('replace-notes', {});
     });
 
-    await waitFor(() => expect(result.current.generating).toBe(false));
-    expect(onApplied).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(result.current.generating).toBe(false);
   });
 
   it("surfaces a failed job's error rather than silently going idle", async () => {
-    const client = fakeClient({ getJob: vi.fn(async () => job('failed', 'provider exploded')) });
+    const client = fakeClient({
+      getJob: vi.fn(async () => job('failed', 'provider exploded')),
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: 't0' })),
+    });
     const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
 
     await act(async () => {
@@ -124,7 +158,10 @@ describe('useProjectGeneration', () => {
   });
 
   it('reports no error for a job that was cancelled, since the user did that', async () => {
-    const client = fakeClient({ getJob: vi.fn(async () => job('cancelled')) });
+    const client = fakeClient({
+      getJob: vi.fn(async () => job('cancelled')),
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: 't0' })),
+    });
     const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
 
     await act(async () => {
@@ -139,12 +176,12 @@ describe('useProjectGeneration', () => {
     // A network blip is not a finished job; unlocking here would let the user
     // edit a project the server still considers generating.
     let calls = 0;
-    const getJob = vi.fn(async () => {
+    const getProjectStatus = vi.fn(async () => {
       calls += 1;
       if (calls === 1) throw new Error('network blip');
-      return job('running');
+      return { status: 'generating', updatedAt: 't0' };
     });
-    const client = fakeClient({ getJob });
+    const client = fakeClient({ getProjectStatus });
     const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
 
     await act(async () => {
@@ -155,36 +192,40 @@ describe('useProjectGeneration', () => {
     expect(result.current.generating).toBe(true);
   });
 
-  it('cancel calls the endpoint and unlocks immediately, without waiting for the round trip', async () => {
-    let resolveCancel: () => void = () => {};
-    const cancelJob = vi.fn(
-      () =>
-        new Promise<void>((res) => {
-          resolveCancel = res;
-        }),
-    );
-    const client = fakeClient({ cancelJob });
+  it('cancels through the endpoint and unlocks once the server has released it', async () => {
+    const client = fakeClient();
     const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
 
     await act(async () => {
       await result.current.start('replace-notes', {});
     });
+    await waitFor(() => expect(result.current.generating).toBe(true));
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(client.cancelJob).toHaveBeenCalledWith('j1', 'tok');
+    await waitFor(() => expect(result.current.generating).toBe(false));
+  });
+
+  it('stays locked if the cancel never lands, rather than lying about it', async () => {
+    // The optimistic unlock is a nicety for the round trip, not a claim: if
+    // the server has not actually released the project, editing would 409 and
+    // be lost, so the poll correctly puts the cover back.
+    const client = fakeClient({ cancelJob: vi.fn(() => new Promise<void>(() => {})) });
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
+
+    await act(async () => {
+      await result.current.start('replace-notes', {});
+    });
+    await waitFor(() => expect(result.current.generating).toBe(true));
 
     act(() => {
       void result.current.cancel();
     });
 
-    // Unlocked synchronously — before the token is even fetched, let alone
-    // before the request resolves. That is the point: the editor must not
-    // stay greyed out for a round trip.
-    expect(result.current.generating).toBe(false);
-
-    await waitFor(() => expect(cancelJob).toHaveBeenCalledWith('j1', 'tok'));
-    // Still unlocked while the request is in flight.
-    expect(result.current.generating).toBe(false);
-    await act(async () => {
-      resolveCancel();
-    });
+    await waitFor(() => expect(result.current.generating).toBe(true));
   });
 
   it('does nothing without a project id', async () => {
@@ -213,5 +254,120 @@ describe('useProjectGeneration', () => {
 
     expect(result.current.error).toBe('quota exceeded');
     expect(result.current.generating).toBe(false);
+  });
+});
+
+describe('useProjectGeneration — generation started elsewhere', () => {
+  it('locks the editor for a project already generating, with no job of its own', async () => {
+    // Started on the dashboard: this hook has no job id. Watching only its own
+    // jobs left the editor showing the placeholder score forever.
+    const client = fakeClient({}, true);
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
+
+    await waitFor(() => expect(result.current.generating).toBe(true));
+    expect(result.current.jobId).toBeNull();
+  });
+
+  it('reloads once that generation finishes', async () => {
+    const onApplied = vi.fn();
+    let polls = 0;
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => {
+        polls += 1;
+        // Generating, then ready with a newer stamp: the job wrote the score.
+        return polls <= 1
+          ? { status: 'generating', updatedAt: 't0' }
+          : { status: 'ready', updatedAt: 't1' };
+      }),
+    });
+    const { result } = renderHook(() =>
+      useProjectGeneration('p1', { ...opts(client), onApplied }),
+    );
+
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+    expect(result.current.generating).toBe(false);
+  });
+
+  it('does not reload a project that was never generating, which would clobber local edits', async () => {
+    const onApplied = vi.fn();
+    const client = fakeClient();
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
+
+    await waitFor(() => expect(client.getProjectStatus).toHaveBeenCalled());
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it('cancels by project when it has no job id', async () => {
+    const client = fakeClient({}, true);
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client)));
+    await waitFor(() => expect(result.current.generating).toBe(true));
+
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(client.cancelProjectGeneration).toHaveBeenCalledWith('p1', 'tok');
+    expect(client.cancelJob).not.toHaveBeenCalled();
+  });
+});
+
+describe('useProjectGeneration — freshness', () => {
+  it('reloads when the score changed under it, even having never seen it generating', async () => {
+    // Open a project in the instant its job finishes and the transition
+    // happens between the fetch and the first poll. Waiting to *witness*
+    // generating left the editor showing the placeholder score forever.
+    const onApplied = vi.fn();
+    let polls = 0;
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => {
+        polls += 1;
+        return { status: 'ready', updatedAt: polls <= 1 ? 't0' : 't1' };
+      }),
+    });
+
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
+
+    await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not reload while nothing changes, which would clobber local edits', async () => {
+    const onApplied = vi.fn();
+    const client = fakeClient();
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), onApplied }));
+
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(2));
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+});
+
+describe('useProjectGeneration — unlock ordering', () => {
+  it('reloads before unlocking, so the editor never shows the pre-job score as the result', async () => {
+    let reloadDone = false;
+    let generatingWhenReloadRan: boolean | null = null;
+    let polls = 0;
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => {
+        polls += 1;
+        return polls <= 1
+          ? { status: 'generating', updatedAt: 't0' }
+          : { status: 'ready', updatedAt: 't1' };
+      }),
+    });
+
+    const { result } = renderHook(() =>
+      useProjectGeneration('p1', {
+        ...opts(client),
+        onApplied: async () => {
+          generatingWhenReloadRan = result.current.generating;
+          await new Promise((r) => setTimeout(r, 5));
+          reloadDone = true;
+        },
+      }),
+    );
+
+    await waitFor(() => expect(reloadDone).toBe(true));
+    // Still covered while the refetch was in flight.
+    expect(generatingWhenReloadRan).toBe(true);
+    await waitFor(() => expect(result.current.generating).toBe(false));
   });
 });

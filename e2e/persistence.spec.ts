@@ -6,7 +6,6 @@
 import { expect, test } from '@playwright/test';
 import {
   collectPageErrors,
-  createNewProject,
   generateWholeScore,
   gotoDashboard,
   readScoreSummary,
@@ -17,8 +16,8 @@ test.describe('project persistence: save and reopen', () => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
-    await createNewProject(page, 'Persistence Check');
     await generateWholeScore(page, {
+      title: 'Persistence Check',
       prompt: 'Create a calm ambient piano piece',
       measures: 8,
     });

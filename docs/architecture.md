@@ -29,7 +29,9 @@ ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split ac
 | [`music_io`](https://github.com/johnqh/music_io)         | `@sudobility/music_io`               | Platform implementations of the interfaces in `music_types`: audio playback, XML parsing, file export and the MIDI codec, for web and React Native. A `react-native` export condition means consumers write one import and Metro or Vite each resolve their own build. Runtime dependencies are empty by design; every platform library is an optional peer. |
 | `music_app` (this repo)                                  | `scoresmith` (private)               | The web app: routing, page-level React components, Tailwind styling, and the composition root that wires `music_client`/`music_lib` together with real browser services (fetch, Firebase auth, `localStorage`). No business logic lives here — see [Known limitations](#known-limitations) for what that means in practice.                                  |
 
-Dependency direction is strictly one-way: `music_app` → `music_lib` → `music_client` → `music_types`, with `music_api` depending only on `music_types`. No package ever depends on something that depends on it.
+Dependency direction is strictly one-way: `music_app` → `music_lib` → `music_client` → `music_types`. `music_api` depends on `music_types` **and `music_lib`** — it applies generated fragments itself, using the same commands the editor uses, which is what `music_lib` being platform-free is for. No package ever depends on something that depends on it.
+
+That edge also fixes the publish order: `music_api` must now be released **after** `music_lib`, not before it (`music_app/scripts/push_all.sh`).
 
 `music_io` sits alongside that chain rather than in it. It implements interfaces declared in `music_types`, and peer-depends on `music_lib` for the domain knowledge its playback engine needs (scheduling a score, GM instrument lookup). That is one-way too: `music_lib` reaches for `music_io` **only in its tests**, and only through `music_io/mocks`, which imports nothing of ours. The app's composition root is the single place both are constructed and joined — `createMusicIo()` builds the platform bundle and `initializeMusicPlatform()` hands `music_lib` the playback engine it resolves lazily on first use.
 
@@ -100,6 +102,26 @@ flowchart TB
 4. `music_api`'s `authMiddleware` verifies the Firebase ID token (or, in `AI_TEST_MODE`, accepts a fixed `TEST_AUTH_BYPASS_TOKEN` as a stand-in "test-user" identity — e2e/test only, never enabled in production) and sets `userId`/`userEmail` request context; every route except `/health` requires it.
 5. `POST /ai/generate` / `POST /ai/regenerate` check the caller's daily quota (`AI_DAILY_LIMIT`), call OpenAI server-side with `OPENAI_API_KEY` (which never reaches the browser), and run the model's response through schema validation/sanitization (`sanitizeGeneratedScore`-equivalent on the API side) before it's returned — untrusted model output is never persisted or forwarded as-is.
 6. The response comes back through the same envelope shape (`{success,data,error,code}`, from `music_types`) that `MusicClient` unwraps, mapping specific failure codes to typed errors (`QuotaExceededError`, `AiOutputInvalidError`, `AiGenerationError`, `ProjectNotFoundError`, generic `ApiError`).
+
+### Generation jobs
+
+Generation is slow enough that it cannot hold a browser request, so it is a persisted server-side job.
+
+```
+browser                     music_api                       OpenAI
+  │ POST /jobs ───────────────►│ insert job + project.status = 'generating'
+  │◄── {jobId} ────────────────│   (one transaction)
+  │                            ├─ run ────────────────────────►
+  │  (tab may close)           │            …
+  │                            │◄── result ─────────────────────
+  │                            ├─ still 'generating'? ─ no ─► discard
+  │                            ├─ yes ─► apply via music_lib command
+  │                            └─ project.status = 'ready'
+  │ GET /projects/:id/status ─►│   (status only — the score cannot
+  │◄── {status, updatedAt} ────│    change while generating)
+```
+
+Cancel writes `ready` to the project; the running job discards its result when it next looks. Writes to a generating project are rejected with 409 `PROJECT_GENERATING`, which is what makes applying the result sound.
 
 ### Project CRUD
 

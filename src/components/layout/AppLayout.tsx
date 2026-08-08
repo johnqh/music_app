@@ -73,6 +73,13 @@ import { TrackEditorPanel } from '@/features/tracks/TrackEditorPanel';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
+import {
+  prepareRegenerationRequestForRange,
+  replacementRegion,
+  selectActiveTrackId,
+} from '@sudobility/music_lib';
+import type { ReplaceScope } from '@sudobility/music_lib';
+import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
@@ -193,10 +200,51 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    */
   const generation = useProjectGeneration(projectId, {
     store,
-    onApplied: () => {
-      if (projectId) void store.getState().openProject(projectId);
+    onApplied: async () => {
+      if (projectId) await store.getState().openProject(projectId);
     },
   });
+
+  /**
+   * Turns a Replace submission into the request the server actually needs.
+   *
+   * The modal only collects settings; the region — its tick range, the
+   * fragment being replaced, and the surrounding context the model reads to
+   * continue seamlessly — is derived here. Sending the settings alone leaves
+   * the server with nothing to regenerate against.
+   */
+  const startReplacement = useCallback(
+    async (scope: ReplaceScope, submission: ReplaceSubmission): Promise<void> => {
+      const state = store.getState();
+      const current = state.score;
+      if (!current) return;
+
+      const region = replacementRegion(current, state.selection, selectActiveTrackId(state), scope);
+      if (!region) return;
+
+      const request = prepareRegenerationRequestForRange(
+        current,
+        region.range,
+        submission.instruction,
+        {
+          measureAligned: region.measureAligned,
+          ...(submission.style ? { style: submission.style } : {}),
+          ...(submission.mood ? { mood: submission.mood } : {}),
+          ...(submission.complexity ? { complexity: submission.complexity } : {}),
+          constraints: submission.constraints,
+        },
+      );
+
+      const kind =
+        scope === 'notes'
+          ? 'replace-notes'
+          : scope === 'measures'
+            ? 'replace-measures'
+            : 'replace-track';
+      await generation.start(kind, request);
+    },
+    [generation, store],
+  );
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const importMenu = useMenu<HTMLDivElement>();
@@ -899,9 +947,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <div className="shrink-0">
               <InspectorPanel
                 store={store}
-                onReplace={(scope, submission) =>
-                  void generation.start(scope === 'notes' ? 'replace-notes' : scope === 'measures' ? 'replace-measures' : 'replace-track', submission)
-                }
+                onReplace={(scope, submission) => void startReplacement(scope, submission)}
               />
             </div>
           </div>

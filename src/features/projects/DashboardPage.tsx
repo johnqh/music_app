@@ -168,7 +168,10 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     try {
       const { client, token } = await clientAndToken();
       const project = await client.createProject(
-        { name: request.title?.trim() || request.prompt.slice(0, 60), score: emptyScoreFor(request) },
+        // Not the prompt: prompts routinely begin "Create a ...", which makes
+        // a project list full of near-identical names that also collide with
+        // the page's own Create button.
+        { name: request.title?.trim() || 'Generated score', score: emptyScoreFor(request) },
         token,
       );
       await client.createJob(
@@ -287,7 +290,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           <Button
             type="button"
             variant="ghost"
-            aria-label="Cancel generation"
+            aria-label={`Cancel generation: ${project.name}`}
             onClick={() => void cancelGeneration(project.id)}
             className="px-3 py-1"
           >

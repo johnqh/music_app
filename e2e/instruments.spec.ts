@@ -47,7 +47,10 @@ test.describe('track gutter and editor', () => {
     await waitForNotation(page);
 
     // A second track, so "which track is active" is a real question.
-    await page.getByRole('button', { name: 'Add track' }).click();
+    // "+" opens a menu now (Blank Track / Generate Track), rather than adding
+    // a track outright.
+    await page.getByRole('combobox', { name: 'Add Track' }).click();
+    await page.getByRole('option', { name: 'Blank Track' }).click();
     const editor = page.getByRole('region', { name: 'Track editor' });
     await expect(editor).toBeVisible();
 

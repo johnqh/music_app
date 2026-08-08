@@ -67,6 +67,8 @@ export type ScoreSummary = {
 
 export type GenerationOptions = {
   prompt: string;
+  /** Names the project this creates. Defaults to a unique generated name; pass one when the spec asserts on the title. */
+  title?: string;
   measures?: number;
   keyFifths?: string; // visible option label, e.g. "C", "Bb"
   keyMode?: 'major' | 'minor';
@@ -93,6 +95,18 @@ const KEY_FIFTHS_LABELS = [
 ];
 
 /** Navigates to the dashboard (auth is satisfied by the VITE_E2E shim). */
+/**
+ * What a generated project is called.
+ *
+ * Deliberately not the prompt: prompts routinely start with "Create ...",
+ * which collided with the dashboard's own Create button under Playwright's
+ * substring name matching.
+ */
+export const GENERATED_NAME = 'Generated score';
+
+/** A distinct title per call: e2e files run in parallel against one database, so two projects sharing a name is a strict-mode violation waiting to happen. */
+let generatedCounter = 0;
+
 export async function gotoDashboard(page: Page): Promise<void> {
   await page.goto('/en/projects');
   // Waits on the dashboard's own controls rather than the product name: the
@@ -111,37 +125,41 @@ export async function createNewProject(page: Page, name = 'E2E Project'): Promis
   await expect(page.getByLabel('Edit project title')).toBeVisible();
 }
 
-/** Fills out `GenerationPanel` and clicks Generate, waiting for the mock provider's response to land (spec §39 items 3-5). Assumes the panel is already visible (empty selection -> `mode === 'generate'`, the default for a freshly-created project). */
-export async function generateWholeScore(page: Page, options: GenerationOptions): Promise<void> {
-  // `exact: true` throughout: Playwright's label/role name matching is
-  // substring-by-default, and several nearby controls' aria-labels contain
-  // these as substrings (e.g. "Preset prompts" contains "Prompt", the
-  // transport's "Tempo (BPM)" contains "Tempo") -- a non-exact match would
-  // hit Playwright's strict-mode "resolved to N elements" error.
+/**
+ * Generates a whole score from the dashboard and opens it.
+ *
+ * Whole-score generation moved off the editor sidebar: it now creates its own
+ * project and runs as a background job, so this navigates to the dashboard,
+ * submits, waits for the job to finish, and opens the result. Callers keep the
+ * same contract as before — a generated score is open in the editor when this
+ * returns.
+ */
+export async function generateWholeScore(
+  page: Page,
+  options: GenerationOptions,
+): Promise<string> {
+  await gotoDashboard(page);
+  await page.getByRole('button', { name: 'Generate Score', exact: true }).click();
+
+  generatedCounter += 1;
+  const title =
+    options.title ??
+    `${GENERATED_NAME} ${process.env.TEST_PARALLEL_INDEX ?? '0'}-${generatedCounter}-${Date.now()}`;
+  await page.getByLabel('Title', { exact: true }).fill(title);
+
+  // `exact: true` throughout: Playwright matches names by substring, and
+  // several nearby controls contain these as substrings.
   await page.getByLabel('Prompt', { exact: true }).fill(options.prompt);
   if (options.measures !== undefined) {
     await page.getByLabel('Measures', { exact: true }).fill(String(options.measures));
   }
-  // Library sweep 2: GenerationPanel's Key/Mode `<select>`s became
-  // @sudobility/components' Radix-backed `Select` -- its trigger is a
-  // `<button role="combobox">`, not a real `<select>`, so `selectOption`
-  // no longer applies. Mode (2 options) is opened and clicked, same as the
-  // Pitch step select this file's callers already drive that way (see
-  // `acceptance.spec.ts`/`select-edit-undo.spec.ts`). Key (15 options,
-  // spanning fifths -7..7 -- GenerationPanel.tsx's own `KEY_FIFTHS_OPTIONS`)
-  // is driven by keyboard instead: the library `SelectContent`'s
-  // `Viewport` is given a fixed `h-[var(--radix-select-trigger-height)]`
-  // (the *trigger's* own height, not the popup's available height -- see
-  // `select.tsx`), so for a list this long, most items genuinely render
-  // outside any scrollable-into-view area a real browser click can reach
-  // -- confirmed by a real Playwright run timing out on exactly that
-  // click. `Home` + `ArrowDown` × index + `Enter` reaches the same item
-  // via Radix's own internally-managed highlight/scroll instead.
   if (options.keyFifths !== undefined) {
     await page.getByRole('combobox', { name: 'Key', exact: true }).click();
     const index = KEY_FIFTHS_LABELS.indexOf(options.keyFifths);
     if (index === -1)
       throw new Error(`generateWholeScore: unknown keyFifths label "${options.keyFifths}"`);
+    // Keyboard rather than click: the Radix viewport is trigger-height, so
+    // most of a 15-item list is unreachable by a real click.
     await page.keyboard.press('Home');
     for (let i = 0; i < index; i++) await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
@@ -153,14 +171,40 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
   if (options.tempo !== undefined) {
     await page.getByLabel('Tempo', { exact: true }).fill(String(options.tempo));
   }
+
   await page.getByRole('button', { name: 'Generate', exact: true }).click();
+
+  // Wait on a positive condition, never on the badge being absent: the badge
+  // has not necessarily rendered yet at this point, so "no badge" passes
+  // instantly and opens a project the job has not filled in.
+  const card = page.getByRole('button', { name: `Open project: ${title}`, exact: true });
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.click();
+  await expect(page).toHaveURL(/\/project\//);
+
   await waitForGenerationSettled(page);
   await waitForNotation(page);
+
+  // The job writes the score server-side, so the notes are the only proof it
+  // actually landed rather than leaving the placeholder behind.
+  await expect
+    .poll(async () => (await readScoreSummary(page))?.notes.length ?? 0, { timeout: 60_000 })
+    .toBeGreaterThan(0);
+
+  return title;
 }
 
-/** Waits for `generation-slice.pending` to go back to `false` (Generate/Regenerate's `role="progressbar"` indicator disappears). */
+/**
+ * Waits for every generation job to finish.
+ *
+ * Generation is a server-side job now, so "settled" means no project is
+ * marked generating any more — on the dashboard that is the badge, in the
+ * editor it is the overlay. Both are checked so callers need not care where
+ * they are.
+ */
 export async function waitForGenerationSettled(page: Page): Promise<void> {
-  await expect(page.getByRole('progressbar')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByText('Generating notes…')).toHaveCount(0, { timeout: 60_000 });
+  await expect(page.getByText('Generating…')).toHaveCount(0, { timeout: 60_000 });
 }
 
 /** Waits until the notation canvas has drawn at least one note (the `__scoresmith` handle's bbox map is non-empty). */
@@ -399,15 +443,6 @@ export async function readPlaybackState(
   });
 }
 
-/** Reads `generation-slice.candidates` (id + label only -- enough to target each candidate card's controls by accessible name, without guessing at label text conventions the mock provider happens to use). */
-export async function readCandidates(page: Page): Promise<Array<{ id: string; label: string }>> {
-  await requireStore(page);
-  return page.evaluate(() => {
-    type Store = { getState: () => { candidates: Array<{ id: string; label: string }> } };
-    const store = (window as unknown as { __SCORESMITH_STORE__: Store }).__SCORESMITH_STORE__;
-    return store.getState().candidates.map((c) => ({ id: c.id, label: c.label }));
-  });
-}
 
 export type NoteGroup = { id: string };
 

@@ -22,10 +22,10 @@ import {
   generateWholeScore,
   getNoteGroups,
   gotoDashboard,
-  readCandidates,
   readPlaybackState,
   readScoreSummary,
   selectMeasuresByIndex,
+  waitForGenerationSettled,
   waitForNotation,
   expectCanvasPainted,
 } from './helpers';
@@ -61,30 +61,19 @@ test.describe('spec §39 acceptance scenario', () => {
       .toBe('playing');
     await page.getByRole('button', { name: 'Stop' }).click();
 
-    // 8-13. Select measures 3-4, regenerate, preview each alternative, accept one.
+    // 8-13. Select measures 3-4 and replace them. One result, applied by the
+    // job — no candidate list to preview or accept.
     await selectMeasuresByIndex(page, [2, 3]);
-    await expect(page.locator('[aria-label="Regeneration panel"]')).toBeVisible();
+    await page.getByRole('tab', { name: 'Measure' }).click();
+    await page.getByRole('button', { name: 'Replace Measures' }).click();
     await page
-      .getByLabel('Regeneration instruction')
+      .getByLabel('Instruction', { exact: true })
       .fill('Make this section more dramatic while preserving the melody.');
-    await page.getByRole('button', { name: 'Generate alternatives' }).click();
-
-    const candidateCards = page.locator('[role="group"][aria-label^="Candidate card:"]');
-    await expect(candidateCards).toHaveCount(3, { timeout: 15_000 });
-    const candidates = await readCandidates(page);
-    for (const candidate of candidates) {
-      const card = page.getByRole('group', { name: `Candidate card: ${candidate.label}` });
-      await card.getByRole('button', { name: candidate.label, exact: true }).click();
-      await expect(
-        card.getByRole('button', { name: candidate.label, exact: true }),
-      ).toHaveAttribute('aria-pressed', 'true');
-    }
-    const acceptedLabel = candidates[candidates.length - 1].label;
-    await page
-      .getByRole('group', { name: `Candidate card: ${acceptedLabel}` })
-      .getByRole('button', { name: `Accept ${acceptedLabel}` })
-      .click();
-    await expect(candidateCards).toHaveCount(0);
+    await page.getByRole('button', { name: 'Replace', exact: true }).click();
+    // Wait for the lock to appear before waiting for it to clear: "no overlay"
+    // is true before the job starts too, so settling alone reads a stale score.
+    await expect(page.getByText('Generating notes…')).toBeVisible();
+    await waitForGenerationSettled(page);
 
     const afterRegen = await readScoreSummary(page);
     expect(afterRegen).not.toBeNull();
