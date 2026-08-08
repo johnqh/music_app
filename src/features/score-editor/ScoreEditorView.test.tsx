@@ -927,6 +927,44 @@ describe('playback repaint cost', () => {
     expect(renderSpy.mock.calls.length).toBe(before);
   });
 
+  it('DOES repaint a sounding note inside the window, and marks it playing', async () => {
+    // The positive case this describe was missing. Both other tests assert a
+    // redraw is *skipped*, so a change that stopped playing notes colouring
+    // altogether would have left them green — which is exactly what happened
+    // when `activeNoteIds` moved off the render path.
+    const store = makeStore();
+    const [first] = allNotes(store.getState().score!);
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const before = renderSpy.mock.calls.length;
+
+    act(() => store.getState().setActiveNoteIds([first.id]));
+    await flushRepaintFrame();
+
+    expect(renderSpy.mock.calls.length).toBeGreaterThan(before);
+    const options = renderSpy.mock.calls.at(-1)?.[2] as
+      | { noteColors?: Map<string, string> }
+      | undefined;
+    expect(options?.noteColors?.get(first.id)).toBe('playing');
+  });
+
+  it('clears the playing colour when the note stops', async () => {
+    const store = makeStore();
+    const [first] = allNotes(store.getState().score!);
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+
+    act(() => store.getState().setActiveNoteIds([first.id]));
+    await flushRepaintFrame();
+    act(() => store.getState().setActiveNoteIds([]));
+    await flushRepaintFrame();
+
+    const options = renderSpy.mock.calls.at(-1)?.[2] as
+      | { noteColors?: Map<string, string> }
+      | undefined;
+    expect(options?.noteColors?.get(first.id)).not.toBe('playing');
+  });
+
   it('does not redraw when the colors resolve to the same visible state', async () => {
     const store = makeStore();
     const [first] = allNotes(store.getState().score!);

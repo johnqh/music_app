@@ -339,7 +339,6 @@ export function ScoreEditorView({
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const zoom = store((s) => s.zoom);
-  const activeNoteIds = store((s) => s.activeNoteIds);
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const editMode = store((s) => s.editMode);
@@ -497,21 +496,37 @@ export function ScoreEditorView({
 
 
   /**
-   * Per-note colors for this frame.
+   * Per-note colors from the *low-frequency* inputs only.
+   *
+   * `activeNoteIds` is deliberately absent. It changes on every note-on and
+   * note-off, and reading it here re-rendered this whole component twice per
+   * note — measured at 16 renders against 8 note events in four seconds, which
+   * cost the playback caret a frame each time and made it lurch at every note.
+   * The sounding notes are merged in by the subscription below instead, which
+   * repaints the canvas without going through React at all.
    *
    * The `regenerated` role survives the removal of candidate previews:
-   * `selectionRegenerated` still marks material a generation just produced,
-   * which is the signal the colour was for. Only the preview half is gone,
-   * because a result now lands committed rather than as an overlay.
+   * `selectionRegenerated` still marks material a generation just produced.
    */
   const noteColors = useMemo(
     () =>
       buildNoteColors({
         selectedIds: selection.eventIds,
-        playingIds: activeNoteIds,
+        playingIds: [],
         regenerated: selectionRegenerated,
       }),
-    [selection.eventIds, activeNoteIds, selectionRegenerated],
+    [selection.eventIds, selectionRegenerated],
+  );
+
+  /** The colours actually painted: `noteColors` with the currently sounding notes merged over it. */
+  const colorsWithPlaying = useCallback(
+    (playingIds: readonly string[]) =>
+      buildNoteColors({
+        selectedIds: selection.eventIds,
+        playingIds: [...playingIds],
+        regenerated: selectionRegenerated,
+      }),
+    [selection.eventIds, selectionRegenerated],
   );
 
   const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
@@ -672,28 +687,65 @@ export function ScoreEditorView({
    *   changes at all.
    */
   const paintedColorsRef = useRef<string>('');
+
+  /**
+   * Repaints for a colour change, coalesced to one draw per animation frame
+   * and skipped when nothing *visible* changed.
+   *
+   * Takes the colour map as an argument rather than reading render state, so
+   * the subscription below can drive it without a React render.
+   */
+  const repaintColors = useCallback(
+    (colors: Map<string, unknown>) => {
+      const result = resultRef.current;
+      // Before the first draw there is no window to compare against; the mount
+      // effect owns that paint.
+      if (!result) return;
+
+      let signature = '';
+      for (const [id, role] of colors) {
+        if (result.idToBBox.has(id)) signature += `${id}:${String(role)};`;
+      }
+      for (const id of selectedMeasureIdsRef.current) {
+        if (result.measureIdToBBox.has(id)) signature += `m${id};`;
+      }
+      if (signature === paintedColorsRef.current) return;
+      paintedColorsRef.current = signature;
+
+      noteColorsRef.current = colors as typeof noteColorsRef.current;
+      if (colorFrameRef.current !== null) return;
+      colorFrameRef.current = requestAnimationFrame(() => {
+        colorFrameRef.current = null;
+        draw();
+      });
+    },
+    [draw],
+  );
+
+  // Selection and measure changes are low-frequency, so they can ride the
+  // normal render path.
   useEffect(() => {
-    const result = resultRef.current;
-    // Before the first draw there is no window to compare against; the mount
-    // effect above owns that paint.
-    if (!result) return;
+    repaintColors(colorsWithPlaying(store.getState().activeNoteIds));
+  }, [noteColors, selectedMeasureIds, repaintColors, colorsWithPlaying, store]);
 
-    let signature = '';
-    for (const [id, role] of noteColors) {
-      if (result.idToBBox.has(id)) signature += `${id}:${role};`;
-    }
-    for (const id of selectedMeasureIds) {
-      if (result.measureIdToBBox.has(id)) signature += `m${id};`;
-    }
-    if (signature === paintedColorsRef.current) return;
-    paintedColorsRef.current = signature;
-
-    if (colorFrameRef.current !== null) return;
-    colorFrameRef.current = requestAnimationFrame(() => {
-      colorFrameRef.current = null;
-      draw();
+  /**
+   * Sounding notes, straight off the store — never through React.
+   *
+   * This is the same rule the transport readouts and the caret follow:
+   * `activeNoteIds` fires on every note-on and note-off, and rendering this
+   * component for each one cost the caret a frame and made it lurch at every
+   * note. Subscribing here keeps the repaint (1-5ms of canvas work) without
+   * the re-render (the expensive part).
+   */
+  useEffect(() => {
+    let previous = store.getState().activeNoteIds;
+    return store.subscribe((state) => {
+      const next = state.activeNoteIds;
+      if (next === previous) return;
+      previous = next;
+      repaintColors(colorsWithPlaying(next));
     });
-  }, [noteColors, selectedMeasureIds, draw]);
+  }, [store, repaintColors, colorsWithPlaying]);
 
   const stopAutoscroll = useCallback(() => {
     if (autoscrollRafRef.current !== null) {
