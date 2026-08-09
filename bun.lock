@@ -14,9 +14,9 @@
         "@sudobility/di": "^1.5.59",
         "@sudobility/di_web": "^0.1.216",
         "@sudobility/music_client": "^0.4.7",
-        "@sudobility/music_io": "^0.6.14",
+        "@sudobility/music_io": "^0.6.15",
         "@sudobility/music_lib": "^1.7.13",
-        "@sudobility/music_types": "^0.11.5",
+        "@sudobility/music_types": "^0.11.7",
         "@sudobility/seo_lib": "^0.0.34",
         "@sudobility/types": "^1.9.64",
         "@tanstack/react-query": "^5.0.0",
@@ -419,11 +419,11 @@
 
     "@sudobility/music_client": ["@sudobility/music_client@0.4.7", "", { "dependencies": { "@sudobility/music_types": "^0.11.5" }, "peerDependencies": { "@sudobility/di": "^1.5.59", "@sudobility/types": "^1.9.64", "@tanstack/react-query": ">=5", "react": ">=18" } }, "sha512-tbejCErch+XfJ/8kCPJ6xLIXPqunKz9gTi9MjV65lVOudh2dewwOLpo5fy/Z0dqx2dpy5fMBqKVrOLauSaLZeA=="],
 
-    "@sudobility/music_io": ["@sudobility/music_io@0.6.14", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7" }, "peerDependencies": { "@sudobility/music_lib": "^1.7.12", "@sudobility/music_types": "^0.11.5", "@tonejs/midi": "^2.0.28", "fast-xml-parser": "", "react-native-audio-api": ">=0.13.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0", "tone": "^15" }, "optionalPeers": ["fast-xml-parser", "react-native-audio-api", "react-native-fs", "react-native-share", "tone"] }, "sha512-knYGSdBUveCqEmp3/3gLD0B4tC/JmTFVANXzUsPMIcBUK2j0JuesSWY7x/PzZ/ewKl7ZyZwwwdFCwopduTHpTg=="],
+    "@sudobility/music_io": ["@sudobility/music_io@0.6.15", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7" }, "peerDependencies": { "@sudobility/music_lib": "^1.7.13", "@sudobility/music_types": "^0.11.5", "@tonejs/midi": "^2.0.28", "fast-xml-parser": "", "react-native-audio-api": ">=0.13.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0", "tone": "^15" }, "optionalPeers": ["fast-xml-parser", "react-native-audio-api", "react-native-fs", "react-native-share", "tone"] }, "sha512-vQUtDVxP+FCj0VGLq4PooFguGltaTLjmtaP6iWZXGmz0mlg+H9qSX9W2Q0u+l6qwSLTtGxl52f4e7uDQCjHZ7g=="],
 
     "@sudobility/music_lib": ["@sudobility/music_lib@1.7.13", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.7", "@sudobility/music_types": "^0.11.5", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-uDB+bxtrf6Ieb5HivKnGGwINZ3gVtkA+A6xmm2X+2SV9I1j4q89FkKbaUdT4TpZVrdoY1rhGlYaBHPzGtm48qQ=="],
 
-    "@sudobility/music_types": ["@sudobility/music_types@0.11.5", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-fgtGtbbH7jgZV8LM4y/rkF/zTYZtjFbQGFfwtQxecYqOetqfPEervRN+zsqbV5GzVzdTSYVSfjNuU0w/sB9oyA=="],
+    "@sudobility/music_types": ["@sudobility/music_types@0.11.7", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-O//JcDI+2AVuxFdevK7nrYYifqmHdehUijFbjoiGIOk+Yj+3pHFiNwtK7dDXD7DGsfEZ8DnS2uXrySRTDga2yg=="],
 
     "@sudobility/seo_lib": ["@sudobility/seo_lib@0.0.34", "", { "peerDependencies": { "i18next": ">=23.0.0", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "react-helmet-async": ">=2.0.0", "react-i18next": ">=14.0.0", "react-router-dom": ">=6.0.0" }, "optionalPeers": ["i18next", "react-i18next", "react-router-dom"] }, "sha512-iMA9IsDfpT3DG/pjv5sllmj1Osds4QdGHChF1P/mTUDgyDSew7dHxEM3rj/CPq0XaWmvSkIhrCAeEJ6rUQY4mg=="],
 
@@ -1082,6 +1082,8 @@
     "@babel/helper-compilation-targets/lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
+
+    "@sudobility/music_client/@sudobility/music_types": ["@sudobility/music_types@0.11.5", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-fgtGtbbH7jgZV8LM4y/rkF/zTYZtjFbQGFfwtQxecYqOetqfPEervRN+zsqbV5GzVzdTSYVSfjNuU0w/sB9oyA=="],
 
     "@testing-library/dom/dom-accessibility-api": ["dom-accessibility-api@0.5.16", "", {}, "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg=="],
 

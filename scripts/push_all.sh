@@ -38,13 +38,13 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # just-published version for minutes after npm and curl both show it; `bun
 # update` resolves it where `bun add` and `bun install` do not.
 PROJECTS=(
-    "../music_types:150"
-    "../music_client:150"
+    "../music_types:60"
+    "../music_client:60"
     "../music_io:0"
     # music_api after music_lib: the job runner applies generated fragments
     # with music_lib's commands, so the backend is now a consumer of the
     # domain library rather than only of music_types.
-    "../music_lib:150"
+    "../music_lib:60"
     "../music_api:0"
     "../music_app:0"
 )
