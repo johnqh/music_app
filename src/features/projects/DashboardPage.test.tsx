@@ -126,9 +126,13 @@ describe('DashboardPage', () => {
     render(<DashboardPage store={store} />);
     await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
     const user = userEvent.setup();
+    const getProject = vi.spyOn(context.fakeClient, 'getProject');
 
     await user.click(screen.getByRole('button', { name: 'Duplicate project: Original' }));
     await waitFor(() => expect(screen.getByText('Original (copy)')).toBeInTheDocument());
+    // The copy happens server-side. Reading the project here would mean the
+    // score had been downloaded only to be uploaded straight back.
+    expect(getProject).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Delete project: Original (copy)' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));

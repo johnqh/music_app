@@ -6,7 +6,7 @@ import { createAppStore } from '@sudobility/music_lib';
 import { threeTrackScore, twinkleScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { changeVelocityCommand } from '@sudobility/music_lib';
+import { addMeasureCommand, changeVelocityCommand } from '@sudobility/music_lib';
 
 // AppLayout renders ScoreEditorView (useEditorShortcuts -> playbackController)
 // and TransportBar, both of which reach the app-wide playbackController
@@ -355,5 +355,85 @@ describe('AppLayout export scope', () => {
 
     expect(screen.queryByText('Export hidden tracks?')).toBeNull();
     await waitFor(() => expect(savedFiles()).toHaveLength(1));
+  });
+});
+
+/**
+ * Snapshots pin the *server's* project row, so the live score has to be there
+ * first. This used to be an unconditional PUT of the whole score, and the
+ * invariant was e2e-only — the API's own tests cannot see it, because a
+ * project created through the API is current by construction.
+ */
+describe('AppLayout — snapshots', () => {
+  type SnapshotStubs = {
+    createSnapshot: ReturnType<typeof vi.fn>;
+    storedMeasureCountAtSnapshot: () => number | null;
+  };
+
+  /** Teaches the in-memory client the snapshot calls this panel makes. */
+  function stubSnapshotClient(
+    context: ReturnType<typeof installTestAppServices>,
+    projectId: () => string,
+  ): SnapshotStubs {
+    const client = context.client as unknown as Record<string, unknown>;
+    let measuresAtSnapshot: number | null = null;
+    const createSnapshot = vi.fn(async () => {
+      const stored = context.fakeClient.storedRecord(projectId());
+      measuresAtSnapshot = stored?.score.tracks[0].measures.length ?? null;
+      return {
+        id: 's1',
+        projectId: projectId(),
+        parentId: null,
+        name: 'Version 1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
+    });
+    client.listSnapshots = vi.fn(async () => []);
+    client.lastPublisherName = vi.fn(async () => ({ publisherName: null }));
+    client.createSnapshot = createSnapshot;
+    return { createSnapshot, storedMeasureCountAtSnapshot: () => measuresAtSnapshot };
+  }
+
+  it('flushes the live score before pinning it', async () => {
+    const user = userEvent.setup();
+    const context = installTestAppServices();
+    const store = createAppStore({ context });
+    await store.getState().newProject({ name: 'Snap', score: twinkleScore() });
+    const stubs = stubSnapshotClient(context, () => store.getState().projectId!);
+
+    render(<AppLayout store={store} />);
+
+    // An edit still inside the autosave debounce window: the server has not
+    // seen it, and a snapshot taken now would pin the music without it.
+    const before = store.getState().score!.tracks[0].measures.length;
+    act(() => store.getState().dispatchCommand(addMeasureCommand()));
+    expect(store.getState().dirty).toBe(true);
+
+    await user.click(screen.getByRole('button', { name: 'Project menu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create snapshot…' }));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+
+    await waitFor(() => expect(stubs.createSnapshot).toHaveBeenCalled());
+    expect(stubs.storedMeasureCountAtSnapshot()).toBe(before + 1);
+  });
+
+  it('does not re-upload a score the server already has', async () => {
+    // `saveNow` is a no-op when nothing is dirty. The unconditional PUT this
+    // replaced sent the whole score every time somebody took a second
+    // snapshot of music they had not touched.
+    const user = userEvent.setup();
+    const context = installTestAppServices();
+    const store = createAppStore({ context });
+    await store.getState().newProject({ name: 'Snap', score: twinkleScore() });
+    const stubs = stubSnapshotClient(context, () => store.getState().projectId!);
+    render(<AppLayout store={store} />);
+
+    const writesBefore = context.fakeClient.updateCalls;
+    await user.click(screen.getByRole('button', { name: 'Project menu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create snapshot…' }));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+
+    await waitFor(() => expect(stubs.createSnapshot).toHaveBeenCalled());
+    expect(context.fakeClient.updateCalls).toBe(writesBefore);
   });
 });

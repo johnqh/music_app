@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, configure, renderHook, waitFor } from '@testing-library/react';
 import { createAppStore, testStoreContext, twinkleScore } from '@sudobility/music_lib';
 import type { GenerationJob, GenerationJobStatus } from '@sudobility/music_types';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
@@ -65,10 +65,22 @@ function opts(client: JobClient, extra: Record<string, unknown> = {}) {
     store: makeStore(),
     client: client as unknown as UseProjectGenerationOptions['client'],
     getToken: async () => 'tok',
+    // Both cadences collapsed to nothing: these tests are about what the poll
+    // decides, not how long it waits. The gap between them has its own tests.
     pollMs: 5,
+    idlePollMs: 5,
     ...extra,
   };
 }
+
+/**
+ * These wait on the hook's *real* timers, and each tick now waits for the
+ * request it made before scheduling the next — so under a loaded parallel run
+ * a handful of polls can take longer than the one-second default. Generous
+ * here rather than flaky: nothing in this file waits on anything that is not
+ * about to happen.
+ */
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -336,32 +348,146 @@ describe('useProjectGeneration — freshness', () => {
     await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(2));
     expect(onApplied).not.toHaveBeenCalled();
   });
+
+  it('does not reload after this client s own save', async () => {
+    // The bug this exists to prevent: autosave bumps `updatedAt`, the poll
+    // read any change as somebody else's, and the editor re-downloaded the
+    // project it had just uploaded — throwing away the undo history with it,
+    // seconds after every edit.
+    const onApplied = vi.fn();
+    const store = makeStore();
+    store.setState({ serverUpdatedAt: 't0' } as never);
+    let stamp = 't0';
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: stamp })),
+    });
+
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), store, onApplied }));
+    // Let the poll see the project where it stands before anything moves.
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(0));
+
+    // The autosave lands: the server moves on, and the store records where it
+    // left it. The poll's own memory still says t0 — which is exactly what
+    // used to make this look like somebody else's write.
+    stamp = 't1';
+    store.setState({ serverUpdatedAt: 't1' } as never);
+
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(3));
+    expect(onApplied).not.toHaveBeenCalled();
+
+    // A change this client did *not* make still reloads — the point is to tell
+    // them apart, not to stop watching.
+    stamp = 't2';
+    await waitFor(() => expect(onApplied).toHaveBeenCalled());
+  });
+
+  it('does not reload while a save of its own is still in flight', async () => {
+    // The write may have committed while its response is in the air: for that
+    // moment the server is ahead of anything this client could have recorded,
+    // and the newer stamp is still its own.
+    const onApplied = vi.fn();
+    const store = makeStore();
+    store.setState({ serverUpdatedAt: 't0', saveState: 'saving' } as never);
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: 't1' })),
+    });
+
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), store, onApplied }));
+
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(2));
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+
+  it('ignores a poll that reports an older stamp than the client already knows', async () => {
+    // A poll that started before a save landed answers with the pre-save
+    // stamp. Reloading on "different" would send the editor to fetch over the
+    // top of the save it raced.
+    const onApplied = vi.fn();
+    const store = makeStore();
+    store.setState({ serverUpdatedAt: 't5' } as never);
+    const client = fakeClient({
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: 't4' })),
+    });
+
+    renderHook(() => useProjectGeneration('p1', { ...opts(client), store, onApplied }));
+
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(2));
+    expect(onApplied).not.toHaveBeenCalled();
+  });
+});
+
+describe('useProjectGeneration — cadence', () => {
+  it('backs off when nothing is generating', async () => {
+    // An idle editor polled every three seconds forever — ~1,200 requests an
+    // hour per open tab, to learn nothing.
+    const client = fakeClient();
+    renderHook(() =>
+      useProjectGeneration('p1', { ...opts(client), pollMs: 5, idlePollMs: 100_000 }),
+    );
+
+    await waitFor(() => expect(client.getProjectStatus).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(client.getProjectStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('polls at the running cadence once a job is started', async () => {
+    const client = fakeClient();
+    const { result } = renderHook(() =>
+      useProjectGeneration('p1', { ...opts(client), pollMs: 5, idlePollMs: 100_000 }),
+    );
+
+    await act(async () => {
+      await result.current.start('replace-notes', {});
+    });
+
+    await waitFor(() => expect(client.getProjectStatus.mock.calls.length).toBeGreaterThan(2));
+  });
+
+  it('checks immediately when a hidden tab comes back to the front', async () => {
+    // What makes the idle cadence affordable: the wait is never felt, because
+    // the moment anyone looks the answer is already being fetched.
+    const client = fakeClient();
+    renderHook(() =>
+      useProjectGeneration('p1', { ...opts(client), pollMs: 5, idlePollMs: 100_000 }),
+    );
+    await waitFor(() => expect(client.getProjectStatus).toHaveBeenCalledTimes(1));
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await waitFor(() => expect(client.getProjectStatus).toHaveBeenCalledTimes(2));
+  });
 });
 
 describe('useProjectGeneration — unlock ordering', () => {
   it('reloads before unlocking, so the editor never shows the pre-job score as the result', async () => {
     let reloadDone = false;
     let generatingWhenReloadRan: boolean | null = null;
-    let polls = 0;
+    // Gated rather than counted: the test has to *observe* the overlay before
+    // the job is allowed to finish, or it races the render it depends on.
+    let finished = false;
     const client = fakeClient({
-      getProjectStatus: vi.fn(async () => {
-        polls += 1;
-        return polls <= 1
-          ? { status: 'generating', updatedAt: 't0' }
-          : { status: 'ready', updatedAt: 't1' };
-      }),
+      getProjectStatus: vi.fn(async () =>
+        finished ? { status: 'ready', updatedAt: 't1' } : { status: 'generating', updatedAt: 't0' },
+      ),
     });
 
     const { result } = renderHook(() =>
       useProjectGeneration('p1', {
         ...opts(client),
         onApplied: async () => {
+          // Sampled *after* the reload's own await, not before it. Read at the
+          // top, this passes whether or not the hook awaits `onApplied` —
+          // an async function runs synchronously up to its first await either
+          // way — so it asserted nothing about the ordering it exists for.
+          await new Promise((r) => setTimeout(r, 20));
           generatingWhenReloadRan = result.current.generating;
-          await new Promise((r) => setTimeout(r, 5));
           reloadDone = true;
         },
       }),
     );
+
+    await waitFor(() => expect(result.current.generating).toBe(true));
+    finished = true;
 
     await waitFor(() => expect(reloadDone).toBe(true));
     // Still covered while the refetch was in flight.

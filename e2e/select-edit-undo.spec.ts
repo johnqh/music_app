@@ -17,6 +17,14 @@ test.describe('note selection, editing, and undo/redo', () => {
   test('selects a note, changes its pitch, and undoes/redoes the change', async ({ page }) => {
     const getErrors = collectPageErrors(page);
 
+    /** How the browser encoded each save it actually made. */
+    const saveEncodings: (string | undefined)[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes('/api/v1/projects/')) {
+        saveEncodings.push(request.headers()['content-encoding']);
+      }
+    });
+
     await gotoDashboard(page);
     await createNewProject(page);
     await generateWholeScore(page, {
@@ -66,6 +74,17 @@ test.describe('note selection, editing, and undo/redo', () => {
     await expect(pitchStepSelect).toHaveText(nextStep);
     const afterRedo = await readScoreSummary(page);
     expect(afterRedo!.notes[0].pitch.step).toBe(nextStep);
+
+    // The autosave that follows an edit carries the whole score, and carries
+    // it gzipped. Only a real browser against the real server shows both
+    // halves at once: a unit test proves the client compresses and the API's
+    // own tests prove it decompresses, but neither sees Chromium's
+    // willingness to send `Content-Encoding` or the preflight it provokes.
+    // The save reaching "Saved" is the proof the server understood it.
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.locator('[aria-label="Save state: Saved"]')).toBeVisible({ timeout: 10_000 });
+    expect(saveEncodings.length).toBeGreaterThan(0);
+    expect(saveEncodings).toContain('gzip');
 
     expect(getErrors()).toEqual([]);
   });

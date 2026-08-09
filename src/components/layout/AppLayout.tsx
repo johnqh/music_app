@@ -306,8 +306,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     if (!token) return;
     setSnapshots(await musicClient.listSnapshots(projectId, token));
     setPublisherName((await musicClient.lastPublisherName(token)).publisherName ?? undefined);
-    const project = await musicClient.getProject(projectId, token);
-    setParentSnapshotId(project.parentSnapshotId ?? null);
+    // The status endpoint carries `parentSnapshotId`. Reading the project for
+    // it fetched the entire score to learn one id — every time this panel
+    // opened, and after every snapshot taken.
+    const status = await musicClient.getProjectStatus(projectId, token);
+    setParentSnapshotId(status.parentSnapshotId);
+    // Creating or opening a snapshot writes the project row. Recording where
+    // the server stands keeps the generation poll from reading this client's
+    // own change as a foreign one and reloading over the top of it.
+    store.getState().noteServerVersion(status.updatedAt);
   }, [store]);
 
   const createSnapshot = useCallback(
@@ -322,8 +329,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       // project row, and autosave is debounced — so without this a snapshot
       // pins whatever the server last happened to receive rather than what is
       // on screen, which for a freshly generated score is nothing at all.
-      const current = store.getState().score;
-      if (current) await musicClient.updateProject(projectId, { score: current }, token);
+      //
+      // Through the autosaver rather than a PUT of its own: `saveNow` is a
+      // no-op when nothing is dirty, where a direct write re-uploaded the
+      // whole score every time somebody took a second snapshot of it.
+      await store.getState().saveNow();
 
       const snapshot = await musicClient.createSnapshot(projectId, name, token);
       setCreateSnapshotOpen(false);
@@ -348,6 +358,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       // editor takes its score straight from the response rather than reloading.
       const project = await musicClient.openSnapshot(snapshotId, token);
       store.getState().setScore(project.score);
+      // This client made that change and is showing the result; say so, or the
+      // generation poll reads the new `updatedAt` as somebody else's write.
+      store.getState().noteServerVersion(project.updatedAt);
       setOpenSnapshotOpen(false);
       await refreshSnapshots();
     },
@@ -497,16 +510,16 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   /**
    * Render the score offline and save it.
    *
-   * `renderEvents` decides what sounds (mute, solo, timing); `audioRenderer`
-   * schedules it through the same instruments playback uses, so the file
-   * matches what you just heard.
+   * `renderEvents` decides what sounds (mute, solo, timing, per-track level and
+   * pan); `audioRenderer` builds the same channel graph playback uses and
+   * schedules into it, so the file matches what you just heard.
    */
   const handleExportAudio = (format: 'wav' | 'mp3'): void => {
     withExportScope(async (target) => {
       try {
         const { audioCodec, audioRenderer, fileExporter } = getAppServices().io;
         const plan = renderEvents(target);
-        const audio = await audioRenderer.render(plan.events, plan.durationSec);
+        const audio = await audioRenderer.render(plan);
         const bytes = format === 'wav' ? audioCodec.encodeWav(audio) : audioCodec.encodeMp3(audio);
         await fileExporter.save(
           `${midiSafeFilename(target.metadata.title)}.${format}`,

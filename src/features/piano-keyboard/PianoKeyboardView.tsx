@@ -317,7 +317,11 @@ export function PianoKeyboardView({
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
       // must be heard whether or not a score is loaded or playing.
-      playbackController.noteOn(midi, activeTrack?.midiProgram ?? 0);
+      playbackController.noteOn(
+        midi,
+        activeTrack?.midiProgram ?? 0,
+        activeTrack?.clef === 'percussion',
+      );
     },
     [activeTrack?.midiProgram],
   );

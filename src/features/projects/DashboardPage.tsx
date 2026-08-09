@@ -223,8 +223,10 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const handleDuplicate = async (project: ProjectSummary): Promise<void> => {
     try {
       const { client, token } = await clientAndToken();
-      const full = await client.getProject(project.id, token);
-      await client.createProject({ name: `${full.name} (copy)`, score: full.score }, token);
+      // Server-side: the score is copied inside the database. Downloading it
+      // to upload it again moved the whole thing twice for a copy nobody here
+      // is going to look at.
+      await client.duplicateProject(project.id, {}, token);
       await refresh();
     } catch (err) {
       reportError(err, { context: 'Failed to duplicate project', store });
@@ -254,10 +256,13 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const score = parseScore(parsed.score);
       const name =
         typeof parsed.name === 'string' && parsed.name ? parsed.name : score.metadata.title;
-      const { client, token } = await clientAndToken();
-      const record = await client.createProject({ name, score }, token);
+      // `newProject` creates it and adopts what it just sent. Creating through
+      // the client and then opening the result meant uploading the score and
+      // immediately downloading the same bytes back.
+      await store.getState().newProject({ name, score });
+      const id = store.getState().projectId;
       await refresh();
-      await openProject(record.id);
+      if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       reportError(err, { context: 'Project JSON import failed', store });
     }

@@ -293,7 +293,13 @@ describe('playing the keyboard writes notes', () => {
     const written = allNotes(store.getState().score!).find((n) => n.startTick === 0)!;
     expect(written.durationTicks).toBe(store.getState().score!.ppq);
     expect(store.getState().canUndo).toBe(true);
-    expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalledWith(60, expect.any(Number));
+    // The third argument is the active track's percussion flag, so a drum track
+    // auditions on the kit rather than a pitched voice.
+    expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalledWith(
+      60,
+      expect.any(Number),
+      false,
+    );
     expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
   });
 
