@@ -26,6 +26,7 @@
         "i18next": "^25.5.3",
         "i18next-browser-languagedetector": "^8.2.1",
         "i18next-http-backend": "^4.0.1",
+        "js-synthesizer": "^1.13.0",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "react-i18next": "^16.2.1",
@@ -738,6 +739,8 @@
     "istanbul-reports": ["istanbul-reports@3.2.0", "", { "dependencies": { "html-escaper": "^2.0.0", "istanbul-lib-report": "^3.0.0" } }, "sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA=="],
 
     "jiti": ["jiti@1.21.7", "", { "bin": { "jiti": "bin/jiti.js" } }, "sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A=="],
+
+    "js-synthesizer": ["js-synthesizer@1.13.0", "", {}, "sha512-KXhyJcY90mUvJwbfF1aBNurodm16w8R/wrZYRRc+SSlm58EtL88bspbs7ixtAmoV9QQvf/2EuPAwxj2ExdZSmQ=="],
 
     "js-tokens": ["js-tokens@10.0.0", "", {}, "sha512-lM/UBzQmfJRo9ABXbPWemivdCW8V2G8FHaHdypQaIy523snUjog0W71ayWXTjiR+ixeMyVHN2XcpnTd/liPg/Q=="],
 

@@ -221,7 +221,16 @@ export function initializeApp(): AppServices {
   // The platform comes first: music_lib resolves its playback engine from the
   // registry on first use, and nothing else here may touch playback before it
   // is registered.
-  const io = createMusicIo();
+  // Served from public/audio rather than resolved from node_modules: the
+  // worklet modules must be reachable as URLs, because addModule takes one,
+  // and the soundfont is a 23MB asset the bundler should not touch.
+  const io = createMusicIo({
+    soundfont: {
+      fluidsynthModuleUrl: '/audio/libfluidsynth-2.4.6-with-libsndfile.js',
+      workletModuleUrl: '/audio/js-synthesizer.worklet.min.js',
+      fontUrl: '/audio/FluidR3Mono_GM.sf3',
+    },
+  });
   initializeMusicPlatform({ playback: io.playback });
 
   const baseUrl = CONSTANTS.API_URL;
