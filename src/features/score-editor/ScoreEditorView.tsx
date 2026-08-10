@@ -37,13 +37,11 @@ import {
 } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
-import type { Pitch, Score } from '@sudobility/music_types';
+import type { GenerateScoreRequest, Pitch, Score } from '@sudobility/music_types';
 import {
   changePitchCommand,
   findEvent,
   relocateNotesCommand,
-  appendTrackCommand,
-  createId,
   gmInstrument,
   selectionSummaryLabel,
   shiftDiatonic,
@@ -52,8 +50,6 @@ import {
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import { dispatchTracked } from '@/features/score-editor/editing';
-import { getAppServices } from '@/config/initialize';
 import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
@@ -88,6 +84,11 @@ export type ScoreEditorViewProps = {
   onToggleInspector?: () => void;
   /** Opens the audio-transcription dialog, which `AppLayout` owns. */
   onAddTrackFromAudio?: () => void;
+  /**
+   * Submits a new-track generation as a background job. `AppLayout` owns the
+   * job hook, the same one the Replace buttons use.
+   */
+  onGenerateTrackJob?: (request: GenerateScoreRequest) => Promise<void>;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -342,6 +343,7 @@ export function ScoreEditorView({
   inspectorOpen,
   onToggleInspector,
   onAddTrackFromAudio,
+  onGenerateTrackJob,
 }: ScoreEditorViewProps) {
   const clipboard = useClipboardPrompts(store);
   useEditorShortcuts(store, playbackController, clipboard);
@@ -406,51 +408,52 @@ export function ScoreEditorView({
    * `appendTrackCommand`, which re-homes the result onto this score's grid and
    * makes the whole thing one undo step.
    */
+  /**
+   * Builds the request for a new track and hands it to the job runner.
+   *
+   * A **job**, not a direct call to the provider that this modal waits on.
+   * Generating a track takes as long as any other generation, and the modal
+   * held the user there for all of it — unable to look at another project, and
+   * losing the work entirely if they navigated away. Replace Notes/Measures/
+   * Track already went through the server-side runner for exactly that reason;
+   * this is the same route, and the backend has always understood the
+   * `generate-track` kind (it appends the result with `appendTrackCommand`).
+   *
+   * The dialog closes as soon as the job is accepted. What happens next is the
+   * overlay, which covers the whole editing area and survives leaving and
+   * coming back.
+   */
   const generateTrack = useCallback(
     async (prompt: string, midiProgram: number) => {
       const current = store.getState().score;
-      if (!current) return;
+      if (!current || !onGenerateTrackJob) return;
 
       setGenerateTrackPending(true);
       setGenerateTrackError(null);
       try {
-        const { musicClient, auth } = getAppServices();
-        const token = await auth.getToken();
-        if (!token) throw new Error('Not signed in');
-
         const first = current.tracks[0];
         const instrumentName = gmInstrument(midiProgram)?.name ?? 'Piano';
-        const result = await musicClient.generateScore(
-          {
-            prompt,
-            // Matched to the open score, or the new track will not line up
-            // with the music it is meant to accompany.
-            durationMeasures: first?.measures.length ?? 8,
-            ...(first?.measures[0]
-              ? {
-                  timeSignature: first.measures[0].timeSignature,
-                  keySignature: first.measures[0].keySignature,
-                }
-              : {}),
-            ...(current.tempoMap[0] ? { tempo: current.tempoMap[0].bpm } : {}),
-            tracks: [
-              {
-                name: instrumentName,
-                instrumentName,
-                midiProgram,
-                clef: midiProgram >= 32 && midiProgram <= 39 ? 'bass' : 'treble',
-              },
-            ],
-          },
-          token,
-        );
-
-        const generated = result.score.tracks[0];
-        if (!generated) throw new Error('The model returned no track');
-
-        const id = createId();
-        dispatchTracked(store, appendTrackCommand({ ...generated, id }));
-        store.getState().setActiveTrack(id);
+        await onGenerateTrackJob({
+          prompt,
+          // Matched to the open score, or the new track will not line up
+          // with the music it is meant to accompany.
+          durationMeasures: first?.measures.length ?? 8,
+          ...(first?.measures[0]
+            ? {
+                timeSignature: first.measures[0].timeSignature,
+                keySignature: first.measures[0].keySignature,
+              }
+            : {}),
+          ...(current.tempoMap[0] ? { tempo: current.tempoMap[0].bpm } : {}),
+          tracks: [
+            {
+              name: instrumentName,
+              instrumentName,
+              midiProgram,
+              clef: midiProgram >= 32 && midiProgram <= 39 ? 'bass' : 'treble',
+            },
+          ],
+        });
         setGenerateTrackOpen(false);
       } catch (err) {
         setGenerateTrackError(err instanceof Error ? err.message : 'Generation failed');
@@ -458,8 +461,9 @@ export function ScoreEditorView({
         setGenerateTrackPending(false);
       }
     },
-    [store],
+    [store, onGenerateTrackJob],
   );
+
   /**
    * The same value as `dropTarget`, for the pointer handlers to read.
    *

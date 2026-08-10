@@ -41,10 +41,12 @@ import {
   createId,
   trackMaxPolyphony,
   selectActiveTrackId,
+  selectSelectedNotes,
 } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { durationParts, withBase, withModifier } from '@/features/score-editor/duration-modifiers';
+import { durationDisplay } from '@/features/score-editor/duration-selection';
 import type { BaseDuration } from '@/features/score-editor/duration-modifiers';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 import { dispatchTracked } from '@/features/score-editor/editing';
@@ -148,6 +150,19 @@ const DURATION_OPTIONS: Array<{ value: BaseDuration; Icon: NotationIcon; ariaLab
   { value: 'thirtysecond', Icon: ThirtySecondNoteIcon, ariaLabel: 'Thirty-second note' },
 ];
 
+/**
+ * The note glyph for a base duration, for the merged control's trigger.
+ *
+ * Carries `data-duration` because the glyph is a path, not text: without it
+ * "which duration is the toolbar showing" is only answerable by eye.
+ */
+function SelectedDurationIcon({ base }: { base: BaseDuration }) {
+  const option = DURATION_OPTIONS.find((o) => o.value === base) ?? DURATION_OPTIONS[2];
+  return (
+    <option.Icon className={ICON_GLYPH_CLASS} data-testid="duration-glyph" data-duration={base} />
+  );
+}
+
 const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; Icon: NotationIcon; ariaLabel: string }> = [
   { value: -2, Icon: DoubleFlatIcon, ariaLabel: 'Double flat' },
   { value: -1, Icon: FlatIcon, ariaLabel: 'Flat' },
@@ -229,6 +244,20 @@ export function EditorToolbar({
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
+  const selectedNotes = store(selectSelectedNotes);
+  /**
+   * What the one duration control shows: the armed length with nothing
+   * selected, the selection's own length when they agree, "…" when they do not.
+   */
+  const durationShown = useMemo(
+    () => durationDisplay(selectedNotes, score?.ppq ?? 480, snapGrid),
+    [selectedNotes, score?.ppq, snapGrid],
+  );
+  /**
+   * Radix needs a value that matches an item, and "mixed" matches none — so the
+   * trigger renders its own content and this only decides which row is ticked.
+   */
+  const durationValue = durationShown.kind === 'mixed' ? '' : durationShown.base;
   const editMode = store((s) => s.editMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
@@ -304,6 +333,15 @@ export function EditorToolbar({
   const handleDurationClick = (value: DurationName): void => {
     store.getState().setSnapGrid(value);
     changeDuration(store, value);
+  };
+
+  /**
+   * Picking a base length keeps whatever modifier is armed, so choosing
+   * "quarter" while Dotted is on gives a dotted quarter — the same thing the
+   * six separate buttons did.
+   */
+  const handleDurationSelect = (value: string): void => {
+    handleDurationClick(withBase(snapGrid, value as BaseDuration));
   };
 
   const handleMoreAction = (value: string): void => {
@@ -408,26 +446,47 @@ export function EditorToolbar({
           retypes the selection -- and the pressed state only ever showed the
           first. The tooltip has to say both, or the second looks like the
           editor changing notes you did not ask it to. */}
-        <div role="group" aria-label="Note duration" className="flex items-center gap-0.5">
-          {DURATION_OPTIONS.map((option) => (
-            <Tooltip
-              placement="bottom"
-              key={option.value}
-              content={`${option.ariaLabel} — sets the length for notes you add, and changes any selected notes to it`}
+        {/* One control, not six toggles. What it shows depends on the
+            selection — see `durationDisplay` — and choosing a value both
+            rewrites every selected note and arms the next one, so the control
+            never has to explain which of its two jobs it is doing. */}
+        {/* No `role="group"` wrapper: it exists to bind several controls under
+            one name, and there is one control here — a group sharing the
+            control's own name makes both ambiguous to a screen reader. */}
+        <Select value={durationValue} onValueChange={handleDurationSelect}>
+          <Tooltip
+            placement="bottom"
+            content={
+              durationShown.kind === 'mixed'
+                ? 'The selected notes are different lengths — pick one to make them all match'
+                : 'Note length — for the notes you add, and for any that are selected'
+            }
+          >
+            <SelectTrigger
+              aria-label="Note duration"
+              disabled={!hasScore}
+              className={cn(TEXT_CONTROL_CLASS, 'w-[74px] justify-between [&_svg]:size-[18px]')}
             >
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label={option.ariaLabel}
-                aria-pressed={durationParts(snapGrid).base === option.value}
-                onClick={() => handleDurationClick(withBase(snapGrid, option.value))}
-                className={TOGGLE_BUTTON_CLASS}
-              >
-                <option.Icon className={ICON_GLYPH_CLASS} />
-              </Button>
-            </Tooltip>
-          ))}
-        </div>
+              {durationShown.kind === 'mixed' ? (
+                // Not the first note's icon and not the armed one: either
+                // would claim the selection is something it is not.
+                <span aria-hidden="true">…</span>
+              ) : (
+                <SelectedDurationIcon base={durationShown.base} />
+              )}
+            </SelectTrigger>
+          </Tooltip>
+          <SelectContent>
+            {DURATION_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                <span className="flex items-center gap-2">
+                  <option.Icon className={ICON_GLYPH_CLASS} />
+                  {option.ariaLabel}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <div role="group" aria-label="Duration modifier" className="flex items-center gap-0.5">
           <Tooltip

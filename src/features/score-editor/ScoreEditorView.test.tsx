@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render } from '@testing-library/react';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { stressScore, threeTrackScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
@@ -264,7 +264,10 @@ describe('ScoreEditorView', () => {
     const [first] = allNotes(store.getState().score!);
     clickNote(store.getState().score!, first.id);
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Eighth note' }));
+    // The six duration toggles are one control now.
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('Note duration'));
+    await user.click(await screen.findByRole('option', { name: /Eighth note/ }));
 
     const updated = findEvent(store.getState().score!, first.id);
     expect(updated?.durationTicks).toBe(store.getState().score!.ppq / 2);
@@ -1316,5 +1319,50 @@ describe('ScoreEditorView: following playback never cancels its own smooth scrol
     }
 
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('generating a track', () => {
+  it('submits a job and closes, instead of holding the modal until it finishes', async () => {
+    // Generating a track takes as long as any other generation. The modal used
+    // to wait it out: you could not look at another project, and navigating
+    // away lost the work. Replace Notes/Measures/Track already went through the
+    // server-side runner for exactly this reason.
+    const store = makeStore();
+    const onGenerateTrackJob = vi.fn().mockResolvedValue(undefined);
+    render(<ScoreEditorView store={store} onGenerateTrackJob={onGenerateTrackJob} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Add Track'));
+    await user.click(await screen.findByRole('option', { name: 'Generate Track' }));
+    await user.type(screen.getByLabelText('Prompt'), 'a walking bass line');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(onGenerateTrackJob).toHaveBeenCalledTimes(1);
+    const request = onGenerateTrackJob.mock.calls[0][0];
+    // Matched to the open score, or the new track will not line up with it.
+    expect(request.prompt).toBe('a walking bass line');
+    expect(request.durationMeasures).toBe(store.getState().score!.tracks[0].measures.length);
+    expect(request.tracks).toHaveLength(1);
+    // And the dialog is gone: what happens next is the overlay.
+    await waitFor(() => expect(screen.queryByLabelText('Prompt')).toBeNull());
+  });
+
+  it('leaves the score alone — the server applies the result, not the client', async () => {
+    // The job runner appends the track with `appendTrackCommand` and the
+    // editor reloads the project. A client-side splice here would race it.
+    const store = makeStore();
+    const before = store.getState().score;
+    render(
+      <ScoreEditorView store={store} onGenerateTrackJob={vi.fn().mockResolvedValue(undefined)} />,
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Add Track'));
+    await user.click(await screen.findByRole('option', { name: 'Generate Track' }));
+    await user.type(screen.getByLabelText('Prompt'), 'strings');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(store.getState().score).toBe(before);
   });
 });

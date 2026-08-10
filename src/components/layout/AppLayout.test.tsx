@@ -32,7 +32,13 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   },
 }));
 
+vi.mock('@/features/generation/useGenerationJob', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useProjectGeneration: vi.fn(),
+}));
+
 import { AppLayout } from '@/components/layout/AppLayout';
+import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices } from '@/config/initialize';
@@ -40,8 +46,16 @@ import { getAppServices } from '@/config/initialize';
 // AppLayout mounts the import dialogs even while they are closed, and those
 // build their import service from the composition root, so the harness has to
 // be installed for a plain render.
+const IDLE_GENERATION = {
+  generating: false,
+  error: null,
+  start: vi.fn(),
+  cancel: vi.fn(),
+} as unknown as ReturnType<typeof useProjectGeneration>;
+
 beforeEach(() => {
   installTestAppServices();
+  vi.mocked(useProjectGeneration).mockReturnValue(IDLE_GENERATION);
 });
 
 afterEach(() => {
@@ -435,5 +449,36 @@ describe('AppLayout — snapshots', () => {
 
     await waitFor(() => expect(stubs.createSnapshot).toHaveBeenCalled());
     expect(context.fakeClient.updateCalls).toBe(writesBefore);
+  });
+});
+
+describe('the generating overlay covers the whole editing area', () => {
+  it('covers the keyboard, the transport and the inspector — not just the sheet', async () => {
+    // A job rewrites the score server-side, and the project is immutable for
+    // the duration: a keyboard that still auditions notes, or a transport that
+    // still plays, is offering to edit music that is about to be replaced.
+    // The overlay used to sit inside the sheet's own column, leaving all three
+    // live underneath it.
+    vi.mocked(useProjectGeneration).mockReturnValue({
+      generating: true,
+      error: null,
+      start: vi.fn(),
+      cancel: vi.fn(),
+    } as unknown as ReturnType<typeof useProjectGeneration>);
+
+    const store = await makeStoreWithProject();
+    render(<AppLayout store={store} />);
+
+    const overlay = screen.getByTestId('generating-overlay');
+    // `absolute inset-0` covers its offset parent, so "what does it cover" is
+    // "what else lives in that parent".
+    const region = overlay.parentElement!;
+    expect(region.contains(screen.getByRole('toolbar', { name: 'Playback transport' }))).toBe(true);
+    expect(region.contains(screen.getByRole('img', { name: /Piano keyboard/ }))).toBe(true);
+    expect(region.contains(screen.getByRole('toolbar', { name: 'Score editor toolbar' }))).toBe(
+      true,
+    );
+    // But not the app bar: leaving is ordinary navigation.
+    expect(region.contains(screen.getByRole('button', { name: 'Back to dashboard' }))).toBe(false);
   });
 });

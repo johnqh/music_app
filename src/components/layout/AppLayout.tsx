@@ -870,77 +870,87 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* The inspector toggle lives on the editor toolbar. It used to sit on
+      {/*
+        Everything below the app bar is one region, and the generating overlay
+        covers all of it: the sheet, the inspector, the keyboard and the
+        transport. A job rewrites the score out from under every one of those —
+        a keyboard that still auditions notes, or a transport that still plays,
+        is offering to edit music that is about to be replaced. The app bar
+        stays outside it on purpose, so you can leave and come back.
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-1 min-h-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* The inspector toggle lives on the editor toolbar. It used to sit on
               a strip of its own alongside a track-panel toggle; with that gone
               the strip was a blank row holding one button. */}
-          {/* `relative` so the generating overlay can cover exactly the
-              editor — the app bar stays usable, so you can navigate away. */}
-          <div className="relative min-h-0 flex-1">
-            <ScoreEditorView
-              store={store}
-              inspectorOpen={inspectorOpen}
-              onToggleInspector={() => setInspectorOpen((v) => !v)}
-              onAddTrackFromAudio={() => {
-                setAudioAnalysis(undefined);
-                setAudioImportOpen(true);
-              }}
-            />
-            {generation.generating && (
-              <GeneratingOverlay
-                onCancel={() => void generation.cancel()}
-                error={generation.error}
-              />
-            )}
-          </div>
-        </div>
-
-        {inspectorOpen && (
-          <div
-            className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-theme-border"
-            style={{ width: SIDE_PANEL_WIDTH }}
-          >
-            {/* The generation panels are gone: whole-score generation moved
-                to the dashboard, and region regeneration is now the
-                Inspector's three Replace buttons, each submitting a job. */}
-            <div className="shrink-0">
-              <InspectorPanel
+            <div className="min-h-0 flex-1">
+              <ScoreEditorView
                 store={store}
-                onReplace={(scope, submission) => void startReplacement(scope, submission)}
+                inspectorOpen={inspectorOpen}
+                onToggleInspector={() => setInspectorOpen((v) => !v)}
+                onAddTrackFromAudio={() => {
+                  setAudioAnalysis(undefined);
+                  setAudioImportOpen(true);
+                }}
+                // The same runner the Replace buttons use, so adding a track
+                // behaves like every other generation: the overlay appears, the
+                // project is locked server-side, and leaving is safe.
+                onGenerateTrackJob={(request) => generation.start('generate-track', request)}
               />
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Full-width piano keyboard: a sibling of the transport rather than a
+          {inspectorOpen && (
+            <div
+              className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-theme-border"
+              style={{ width: SIDE_PANEL_WIDTH }}
+            >
+              {/* The generation panels are gone: whole-score generation moved
+                to the dashboard, and region regeneration is now the
+                Inspector's three Replace buttons, each submitting a job. */}
+              <div className="shrink-0">
+                <InspectorPanel
+                  store={store}
+                  onReplace={(scope, submission) => void startReplacement(scope, submission)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Full-width piano keyboard: a sibling of the transport rather than a
           child of the centre column, so it spans the whole window beneath the
           track and inspector panels. Fixed height, collapsible, and its own
           horizontal scroll when the window is too narrow for 88 keys. */}
-      <div
-        className="shrink-0 overflow-hidden border-t border-theme-border"
-        style={keyboardCollapsed ? undefined : { height: PIANO_KEYBOARD_PANEL_HEIGHT }}
-      >
-        {/* The editor panel shares the keyboard's row and the canvas gutter's
+        <div
+          className="shrink-0 overflow-hidden border-t border-theme-border"
+          style={keyboardCollapsed ? undefined : { height: PIANO_KEYBOARD_PANEL_HEIGHT }}
+        >
+          {/* The editor panel shares the keyboard's row and the canvas gutter's
             width, so a track's label on the sheet and its controls sit on the
             same column. Both show only the active track. */}
-        <div className="flex h-full min-h-0">
-          {!keyboardCollapsed && <TrackEditorPanel store={store} />}
-          <div className="min-w-0 flex-1">
-            <PianoKeyboardView
-              store={store}
-              collapsed={keyboardCollapsed}
-              onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
-            />
+          <div className="flex h-full min-h-0">
+            {!keyboardCollapsed && <TrackEditorPanel store={store} />}
+            <div className="min-w-0 flex-1">
+              <PianoKeyboardView
+                store={store}
+                collapsed={keyboardCollapsed}
+                onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Pinned bottom bars: the transport sits directly above the status
+        {/* Pinned bottom bars: the transport sits directly above the status
           bar, outside the scrolling score region, so neither scrolls away
           with the sheet. */}
-      <TransportBar store={store} />
+        <TransportBar store={store} />
+
+        {generation.generating && (
+          <GeneratingOverlay onCancel={() => void generation.cancel()} error={generation.error} />
+        )}
+      </div>
 
       <div
         role="status"

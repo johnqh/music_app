@@ -7,9 +7,10 @@
  * Choosing a hidden track reveals it (handled in music_lib's `setActiveTrack`),
  * so picking one and seeing nothing happen is not a reachable state.
  */
-import { CheckableSelect, Tooltip } from '@sudobility/components';
+import { CheckableSelect, Tooltip, cn } from '@sudobility/components';
 import { selectActiveTrackId, selectVisibleTrackIds, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
 export type TrackVisibilitySelectProps = {
   store?: EditorStoreApi;
@@ -34,7 +35,9 @@ export function TrackVisibilitySelect({ store = useAppStore }: TrackVisibilitySe
         onChange={(trackId) => store.getState().setActiveTrack(trackId)}
         checked={visibleTrackIds}
         onCheckedChange={(ids) => store.getState().setVisibleTracks(ids)}
-        className="w-[150px]"
+        // The bar's shared height: left to itself this takes the library's
+        // default, which is 8px taller than every button beside it.
+        className={cn(TEXT_CONTROL_CLASS, 'w-[150px] justify-between')}
       />
     </Tooltip>
   );
