@@ -86,6 +86,8 @@ export type ScoreEditorViewProps = {
   /** Inspector visibility, forwarded to the toolbar, which owns the toggle. Optional so tests can render the view alone. */
   inspectorOpen?: boolean;
   onToggleInspector?: () => void;
+  /** Opens the audio-transcription dialog, which `AppLayout` owns. */
+  onAddTrackFromAudio?: () => void;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -339,6 +341,7 @@ export function ScoreEditorView({
   store = useAppStore,
   inspectorOpen,
   onToggleInspector,
+  onAddTrackFromAudio,
 }: ScoreEditorViewProps) {
   const clipboard = useClipboardPrompts(store);
   useEditorShortcuts(store, playbackController, clipboard);
@@ -1322,6 +1325,7 @@ export function ScoreEditorView({
           setGenerateTrackError(null);
           setGenerateTrackOpen(true);
         }}
+        onAddTrackFromAudio={onAddTrackFromAudio}
       />
 
       <GenerateTrackDialog

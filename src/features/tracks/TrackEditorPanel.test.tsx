@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  changeClefCommand,
   changeTrackPropsCommand,
   createAppStore,
   testStoreContext,
@@ -65,6 +66,28 @@ describe('TrackEditorPanel', () => {
     const track = store.getState().score!.tracks[0];
     expect(track.midiProgram).toBe(56);
     expect(track.instrumentName).toBe('Trumpet');
+  });
+
+  it('offers drum kits, not instruments, for a percussion track', async () => {
+    // A percussion track's `midiProgram` selects a kit. Offering the melodic
+    // catalogue meant picking "Celesta" quietly switched the kit to Room —
+    // program 8 is both — and picking "Jazz Guitar" did nothing at all,
+    // because no kit sits at that address.
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() =>
+      store.getState().dispatchCommand(changeClefCommand(score.tracks[0].id, 'percussion')),
+    );
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText(`Drum kit: ${score.tracks[0].name}`));
+    expect(screen.getAllByRole('option')).toHaveLength(8);
+    await user.click(await screen.findByRole('option', { name: /^TR-808 Kit$/ }));
+
+    const track = store.getState().score!.tracks[0];
+    expect(track.midiProgram).toBe(25);
+    expect(track.instrumentName).toBe('TR-808 Kit');
   });
 
   it('opens the instrument list in a modal, grouped by family', async () => {

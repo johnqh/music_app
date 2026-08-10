@@ -14,11 +14,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Tooltip } from '@sudobility/components';
 import {
   findTrack,
-  gmInstrument,
-  gmInstrumentRange,
   midiToPitch,
   playbackController,
   selectActiveTrackId,
+  trackInstrumentLabel,
+  trackKeyboardRange,
   useAppStore,
   pitchToMidi,
   selectSelectedNotes,
@@ -31,12 +31,12 @@ import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
-import type { PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
+import type { KeyNaming, PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
 import {
+  LABEL_ROW_HEIGHT,
   MIN_WHITE_KEY_WIDTH,
   FULL_RANGE,
   computeKeys,
-  noteLabel,
   keyboardWidth,
   snapToWhiteKeys,
   whiteKeyCount,
@@ -56,6 +56,8 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   width,
   height,
   label,
+  name,
+  labelTop,
   isLit,
   litColor,
   isSelected,
@@ -76,10 +78,11 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
       data-playing={isLit ? 'true' : 'false'}
       data-selected={isSelected ? 'true' : 'false'}
       role="button"
-      // The note itself, not "Play C4": every key would otherwise match a
+      // What the key sounds, not "Play C4": every key would otherwise match a
       // search for the transport's Play button, and a key's accessible name
-      // should be the note it sounds.
-      aria-label={noteLabel(midi)}
+      // should be what it sounds — which on a drum track is a drum, not a
+      // pitch. `name` carries whichever applies.
+      aria-label={name}
       onPointerDown={(event) => {
         event.preventDefault();
         // Capture keeps the release on this key when a finger slides off it,
@@ -129,8 +132,11 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
     >
       {label && (
         <span
-          className="pointer-events-none absolute left-0 w-full text-center text-[9px] text-theme-text-secondary"
-          style={{ top: height + 1 }}
+          // `whitespace-nowrap` with the span centred on the key: a drum name
+          // is wider than the key it belongs to, so it has to overhang rather
+          // than wrap into the row below and collide with it.
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[9px] text-theme-text-secondary"
+          style={{ top: labelTop }}
         >
           {label}
         </span>
@@ -246,7 +252,12 @@ export function PianoKeyboardView({
     const measure = (): void => {
       setBox({
         width: el.clientWidth || FALLBACK_WIDTH,
-        height: Math.max(1, (el.clientHeight || FALLBACK_KEY_HEIGHT) - LABEL_GUTTER),
+        // The raw box. The label gutter is subtracted at render time instead of
+        // here: a drum track labels its black keys too, on a second row, and
+        // that is not known at measure time. Baking one gutter in here meant
+        // the taller one overflowed a container that clips vertically, and the
+        // black keys' names were cut off entirely.
+        height: Math.max(1, el.clientHeight || FALLBACK_KEY_HEIGHT),
       });
     };
     measure();
@@ -267,10 +278,26 @@ export function PianoKeyboardView({
    * Widened to whole keys first: a keyboard whose outermost key is black has
    * nothing for that key to hang off, so it would float.
    */
+  /**
+   * The two fields every instrument lookup here depends on, pulled out as
+   * primitives.
+   *
+   * Deliberate: memoizing on the track object would recompute the whole key
+   * geometry on any score edit, since a new score means a new track object.
+   * These two are what actually decide it — and both are needed, because
+   * `midiProgram` means a drum kit or an instrument depending on the clef.
+   */
+  const trackProgram = activeTrack?.midiProgram;
+  const trackClef = activeTrack?.clef;
+
   const range = useMemo(() => {
-    const program = activeTrack?.midiProgram;
-    return snapToWhiteKeys(program === undefined ? FULL_RANGE : gmInstrumentRange(program));
-  }, [activeTrack?.midiProgram]);
+    // Through the track, not the program alone: on a percussion track
+    // `midiProgram` is a drum kit, so reading it as an instrument showed a
+    // piano's compass for a kit — keys that could not sound a drum, and the
+    // drums that do sound (35-81) partly off the end.
+    if (trackProgram === undefined || trackClef === undefined) return snapToWhiteKeys(FULL_RANGE);
+    return snapToWhiteKeys(trackKeyboardRange({ clef: trackClef, midiProgram: trackProgram }));
+  }, [trackProgram, trackClef]);
 
   /**
    * Keys currently held by the pointer, and when each went down.
@@ -317,13 +344,12 @@ export function PianoKeyboardView({
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
       // must be heard whether or not a score is loaded or playing.
-      playbackController.noteOn(
-        midi,
-        activeTrack?.midiProgram ?? 0,
-        activeTrack?.clef === 'percussion',
-      );
+      // The clef is as load-bearing as the program: it decides whether that
+      // number is an instrument or a drum kit, so a stale one auditions a
+      // pitched instrument for a note that plays back as a drum.
+      playbackController.noteOn(midi, trackProgram ?? 0, trackClef === 'percussion');
     },
-    [activeTrack?.midiProgram],
+    [trackProgram, trackClef],
   );
 
   const releaseKey = useCallback(
@@ -384,19 +410,30 @@ export function PianoKeyboardView({
   );
 
   const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
+  /**
+   * A drum track's keys are drums, so they are named as drums — and every one
+   * of them is labelled, since a drum name cannot be inferred from a landmark
+   * the way a pitch name can.
+   */
+  const naming: KeyNaming = trackClef === 'percussion' ? 'percussion' : 'pitch';
+  /** Two rows of labels for a kit — the blacks are named too, and need their own line. */
+  const labelGutter = naming === 'percussion' ? LABEL_ROW_HEIGHT * 2 : LABEL_GUTTER;
+  /** What is left for the keys themselves once the labels have their rows. */
+  const keyHeight = Math.max(1, box.height - labelGutter);
   const keys = useMemo(
-    () => computeKeys(whiteKeyWidth, box.height, range),
-    [whiteKeyWidth, box.height, range],
+    () => computeKeys(whiteKeyWidth, keyHeight, range, naming),
+    [whiteKeyWidth, keyHeight, range, naming],
   );
 
   /**
    * The instrument, not the literal word "Piano": the keyboard is a view of
-   * whichever track is active, and that track is frequently not a piano.
+   * whichever track is active, and that track is frequently not a piano — and
+   * on a percussion track it is a drum kit rather than an instrument at all.
    * Falls back to the track's own name when the program has no catalogue entry
    * (a hand-edited score), and to "Keyboard" when there is no score.
    */
   const headerLabel = activeTrack
-    ? (gmInstrument(activeTrack.midiProgram)?.name ?? activeTrack.name)
+    ? (trackInstrumentLabel(activeTrack) ?? activeTrack.name)
     : 'Keyboard';
 
   const header = (
@@ -404,9 +441,7 @@ export function PianoKeyboardView({
       className="flex shrink-0 items-center gap-2 border-b border-theme-border px-2"
       style={{ height: HEADER_HEIGHT }}
     >
-      {activeTrack && (
-        <InstrumentIcon program={activeTrack.midiProgram} className="size-4 shrink-0" />
-      )}
+      {activeTrack && <InstrumentIcon track={activeTrack} className="size-4 shrink-0" />}
       <span className="text-xs font-medium text-theme-text-primary">
         {/* The keyboard carries no track identity of its own, so the header is
             the only thing telling you which part you are looking at. */}
@@ -444,7 +479,7 @@ export function PianoKeyboardView({
           role="img"
           aria-label="Piano keyboard showing the notes being played"
           className="relative"
-          style={{ width: keyboardWidth(whiteKeyWidth), height: box.height + LABEL_GUTTER }}
+          style={{ width: keyboardWidth(whiteKeyWidth), height: box.height }}
         >
           <PianoKeyRow
             store={store}

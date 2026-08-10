@@ -204,6 +204,22 @@ export async function waitForGenerationSettled(page: Page): Promise<void> {
   await expect(page.getByText('Generating…')).toHaveCount(0, { timeout: 60_000 });
 }
 
+/**
+ * Presses Play and waits until the transport is actually playing.
+ *
+ * The first press of the run has a 23MB soundfont to fetch and hand to
+ * fluidsynth, and the transport no longer claims to be playing during that: it
+ * disables the button, says "Preparing instruments", and flips to Pause only
+ * once a note can sound. (It used to report "playing" immediately, which made
+ * the caret — interpolated from elapsed real time — glide silently through
+ * several bars and then snap back.) So this waits on a load-sized budget rather
+ * than Playwright's default five seconds.
+ */
+export async function startPlayback(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Play' }).click();
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 60_000 });
+}
+
 /** Waits until the notation canvas has drawn at least one note (the `__scoresmith` handle's bbox map is non-empty). */
 export async function waitForNotation(page: Page): Promise<void> {
   await page.waitForFunction(

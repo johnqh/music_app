@@ -110,6 +110,37 @@ describe('computeKeys', () => {
     }
   });
 
+  it('names a drum keyboard after its drums, not after pitches', () => {
+    // On a percussion track a key sounds a drum, and "C3" is a name for
+    // nothing there. Every key is labelled, black ones included: a drum name
+    // cannot be inferred from a landmark the way a pitch name can, and Closed
+    // Hi-Hat — the most-played piece of a kit — sits on a black key.
+    const drums = computeKeys(W, H, { min: 35, max: 81 }, 'percussion');
+
+    for (const key of drums) expect(key.label, `midi ${key.midi}`).not.toBeNull();
+    expect(drums.find((k) => k.midi === 38)?.name).toBe('Acoustic Snare');
+    expect(drums.find((k) => k.midi === 42)?.name).toBe('Closed Hi-Hat');
+    expect(drums.find((k) => k.midi === 42)?.isBlack).toBe(true);
+    expect(drums.find((k) => k.midi === 42)?.label).toBe('Cl HH');
+  });
+
+  it('drops a drum keyboard’s black labels to a second row', () => {
+    // A black key sits between two whites, so one row would print its name on
+    // top of both its neighbours'.
+    const drums = computeKeys(W, H, { min: 35, max: 81 }, 'percussion');
+    const white = drums.find((k) => !k.isBlack)!;
+    const black = drums.find((k) => k.isBlack)!;
+
+    expect(black.labelTop).toBeGreaterThan(white.labelTop);
+    // Both clear the white keys, which are the tall ones.
+    expect(white.labelTop).toBeGreaterThanOrEqual(H);
+  });
+
+  it('still names a pitched keyboard after its notes', () => {
+    expect(keys.find((k) => k.midi === 60)?.name).toBe('C4');
+    expect(keys.find((k) => k.midi === 61)?.name).toBe('C#4');
+  });
+
   it('never places a black key at either extreme', () => {
     // A0 is white and C8 is white, so the keyboard begins and ends on a white.
     expect(isBlackKey(KEYBOARD_MIN_MIDI)).toBe(false);

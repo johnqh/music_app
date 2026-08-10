@@ -305,6 +305,44 @@ describe('TransportBar: synth loading', () => {
     expect(screen.getByText('Preparing instruments')).toBeInTheDocument();
   });
 
+  it('cannot be told to play while the instruments are still loading', () => {
+    // Nothing can sound until the font is in, and the transport used to say
+    // "playing" anyway — so the caret, which interpolates from elapsed real
+    // time between position reports, ran silently through several bars and
+    // then snapped back when the music actually started at the beginning.
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+
+    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: 0.4 }));
+
+    const button = screen.getByRole('button', { name: 'Preparing instruments' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('button', { name: 'Play' })).toBeNull();
+  });
+
+  it('goes back to Play once the instruments are ready', () => {
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: 0.4 }));
+
+    act(() => store.getState().setSynthLoad({ status: 'ready' }));
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+  });
+
+  it('leaves Play usable when the instruments failed, so the error is not a trap', () => {
+    // A failed load is terminal for the font, not for the button: retrying is
+    // the only thing left to try, and a disabled control offers nothing.
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+
+    act(() => store.getState().setSynthLoad({ status: 'failed', message: 'boom' }));
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+  });
+
   it('says so when the instruments cannot be loaded at all', () => {
     const store = makeStore();
     render(<TransportBar store={store} />);

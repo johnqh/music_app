@@ -12,7 +12,7 @@
  *   │C │D │E │F │G │
  *   └──┴──┴──┴──┴──┘
  */
-import { midiToPitch, pitchToString } from '@sudobility/music_lib';
+import { gmPercussion, gmPercussionName, midiToPitch, pitchToString } from '@sudobility/music_lib';
 
 /** A0 — the lowest key on a standard 88-key piano. */
 export const KEYBOARD_MIN_MIDI = 21;
@@ -82,7 +82,38 @@ export type PianoKey = {
    * octave is legible only while the keys are wide, and this keyboard shrinks.
    */
   label: string | null;
+  /**
+   * What this key sounds, spelled out — the note name, or the drum on a
+   * percussion track.
+   *
+   * The key's accessible name, which is not always what `label` prints: a black
+   * key prints nothing but still has to announce itself, and a drum key prints
+   * "Cl HH" while announcing "Closed Hi-Hat".
+   */
+  name: string;
+  /**
+   * Where the label sits, measured from the key's own top.
+   *
+   * Both kinds of key start at y=0 but a black one is shorter, so "just below
+   * this key" is not the same line for both. Labels go in the gutter under the
+   * *white* keys, and a labelled black key drops to a second row: a black key
+   * sits between two whites, so one row would print its name on top of both
+   * its neighbours'.
+   */
+  labelTop: number;
 };
+
+/** Height of one row of key labels, and so of the gutter a keyboard needs per row. */
+export const LABEL_ROW_HEIGHT = 12;
+
+/**
+ * How a keyboard names its keys.
+ *
+ * A percussion track's keys are drums, not pitches: `C3` is a name for nothing
+ * on a drum staff, where that key sounds a Bass Drum. Passing the mode in keeps
+ * `computeKeys` free of any opinion about tracks or clefs.
+ */
+export type KeyNaming = 'pitch' | 'percussion';
 
 /** True for the five black keys per octave (pitch classes 1, 3, 6, 8, 10). */
 export function isBlackKey(midi: number): boolean {
@@ -111,11 +142,13 @@ export function computeKeys(
   whiteKeyWidth: number,
   whiteKeyHeight: number,
   range: KeyboardRange = FULL_RANGE,
+  naming: KeyNaming = 'pitch',
 ): PianoKey[] {
   const whites: PianoKey[] = [];
   const blacks: PianoKey[] = [];
   const blackWidth = whiteKeyWidth * BLACK_KEY_WIDTH_RATIO;
   const blackHeight = whiteKeyHeight * BLACK_KEY_HEIGHT_RATIO;
+  const drums = naming === 'percussion';
 
   // `whiteIndex` counts only the whites seen so far, which is what positions
   // both kinds: a white sits at its own index, and a black hangs off the
@@ -124,7 +157,11 @@ export function computeKeys(
   for (let midi = range.min; midi <= range.max; midi += 1) {
     const pitch = midiToPitch(midi);
     const isLandmark = pitch.accidental === 0 && (pitch.step === 'C' || pitch.step === 'F');
-    const label = isLandmark ? noteLabel(midi) : null;
+    // On a drum kit every key is a different instrument, so every key is worth
+    // labelling — the landmark rule exists because pitch names are predictable
+    // from a reference, and drum names are not.
+    const label = drums ? (gmPercussion(midi)?.short ?? null) : isLandmark ? noteLabel(midi) : null;
+    const name = drums ? gmPercussionName(midi) : noteLabel(midi);
 
     if (isBlackKey(midi)) {
       blacks.push({
@@ -133,7 +170,13 @@ export function computeKeys(
         x: whiteIndex * whiteKeyWidth - blackWidth / 2,
         width: blackWidth,
         height: blackHeight,
-        label: null, // a black key is never a landmark
+        // A black key is never a pitch landmark, but it is a drum of its own:
+        // Closed Hi-Hat is F#, and leaving it blank would drop the most-played
+        // piece of the kit off the labelled keyboard.
+        label: drums ? label : null,
+        name,
+        // Second row: clear of the white keys and of their labels.
+        labelTop: whiteKeyHeight + 1 + LABEL_ROW_HEIGHT,
       });
     } else {
       whites.push({
@@ -143,6 +186,8 @@ export function computeKeys(
         width: whiteKeyWidth,
         height: whiteKeyHeight,
         label,
+        name,
+        labelTop: whiteKeyHeight + 1,
       });
       whiteIndex += 1;
     }

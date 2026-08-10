@@ -43,7 +43,15 @@ import {
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
-import { projectTemplates, reportError, useAppStore } from '@sudobility/music_lib';
+import {
+  addTranscribedTrackCommand,
+  deleteTrackCommand,
+  modToScore,
+  projectTemplates,
+  reportError,
+  transcribe,
+  useAppStore,
+} from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { getAppServices } from '@/config/initialize';
 import { createEmptyScore } from '@sudobility/music_lib';
@@ -53,6 +61,8 @@ import { CONSTANTS } from '@/config/constants';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
+import { AudioImportDialog } from '@/components/dialogs/AudioImportDialog';
+import type { Transcription } from '@sudobility/music_lib';
 
 export type DashboardPageProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
@@ -104,9 +114,27 @@ function emptyScoreFor(request: GenerateScoreRequest) {
   });
 }
 
-const TEXT_INPUT_CLASS = 'px-3 py-1.5 text-sm';
+/**
+ * One height for every control in the toolbar row.
+ *
+ * The library `Button` sizes itself from its own padding, a `SelectTrigger`
+ * from its text, and the file-picker `<label>` from whatever padding it is
+ * handed — so the row came out visibly ragged, with the sort select and
+ * "Import Project JSON" shorter than the buttons beside them. Stating the
+ * height once and centring within it is what makes them agree; padding cannot,
+ * because it is the content that differs.
+ */
+const ROW_CONTROL_CLASS = 'h-10 min-h-10 inline-flex items-center text-sm';
 
-const SELECT_TRIGGER_CLASS = 'h-auto w-auto px-3 py-1.5 text-sm';
+/** The resolution a transcription is emitted against, and the score built to hold it. */
+const TRANSCRIPTION_PPQ = 480;
+
+const TEXT_INPUT_CLASS = `${ROW_CONTROL_CLASS} px-3`;
+
+const SELECT_TRIGGER_CLASS = `${ROW_CONTROL_CLASS} w-auto px-3`;
+
+/** Buttons and the file-picker labels that have to pass for buttons. */
+const ROW_BUTTON_CLASS = `${ROW_CONTROL_CLASS} justify-center px-3`;
 
 const CARD_CLASS = cn(variants.card.default.base(), 'flex flex-col overflow-hidden rounded-md');
 
@@ -119,6 +147,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
+  const [audioImportOpen, setAudioImportOpen] = useState(false);
+  const [audioAnalysis, setAudioAnalysis] = useState<Transcription | undefined>(undefined);
+  const [audioName, setAudioName] = useState('Audio');
   const [generateOpen, setGenerateOpen] = useState(false);
   const [creatingGeneration, setCreatingGeneration] = useState(false);
 
@@ -268,6 +299,102 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
   };
 
+  /**
+   * Imports a tracker module as a new project.
+   *
+   * One step, not a wizard: a `.MOD` states every note and every instrument
+   * outright, so unlike MIDI or audio there is nothing to estimate and nothing
+   * to confirm. A file that is not a module throws in the codec and surfaces as
+   * a toast — a garbage score would look like it imported and quietly not be
+   * the music.
+   */
+  const handleImportModFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const bytes = await file.arrayBuffer();
+      const mod = getAppServices().io.modCodec.decode(bytes);
+      const score = modToScore(mod);
+      await store.getState().newProject({ name: mod.title || file.name, score });
+      const id = store.getState().projectId;
+      await refresh();
+      if (id) onNavigate?.(`/project/${id}`);
+    } catch (err) {
+      reportError(err, { context: 'Module import failed', store });
+    }
+  };
+
+  /** Decode and analyse the picked file; the dialog then shows what was heard. */
+  const handleAudioFile = (file: File): void => {
+    void (async () => {
+      try {
+        setAudioAnalysis(undefined);
+        setAudioName(file.name.replace(/\.[^.]+$/, ''));
+        const audio = await getAppServices().io.audioCodec.decode(await file.arrayBuffer());
+        setAudioAnalysis(transcribe(audio, TRANSCRIPTION_PPQ));
+      } catch (err) {
+        reportError(err, { context: 'Audio import failed', store });
+      }
+    })();
+  };
+
+  /**
+   * Commits the transcription as a **new project**.
+   *
+   * The editor's version of this added a track to the score already open; here
+   * there is no open score, so the transcribed track is written onto an empty
+   * one. `addTranscribedTrackCommand` is a pure `(Score) => Score`, so it
+   * applies with no store behind it.
+   *
+   * Ticks are rescaled when the tempo was corrected: they were emitted against
+   * the *detected* value, so halving the tempo has to halve them too or the
+   * notes land in the wrong bars.
+   */
+  const handleAudioImport = (bpm: number): void => {
+    const analysis = audioAnalysis;
+    if (!analysis) return;
+    void (async () => {
+      try {
+        const scale = analysis.bpm === 0 ? 1 : bpm / analysis.bpm;
+        const notes = analysis.notes.map((n) => ({
+          midi: n.midi,
+          startTick: Math.round(n.startTick * scale),
+          durationTicks: Math.max(1, Math.round(n.durationTicks * scale)),
+        }));
+
+        // Long enough to hold the recording: `addTranscribedTrackCommand`
+        // drops a note that falls past the last measure rather than piling it
+        // on the final beat, so a score built too short silently loses the end
+        // of the take.
+        const lastTick = notes.reduce((end, n) => Math.max(end, n.startTick + n.durationTicks), 0);
+        const ticksPerMeasure = TRANSCRIPTION_PPQ * 4; // the 4/4 default below
+        const measures = Math.max(4, Math.ceil((lastTick + 1) / ticksPerMeasure));
+
+        // One placeholder track, because the command copies its measure grid
+        // for the new track and refuses a score with none — then dropped again,
+        // so the project opens with the transcription alone.
+        const empty = createEmptyScore({
+          title: audioName,
+          ppq: TRANSCRIPTION_PPQ,
+          tempo: bpm,
+          measures,
+        });
+        const withAudio = addTranscribedTrackCommand({ name: audioName, notes }).execute(empty);
+        const score = deleteTrackCommand(empty.tracks[0].id).execute(withAudio);
+
+        await store.getState().newProject({ name: audioName, score });
+        const id = store.getState().projectId;
+        setAudioImportOpen(false);
+        setAudioAnalysis(undefined);
+        await refresh();
+        if (id) onNavigate?.(`/project/${id}`);
+      } catch (err) {
+        reportError(err, { context: 'Audio import failed', store });
+      }
+    })();
+  };
+
   const renderCard = (project: ProjectSummary) => (
     <div key={project.id} className={CARD_CLASS}>
       <Button
@@ -371,6 +498,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
               variant="primary"
               aria-label="Create"
               onClick={() => void handleCreate()}
+              className={ROW_BUTTON_CLASS}
             >
               Create
             </Button>
@@ -381,6 +509,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             variant="primary"
             aria-label="New project"
             onClick={() => setCreatingName('Untitled Project')}
+            className={ROW_BUTTON_CLASS}
           >
             New Project
           </Button>
@@ -392,7 +521,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             variant="outline"
             aria-label="Generate Score"
             onClick={() => setGenerateOpen(true)}
-            className="px-3 py-1.5"
+            className={ROW_BUTTON_CLASS}
           >
             Generate Score
           </Button>
@@ -403,7 +532,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             variant="outline"
             aria-label="Import MIDI"
             onClick={() => setMidiImportOpen(true)}
-            className="px-3 py-1.5"
+            className={ROW_BUTTON_CLASS}
           >
             Import MIDI
           </Button>
@@ -414,17 +543,50 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             variant="outline"
             aria-label="Import MusicXML"
             onClick={() => setMusicXmlImportOpen(true)}
-            className="px-3 py-1.5"
+            className={ROW_BUTTON_CLASS}
           >
             Import MusicXML
           </Button>
+        </Tooltip>
+        <Tooltip content="Import audio (WAV, MP3, MPA)">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Import Audio"
+            onClick={() => {
+              setAudioAnalysis(undefined);
+              setAudioImportOpen(true);
+            }}
+            className={ROW_BUTTON_CLASS}
+          >
+            Import Audio
+          </Button>
+        </Tooltip>
+        <Tooltip content="Import an Amiga tracker module (.MOD)">
+          {/* A native <label> around a hidden input: `Button` renders a
+              <button>, which cannot drive a file picker. */}
+          <label
+            role="button"
+            tabIndex={0}
+            aria-label="Import MOD"
+            className={cn(variants.button.outline.default(), ROW_BUTTON_CLASS, 'cursor-pointer')}
+          >
+            Import MOD
+            <input
+              type="file"
+              accept=".mod,audio/mod,application/octet-stream"
+              className="sr-only"
+              aria-label="Module file input"
+              onChange={(e) => void handleImportModFile(e)}
+            />
+          </label>
         </Tooltip>
         <Tooltip content="Import project JSON">
           <label
             role="button"
             tabIndex={0}
             aria-label="Import project JSON"
-            className={cn(variants.button.outline.default(), 'cursor-pointer px-3 py-1.5')}
+            className={cn(variants.button.outline.default(), ROW_BUTTON_CLASS, 'cursor-pointer')}
           >
             Import Project JSON
             <input
@@ -496,6 +658,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         onImportedNewProject={(projectId) => {
           setMidiImportOpen(false);
           onNavigate?.(`/project/${projectId}`);
+        }}
+      />
+      <AudioImportDialog
+        open={audioImportOpen}
+        analysis={audioAnalysis}
+        onFile={handleAudioFile}
+        onImport={handleAudioImport}
+        onClose={() => {
+          setAudioImportOpen(false);
+          setAudioAnalysis(undefined);
         }}
       />
       <MusicXmlImportDialog

@@ -9,6 +9,7 @@ import {
   generateWholeScore,
   gotoDashboard,
   readPlaybackState,
+  startPlayback,
   waitForNotation,
 } from './helpers';
 
@@ -37,10 +38,8 @@ test.describe('project creation, generation, and playback', () => {
     // Play (spec §39 items 6-7): transport toggles and the store's
     // playback state actually advances (Tone.js audio itself can't be
     // observed in headless Chromium -- see helpers.ts's module doc).
-    const playButton = page.getByRole('button', { name: 'Play' });
-    await expect(playButton).toBeEnabled();
-    await playButton.click();
-    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play' })).toBeEnabled();
+    await startPlayback(page);
 
     await expect
       .poll(async () => (await readPlaybackState(page)).state, { timeout: 10_000 })

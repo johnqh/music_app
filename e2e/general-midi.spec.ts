@@ -26,9 +26,12 @@ async function withSynth<T>(page: import('@playwright/test').Page, body: string)
   await page.goto('/');
   await page.addScriptTag({ url: '/audio/libfluidsynth-2.4.6-with-libsndfile.js' });
   await page.addScriptTag({ content: JS_SYNTH });
-  await page.waitForFunction(() => (window as never as { JSSynth?: unknown }).JSSynth !== undefined, {
-    timeout: 60_000,
-  });
+  await page.waitForFunction(
+    () => (window as never as { JSSynth?: unknown }).JSSynth !== undefined,
+    {
+      timeout: 60_000,
+    },
+  );
   return (await page.evaluate(body)) as T;
 }
 

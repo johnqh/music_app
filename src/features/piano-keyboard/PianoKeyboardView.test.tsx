@@ -111,6 +111,54 @@ describe('PianoKeyboardView', () => {
     });
   });
 
+  describe('a percussion track', () => {
+    /** Turns the active track into a drum track carrying `program` as its kit. */
+    function makeDrumStore(program = 0): EditorStoreApi {
+      const store = makeStore();
+      const trackId = store.getState().score!.tracks[0].id;
+      act(() => {
+        store.getState().dispatchCommand(changeTrackPropsCommand(trackId, { clef: 'percussion' }));
+        store
+          .getState()
+          .dispatchCommand(changeTrackPropsCommand(trackId, { midiProgram: program }));
+        store.getState().setActiveTrack(trackId);
+      });
+      return store;
+    }
+
+    it('spans the drums, not the melodic instrument at that address', () => {
+      // Reading a kit address as an instrument showed a piano's compass for a
+      // kit: keys that could not sound a drum, and drums that could sound
+      // (35-81) hanging off the end.
+      const { container } = render(<PianoKeyboardView store={makeDrumStore()} />);
+
+      const midis = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
+        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
+      );
+      expect(Math.min(...midis)).toBe(35);
+      expect(Math.max(...midis)).toBe(81);
+    });
+
+    it('names each key for the drum it strikes', () => {
+      const { container } = render(<PianoKeyboardView store={makeDrumStore()} />);
+
+      expect(key(container, 38)).toHaveAttribute('aria-label', 'Acoustic Snare');
+      // A black key, and the most-played piece of the kit.
+      expect(key(container, 42)).toHaveAttribute('aria-label', 'Closed Hi-Hat');
+      expect(screen.getByText('Snare')).toBeInTheDocument();
+      expect(screen.getByText('Cl HH')).toBeInTheDocument();
+      // No pitch names anywhere: on a drum staff "C4" names nothing.
+      expect(screen.queryByText('C4')).not.toBeInTheDocument();
+    });
+
+    it('heads the panel with the kit, not with the instrument at that address', () => {
+      // Program 40 is Brush as a kit and Violin as an instrument.
+      render(<PianoKeyboardView store={makeDrumStore(40)} />);
+      expect(screen.getByText(/Brush Kit/)).toBeInTheDocument();
+      expect(screen.queryByText(/Violin/)).not.toBeInTheDocument();
+    });
+  });
+
   it('labels C and F, the landmarks of the black-key groups', () => {
     // With both labelled no white key is more than two steps from a reference;
     // labelling all seven per octave is legible only while the keys are wide.

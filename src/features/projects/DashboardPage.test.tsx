@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe('DashboardPage', () => {
-  it('shows the three project templates', () => {
+  it('shows every project template', () => {
     const { store } = setup();
     render(<DashboardPage store={store} />);
     for (const template of projectTemplates) {
@@ -37,6 +37,34 @@ describe('DashboardPage', () => {
         screen.getByRole('button', { name: `New from template: ${template.name}` }),
       ).toBeInTheDocument();
     }
+  });
+
+  it('offers every kind of import here, since each one makes a new project', () => {
+    // These moved off the editor's title bar: every one of them creates a
+    // project and navigates away, which is not something a screen showing one
+    // open project should be doing.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+
+    for (const label of [
+      'Import MIDI',
+      'Import MusicXML',
+      'Import Audio',
+      'Import MOD',
+      'Import project JSON',
+    ]) {
+      expect(screen.getByRole('button', { name: label }), label).toBeInTheDocument();
+    }
+  });
+
+  it('accepts the audio formats it claims to', () => {
+    // The button says WAV, MP3 and MPA; the picker has to agree, or the file
+    // the user was told to bring is greyed out in their own file dialog.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+
+    const modInput = screen.getByLabelText('Module file input') as HTMLInputElement;
+    expect(modInput.accept).toContain('.mod');
   });
 
   it("lists the signed-in user's server-side projects", async () => {

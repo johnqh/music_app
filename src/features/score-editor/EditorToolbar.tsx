@@ -39,7 +39,7 @@ import { useAppStore } from '@sudobility/music_lib';
 import {
   addTrackCommand,
   createId,
-  gmMaxPolyphony,
+  trackMaxPolyphony,
   selectActiveTrackId,
 } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
@@ -50,11 +50,14 @@ import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySe
 import { dispatchTracked } from '@/features/score-editor/editing';
 import type { ReactElement } from 'react';
 import {
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
   ClipboardIcon,
   EllipsisHorizontalIcon,
   DocumentDuplicateIcon,
   MagnifyingGlassMinusIcon,
   MagnifyingGlassPlusIcon,
+  PlusIcon,
   ScissorsIcon,
   TrashIcon,
 } from '@heroicons/react/24/solid';
@@ -68,7 +71,9 @@ import {
   QuarterNoteIcon,
   SharpIcon,
   SixteenthNoteIcon,
+  ICON_CONTROL_CLASS,
   ICON_GLYPH_CLASS,
+  TEXT_CONTROL_CLASS,
   ArticulationIcon,
   ChordIcon,
   DottedIcon,
@@ -110,6 +115,15 @@ export type EditorToolbarProps = {
   onToggleInspector?: () => void;
   /** Opens the generate-track modal. Omitted when no host provides one. */
   onGenerateTrack?: () => void;
+  /**
+   * Opens the audio-transcription dialog, which writes what it hears onto a
+   * *new track* of the open score.
+   *
+   * It lives under Add Track rather than under an Import menu because that is
+   * what it does — every other import on the Projects screen creates a whole
+   * project, and this one does not.
+   */
+  onAddTrackFromAudio?: () => void;
   /**
    * Cut and paste go through the view's prompt hook rather than the store, so
    * the button and the keyboard shortcut ask the same question. Optional so
@@ -190,10 +204,11 @@ function defaultInsertPitch(store: EditorStoreApi): Pitch {
 /** A drawn notation glyph: sized by the caller, coloured by `currentColor`. */
 type NotationIcon = (props: { className?: string }) => ReactElement;
 
-const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
+/** Every icon-only control on the bar, at the shared control height. */
+const ICON_BUTTON_CLASS = ICON_CONTROL_CLASS;
 
 const TOGGLE_BUTTON_CLASS = cn(
-  'px-2 py-1 text-sm',
+  TEXT_CONTROL_CLASS,
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
@@ -210,6 +225,7 @@ export function EditorToolbar({
   onCut,
   onPaste,
   onGenerateTrack,
+  onAddTrackFromAudio,
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
@@ -218,7 +234,9 @@ export function EditorToolbar({
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrackId = store(selectActiveTrackId);
   const activeTrack = score?.tracks.find((t) => t.id === activeTrackId) ?? null;
-  const canStack = gmMaxPolyphony(activeTrack?.midiProgram ?? 0) > 1;
+  // Through the track: a drum track's program is a kit, and Brush sits at 40 —
+  // the Violin address — so the toolbar refused a three-piece drum hit.
+  const canStack = activeTrack === null || trackMaxPolyphony(activeTrack) > 1;
 
   // A mode chosen before the track changed would otherwise refuse every edit,
   // and that refusal only surfaces after you have already played something.
@@ -358,6 +376,8 @@ export function EditorToolbar({
                 store.getState().setActiveTrack(id);
               } else if (value === 'generate') {
                 onGenerateTrack?.();
+              } else if (value === 'audio') {
+                onAddTrackFromAudio?.();
               }
             }}
           >
@@ -365,14 +385,19 @@ export function EditorToolbar({
               <SelectTrigger
                 aria-label="Add Track"
                 disabled={!score}
-                className="h-auto w-auto px-2 py-1"
+                // Not the square icon class: this trigger carries the library's
+                // own dropdown chevron beside the plus, and that chevron is
+                // 16px by default — the one glyph in either bar that was not
+                // the same size as the rest.
+                className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
               >
-                <span>+</span>
+                <PlusIcon className={ICON_GLYPH_CLASS} />
               </SelectTrigger>
             </Tooltip>
             <SelectContent>
               <SelectItem value="blank">Blank Track</SelectItem>
               <SelectItem value="generate">Generate Track</SelectItem>
+              <SelectItem value="audio">Track from Audio…</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -450,7 +475,7 @@ export function EditorToolbar({
             <SelectTrigger
               aria-label="Accidental"
               disabled={!hasScore || !hasSelection}
-              className="h-auto w-auto gap-1 px-2 py-1.5"
+              className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               <SharpIcon className={ICON_GLYPH_CLASS} />
             </SelectTrigger>
@@ -613,7 +638,7 @@ export function EditorToolbar({
               aria-label="Quantize grid"
               // The trigger's own chevron is 16px by default; this brings it in
               // line with every other icon on the bar.
-              className="h-auto w-auto px-2 py-1.5 text-sm [&_svg]:size-[18px]"
+              className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               {/* The short form, not `SelectValue`: the trigger is read at a
                 glance and was the widest control on the bar. */}
@@ -688,7 +713,7 @@ export function EditorToolbar({
             <SelectTrigger
               aria-label="More actions"
               disabled={!hasScore}
-              className="h-auto w-auto gap-1 px-2 py-1.5"
+              className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               <EllipsisHorizontalIcon className={ICON_GLYPH_CLASS} />
             </SelectTrigger>
@@ -804,9 +829,13 @@ export function EditorToolbar({
               size="icon"
               aria-label="Toggle inspector panel"
               onClick={onToggleInspector}
-              className="h-auto w-auto p-1.5 text-sm leading-none"
+              className={ICON_BUTTON_CLASS}
             >
-              {inspectorOpen ? '⟩' : '⟨'}
+              {inspectorOpen ? (
+                <ChevronDoubleRightIcon className={ICON_GLYPH_CLASS} />
+              ) : (
+                <ChevronDoubleLeftIcon className={ICON_GLYPH_CLASS} />
+              )}
             </Button>
           </Tooltip>
         </div>

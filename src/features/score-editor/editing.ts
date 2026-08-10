@@ -41,7 +41,7 @@ import {
   playbackController,
   selectActiveTrackId,
 } from '@sudobility/music_lib';
-import { gmMaxPolyphony, gmSupportsChord, insertWithRippleCommand } from '@sudobility/music_lib';
+import { gmMaxPolyphony, insertWithRippleCommand, trackMaxPolyphony } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import { ticksFor } from '@sudobility/music_lib';
 import {
@@ -214,8 +214,9 @@ function chordSizeAt(score: Score, trackId: UUID, tick: number): number {
  * is dropped. Writing three keys with three separately-measured tap lengths
  * would therefore silently discard two of them.
  *
- * Refuses chords the instrument could not play (`gmMaxPolyphony`), counting
- * notes already at the tick so a second pass cannot sneak past the limit.
+ * Refuses chords the instrument could not play (`trackMaxPolyphony`, which is
+ * unlimited on a drum track — a kit is not one instrument), counting notes
+ * already at the tick so a second pass cannot sneak past the limit.
  * Returns whether anything was written.
  */
 export function insertChordAtCaret(
@@ -246,12 +247,14 @@ export function insertChordAtCaret(
   if (!target) return false;
 
   const track = findTrack(state.score, target.trackId);
-  const program = track?.midiProgram ?? 0;
   const existing = chordSizeAt(state.score, target.trackId, target.startTick);
   const total = existing + pitches.length;
 
-  if (!gmSupportsChord(program, total)) {
-    const limit = gmMaxPolyphony(program);
+  // Through the track rather than its program: a percussion track's program is
+  // a drum kit, and reading a kit address as an instrument capped a kit at
+  // whatever that instrument could play — two notes, for Brush.
+  const limit = track ? trackMaxPolyphony(track) : gmMaxPolyphony(0);
+  if (total > limit) {
     store.getState().pushToast({
       severity: 'warning',
       message:

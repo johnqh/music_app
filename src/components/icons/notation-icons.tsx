@@ -41,6 +41,27 @@ import type { SVGProps } from 'react';
  */
 export const ICON_GLYPH_CLASS = 'size-[18px] shrink-0';
 
+/**
+ * The height of every control in an action bar — buttons and selects alike.
+ *
+ * A bar mixes icon buttons, text buttons and Radix select triggers, and each of
+ * those sizes itself from its own content: an 18px glyph with `p-1.5` comes out
+ * 30px, `text-sm` with `py-1` comes out 28px, and the row ended up visibly
+ * ragged. Padding cannot fix that — it is the *content* that differs — so the
+ * height is stated once here and the padding left to centre within it.
+ *
+ * Lives beside `ICON_GLYPH_CLASS` for the same reason that does: both toolbars
+ * and the dashboard need it, and importing it from any one of them drags that
+ * module's dependency graph into the others.
+ */
+export const CONTROL_HEIGHT_CLASS = 'h-8 min-h-8';
+
+/** An icon-only control: square at the shared height, with the glyph centred. */
+export const ICON_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} w-8 shrink-0 inline-flex items-center justify-center p-0 text-sm leading-none`;
+
+/** A control carrying text (or text + glyph) at the shared height. */
+export const TEXT_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} inline-flex items-center gap-1 px-2 py-0 text-sm leading-none`;
+
 type GlyphProps = SVGProps<SVGSVGElement>;
 
 /** Shared frame: one grid, one fill rule, no intrinsic size. */
@@ -545,6 +566,86 @@ export function MetronomeIcon(props: GlyphProps) {
       <rect x={6.6} y={16.4} width={10.8} height={1.6} />
       <path d="M15.8 6.6 L10.6 17 L9.1 16.3 L14.3 5.9 Z" />
       <rect x={11.9} y={9.6} width={3.4} height={2.4} rx={0.5} transform="rotate(-24 13.6 10.8)" />
+    </Glyph>
+  );
+}
+
+/**
+ * Light/dark theme: one disc, lit on the left and dark on the right.
+ *
+ * Drawn rather than borrowed because the general sets offer a sun *or* a moon,
+ * and either one alone names a destination rather than the choice — this
+ * control opens a menu of light, dark and system. It replaced 🌓, which was an
+ * emoji: it kept its own colours against the app bar's inverted text, and
+ * rendered at whatever size the platform's emoji font felt like.
+ */
+export function SunMoonIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      {/* The lit half: a filled semicircle with the sun's rays on its side. */}
+      <path d="M12 3.6 a8.4 8.4 0 0 0 0 16.8 Z" />
+      <path
+        d="M12 3.6 a8.4 8.4 0 0 1 0 16.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+      />
+      <g stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+        <path d="M12 1.4 V0.2 M12 23.8 V22.6 M4.1 4.1 L3.2 3.2 M4.1 19.9 L3.2 20.8 M1.4 12 H0.2" />
+      </g>
+    </Glyph>
+  );
+}
+
+// --- transport navigation -------------------------------------------------
+//
+// The three of these are one family, built from two parts: a bar that means
+// "the end of the road" and a triangle that means "go". Which side the bar sits
+// on is the whole message, which is why they are drawn here rather than
+// borrowed — the general-purpose sets pair a double triangle for "start" with
+// bare chevrons for "step", so the row read as two unrelated ideas and neither
+// one said where it would stop.
+
+/** Bar length and thickness, shared so the three icons line up as a set. */
+const TRANSPORT_BAR_W = 2.2;
+const TRANSPORT_TOP = 5.4;
+const TRANSPORT_BOTTOM = 18.6;
+const TRANSPORT_H = TRANSPORT_BOTTOM - TRANSPORT_TOP;
+
+/** A triangle spanning `left`..`right`, pointing right (or left when mirrored). */
+function transportTriangle(left: number, right: number, pointsRight = true): string {
+  const [tip, base] = pointsRight ? [right, left] : [left, right];
+  return `M${base} ${TRANSPORT_TOP} L${tip} 12 L${base} ${TRANSPORT_BOTTOM} Z`;
+}
+
+/** Go to start: a bar, then two triangles pointing back at it. */
+export function GoToStartIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={3.4} y={TRANSPORT_TOP} width={TRANSPORT_BAR_W} height={TRANSPORT_H} rx={0.6} />
+      <path d={transportTriangle(6.8, 13.4, false)} />
+      <path d={transportTriangle(13.9, 20.5, false)} />
+    </Glyph>
+  );
+}
+
+/** Previous measure: a bar, then one triangle pointing back at it. */
+export function PreviousMeasureIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect x={4.6} y={TRANSPORT_TOP} width={TRANSPORT_BAR_W} height={TRANSPORT_H} rx={0.6} />
+      <path d={transportTriangle(8.6, 18.4, false)} />
+    </Glyph>
+  );
+}
+
+/** Next measure: one triangle, then the bar it runs into. */
+export function NextMeasureIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <path d={transportTriangle(5.6, 15.4)} />
+      <rect x={17.2} y={TRANSPORT_TOP} width={TRANSPORT_BAR_W} height={TRANSPORT_H} rx={0.6} />
     </Glyph>
   );
 }

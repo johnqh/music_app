@@ -43,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
   Slider,
+  Spinner,
   Tooltip,
   cn,
 } from '@sudobility/components';
@@ -54,16 +55,16 @@ import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import type { MeasureBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
-import { ICON_GLYPH_CLASS, MetronomeIcon } from '@/components/icons/notation-icons';
 import {
-  BackwardIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ExclamationTriangleIcon,
-  PauseIcon,
-  PlayIcon,
-  StopIcon,
-} from '@heroicons/react/24/solid';
+  GoToStartIcon,
+  ICON_CONTROL_CLASS,
+  ICON_GLYPH_CLASS,
+  MetronomeIcon,
+  NextMeasureIcon,
+  PreviousMeasureIcon,
+  TEXT_CONTROL_CLASS,
+} from '@/components/icons/notation-icons';
+import { ExclamationTriangleIcon, PauseIcon, PlayIcon, StopIcon } from '@heroicons/react/24/solid';
 
 export type TransportBarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -73,10 +74,12 @@ export type TransportBarProps = {
 /** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-const ICON_BUTTON_CLASS = 'h-auto w-auto p-1.5 text-sm leading-none';
+/** Icon-only transport controls, all at the bar's shared control height. */
+const ICON_BUTTON_CLASS = ICON_CONTROL_CLASS;
 
+/** Loop and metronome: icon-only toggles, so square at the shared height. */
 const TOGGLE_BUTTON_CLASS = cn(
-  'px-2 py-1 text-xs',
+  ICON_CONTROL_CLASS,
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
@@ -120,7 +123,10 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
 
   if (load.status === 'failed') {
     return (
-      <div role="status" className="flex items-center gap-1.5 whitespace-nowrap text-xs text-theme-error">
+      <div
+        role="status"
+        className="flex items-center gap-1.5 whitespace-nowrap text-xs text-theme-error"
+      >
         <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>Instruments failed to load</span>
       </div>
@@ -140,7 +146,9 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
         // nothing, so that half is a moving bar rather than a false percentage.
         role="progressbar"
         aria-label="Preparing instruments"
-        {...(percent === null ? {} : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
+        {...(percent === null
+          ? {}
+          : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
         className="h-1 w-16 overflow-hidden rounded-full bg-theme-border"
       >
         <div
@@ -153,6 +161,55 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Play/Pause, and the only control that knows the synth may not be ready.
+ *
+ * Its own subscriber for the reason every readout in this file is one: the load
+ * reports progress per percent, and read at the bar's top level each of those
+ * would re-render a dozen Buttons and two Selects. Here it touches one button.
+ *
+ * Disabled while preparing rather than showing a Play the engine cannot honour.
+ * The transport used to claim "playing" through the whole first load, and the
+ * caret — which interpolates from elapsed real time between position reports —
+ * ran on ahead through several silent bars before snapping back when the music
+ * actually started. Nothing can play until the font is in, so the control that
+ * starts playing says so.
+ */
+function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScore: boolean }) {
+  const playbackState = store((s) => s.state);
+  const preparing = store((s) => s.synthLoad.status === 'loading');
+  const label = preparing
+    ? 'Preparing instruments'
+    : playbackState === 'playing'
+      ? 'Pause'
+      : 'Play';
+
+  return (
+    <Tooltip content={label}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={label}
+        aria-busy={preparing || undefined}
+        disabled={!hasScore || preparing}
+        onClick={() => playbackController.togglePlay()}
+        className={ICON_BUTTON_CLASS}
+      >
+        {preparing ? (
+          // Decorative here: the button already carries the name, and a nested
+          // role="status" would announce the same thing twice.
+          <Spinner size="small" aria-hidden="true" />
+        ) : playbackState === 'playing' ? (
+          <PauseIcon className={ICON_GLYPH_CLASS} />
+        ) : (
+          <PlayIcon className={ICON_GLYPH_CLASS} />
+        )}
+      </Button>
+    </Tooltip>
   );
 }
 
@@ -228,14 +285,18 @@ function Timecode({
 
 export function TransportBar({ store = useAppStore }: TransportBarProps) {
   const score = store((s) => s.score);
-  const playbackState = store((s) => s.state);
+  // `state` is deliberately not read here: `PlayPauseButton` is the only
+  // control that needs it, and it subscribes for itself.
   const loopRange = store((s) => s.loopRange);
   const metronome = store((s) => s.metronome);
   const tempoMultiplier = store((s) => s.tempoMultiplier);
   const masterVolume = store((s) => s.masterVolume);
 
   const hasScore = score !== null;
-  const currentBpm = score?.tempoMap[0]?.bpm ?? 120;
+  // Rounded for display as well as on commit: a score can arrive carrying a
+  // fractional tempo from a MIDI file or a detected one from audio import, and
+  // "119.87421 BPM" in the transport is noise, not precision.
+  const currentBpm = Math.round(score?.tempoMap[0]?.bpm ?? 120);
   const maxTick = useMemo(() => (score ? Math.max(1, scoreEndTick(score)) : 1), [score]);
   // Score-time seconds via the same TempoMap the playback engine schedules
   // with, so this readout advances exactly 1 second per wall-clock second at
@@ -254,7 +315,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
 
   const commitTempo = (): void => {
     setEditingTempo(false);
-    const bpm = Number(tempoDraft);
+    // Whole numbers only. The field is a number input, so a stepper or a paste
+    // can put "104.5" in it, and a tempo the transport rounds for display but
+    // stores unrounded reads back differently the next time it is opened.
+    const bpm = Math.round(Number(tempoDraft));
     if (!score || !Number.isFinite(bpm) || bpm <= 0) return;
     const firstEvent = score.tempoMap[0];
     store
@@ -304,7 +368,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.goToStart()}
           className={ICON_BUTTON_CLASS}
         >
-          <BackwardIcon className={ICON_GLYPH_CLASS} />
+          <GoToStartIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <Tooltip content="Previous measure">
@@ -317,26 +381,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.previousMeasure()}
           className={ICON_BUTTON_CLASS}
         >
-          <ChevronLeftIcon className={ICON_GLYPH_CLASS} />
+          <PreviousMeasureIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
-      <Tooltip content={playbackState === 'playing' ? 'Pause' : 'Play'}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={playbackState === 'playing' ? 'Pause' : 'Play'}
-          disabled={!hasScore}
-          onClick={() => playbackController.togglePlay()}
-          className={ICON_BUTTON_CLASS}
-        >
-          {playbackState === 'playing' ? (
-            <PauseIcon className={ICON_GLYPH_CLASS} />
-          ) : (
-            <PlayIcon className={ICON_GLYPH_CLASS} />
-          )}
-        </Button>
-      </Tooltip>
+      <PlayPauseButton store={store} hasScore={hasScore} />
       <Tooltip content="Stop">
         <Button
           type="button"
@@ -370,7 +418,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onClick={() => playbackController.nextMeasure()}
           className={ICON_BUTTON_CLASS}
         >
-          <ChevronRightIcon className={ICON_GLYPH_CLASS} />
+          <NextMeasureIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
@@ -414,7 +462,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           onChange={(event: ChangeEvent<HTMLInputElement>) => setTempoDraft(event.target.value)}
           onBlur={commitTempo}
           onKeyDown={handleTempoKeyDown}
-          className="w-[84px] px-2 py-1 text-sm"
+          className={cn(TEXT_CONTROL_CLASS, 'w-[84px]')}
         />
       ) : (
         <Tooltip content="Edit tempo">
@@ -424,7 +472,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
             aria-label="Tempo (BPM)"
             disabled={!hasScore}
             onClick={beginEditTempo}
-            className="min-w-[64px] px-1 py-1 disabled:cursor-default enabled:cursor-pointer"
+            className={cn(
+              TEXT_CONTROL_CLASS,
+              'min-w-[72px] justify-center disabled:cursor-default enabled:cursor-pointer',
+            )}
           >
             {currentBpm} BPM
           </Button>
@@ -436,7 +487,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           <SelectTrigger
             aria-label="Playback speed"
             // Matches the bar's icon size; the trigger's chevron is 16px by default.
-            className="h-auto w-auto min-w-[64px] px-2 py-1 text-sm [&_svg]:size-[18px]"
+            className={cn(TEXT_CONTROL_CLASS, 'w-auto min-w-[64px] [&_svg]:size-[18px]')}
           >
             <SelectValue />
           </SelectTrigger>

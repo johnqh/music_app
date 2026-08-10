@@ -21,6 +21,7 @@ import type { Clef, Track, UUID } from '@sudobility/music_types';
 import {
   GM_FAMILIES,
   GM_FAMILY_LABELS,
+  GM_KITS,
   TRACK_INFO_WIDTH,
   changeClefCommand,
   changeTrackPropsCommand,
@@ -28,6 +29,9 @@ import {
   findTrack,
   gmInstrument,
   gmInstrumentsByFamily,
+  gmKit,
+  gmKitAt,
+  isPercussionTrack,
   selectActiveTrackId,
   useAppStore,
 } from '@sudobility/music_lib';
@@ -59,6 +63,16 @@ const INSTRUMENT_OPTIONS = GM_FAMILIES.flatMap((family) =>
     group: GM_FAMILY_LABELS[family],
   })),
 );
+
+/**
+ * The eight drum kits, for a percussion track.
+ *
+ * A percussion track's `midiProgram` selects a kit, not an instrument, so the
+ * melodic list above is the wrong list for it: picking "Celesta" there quietly
+ * switched the kit to Room, and picking "Jazz Guitar" did nothing at all
+ * because no kit sits at that address.
+ */
+const KIT_OPTIONS = GM_KITS.map((kit) => ({ value: String(kit.program), label: kit.name }));
 
 const ICON_BUTTON_CLASS = 'h-auto w-auto p-1 text-sm leading-none';
 const TOGGLE_BUTTON_CLASS = cn(
@@ -139,22 +153,43 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           />
 
           <div className="flex items-center gap-1">
-            <InstrumentIcon program={track.midiProgram} className="size-4 shrink-0" />
-            <SheetSelector
-              title="Instrument"
-              aria-label={`Instrument: ${track.name}`}
-              options={INSTRUMENT_OPTIONS}
-              value={String(track.midiProgram)}
-              onChange={(value: string) => {
-                const instrument = gmInstrument(Number(value));
-                if (!instrument) return;
-                // Both together: `instrumentName` is free text and could
-                // otherwise drift from `midiProgram`.
-                patch({ midiProgram: instrument.program, instrumentName: instrument.name });
-              }}
-              size="large"
-              className="h-auto w-full px-1 py-0.5 text-xs"
-            />
+            <InstrumentIcon track={track} className="size-4 shrink-0" />
+            {isPercussionTrack(track) ? (
+              <SheetSelector
+                title="Drum kit"
+                aria-label={`Drum kit: ${track.name}`}
+                options={KIT_OPTIONS}
+                // Through `gmKitAt`, so a track sitting at an address no kit is
+                // at still selects the kit it actually plays rather than
+                // showing an empty control.
+                value={String(gmKitAt(track.midiProgram).program)}
+                onChange={(value: string) => {
+                  const kit = gmKit(Number(value));
+                  if (!kit) return;
+                  // Both together, for the same reason the melodic branch does
+                  // it: `instrumentName` is free text and would otherwise drift.
+                  patch({ midiProgram: kit.program, instrumentName: kit.name });
+                }}
+                size="large"
+                className="h-auto w-full px-1 py-0.5 text-xs"
+              />
+            ) : (
+              <SheetSelector
+                title="Instrument"
+                aria-label={`Instrument: ${track.name}`}
+                options={INSTRUMENT_OPTIONS}
+                value={String(track.midiProgram)}
+                onChange={(value: string) => {
+                  const instrument = gmInstrument(Number(value));
+                  if (!instrument) return;
+                  // Both together: `instrumentName` is free text and could
+                  // otherwise drift from `midiProgram`.
+                  patch({ midiProgram: instrument.program, instrumentName: instrument.name });
+                }}
+                size="large"
+                className="h-auto w-full px-1 py-0.5 text-xs"
+              />
+            )}
           </div>
 
           <SheetSelector

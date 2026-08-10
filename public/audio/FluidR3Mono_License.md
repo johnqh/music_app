@@ -5,22 +5,21 @@ Current version: 0.1 alpha 1st March 2018
 
 This is a fork of FluidR3Mono_GM.sf2, with many samples (eventually) being replaced and/or reprogrammed. This version of the SoundFont is an alpha work-in-progress. Information on all sample sources will be provided upon release.
 
-FluidR3 (original version) by Frank Wen Copyright © 2000-2002
+FluidR3 (original version) by Frank Wen Copyright ï¿½ 2000-2002
 
-Mono conversion (FluidR3Mono) by Michael Cowgill Copyright © 2014-17
+Mono conversion (FluidR3Mono) by Michael Cowgill Copyright ï¿½ 2014-17
 
-Adaptation for MS_General.sf2 by S. Christian Collins Copyright © 2018
+Adaptation for MS_General.sf2 by S. Christian Collins Copyright ï¿½ 2018
 
-Temple Blocks instrument provided by Ethan Winer Copyright © 2002
+Temple Blocks instrument provided by Ethan Winer Copyright ï¿½ 2002
 
-Drumline Percussion provided by Michael Schorsch Copyright © 2016
+Drumline Percussion provided by Michael Schorsch Copyright ï¿½ 2016
 
 MS_General.sf2 is shared under the MIT license as described in COPYING, as was FluidR3Mono and FluidR3 before it. The licensing for this new collection is currently under discussion and may be subject to change before release.
 
 The COPYING and README files from the original FluidR3GM file are now displayed here for reference.
 
 The acknowledgements and copyright notices above must be included in any derivative work.
-
 
 README
 ---
@@ -31,11 +30,9 @@ Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>
 
 I hereby release Fluid under the MIT license, as described in COPYING.
 
-
 Thanks to Toby Smithe for helping to get Fluid included in Ubuntu.
 
-This package, of course, is the original Release 3 of Fluid.  
-
+This package, of course, is the original Release 3 of Fluid.
 
 Fluid was constructed in part from samples found in the public domain that I
 edited/cleaned/remixed/programmed and largely from recordings of my own and
@@ -48,25 +45,23 @@ Chris Gillman
 Alex Taubr
 Chris Prola
 Andrew Klenk
-Winfried Hubbe 
+Winfried Hubbe
 Dylan
 Tim
 Gort
-Uros Katic 
-Ethan Winer (http://www.ethanwiner.com) 
-
+Uros Katic
+Ethan Winer (http://www.ethanwiner.com)
 
 It's obviously been a few years since the project, but its nice to see that
-people are still enjoying my work and getting good use out of it.  As always,
+people are still enjoying my work and getting good use out of it. As always,
 I'd like to hear some work done with Fluid so email me, or just email me to
 say hello and tell me what is going on in the computer musician world.
 Who knows, maybe I'll kick start this project again? ;)
 
-
 COPYING
 ---
 
-Mono version:  Copyright (c) 2014-16 Michael Cowgill 
+Mono version: Copyright (c) 2014-16 Michael Cowgill
 Copyright (c) 2000-2002, 2008 Frank Wen <getfrank@gmail.com>
 
 Permission is hereby granted, free of charge, to any person
@@ -89,4 +84,3 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
-

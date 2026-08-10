@@ -48,18 +48,26 @@
  * documented, checked reason rather than an assumed one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
+import {
+  ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
+  Cog6ToothIcon,
+  QuestionMarkCircleIcon,
+} from '@heroicons/react/24/solid';
+import {
+  ICON_CONTROL_CLASS,
+  ICON_GLYPH_CLASS,
+  SunMoonIcon,
+  TEXT_CONTROL_CLASS,
+} from '@/components/icons/notation-icons';
 import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
-import {
-  addTranscribedTrackCommand,
-  modToScore,
-  renderEvents,
-  transcribe,
-} from '@sudobility/music_lib';
+import { addTranscribedTrackCommand, renderEvents, transcribe } from '@sudobility/music_lib';
 import type { Transcription } from '@sudobility/music_lib';
 import { dispatchTracked } from '@/features/score-editor/editing';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -67,7 +75,6 @@ import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { parseScore } from '@sudobility/music_types';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
@@ -86,7 +93,6 @@ import {
 import type { ReplaceScope } from '@sudobility/music_lib';
 import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
-import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
@@ -129,11 +135,15 @@ const SAVE_STATE_CLASS: Record<string, string> = {
 // ghost's neutral-background skin (text-muted-foreground/hover:bg-muted)
 // isn't designed for an inverted (text-on-primary) toolbar and would lose
 // contrast there.
-const ICON_BUTTON_CLASS =
-  'rounded-md p-1.5 text-sm leading-none text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40';
+const ICON_BUTTON_CLASS = cn(
+  ICON_CONTROL_CLASS,
+  'rounded-md text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40',
+);
 
-const TEXT_BUTTON_CLASS =
-  'rounded-md px-3 py-1.5 text-sm font-medium text-inherit hover:bg-white/10';
+const TEXT_BUTTON_CLASS = cn(
+  TEXT_CONTROL_CLASS,
+  'rounded-md px-3 font-medium text-inherit hover:bg-white/10',
+);
 
 const MENU_CLASS = cn(
   variants.card.default.base(),
@@ -279,7 +289,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   );
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
-  const importMenu = useMenu<HTMLDivElement>();
   const exportMenu = useMenu<HTMLDivElement>();
   const themeMenu = useMenu<HTMLDivElement>();
   const settingsMenu = useMenu<HTMLDivElement>();
@@ -366,9 +375,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     },
     [store, refreshSnapshots],
   );
-  const [confirmingImportJson, setConfirmingImportJson] = useState<Record<string, unknown> | null>(
-    null,
-  );
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
@@ -408,62 +414,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       store.getState().renameProject(titleDraft.trim());
     }
     setTitleDraft(null);
-  };
-
-  const handleImportJsonFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const json = JSON.parse(text) as Record<string, unknown>;
-      setConfirmingImportJson(json);
-    } catch (err) {
-      reportError(err, { context: 'Project JSON import failed', store });
-    }
-  };
-
-  /**
-   * Imports an Amiga tracker module as a new project.
-   *
-   * Straight through rather than via a wizard: a `.MOD` states every note and
-   * every instrument outright, so unlike MIDI or audio there is nothing to
-   * estimate and nothing to confirm. A file that is not a module throws in the
-   * codec and surfaces as a toast — a garbage score would look like it
-   * imported and quietly not be the music.
-   */
-  const handleImportModFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    importMenu.setOpen(false);
-    try {
-      const bytes = await file.arrayBuffer();
-      const mod = getAppServices().io.modCodec.decode(bytes);
-      const imported = modToScore(mod);
-      await store.getState().newProject({ name: mod.title || file.name, score: imported });
-      const newId = store.getState().projectId;
-      if (newId) onNavigate?.(`/project/${newId}`);
-    } catch (err) {
-      reportError(err, { context: 'Module import failed', store });
-    }
-  };
-
-  const commitImportJson = async (): Promise<void> => {
-    const json = confirmingImportJson;
-    setConfirmingImportJson(null);
-    if (!json) return;
-    try {
-      const parsed = json as { name?: unknown; score?: unknown };
-      const importedScore = parseScore(parsed.score);
-      const name =
-        typeof parsed.name === 'string' && parsed.name ? parsed.name : importedScore.metadata.title;
-      await store.getState().newProject({ name, score: importedScore });
-      const newId = store.getState().projectId;
-      if (newId) onNavigate?.(`/project/${newId}`);
-    } catch (err) {
-      reportError(err, { context: 'Project JSON import failed', store });
-    }
   };
 
   /** Decode and analyse the picked file; the dialog then shows what was heard. */
@@ -659,17 +609,17 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             {SAVE_STATE_LABEL[saveState]}
           </span>
 
-          <Tooltip content="Save now">
+          <Tooltip placement="bottom" content="Save now">
             <button
               type="button"
               aria-label="Save"
               onClick={() => void store.getState().saveNow()}
               className={ICON_BUTTON_CLASS}
             >
-              💾
+              <ArrowDownTrayIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
-          <Tooltip content={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}>
+          <Tooltip placement="bottom" content={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}>
             <button
               type="button"
               aria-label="Undo"
@@ -677,10 +627,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               onClick={() => store.getState().undo()}
               className={ICON_BUTTON_CLASS}
             >
-              ↶
+              <ArrowUturnLeftIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
-          <Tooltip content={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}>
+          <Tooltip placement="bottom" content={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}>
             <button
               type="button"
               aria-label="Redo"
@@ -688,87 +638,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               onClick={() => store.getState().redo()}
               className={ICON_BUTTON_CLASS}
             >
-              ↷
+              <ArrowUturnRightIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
-
-          <div ref={importMenu.ref} className="relative">
-            <button
-              type="button"
-              aria-label="Import menu"
-              aria-haspopup="menu"
-              aria-expanded={importMenu.open}
-              onClick={() => importMenu.setOpen((v) => !v)}
-              className={TEXT_BUTTON_CLASS}
-            >
-              Import
-            </button>
-            {importMenu.open && (
-              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => {
-                    importMenu.setOpen(false);
-                    store.getState().openDialog('midiImport');
-                  }}
-                  className={MENU_ITEM_CLASS}
-                >
-                  MIDI…
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => {
-                    importMenu.setOpen(false);
-                    store.getState().openDialog('musicXmlImport');
-                  }}
-                  className={MENU_ITEM_CLASS}
-                >
-                  MusicXML…
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => {
-                    importMenu.setOpen(false);
-                    setAudioAnalysis(undefined);
-                    setAudioImportOpen(true);
-                  }}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  Audio…
-                </Button>
-                {/* A native <label> wrapping a hidden file input, like the
-                    others here: `Button` renders a <button>, which cannot
-                    drive a file picker. */}
-                <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
-                  Module (.MOD)…
-                  <input
-                    type="file"
-                    accept=".mod,audio/mod,application/octet-stream"
-                    hidden
-                    aria-label="Module file input"
-                    onChange={(e) => void handleImportModFile(e)}
-                  />
-                </label>
-                <label role="menuitem" className={`cursor-pointer ${MENU_ITEM_CLASS}`}>
-                  Project JSON…
-                  <input
-                    type="file"
-                    accept="application/json"
-                    hidden
-                    aria-label="Project JSON file input"
-                    onChange={(e) => void handleImportJsonFile(e)}
-                  />
-                </label>
-              </div>
-            )}
-          </div>
 
           <div ref={projectMenu.ref} className="relative">
             <button
@@ -898,7 +770,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           <div className="flex-1" />
 
           <div ref={themeMenu.ref} className="relative">
-            <Tooltip content="Theme">
+            <Tooltip placement="bottom" content="Theme">
               <button
                 type="button"
                 aria-label="Theme menu"
@@ -907,7 +779,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 onClick={() => themeMenu.setOpen((v) => !v)}
                 className={ICON_BUTTON_CLASS}
               >
-                🌓
+                <SunMoonIcon className={ICON_GLYPH_CLASS} />
               </button>
             </Tooltip>
             {themeMenu.open && (
@@ -931,19 +803,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             )}
           </div>
 
-          <Tooltip content="Keyboard shortcuts">
+          <Tooltip placement="bottom" content="Keyboard shortcuts">
             <button
               type="button"
               aria-label="Keyboard shortcuts"
               onClick={() => store.getState().openDialog('shortcutHelp')}
               className={ICON_BUTTON_CLASS}
             >
-              ?
+              <QuestionMarkCircleIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
 
           <div ref={settingsMenu.ref} className="relative">
-            <Tooltip content="Settings">
+            <Tooltip placement="bottom" content="Settings">
               <button
                 type="button"
                 aria-label="Settings menu"
@@ -952,7 +824,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 onClick={() => settingsMenu.setOpen((v) => !v)}
                 className={ICON_BUTTON_CLASS}
               >
-                ⚙
+                <Cog6ToothIcon className={ICON_GLYPH_CLASS} />
               </button>
             </Tooltip>
             {settingsMenu.open && (
@@ -1010,6 +882,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               store={store}
               inspectorOpen={inspectorOpen}
               onToggleInspector={() => setInspectorOpen((v) => !v)}
+              onAddTrackFromAudio={() => {
+                setAudioAnalysis(undefined);
+                setAudioImportOpen(true);
+              }}
             />
             {generation.generating && (
               <GeneratingOverlay
@@ -1198,16 +1074,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           store={store}
         />
       )}
-
-      <ConfirmDialog
-        open={confirmingImportJson !== null}
-        title="Open imported project"
-        message="This opens the imported project JSON as a new project, leaving the current project untouched."
-        confirmLabel="Open"
-        destructive={false}
-        onCancel={() => setConfirmingImportJson(null)}
-        onConfirm={() => void commitImportJson()}
-      />
     </div>
   );
 }

@@ -79,8 +79,8 @@ import {
   findTrack,
   replacementRegion,
   selectActiveTrackId,
-  gmWrittenTransposition,
-  soundingPitch,
+  soundingPitchForTrack,
+  trackWrittenTransposition,
   transposeKeySignature,
   transposePitch,
 } from '@sudobility/music_lib';
@@ -414,10 +414,10 @@ function NoteTab({ store, onReplace }: TabProps) {
    * instrument, so the common path returns the stored object untouched.
    */
   const shown = (note: NoteEvent): Pitch => {
-    const semitones =
-      pitchDisplay === 'written'
-        ? gmWrittenTransposition(findTrack(score, note.trackId)?.midiProgram ?? 0)
-        : 0;
+    // Track-aware: a drum track's program is a kit, and kits 24 and 25 sit at
+    // guitar programs, which transpose by an octave.
+    const track = findTrack(score, note.trackId);
+    const semitones = pitchDisplay === 'written' && track ? trackWrittenTransposition(track) : 0;
     if (semitones === 0) return note.pitch;
     const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
     return transposePitch(note.pitch, semitones, transposeKeySignature(key, semitones));
@@ -442,9 +442,10 @@ function NoteTab({ store, onReplace }: TabProps) {
       // convert once. Never a round trip: the stored pitch is replaced
       // outright, not fed back through the lens.
       const edited = { ...shown(note), ...patch };
-      const program = findTrack(score, note.trackId)?.midiProgram ?? 0;
+      const track = findTrack(score, note.trackId);
       const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
-      const next = pitchDisplay === 'written' ? soundingPitch(edited, program, key) : edited;
+      const next =
+        pitchDisplay === 'written' && track ? soundingPitchForTrack(edited, track, key) : edited;
       store.getState().dispatchCommand(changePitchCommand([note.id], next));
     }
   };

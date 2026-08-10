@@ -25,6 +25,7 @@ import {
   readPlaybackState,
   readScoreSummary,
   selectMeasuresByIndex,
+  startPlayback,
   waitForGenerationSettled,
   waitForNotation,
   expectCanvasPainted,
@@ -54,8 +55,7 @@ test.describe('spec §39 acceptance scenario', () => {
 
     // 6-7. Play; notes highlight in sync (observed via store playback state --
     // Tone.js audio itself has no observable signal in headless Chromium).
-    await page.getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+    await startPlayback(page);
     await expect
       .poll(async () => (await readPlaybackState(page)).state, { timeout: 10_000 })
       .toBe('playing');
