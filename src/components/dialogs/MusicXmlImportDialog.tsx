@@ -15,9 +15,7 @@
  * plumbing for no behavioral benefit.
  */
 import { useState } from 'react';
-import type { ChangeEvent } from 'react';
-import { FormModal, cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
@@ -69,9 +67,7 @@ export function MusicXmlImportDialog({
     onClose();
   };
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFile = async (file: File): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
@@ -83,7 +79,6 @@ export function MusicXmlImportDialog({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
-      event.target.value = '';
     }
   };
 
@@ -113,84 +108,55 @@ export function MusicXmlImportDialog({
 
   return (
     <>
-      <FormModal
+      <FileImportModal
         open={open}
         title="Import MusicXML"
+        accept=".musicxml,.xml,application/vnd.recordare.musicxml+xml"
+        fileKind="MusicXML file"
+        fileName={fileName}
+        onFile={(file) => void handleFile(file)}
+        busy={busy}
+        busyLabel="Reading the score…"
+        error={error}
+        canImport={Boolean(result)}
+        onImport={handleImportClick}
         onClose={handleClose}
-        size="small"
-        closeAriaLabel="Close dialog"
-        actions={[
-          { label: 'Cancel', onClick: handleClose, variant: 'ghost' },
-          {
-            label: 'Import',
-            onClick: handleImportClick,
-            variant: 'primary',
-            disabled: !result || busy,
-            ariaLabel: 'Import',
-          },
-        ]}
+        description="Opens a MusicXML score as a new project."
       >
-        <div className="flex flex-col gap-3">
-          <label
-            role="button"
-            tabIndex={0}
-            aria-label="Choose MusicXML file"
-            className={cn(
-              variants.button.outline.default(),
-              'cursor-pointer px-3 py-2 text-center',
+        {result && (
+          <>
+            <p className="text-sm font-medium text-theme-text-primary">
+              {result.score.tracks.length} track(s), {allNotes(result.score).length} notes
+            </p>
+
+            {result.warnings.length > 0 ? (
+              <>
+                <p className="text-sm text-theme-text-secondary">
+                  Unsupported elements were skipped and are reported below (import still proceeds
+                  safely):
+                </p>
+                <ul aria-label="Import warnings" className="flex flex-col gap-1">
+                  {result.warnings.map((warning) => (
+                    <li
+                      key={warning}
+                      className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary"
+                    >
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <div
+                role="status"
+                className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
+              >
+                No unsupported elements were found.
+              </div>
             )}
-          >
-            {fileName ?? 'Choose MusicXML file...'}
-            <input
-              type="file"
-              accept=".musicxml,.xml,application/vnd.recordare.musicxml+xml"
-              className="sr-only"
-              aria-label="MusicXML file input"
-              onChange={(e) => void handleFileChange(e)}
-            />
-          </label>
-
-          {error && (
-            <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {result && (
-            <>
-              <p className="text-sm font-medium text-theme-text-primary">
-                {result.score.tracks.length} track(s), {allNotes(result.score).length} notes
-              </p>
-
-              {result.warnings.length > 0 ? (
-                <>
-                  <p className="text-sm text-theme-text-secondary">
-                    Unsupported elements were skipped and are reported below (import still proceeds
-                    safely):
-                  </p>
-                  <ul aria-label="Import warnings" className="flex flex-col gap-1">
-                    {result.warnings.map((warning) => (
-                      <li
-                        key={warning}
-                        className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary"
-                      >
-                        {warning}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <div
-                  role="status"
-                  className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
-                >
-                  No unsupported elements were found.
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </FormModal>
+          </>
+        )}
+      </FileImportModal>
 
       <ConfirmDialog
         open={confirmingReplace}

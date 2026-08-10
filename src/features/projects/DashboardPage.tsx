@@ -28,7 +28,6 @@
  * `MidiImportWizard`'s file picker).
  */
 import { useCallback, useEffect, useState } from 'react';
-import type { ChangeEvent } from 'react';
 import {
   Button,
   Input,
@@ -49,7 +48,7 @@ import {
   modToScore,
   projectTemplates,
   reportError,
-  transcribe,
+  TranscribeService,
   useAppStore,
 } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -62,6 +61,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { AudioImportDialog } from '@/components/dialogs/AudioImportDialog';
+import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import type { Transcription } from '@sudobility/music_lib';
 
 export type DashboardPageProps = {
@@ -129,6 +129,14 @@ const ROW_CONTROL_CLASS = 'h-10 min-h-10 inline-flex items-center text-sm';
 /** The resolution a transcription is emitted against, and the score built to hold it. */
 const TRANSCRIPTION_PPQ = 480;
 
+/**
+ * One transcription service for the page, not one per import.
+ *
+ * Constructing it spawns a worker; doing that per file would leave one behind
+ * for every recording the user tried.
+ */
+const transcribeService = new TranscribeService();
+
 const TEXT_INPUT_CLASS = `${ROW_CONTROL_CLASS} px-3`;
 
 const SELECT_TRIGGER_CLASS = `${ROW_CONTROL_CLASS} w-auto px-3`;
@@ -150,6 +158,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [audioImportOpen, setAudioImportOpen] = useState(false);
   const [audioAnalysis, setAudioAnalysis] = useState<Transcription | undefined>(undefined);
   const [audioName, setAudioName] = useState('Audio');
+  /** Decoding and transcribing take seconds; without these the dialog looked inert. */
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioProgress, setAudioProgress] = useState<number | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [modImportOpen, setModImportOpen] = useState(false);
+  const [modBusy, setModBusy] = useState(false);
+  const [modError, setModError] = useState<string | null>(null);
+  const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const [jsonBusy, setJsonBusy] = useState(false);
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [creatingGeneration, setCreatingGeneration] = useState(false);
 
@@ -277,10 +295,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
   };
 
-  const handleImportJsonFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
+  const handleImportJsonFile = async (file: File): Promise<void> => {
+    setJsonError(null);
+    setJsonBusy(true);
     try {
       const text = await file.text();
       const parsed = JSON.parse(text) as { name?: unknown; score?: unknown };
@@ -292,10 +309,14 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       // immediately downloading the same bytes back.
       await store.getState().newProject({ name, score });
       const id = store.getState().projectId;
+      setJsonImportOpen(false);
       await refresh();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
+      setJsonError(err instanceof Error ? err.message : 'That file is not a project export.');
       reportError(err, { context: 'Project JSON import failed', store });
+    } finally {
+      setJsonBusy(false);
     }
   };
 
@@ -308,33 +329,56 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
    * a toast — a garbage score would look like it imported and quietly not be
    * the music.
    */
-  const handleImportModFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
+  const handleImportModFile = async (file: File): Promise<void> => {
+    setModError(null);
+    setModBusy(true);
     try {
       const bytes = await file.arrayBuffer();
       const mod = getAppServices().io.modCodec.decode(bytes);
       const score = modToScore(mod);
       await store.getState().newProject({ name: mod.title || file.name, score });
       const id = store.getState().projectId;
+      setModImportOpen(false);
       await refresh();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
+      setModError(
+        err instanceof Error ? err.message : 'That file could not be read as a tracker module.',
+      );
       reportError(err, { context: 'Module import failed', store });
+    } finally {
+      setModBusy(false);
     }
   };
 
   /** Decode and analyse the picked file; the dialog then shows what was heard. */
   const handleAudioFile = (file: File): void => {
     void (async () => {
+      setAudioAnalysis(undefined);
+      setAudioError(null);
+      setAudioBusy(true);
+      setAudioProgress(null);
+      setAudioName(file.name.replace(/\.[^.]+$/, ''));
       try {
-        setAudioAnalysis(undefined);
-        setAudioName(file.name.replace(/\.[^.]+$/, ''));
         const audio = await getAppServices().io.audioCodec.decode(await file.arrayBuffer());
-        setAudioAnalysis(transcribe(audio, TRANSCRIPTION_PPQ));
+        // Through the service, not `transcribe` directly: pitch tracking is a
+        // tight loop that cannot yield, so on this thread nothing would repaint
+        // and the bar would sit at 0 until the moment it finished. The service
+        // runs it in a worker where it can report as it goes.
+        setAudioProgress(0);
+        setAudioAnalysis(
+          await transcribeService.transcribe(audio, TRANSCRIPTION_PPQ, {
+            onProgress: setAudioProgress,
+          }),
+        );
       } catch (err) {
+        // In the dialog as well as the toast: the dialog is where the user is
+        // looking, and a toast over a modal is easy to miss entirely.
+        setAudioError(err instanceof Error ? err.message : 'That file could not be read as audio.');
         reportError(err, { context: 'Audio import failed', store });
+      } finally {
+        setAudioBusy(false);
+        setAudioProgress(null);
       }
     })();
   };
@@ -563,40 +607,26 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           </Button>
         </Tooltip>
         <Tooltip content="Import an Amiga tracker module (.MOD)">
-          {/* A native <label> around a hidden input: `Button` renders a
-              <button>, which cannot drive a file picker. */}
-          <label
-            role="button"
-            tabIndex={0}
+          <Button
+            type="button"
+            variant="outline"
             aria-label="Import MOD"
-            className={cn(variants.button.outline.default(), ROW_BUTTON_CLASS, 'cursor-pointer')}
+            onClick={() => setModImportOpen(true)}
+            className={ROW_BUTTON_CLASS}
           >
             Import MOD
-            <input
-              type="file"
-              accept=".mod,audio/mod,application/octet-stream"
-              className="sr-only"
-              aria-label="Module file input"
-              onChange={(e) => void handleImportModFile(e)}
-            />
-          </label>
+          </Button>
         </Tooltip>
         <Tooltip content="Import project JSON">
-          <label
-            role="button"
-            tabIndex={0}
+          <Button
+            type="button"
+            variant="outline"
             aria-label="Import project JSON"
-            className={cn(variants.button.outline.default(), ROW_BUTTON_CLASS, 'cursor-pointer')}
+            onClick={() => setJsonImportOpen(true)}
+            className={ROW_BUTTON_CLASS}
           >
             Import Project JSON
-            <input
-              type="file"
-              accept="application/json"
-              className="sr-only"
-              aria-label="Project JSON file input"
-              onChange={(e) => void handleImportJsonFile(e)}
-            />
-          </label>
+          </Button>
         </Tooltip>
       </div>
 
@@ -664,11 +694,53 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         open={audioImportOpen}
         analysis={audioAnalysis}
         onFile={handleAudioFile}
+        busy={audioBusy}
+        progress={audioProgress}
+        error={audioError}
         onImport={handleAudioImport}
         onClose={() => {
           setAudioImportOpen(false);
           setAudioAnalysis(undefined);
+          setAudioError(null);
         }}
+      />
+      {/* `.MOD` and Project JSON are one step — the file *is* the answer, so
+          there is nothing to confirm and the modal commits as soon as it reads
+          one. They still go through the same shell: a title saying what will
+          happen, and somewhere to report a file that cannot be read. */}
+      <FileImportModal
+        open={modImportOpen}
+        title="Import module"
+        accept=".mod,audio/mod,application/octet-stream"
+        fileKind="module file"
+        onFile={(file) => void handleImportModFile(file)}
+        busy={modBusy}
+        busyLabel="Decoding the module…"
+        error={modError}
+        canImport={false}
+        onImport={() => {}}
+        onClose={() => {
+          setModImportOpen(false);
+          setModError(null);
+        }}
+        description="Opens an Amiga tracker module as a new project. Notes are grouped by sample rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of measures."
+      />
+      <FileImportModal
+        open={jsonImportOpen}
+        title="Import project JSON"
+        accept="application/json"
+        fileKind="project file"
+        onFile={(file) => void handleImportJsonFile(file)}
+        busy={jsonBusy}
+        busyLabel="Reading the project…"
+        error={jsonError}
+        canImport={false}
+        onImport={() => {}}
+        onClose={() => {
+          setJsonImportOpen(false);
+          setJsonError(null);
+        }}
+        description="Opens a project exported from this app as a new project. The one already open is untouched."
       />
       <MusicXmlImportDialog
         open={musicXmlImportOpen}

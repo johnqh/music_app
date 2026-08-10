@@ -40,21 +40,17 @@
  * `<button>`, not a `<label>`, so it can't drive a hidden native file
  * input's picker the way a real `<label>` wrapping it does.
  */
-import { useMemo, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Button,
   Checkbox,
-  FormModal,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
 } from '@sudobility/components';
-import { variants } from '@sudobility/design';
 import type { MidiSummary } from '@sudobility/music_lib';
 import { defaultMidiImportOptions } from '@sudobility/music_lib';
 import type { MidiImportOptions } from '@sudobility/music_lib';
@@ -66,6 +62,7 @@ import { MidiService } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import { getAppServices } from '@/config/initialize';
 
 export type MidiImportWizardProps = {
@@ -128,7 +125,6 @@ export function MidiImportWizard({
     () => midiService ?? new MidiService(getAppServices().io.midiCodec),
     [midiService],
   );
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
@@ -158,9 +154,7 @@ export function MidiImportWizard({
     onClose();
   };
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFile = async (file: File): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
@@ -175,7 +169,6 @@ export function MidiImportWizard({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -256,261 +249,230 @@ export function MidiImportWizard({
 
   return (
     <>
-      <FormModal
+      <FileImportModal
         open={open}
         title="Import MIDI"
+        accept=".mid,.midi,audio/midi"
+        fileKind="MIDI file"
+        fileName={fileName}
+        onFile={(file) => void handleFile(file)}
+        busy={busy}
+        busyLabel="Reading the file…"
+        error={error}
+        canImport={Boolean(summary && options)}
+        onImport={handleImportClick}
         onClose={handleClose}
         size="large"
-        closeAriaLabel="Close dialog"
-        actions={[
-          { label: 'Cancel', onClick: handleClose, variant: 'ghost' },
-          {
-            label: 'Import',
-            onClick: handleImportClick,
-            variant: 'primary',
-            disabled: !summary || !options || busy,
-            ariaLabel: 'Import',
-          },
-        ]}
+        description="Opens a MIDI file as a new project. Choose which tracks to bring and how to read their timing below."
       >
-        {/* FormModal already scrolls its content area, so this only stacks. */}
-        <div className="flex flex-col gap-3">
-          <label
-            role="button"
-            tabIndex={0}
-            aria-label="Choose MIDI file"
-            className={cn(variants.button.outline.default(), 'cursor-pointer self-start px-3 py-2')}
-          >
-            {fileName ?? 'Choose MIDI file...'}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".mid,.midi,audio/midi"
-              className="sr-only"
-              aria-label="MIDI file input"
-              onChange={(e) => void handleFileChange(e)}
-            />
-          </label>
-
-          {error && (
-            <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
-              {error}
+        {summary && options && (
+          <>
+            <div
+              role="status"
+              className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
+            >
+              MIDI stores performance timing, not complete notation semantics -- imported notation
+              is an approximation. Review the settings below and preview before importing.
             </div>
-          )}
 
-          {summary && options && (
-            <>
-              <div
-                role="status"
-                className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
-              >
-                MIDI stores performance timing, not complete notation semantics -- imported notation
-                is an approximation. Review the settings below and preview before importing.
-              </div>
+            <p className="text-sm font-medium text-theme-text-primary">
+              {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s, {summary.ppq}{' '}
+              PPQ
+            </p>
 
-              <p className="text-sm font-medium text-theme-text-primary">
-                {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s,{' '}
-                {summary.ppq} PPQ
-              </p>
-
-              <div className="overflow-x-auto rounded-md border border-theme-border">
-                <table aria-label="MIDI track summary" className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-theme-border text-theme-text-secondary">
-                      <th className="px-2 py-1.5 font-medium">Include</th>
-                      <th className="px-2 py-1.5 font-medium">Track</th>
-                      <th className="px-2 py-1.5 font-medium">Channel</th>
-                      <th className="px-2 py-1.5 font-medium">Program</th>
-                      <th className="px-2 py-1.5 font-medium">Notes</th>
-                      <th className="px-2 py-1.5 font-medium">Clef</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.tracks.map((track) => {
-                      const selection = options.trackSelections.find(
-                        (s) => s.sourceIndex === track.index,
-                      );
-                      if (!selection) return null;
-                      return (
-                        <tr
-                          key={track.index}
-                          className="border-b border-theme-border text-theme-text-primary last:border-b-0"
-                        >
-                          <td className="px-2 py-1.5">
-                            <Checkbox
-                              label={`Include track: ${track.name}`}
-                              checked={selection.include}
-                              onChange={(checked) =>
-                                patchTrackSelection(track.index, { include: checked })
-                              }
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">{track.name}</td>
-                          <td className="px-2 py-1.5">{track.channel}</td>
-                          <td className="px-2 py-1.5">{track.program}</td>
-                          <td className="px-2 py-1.5">{track.noteCount}</td>
-                          <td className="px-2 py-1.5">
-                            <Select
-                              value={selection.clef}
-                              onValueChange={(v) =>
-                                patchTrackSelection(track.index, { clef: v as Clef })
-                              }
+            <div className="overflow-x-auto rounded-md border border-theme-border">
+              <table aria-label="MIDI track summary" className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-theme-border text-theme-text-secondary">
+                    <th className="px-2 py-1.5 font-medium">Include</th>
+                    <th className="px-2 py-1.5 font-medium">Track</th>
+                    <th className="px-2 py-1.5 font-medium">Channel</th>
+                    <th className="px-2 py-1.5 font-medium">Program</th>
+                    <th className="px-2 py-1.5 font-medium">Notes</th>
+                    <th className="px-2 py-1.5 font-medium">Clef</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.tracks.map((track) => {
+                    const selection = options.trackSelections.find(
+                      (s) => s.sourceIndex === track.index,
+                    );
+                    if (!selection) return null;
+                    return (
+                      <tr
+                        key={track.index}
+                        className="border-b border-theme-border text-theme-text-primary last:border-b-0"
+                      >
+                        <td className="px-2 py-1.5">
+                          <Checkbox
+                            label={`Include track: ${track.name}`}
+                            checked={selection.include}
+                            onChange={(checked) =>
+                              patchTrackSelection(track.index, { include: checked })
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">{track.name}</td>
+                        <td className="px-2 py-1.5">{track.channel}</td>
+                        <td className="px-2 py-1.5">{track.program}</td>
+                        <td className="px-2 py-1.5">{track.noteCount}</td>
+                        <td className="px-2 py-1.5">
+                          <Select
+                            value={selection.clef}
+                            onValueChange={(v) =>
+                              patchTrackSelection(track.index, { clef: v as Clef })
+                            }
+                          >
+                            <SelectTrigger
+                              aria-label={`Clef: ${track.name}`}
+                              className={SELECT_TRIGGER_CLASS}
                             >
-                              <SelectTrigger
-                                aria-label={`Clef: ${track.name}`}
-                                className={SELECT_TRIGGER_CLASS}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {CLEF_OPTIONS.map((clef) => (
-                                  <SelectItem key={clef} value={clef}>
-                                    {clef}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CLEF_OPTIONS.map((clef) => (
+                                <SelectItem key={clef} value={clef}>
+                                  {clef}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-theme-text-secondary">Quantize grid</span>
-                  <Select
-                    value={options.quantizeGrid ?? 'none'}
-                    onValueChange={(v) =>
-                      patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })
-                    }
-                  >
-                    <SelectTrigger aria-label="Quantize grid" className={SELECT_TRIGGER_CLASS}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {QUANTIZE_GRID_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-theme-text-secondary">Quantize grid</span>
+                <Select
+                  value={options.quantizeGrid ?? 'none'}
+                  onValueChange={(v) =>
+                    patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })
+                  }
+                >
+                  <SelectTrigger aria-label="Quantize grid" className={SELECT_TRIGGER_CLASS}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUANTIZE_GRID_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
 
-                <Checkbox
-                  label="Triplet detection"
-                  checked={options.tripletDetection}
-                  onChange={(checked) => patchOptions({ tripletDetection: checked })}
+              <Checkbox
+                label="Triplet detection"
+                checked={options.tripletDetection}
+                onChange={(checked) => patchOptions({ tripletDetection: checked })}
+              />
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-theme-text-secondary">
+                  Min. note duration (ticks)
+                </span>
+                <Input
+                  type="number"
+                  min={0}
+                  aria-label="Minimum note duration (ticks)"
+                  value={options.minDurationTicks}
+                  onChange={(e) =>
+                    patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                  className={TEXT_INPUT_CLASS}
                 />
+              </label>
 
+              <Checkbox
+                label="Merge near-duplicate notes"
+                checked={options.mergeNearDuplicates}
+                onChange={(checked) => patchOptions({ mergeNearDuplicates: checked })}
+              />
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-theme-text-secondary">Sustain pedal handling</span>
+                <Select
+                  value={options.sustainPedal}
+                  onValueChange={(v) => patchOptions({ sustainPedal: v as 'extend' | 'ignore' })}
+                >
+                  <SelectTrigger
+                    aria-label="Sustain pedal handling"
+                    className={SELECT_TRIGGER_CLASS}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="extend">Extend notes through sustain</SelectItem>
+                    <SelectItem value="ignore">Ignore sustain pedal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <Checkbox
+                label="Piano staff split"
+                checked={options.pianoStaffSplit}
+                onChange={(checked) => patchOptions({ pianoStaffSplit: checked })}
+              />
+
+              {options.pianoStaffSplit && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-theme-text-secondary">
-                    Min. note duration (ticks)
-                  </span>
+                  <span className="text-xs text-theme-text-secondary">Split point (MIDI note)</span>
                   <Input
                     type="number"
                     min={0}
-                    aria-label="Minimum note duration (ticks)"
-                    value={options.minDurationTicks}
-                    onChange={(e) =>
-                      patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })
-                    }
+                    max={127}
+                    aria-label="Split point (MIDI note number)"
+                    value={options.splitPointMidi}
+                    onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
                     className={TEXT_INPUT_CLASS}
                   />
                 </label>
-
-                <Checkbox
-                  label="Merge near-duplicate notes"
-                  checked={options.mergeNearDuplicates}
-                  onChange={(checked) => patchOptions({ mergeNearDuplicates: checked })}
-                />
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-theme-text-secondary">Sustain pedal handling</span>
-                  <Select
-                    value={options.sustainPedal}
-                    onValueChange={(v) => patchOptions({ sustainPedal: v as 'extend' | 'ignore' })}
-                  >
-                    <SelectTrigger
-                      aria-label="Sustain pedal handling"
-                      className={SELECT_TRIGGER_CLASS}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="extend">Extend notes through sustain</SelectItem>
-                      <SelectItem value="ignore">Ignore sustain pedal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </label>
-
-                <Checkbox
-                  label="Piano staff split"
-                  checked={options.pianoStaffSplit}
-                  onChange={(checked) => patchOptions({ pianoStaffSplit: checked })}
-                />
-
-                {options.pianoStaffSplit && (
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs text-theme-text-secondary">
-                      Split point (MIDI note)
-                    </span>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={127}
-                      aria-label="Split point (MIDI note number)"
-                      value={options.splitPointMidi}
-                      onChange={(e) =>
-                        patchOptions({ splitPointMidi: Number(e.target.value) || 60 })
-                      }
-                      className={TEXT_INPUT_CLASS}
-                    />
-                  </label>
-                )}
-
-                <Checkbox
-                  label="Detect key"
-                  checked={options.detectKey}
-                  onChange={(checked) => patchOptions({ detectKey: checked })}
-                />
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                aria-label="Preview import"
-                disabled={busy}
-                onClick={() => void handlePreview()}
-                className="self-start px-3 py-1.5"
-              >
-                Preview
-              </Button>
-
-              {preview && (
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm text-theme-text-primary">
-                    {preview.noteCount} notes after import.
-                  </p>
-                  <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
-                  {preview.warnings.map((w) => (
-                    <div
-                      key={w}
-                      role="status"
-                      className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
-                    >
-                      {w}
-                    </div>
-                  ))}
-                </div>
               )}
-            </>
-          )}
-        </div>
-      </FormModal>
+
+              <Checkbox
+                label="Detect key"
+                checked={options.detectKey}
+                onChange={(checked) => patchOptions({ detectKey: checked })}
+              />
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Preview import"
+              disabled={busy}
+              onClick={() => void handlePreview()}
+              className="self-start px-3 py-1.5"
+            >
+              Preview
+            </Button>
+
+            {preview && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-theme-text-primary">
+                  {preview.noteCount} notes after import.
+                </p>
+                <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
+                {preview.warnings.map((w) => (
+                  <div
+                    key={w}
+                    role="status"
+                    className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
+                  >
+                    {w}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </FileImportModal>
 
       <ConfirmDialog
         open={confirmingReplace}

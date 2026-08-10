@@ -57,14 +57,40 @@ describe('DashboardPage', () => {
     }
   });
 
-  it('accepts the audio formats it claims to', () => {
+  it('opens a modal for every import, not the OS picker', async () => {
+    // `.MOD` and Project JSON used to jump straight to the file dialog, so two
+    // of the five imports had no title, no description of what they would do,
+    // and nowhere to report a file that could not be read.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+    const user = userEvent.setup();
+
+    for (const [button, title] of [
+      ['Import MOD', 'Import module'],
+      ['Import project JSON', 'Import project JSON'],
+      ['Import Audio', 'Import audio'],
+    ] as const) {
+      await user.click(screen.getByRole('button', { name: button }));
+      expect(await screen.findByRole('dialog', { name: title }), button).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    }
+  });
+
+  it('accepts the formats each import claims to', async () => {
     // The button says WAV, MP3 and MPA; the picker has to agree, or the file
     // the user was told to bring is greyed out in their own file dialog.
     const { store } = setup();
     render(<DashboardPage store={store} />);
+    const user = userEvent.setup();
 
-    const modInput = screen.getByLabelText('Module file input') as HTMLInputElement;
-    expect(modInput.accept).toContain('.mod');
+    await user.click(screen.getByRole('button', { name: 'Import Audio' }));
+    const audio = (await screen.findByLabelText('audio file input')) as HTMLInputElement;
+    for (const ext of ['.wav', '.mp3', '.mpa']) expect(audio.accept).toContain(ext);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await user.click(screen.getByRole('button', { name: 'Import MOD' }));
+    const mod = (await screen.findByLabelText('module file input')) as HTMLInputElement;
+    expect(mod.accept).toContain('.mod');
   });
 
   it("lists the signed-in user's server-side projects", async () => {

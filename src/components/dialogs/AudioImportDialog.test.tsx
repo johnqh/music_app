@@ -67,15 +67,52 @@ describe('AudioImportDialog', () => {
     expect(onImport).toHaveBeenCalledWith(90);
   });
 
-  it('reports the chosen file', async () => {
+  it('reports the chosen file, and shows its name once picked', async () => {
     const user = userEvent.setup();
     const onFile = vi.fn();
     render(<AudioImportDialog open onFile={onFile} onImport={vi.fn()} onClose={vi.fn()} />);
     await user.upload(
-      screen.getByLabelText('Audio file'),
+      screen.getByLabelText('audio file input'),
       new File([new Uint8Array([1, 2, 3])], 'hum.wav', { type: 'audio/wav' }),
     );
     expect(onFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'hum.wav' }));
+    expect(screen.getByLabelText('Choose audio file')).toHaveTextContent('hum.wav');
+  });
+
+  it('says it is listening while the recording is being analysed', () => {
+    // Decoding an MP3 and running pitch detection takes seconds; the dialog
+    // used to show nothing at all in that window, so picking a file looked
+    // like it had done nothing.
+    render(<AudioImportDialog open busy onFile={vi.fn()} onImport={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Listening to the recording…');
+  });
+
+  it('reports a file it could not read', () => {
+    render(
+      <AudioImportDialog
+        open
+        error="That file could not be read as audio."
+        onFile={vi.fn()}
+        onImport={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be read as audio');
+  });
+
+  it('says so when a recording produced no pitched line', () => {
+    // "Heard 0 notes" alone reads as a bug rather than as what a chord-heavy
+    // or percussive recording legitimately does.
+    render(
+      <AudioImportDialog
+        open
+        analysis={{ bpm: 120, notes: [] }}
+        onFile={vi.fn()}
+        onImport={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Nothing came through as a pitched line/)).toBeInTheDocument();
   });
 });
 
