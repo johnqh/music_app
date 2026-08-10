@@ -270,3 +270,46 @@ describe('TransportBar: timecode', () => {
     expect(screen.getByTestId('playback-timecode').textContent).toBe('0:00.0 / 0:00.0');
   });
 });
+
+describe('TransportBar: synth loading', () => {
+  it('says nothing while the engine is idle or ready', () => {
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    expect(screen.queryByRole('progressbar', { name: 'Preparing instruments' })).toBeNull();
+
+    act(() => store.getState().setSynthLoad({ status: 'ready' }));
+    expect(screen.queryByRole('progressbar', { name: 'Preparing instruments' })).toBeNull();
+  });
+
+  it('shows how far the download has got', () => {
+    // The first press of Play has tens of megabytes to fetch before a note can
+    // sound; without this the transport reads as a broken button.
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+
+    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: 0.4 }));
+    const bar = screen.getByRole('progressbar', { name: 'Preparing instruments' });
+    expect(bar).toHaveAttribute('aria-valuenow', '40');
+    expect(screen.getByText(/Preparing instruments 40%/)).toBeInTheDocument();
+  });
+
+  it('drops the percentage when there is no measurable progress', () => {
+    // The synth digesting the font reports nothing until it is done, and a
+    // number that sits still for five seconds is worse than no number.
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+
+    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: null }));
+    const bar = screen.getByRole('progressbar', { name: 'Preparing instruments' });
+    expect(bar).not.toHaveAttribute('aria-valuenow');
+    expect(screen.getByText('Preparing instruments')).toBeInTheDocument();
+  });
+
+  it('says so when the instruments cannot be loaded at all', () => {
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+
+    act(() => store.getState().setSynthLoad({ status: 'failed', message: 'boom' }));
+    expect(screen.getByText('Instruments failed to load')).toBeInTheDocument();
+  });
+});

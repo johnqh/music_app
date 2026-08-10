@@ -59,6 +59,7 @@ import {
   BackwardIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ExclamationTriangleIcon,
   PauseIcon,
   PlayIcon,
   StopIcon,
@@ -102,6 +103,59 @@ function formatTimecode(seconds: number): string {
  * showed up as `updateForwardRef` when the playback profile was taken. Split
  * out, a position update touches one span, one input and one span.
  */
+/**
+ * What the engine is doing before it can make a sound.
+ *
+ * The soundfont engine has tens of megabytes to fetch and several seconds of
+ * synth setup on the first press of Play. The transport responds immediately —
+ * it reports "playing" and starts the music once the synth is up — but without
+ * saying so, those seconds of silence read as a broken button.
+ *
+ * Renders nothing when there is nothing to say, so a ready engine costs no
+ * space in the bar.
+ */
+function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
+  const load = store((s) => s.synthLoad);
+  if (load.status === 'idle' || load.status === 'ready') return null;
+
+  if (load.status === 'failed') {
+    return (
+      <div role="status" className="flex items-center gap-1.5 whitespace-nowrap text-xs text-theme-error">
+        <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>Instruments failed to load</span>
+      </div>
+    );
+  }
+
+  const percent = load.fraction === null ? null : Math.round(load.fraction * 100);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-2 whitespace-nowrap text-xs text-theme-text-secondary"
+    >
+      <span>Preparing instruments{percent === null ? '' : ` ${percent}%`}</span>
+      <div
+        // Determinate while downloading; the synth digesting the font reports
+        // nothing, so that half is a moving bar rather than a false percentage.
+        role="progressbar"
+        aria-label="Preparing instruments"
+        {...(percent === null ? {} : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
+        className="h-1 w-16 overflow-hidden rounded-full bg-theme-border"
+      >
+        <div
+          className={
+            percent === null
+              ? 'h-full w-1/3 animate-pulse rounded-full bg-theme-text-secondary'
+              : 'h-full rounded-full bg-theme-text-secondary transition-[width] duration-200'
+          }
+          style={percent === null ? undefined : { width: `${percent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
   const measureBeat = store(selectCurrentMeasureBeat);
   return (
@@ -414,6 +468,9 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </div>
 
       <Timecode store={store} maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
+
+      {/* Last, so it never shifts the controls: it appears only while loading. */}
+      <SynthLoadIndicator store={store} />
     </div>
   );
 }
