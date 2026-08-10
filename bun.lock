@@ -15,7 +15,7 @@
         "@sudobility/di_web": "^0.1.218",
         "@sudobility/music_client": "^0.4.11",
         "@sudobility/music_io": "^0.7.2",
-        "@sudobility/music_lib": "^1.7.19",
+        "@sudobility/music_lib": "^1.7.20",
         "@sudobility/music_types": "^0.11.10",
         "@sudobility/seo_lib": "^0.0.34",
         "@sudobility/types": "^1.9.64",
@@ -422,7 +422,7 @@
 
     "@sudobility/music_io": ["@sudobility/music_io@0.7.2", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7", "js-synthesizer": "^1.13.0" }, "peerDependencies": { "@sudobility/music_lib": "^1.7.19", "@sudobility/music_types": "^0.11.10", "@tonejs/midi": "^2.0.28", "fast-xml-parser": "", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0" }, "optionalPeers": ["fast-xml-parser", "react-native-fs", "react-native-share"] }, "sha512-zy/yx7M3bTJEGtu1LMrgt4UGlyZG7oVis2tBXJk+MVbyAXveabEdeFmeGjSN3R21Mm/XIbd/G1PCrlsC0TEC0g=="],
 
-    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.19", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.10", "@sudobility/music_types": "^0.11.10", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-G0x9vY8L61SjUd8M+ZRukHT613sgJMCJbs087nzcq2QPkwPIeNrEnKk8d7Th2WscbkcB3//YBu54cxzsXPOBDA=="],
+    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.20", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.10", "@sudobility/music_types": "^0.11.10", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-5yhyxXKTBZeqTSV7DewZ1tPgnLes0pv0Ix+BtXhc9JcUTFVa8jmVR9UlkPTWIlf2EkqOsNhBZ7gOtnFkWRZayQ=="],
 
     "@sudobility/music_types": ["@sudobility/music_types@0.11.10", "", { "dependencies": { "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.64" } }, "sha512-IOLgC/jNalbdAqG799MSOrDI6eLQFh+FwWxDY5G8ze95Pe6ih+2ip/hNMt2OIP/O3bIoGF/swAuj+RcQwKzhJw=="],
 
