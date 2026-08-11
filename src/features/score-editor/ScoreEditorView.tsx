@@ -83,7 +83,6 @@ export type ScoreEditorViewProps = {
   inspectorOpen?: boolean;
   onToggleInspector?: () => void;
   /** Opens the audio-transcription dialog, which `AppLayout` owns. */
-  onAddTrackFromAudio?: () => void;
   /**
    * Submits a new-track generation as a background job. `AppLayout` owns the
    * job hook, the same one the Replace buttons use.
@@ -342,7 +341,6 @@ export function ScoreEditorView({
   store = useAppStore,
   inspectorOpen,
   onToggleInspector,
-  onAddTrackFromAudio,
   onGenerateTrackJob,
 }: ScoreEditorViewProps) {
   const clipboard = useClipboardPrompts(store);
@@ -1329,7 +1327,6 @@ export function ScoreEditorView({
           setGenerateTrackError(null);
           setGenerateTrackOpen(true);
         }}
-        onAddTrackFromAudio={onAddTrackFromAudio}
       />
 
       <GenerateTrackDialog

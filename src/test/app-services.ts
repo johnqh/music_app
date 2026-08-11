@@ -33,10 +33,6 @@ export function installTestAppServices(
     io,
     networkClient: {} as NetworkClient,
     musicClient: context.client,
-    // Rejects rather than returning empty bytes: a test that reaches this has
-    // wandered into the separation path without meaning to, and silence there
-    // would look like a stem that simply had nothing in it.
-    fetchBinary: () => Promise.reject(new Error('fetchBinary is not stubbed in this test')),
     baseUrl: 'http://test.local',
     prefsStorage: context.storage!,
     auth: {

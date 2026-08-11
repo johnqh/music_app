@@ -118,15 +118,6 @@ export type EditorToolbarProps = {
   /** Opens the generate-track modal. Omitted when no host provides one. */
   onGenerateTrack?: () => void;
   /**
-   * Opens the audio-transcription dialog, which writes what it hears onto a
-   * *new track* of the open score.
-   *
-   * It lives under Add Track rather than under an Import menu because that is
-   * what it does — every other import on the Projects screen creates a whole
-   * project, and this one does not.
-   */
-  onAddTrackFromAudio?: () => void;
-  /**
    * Cut and paste go through the view's prompt hook rather than the store, so
    * the button and the keyboard shortcut ask the same question. Optional so
    * the toolbar still renders standalone in a test.
@@ -240,7 +231,6 @@ export function EditorToolbar({
   onCut,
   onPaste,
   onGenerateTrack,
-  onAddTrackFromAudio,
 }: EditorToolbarProps) {
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
@@ -414,8 +404,6 @@ export function EditorToolbar({
                 store.getState().setActiveTrack(id);
               } else if (value === 'generate') {
                 onGenerateTrack?.();
-              } else if (value === 'audio') {
-                onAddTrackFromAudio?.();
               }
             }}
           >
@@ -435,7 +423,6 @@ export function EditorToolbar({
             <SelectContent>
               <SelectItem value="blank">Blank Track</SelectItem>
               <SelectItem value="generate">Generate Track</SelectItem>
-              <SelectItem value="audio">Track from Audio…</SelectItem>
             </SelectContent>
           </Select>
         </div>

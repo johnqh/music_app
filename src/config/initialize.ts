@@ -84,25 +84,6 @@ class FetchNetworkClient implements NetworkClient {
     } as NetworkResponse<T>;
   }
 
-  /**
-   * A response that is bytes rather than JSON.
-   *
-   * `request` parses every body as JSON, which is right for an API envelope and
-   * useless for a separated stem — megabytes of audio. This stays on
-   * `FetchNetworkClient` so the app still has exactly one `fetch()` call site;
-   * `MusicClient` builds the URL, this fetches it.
-   */
-  async requestBinary(url: string, token: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: signal ?? undefined,
-    });
-    if (!response.ok) {
-      throw new Error(`Could not fetch audio (${response.status})`);
-    }
-    return response.arrayBuffer();
-  }
-
   get<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
     return this.request<T>(url, { ...options, method: 'GET' });
   }
@@ -225,14 +206,6 @@ function e2eBackend(): AuthBackend {
 export type AppServices = {
   networkClient: NetworkClient;
   musicClient: MusicClient;
-  /**
-   * Fetches an authenticated response that is bytes rather than JSON.
-   *
-   * Exposed separately because `NetworkClient` has no binary mode — its
-   * `request` parses every body as JSON. Separated stem audio is the one thing
-   * this app downloads that is neither an envelope nor a static asset.
-   */
-  fetchBinary: (url: string, token: string, signal?: AbortSignal) => Promise<ArrayBuffer>;
   baseUrl: string;
   auth: AuthBackend;
   prefsStorage: PrefsStorage;
@@ -257,10 +230,6 @@ export function initializeApp(): AppServices {
       workletModuleUrl: '/audio/js-synthesizer.worklet.min.js',
       fontUrl: '/audio/FluidR3Mono_GM.sf3',
     },
-    // Hosted beside the soundfont, and for the same reason: it is a model
-    // weight file, not something the bundler should try to transform. The
-    // weights shard sits next to `model.json` and is fetched relative to it.
-    transcription: { modelUrl: '/models/basic-pitch/model.json' },
   });
   initializeMusicPlatform({ playback: io.playback });
 
@@ -285,7 +254,6 @@ export function initializeApp(): AppServices {
   services = {
     networkClient,
     musicClient,
-    fetchBinary: (url, token, signal) => networkClient.requestBinary(url, token, signal),
     baseUrl,
     auth,
     prefsStorage,

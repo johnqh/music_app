@@ -27,7 +27,7 @@
  * + hidden file input stays exactly as-is (same reasoning as
  * `MidiImportWizard`'s file picker).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   Input,
@@ -40,25 +40,17 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import type { DecodedAudio, ProjectSummary } from '@sudobility/music_types';
+import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
 import {
-  addTranscribedTrackCommand,
   createEmptyScore,
-  deleteTrackCommand,
   modToScore,
   projectTemplates,
   reportError,
-  stemInstrument,
-  stemsEndTick,
-  TranscribeService,
-  transcriptionFromHeardNotes,
   useAppStore,
-  type TranscribedStem,
 } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { getAppServices } from '@/config/initialize';
-import { separateAndTranscribe } from '@/features/projects/separate-import';
 import type { GenerateScoreRequest } from '@sudobility/music_types';
 import { GenerateScoreDialog } from '@/features/generation/GenerateScoreDialog';
 import { CONSTANTS } from '@/config/constants';
@@ -67,7 +59,6 @@ import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { AudioImportDialog } from '@/components/dialogs/AudioImportDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
-import type { Transcription } from '@sudobility/music_lib';
 
 export type DashboardPageProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
@@ -131,28 +122,8 @@ function emptyScoreFor(request: GenerateScoreRequest) {
  */
 const ROW_CONTROL_CLASS = 'h-10 min-h-10 inline-flex items-center text-sm';
 
-/** The resolution a transcription is emitted against, and the score built to hold it. */
-const TRANSCRIPTION_PPQ = 480;
 
-/**
- * Longer than this and the dialog asks before listening to the whole file.
- *
- * Transcription cost scales with length and the model is instrument-agnostic,
- * so a full track is minutes of waiting for thousands of notes on a single
- * part. Two minutes covers a song section, which is what somebody importing a
- * riff or a take actually has.
- */
-const LONG_AUDIO_SEC = 120;
-/** How much of a long recording the offered excerpt covers — a verse and a chorus. */
-const AUDIO_EXCERPT_SEC = 90;
 
-/**
- * One transcription service for the page, not one per import.
- *
- * Constructing it spawns a worker; doing that per file would leave one behind
- * for every recording the user tried.
- */
-const transcribeService = new TranscribeService();
 
 const TEXT_INPUT_CLASS = `${ROW_CONTROL_CLASS} px-3`;
 
@@ -173,28 +144,17 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
   const [audioImportOpen, setAudioImportOpen] = useState(false);
-  const [audioAnalysis, setAudioAnalysis] = useState<Transcription | undefined>(undefined);
-  const [audioName, setAudioName] = useState('Audio');
-  /** Decoding and transcribing take seconds; without these the dialog looked inert. */
   const [audioBusy, setAudioBusy] = useState(false);
-  const [audioProgress, setAudioProgress] = useState<number | null>(null);
-  /** What the separation is doing right now — it has several steps, not one wait. */
-  const [audioStage, setAudioStage] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
-  /** Set once a decoded file is waiting on the how-to-import question. */
-  const [audioPending, setAudioPending] = useState<{
-    seconds: number;
-    excerptSeconds: number;
-    longerThanSec: number;
-  } | null>(null);
   /**
-   * The decoded samples, held between "this is long" and the answer.
+   * Whether this deployment can transcribe audio at all.
    *
-   * A ref because a decoded twelve-minute file is well over a hundred megabytes
-   * of Float32 and nothing renders from it — putting it in state would re-render
-   * the dashboard around it for no reason.
+   * Probed when the dialog opens rather than discovered by failing: uploading a
+   * recording and only then being told the server never could is the worst
+   * order to learn it in. `null` while unknown, which leaves the option
+   * enabled — an unanswered probe should not disable a feature that may work.
    */
-  const decodedAudioRef = useRef<DecodedAudio | null>(null);
+  const [canTranscribe, setCanTranscribe] = useState<boolean | null>(null);
   const [modImportOpen, setModImportOpen] = useState(false);
   const [modBusy, setModBusy] = useState(false);
   const [modError, setModError] = useState<string | null>(null);
@@ -384,267 +344,33 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
   };
 
-  /** Decode and analyse the picked file; the dialog then shows what was heard. */
   /**
-   * Hears the recording, polyphonically where the platform can.
+   * Uploads the recording and opens the project it becomes.
    *
-   * `io.audioTranscriber` is Basic Pitch — a model that returns every note
-   * sounding at once, so a chord arrives as a chord. Where it cannot run (no
-   * WebGL/WASM backend, a platform without a tensor runtime) this falls back to
-   * music_lib's YIN tracker, which is monophonic: fewer notes, but notes.
-   * Falling back rather than failing matters because the fallback is still a
-   * usable import for the single-line case the feature was built for.
+   * Nothing is decoded or analysed here: the file goes to the server, which
+   * separates it, transcribes each part and returns a score. The project comes
+   * back immediately in a `transcribing` state and fills itself in when the job
+   * lands, so this navigates straight to it rather than waiting.
    */
-  const analyseAudio = async (
-    io: ReturnType<typeof getAppServices>['io'],
-    audio: { samples: Float32Array; sampleRate: number },
-  ) => {
-    try {
-      const heard = await io.audioTranscriber.transcribe(audio, { onProgress: setAudioProgress });
-      return transcriptionFromHeardNotes(heard, TRANSCRIPTION_PPQ);
-    } catch (err) {
-      reportError(err, {
-        context: 'Polyphonic transcription unavailable, using the simple tracker',
-        store,
-      });
-      // The worker keeps the fallback off the main thread, so its own progress
-      // still animates — see `TranscribeService`.
-      return await transcribeService.transcribe(audio, TRANSCRIPTION_PPQ, {
-        onProgress: setAudioProgress,
-      });
-    }
-  };
-
-  /**
-   * Splits the recording into stems and hears each one, then builds the project.
-   *
-   * Unlike the whole-mix path this produces a **score**, not a `Transcription`:
-   * there is a track per stem and each carries its own instrument, so there is
-   * nothing for the tempo box in the dialog to correct after the fact — the
-   * tempo was detected across every stem at once and the parts are already
-   * written against it.
-   */
-  const runSeparation = (audio: DecodedAudio, limitSec: number | null): void => {
+  const handleAudioImport = (file: File): void => {
     void (async () => {
-      setAudioPending(null);
-      setAudioError(null);
       setAudioBusy(true);
-      setAudioProgress(0);
-      setAudioStage('Uploading the recording…');
-      try {
-        const { io, fetchBinary } = getAppServices();
-        const { client: musicClient, token } = await clientAndToken();
-        const clipped =
-          limitSec === null
-            ? audio
-            : {
-                samples: audio.samples.slice(0, Math.floor(limitSec * audio.sampleRate)),
-                sampleRate: audio.sampleRate,
-              };
-        decodedAudioRef.current = null;
-
-        const { bpm, stems } = await separateAndTranscribe(clipped, {
-          encodeWav: (a) => io.audioCodec.encodeWav(a),
-          decode: (bytes) => io.audioCodec.decode(bytes),
-          transcribe: (a, onProgress) =>
-            io.audioTranscriber.transcribe(a, onProgress ? { onProgress } : {}),
-          createSeparation: (blob) => musicClient.createSeparation(blob, token),
-          getSeparation: (id) => musicClient.getSeparation(id, token),
-          fetchStem: (id, kind) => fetchBinary(musicClient.stemUrl(id, kind), token),
-          onProgress: ({ label, fraction }) => {
-            setAudioStage(label);
-            setAudioProgress(fraction);
-          },
-        });
-
-        if (stems.length === 0) {
-          setAudioError('Nothing came through as notes on any of the separated parts.');
-          return;
-        }
-        await createProjectFromStems(bpm, stems);
-      } catch (err) {
-        setAudioError(
-          err instanceof Error ? err.message : 'That recording could not be separated.',
-        );
-        reportError(err, { context: 'Audio separation failed', store });
-      } finally {
-        setAudioBusy(false);
-        setAudioProgress(null);
-        setAudioStage(null);
-      }
-    })();
-  };
-
-  /**
-   * One track per stem, in one project.
-   *
-   * The score is sized from the longest stem before anything is written:
-   * `addTranscribedTrackCommand` drops a note that falls past the last barline
-   * rather than piling it on the final beat, so a score built too short
-   * silently loses the end of every part at once.
-   */
-  const createProjectFromStems = async (bpm: number, stems: TranscribedStem[]): Promise<void> => {
-    const ticksPerMeasure = TRANSCRIPTION_PPQ * 4; // the 4/4 default below
-    const measures = Math.max(4, Math.ceil((stemsEndTick(stems) + 1) / ticksPerMeasure));
-
-    const empty = createEmptyScore({
-      title: audioName,
-      ppq: TRANSCRIPTION_PPQ,
-      tempo: bpm,
-      measures,
-    });
-    let score = empty;
-    for (const stem of stems) {
-      const instrument = stemInstrument(stem.kind);
-      score = addTranscribedTrackCommand({
-        name: instrument.name,
-        notes: stem.notes,
-        midiProgram: instrument.midiProgram,
-        clef: instrument.clef,
-      }).execute(score);
-    }
-    // The placeholder the command copies its measure grid from, dropped again
-    // so the project opens with the separated parts alone.
-    score = deleteTrackCommand(empty.tracks[0].id).execute(score);
-
-    await store.getState().newProject({ name: audioName, score });
-    const id = store.getState().projectId;
-    setAudioImportOpen(false);
-    setAudioAnalysis(undefined);
-    await refresh();
-    if (id) onNavigate?.(`/project/${id}`);
-  };
-
-  /** Runs the analysis over `audio`, optionally only its opening seconds. */
-  const runAnalysis = (audio: DecodedAudio, limitSec: number | null): void => {
-    void (async () => {
-      setAudioPending(null);
       setAudioError(null);
-      setAudioBusy(true);
-      setAudioProgress(0);
       try {
-        const io = getAppServices().io;
-        const clipped =
-          limitSec === null
-            ? audio
-            : {
-                samples: audio.samples.slice(0, Math.floor(limitSec * audio.sampleRate)),
-                sampleRate: audio.sampleRate,
-              };
-        // Released before the model runs, not after. A decoded twelve-minute
-        // file is ~140MB of Float32, and holding it through an inference that
-        // wants its own hundreds of megabytes is what turned a 90-second
-        // excerpt from ~90s of work into minutes of thrashing. Nothing needs it
-        // again: the choice that got here is the only one on offer.
-        decodedAudioRef.current = null;
-        setAudioAnalysis(await analyseAudio(io, clipped));
-      } catch (err) {
-        setAudioError(err instanceof Error ? err.message : 'That file could not be read as audio.');
-        reportError(err, { context: 'Audio import failed', store });
-      } finally {
-        setAudioBusy(false);
-        setAudioProgress(null);
-      }
-    })();
-  };
-
-  const handleAudioFile = (file: File): void => {
-    void (async () => {
-      setAudioAnalysis(undefined);
-      setAudioError(null);
-      setAudioPending(null);
-      setAudioBusy(true);
-      setAudioProgress(null);
-      setAudioName(file.name.replace(/\.[^.]+$/, ''));
-      try {
-        const io = getAppServices().io;
-        const audio = await io.audioCodec.decode(await file.arrayBuffer());
-        const seconds = audio.samples.length / audio.sampleRate;
-
-        // A long recording is a decision, not a default. Transcription cost
-        // scales with length, and every note it hears lands on one track — so a
-        // twelve-minute track is minutes of waiting for thousands of notes in
-        // one part. Held in a ref rather than state: a decoded twelve-minute
-        // file is well over a hundred megabytes of Float32, and nothing renders
-        // from it.
-        // Always asked, not only for long files: separating into parts is a
-        // choice about where the audio goes as much as how long it takes, and
-        // it cannot be made on the user's behalf.
-        decodedAudioRef.current = audio;
-        setAudioBusy(false);
-        setAudioPending({
-          seconds,
-          excerptSeconds: AUDIO_EXCERPT_SEC,
-          longerThanSec: LONG_AUDIO_SEC,
-        });
-      } catch (err) {
-        // In the dialog as well as the toast: the dialog is where the user is
-        // looking, and a toast over a modal is easy to miss entirely.
-        setAudioError(err instanceof Error ? err.message : 'That file could not be read as audio.');
-        reportError(err, { context: 'Audio import failed', store });
-      } finally {
-        setAudioBusy(false);
-        setAudioProgress(null);
-      }
-    })();
-  };
-
-  /**
-   * Commits the transcription as a **new project**.
-   *
-   * The editor's version of this added a track to the score already open; here
-   * there is no open score, so the transcribed track is written onto an empty
-   * one. `addTranscribedTrackCommand` is a pure `(Score) => Score`, so it
-   * applies with no store behind it.
-   *
-   * Ticks are rescaled when the tempo was corrected: they were emitted against
-   * the *detected* value, so halving the tempo has to halve them too or the
-   * notes land in the wrong bars.
-   */
-  const handleAudioImport = (bpm: number): void => {
-    const analysis = audioAnalysis;
-    if (!analysis) return;
-    void (async () => {
-      try {
-        const scale = analysis.bpm === 0 ? 1 : bpm / analysis.bpm;
-        const notes = analysis.notes.map((n) => ({
-          midi: n.midi,
-          startTick: Math.round(n.startTick * scale),
-          durationTicks: Math.max(1, Math.round(n.durationTicks * scale)),
-        }));
-
-        // Long enough to hold the recording: `addTranscribedTrackCommand`
-        // drops a note that falls past the last measure rather than piling it
-        // on the final beat, so a score built too short silently loses the end
-        // of the take.
-        const lastTick = notes.reduce((end, n) => Math.max(end, n.startTick + n.durationTicks), 0);
-        const ticksPerMeasure = TRANSCRIPTION_PPQ * 4; // the 4/4 default below
-        const measures = Math.max(4, Math.ceil((lastTick + 1) / ticksPerMeasure));
-
-        // One placeholder track, because the command copies its measure grid
-        // for the new track and refuses a score with none — then dropped again,
-        // so the project opens with the transcription alone.
-        const empty = createEmptyScore({
-          title: audioName,
-          ppq: TRANSCRIPTION_PPQ,
-          tempo: bpm,
-          measures,
-        });
-        const withAudio = addTranscribedTrackCommand({ name: audioName, notes }).execute(empty);
-        const score = deleteTrackCommand(empty.tracks[0].id).execute(withAudio);
-
-        await store.getState().newProject({ name: audioName, score });
-        const id = store.getState().projectId;
+        const { client, token } = await clientAndToken();
+        const saved = await client.transcribeAudio(file, file.name, token);
         setAudioImportOpen(false);
-        setAudioAnalysis(undefined);
-        decodedAudioRef.current = null;
         await refresh();
-        if (id) onNavigate?.(`/project/${id}`);
+        onNavigate?.(`/project/${saved.id}`);
       } catch (err) {
+        setAudioError(err instanceof Error ? err.message : 'That recording could not be sent.');
         reportError(err, { context: 'Audio import failed', store });
+      } finally {
+        setAudioBusy(false);
       }
     })();
   };
+
 
   const renderCard = (project: ProjectSummary) => (
     <div key={project.id} className={CARD_CLASS}>
@@ -805,8 +531,21 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             variant="outline"
             aria-label="Import Audio"
             onClick={() => {
-              setAudioAnalysis(undefined);
+              setAudioError(null);
               setAudioImportOpen(true);
+              // Probed per opening, not once per session: a deployment can gain
+              // or lose its credentials while a tab stays open.
+              void (async () => {
+                try {
+                  const { client, token } = await clientAndToken();
+                  setCanTranscribe((await client.getTranscriptionCapability(token)).available);
+                } catch {
+                  // Left unknown rather than false: a probe that failed says
+                  // nothing about whether separation works, and the POST
+                  // reports its own 503 clearly enough if it does not.
+                  setCanTranscribe(null);
+                }
+              })();
             }}
             className={ROW_BUTTON_CLASS}
           >
@@ -899,28 +638,13 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       />
       <AudioImportDialog
         open={audioImportOpen}
-        analysis={audioAnalysis}
-        onFile={handleAudioFile}
         busy={audioBusy}
-        busyLabel={audioStage ?? undefined}
-        progress={audioProgress}
         error={audioError}
-        pending={audioPending}
-        onAnalyse={({ separate, limitSec }) => {
-          const audio = decodedAudioRef.current;
-          if (!audio) return;
-          if (separate) runSeparation(audio, limitSec);
-          else runAnalysis(audio, limitSec);
-        }}
+        canTranscribe={canTranscribe ?? true}
         onImport={handleAudioImport}
         onClose={() => {
           setAudioImportOpen(false);
-          setAudioAnalysis(undefined);
           setAudioError(null);
-          setAudioPending(null);
-          // Releases the decoded samples; a long file held here is hundreds of
-          // megabytes that nothing is going to ask for again.
-          decodedAudioRef.current = null;
         }}
       />
       {/* `.MOD` and Project JSON are one step — the file *is* the answer, so
