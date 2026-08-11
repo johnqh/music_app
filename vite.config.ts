@@ -31,11 +31,27 @@ export default defineConfig({
   // lets Vite transform the package per-module so worker URLs resolve; its
   // CJS deps are pre-bundled explicitly instead.
   optimizeDeps: {
-    exclude: ['@sudobility/music_lib'],
+    // Both, and for the same reason: esbuild's dep pre-bundler does not handle
+    // `new Worker(new URL(...))`, which music_lib uses for MIDI import and
+    // quantize, and music_io now uses for the Basic Pitch model.
+    exclude: ['@sudobility/music_lib', '@sudobility/music_io'],
     // No `dexie`: it went with the IndexedDB persistence the server-backed
     // store replaced, and naming an uninstalled package here makes Vite log a
     // resolve failure on every dev start.
-    include: ['@tonejs/midi', 'immer', 'zustand', 'tone', 'vexflow', 'zod'],
+    // basic-pitch and tfjs are listed explicitly because music_io is excluded
+    // above: excluding a package also stops Vite pre-bundling what it imports,
+    // and both of these ship CommonJS that fails in a module worker with
+    // "module is not defined".
+    include: [
+      '@tonejs/midi',
+      'immer',
+      'zustand',
+      'tone',
+      'vexflow',
+      'zod',
+      '@spotify/basic-pitch',
+      '@tensorflow/tfjs',
+    ],
   },
   test: {
     environment: 'jsdom',
