@@ -975,7 +975,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
       <Toasts store={store} />
 
-
       <CreateSnapshotDialog
         open={createSnapshotOpen}
         snapshotCount={snapshots.length}

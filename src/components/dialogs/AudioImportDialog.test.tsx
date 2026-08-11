@@ -55,7 +55,10 @@ describe('AudioImportDialog', () => {
     const user = userEvent.setup();
     render(<AudioImportDialog {...props()} />);
 
-    await user.upload(screen.getByLabelText('audio file input'), audioFile('long.mp3', 20 * 1024 * 1024));
+    await user.upload(
+      screen.getByLabelText('audio file input'),
+      audioFile('long.mp3', 20 * 1024 * 1024),
+    );
 
     expect(screen.getByText(/that is a large file/i)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Import' })).toBeEnabled();

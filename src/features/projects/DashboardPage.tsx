@@ -122,9 +122,6 @@ function emptyScoreFor(request: GenerateScoreRequest) {
  */
 const ROW_CONTROL_CLASS = 'h-10 min-h-10 inline-flex items-center text-sm';
 
-
-
-
 const TEXT_INPUT_CLASS = `${ROW_CONTROL_CLASS} px-3`;
 
 const SELECT_TRIGGER_CLASS = `${ROW_CONTROL_CLASS} w-auto px-3`;
@@ -370,7 +367,6 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       }
     })();
   };
-
 
   const renderCard = (project: ProjectSummary) => (
     <div key={project.id} className={CARD_CLASS}>
