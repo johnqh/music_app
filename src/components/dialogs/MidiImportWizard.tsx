@@ -58,20 +58,36 @@ import type { Clef, DurationName, NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
-import { MidiService } from '@sudobility/music_lib';
+import { analyzeMidi, importMidi } from '@sudobility/music_lib';
+import type { MidiImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import { getAppServices } from '@/config/initialize';
 
+/** The parse half of the wizard, injectable so tests can force a failure. */
+export type MidiImportApi = {
+  analyze(buffer: ArrayBuffer): Promise<MidiSummary>;
+  import(buffer: ArrayBuffer, options: MidiImportOptions): Promise<MidiImportResult>;
+};
+
 export type MidiImportWizardProps = {
   open: boolean;
   onClose: () => void;
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /** Defaults to a fresh `MidiService`; tests inject a fake to avoid depending on Worker/file-parsing internals. */
-  midiService?: Pick<MidiService, 'analyze' | 'import'>;
+  /**
+   * Defaults to the real parser. Tests inject a fake to drive the failure
+   * branches without crafting corrupt MIDI bytes.
+   *
+   * This used to be a `MidiService`, whose job was to run the same two
+   * functions on a worker thread. That worker was removed — parsing is a
+   * one-shot action behind this modal, where the main thread is doing nothing
+   * else — so the seam is now just the two functions, still promise-returning
+   * because `handleFile` awaits the file read either way.
+   */
+  midiService?: MidiImportApi;
   /** Called after a successful import that created a brand-new project (no project was open), with the new project's id -- e.g. the dashboard navigates to `/project/:id`. */
   onImportedNewProject?: (projectId: string) => void;
   /**
@@ -121,8 +137,13 @@ export function MidiImportWizard({
   onImportedNewProject,
   forceNewProject = false,
 }: MidiImportWizardProps) {
-  const service = useMemo(
-    () => midiService ?? new MidiService(getAppServices().io.midiCodec),
+  const service = useMemo<MidiImportApi>(
+    () =>
+      midiService ?? {
+        analyze: async (buffer) => analyzeMidi(buffer, getAppServices().io.midiCodec),
+        import: async (buffer, options) =>
+          importMidi(buffer, options, getAppServices().io.midiCodec),
+      },
     [midiService],
   );
 

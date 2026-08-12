@@ -29,6 +29,7 @@ import { MusicClient } from '@sudobility/music_client';
 import {
   initializeAppStore,
   initializeMusicPlatform,
+  setErrorLogging,
   type PrefsStorage,
   type StoreContext,
 } from '@sudobility/music_lib';
@@ -217,6 +218,14 @@ let services: AppServices | null = null;
 
 export function initializeApp(): AppServices {
   if (services) return services;
+
+  // music_lib used to read `import.meta.env.DEV` itself to decide this.
+  // `import.meta` is syntax rather than a value, so React Native's bundler
+  // failed to parse the module instead of falling back — a sniff of one
+  // specific bundler, in a package that is meant to know nothing about its
+  // host. The app knows; the app tells it. Defaults off there, which is what
+  // a React Native app would leave it at.
+  setErrorLogging(import.meta.env.DEV);
 
   // The platform comes first: music_lib resolves its playback engine from the
   // registry on first use, and nothing else here may touch playback before it

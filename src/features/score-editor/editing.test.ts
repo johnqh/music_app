@@ -27,7 +27,6 @@ import {
   transposeSemitone,
 } from '@/features/score-editor/editing';
 import { transformCommand } from '@sudobility/music_lib';
-import { QuantizeService } from '@sudobility/music_lib';
 import type { QuantizeOptions } from '@sudobility/music_lib';
 
 function makeStore() {
@@ -326,12 +325,13 @@ describe('quantizeSelection', () => {
     expect(store.getState().canUndo).toBe(true);
   });
 
-  it('routes a selection touching >2000 notes through the given QuantizeService (spec §29) and produces the same result as the inline path', async () => {
+  it('quantizes a 2400-note selection correctly — the size that used to be routed through a worker', async () => {
     const store = createAppStore({ context: testStoreContext() });
-    // 1 track x 600 measures x 4 notes/measure = 2400 notes, well over the
-    // 2000-note worker-routing threshold, spread across 600 per-measure
-    // voices (stressScore's convention) so no single voice is huge — the
-    // threshold sums notes across every touched voice, not per-voice.
+    // 1 track x 600 measures x 4 notes/measure = 2400 notes, spread across 600
+    // per-measure voices (stressScore's convention). This was the case that
+    // crossed the old >2000-event worker threshold; the worker is gone (the
+    // offload measured at 0.57ms of saved work), so what matters now is simply
+    // that a selection this size still quantizes correctly on the one path.
     const big = stressScore(1, 600);
     store.getState().setScore(big);
     const ids = allNotes(store.getState().score!).map((n) => n.id);
@@ -343,14 +343,8 @@ describe('quantizeSelection', () => {
       quantizeStarts: true,
       quantizeDurations: true,
     };
-    // No worker in vitest/jsdom, so this exercises QuantizeService's
-    // direct-call fallback — still routed through the async worker-path
-    // code (not `quantizeCommand` synchronously), which is what this test
-    // checks.
-    const service = new QuantizeService();
-    expect(service.usesWorker).toBe(false);
 
-    await quantizeSelection(store, options, service);
+    await quantizeSelection(store, options);
 
     expect(store.getState().canUndo).toBe(true);
     expect(allNotes(store.getState().score!).every((n) => n.startTick % (big.ppq / 4) === 0)).toBe(
