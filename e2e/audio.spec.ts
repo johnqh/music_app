@@ -1,75 +1,32 @@
 import { expect, test } from '@playwright/test';
-import {
-  createNewProject,
-  generateWholeScore,
-  gotoDashboard,
-  readScoreSummary,
-  waitForNotation,
-} from './helpers';
+import { createNewProject, generateWholeScore, gotoDashboard, waitForNotation } from './helpers';
 
-const SR = 44100;
-
-/** A mono 16-bit WAV of `hz` for `seconds`, built the same way music_io writes one. */
-function wavOfTones(tones: Array<{ hz: number; seconds: number }>): Buffer {
-  const samples: number[] = [];
-  for (const { hz, seconds } of tones) {
-    const n = Math.floor(SR * seconds);
-    for (let i = 0; i < n; i += 1) samples.push(Math.sin((2 * Math.PI * hz * i) / SR));
-  }
-  const body = Buffer.alloc(samples.length * 2);
-  samples.forEach((s, i) => body.writeInt16LE(Math.max(-1, Math.min(1, s)) * 0x7fff, i * 2));
-
-  const header = Buffer.alloc(44);
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + body.length, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(SR, 24);
-  header.writeUInt32LE(SR * 2, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(body.length, 40);
-  return Buffer.concat([header, body]);
-}
-
+/**
+ * Export only, deliberately.
+ *
+ * There used to be an import test here that drove an editor Import menu, waited
+ * for an analysis, picked a tempo and confirmed. All four are gone: audio
+ * import moved to the dashboard and became a *server* job, with no tempo field
+ * and no confirm step, because the score does not exist yet when the dialog
+ * closes.
+ *
+ * It is not covered here because it cannot be covered stably. Transcription
+ * needs the separate `midi_transcriber_api` daemon, and whether it appears
+ * available depends on `music_api`'s local `.env` — so the same test passes,
+ * fails, or asserts the opposite depending on the machine. What *is* covered:
+ * `AudioImportDialog.test.tsx` for the dialog (file choice, the large-file
+ * warning, the unavailable message, the error path), and the transcriber's own
+ * suite for the transcription.
+ *
+ * Export earns its place here because nothing else can test it: `renderOffline`
+ * needs a genuine `OfflineAudioContext`, which vitest does not provide.
+ */
 test.describe('audio', () => {
-  test('imports a recording as a new track, and exports the score as WAV', async ({ page }) => {
+  test('exports the score as WAV and MP3', async ({ page }) => {
     await gotoDashboard(page);
     await createNewProject(page, 'Audio Test');
     await generateWholeScore(page, { prompt: 'Create a calm study', measures: 4 });
     await waitForNotation(page);
-
-    const before = await readScoreSummary(page);
-
-    // --- import ---------------------------------------------------------
-    await page.getByLabel('Import menu').click();
-    await page.getByRole('menuitem', { name: 'Audio…' }).click();
-
-    await page.getByLabel('Audio file').setInputFiles({
-      name: 'hum.wav',
-      mimeType: 'audio/wav',
-      buffer: wavOfTones([
-        { hz: 440, seconds: 0.6 },
-        { hz: 523.25, seconds: 0.6 },
-      ]),
-    });
-
-    // Analysis is async; the tempo field only appears once it is done.
-    // Scoped to the dialog: "Tempo" also labels the transport's field, and
-    // "Import" is the name of a menu, so page-wide locators are ambiguous.
-    const dialog = page.getByRole('dialog', { name: 'Import audio' });
-    await expect(dialog.getByLabel('Tempo')).toBeVisible({ timeout: 15_000 });
-    await dialog.getByRole('button', { name: 'Import' }).click();
-    await expect(page.getByLabel('Audio file')).toBeHidden();
-
-    // A new track, and the existing music untouched.
-    await expect
-      .poll(async () => (await readScoreSummary(page))?.trackCount)
-      .toBe((before?.trackCount ?? 0) + 1);
 
     // --- export ---------------------------------------------------------
     const download = page.waitForEvent('download');

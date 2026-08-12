@@ -7,13 +7,7 @@
  */
 import { expect, test } from '@playwright/test';
 import { buildMod } from '@sudobility/music_io/mocks';
-import {
-  collectPageErrors,
-  createNewProject,
-  gotoDashboard,
-  readScoreSummary,
-  waitForNotation,
-} from './helpers';
+import { collectPageErrors, gotoDashboard, readScoreSummary, waitForNotation } from './helpers';
 
 /** C-3, D-3, E-3 and G-3 as ProTracker periods, one per row on channel 0. */
 const PERIODS = [428, 381, 339, 285];
@@ -37,10 +31,13 @@ test.describe('module import', () => {
     const getErrors = collectPageErrors(page);
 
     await gotoDashboard(page);
-    await createNewProject(page, 'Before Module Import');
 
-    await page.getByRole('button', { name: 'Import' }).click();
-    await page.getByLabel('Module file input').setInputFiles({
+    // Import lives on the dashboard, not in the editor: every import makes a
+    // project, so a menu on the editor's own title bar could only throw you
+    // out of the project you had open. `Import MOD` exactly — the dashboard
+    // has five buttons whose names all begin "Import".
+    await page.getByRole('button', { name: 'Import MOD', exact: true }).click();
+    await page.getByLabel('module file input').setInputFiles({
       name: 'e2e.mod',
       mimeType: 'application/octet-stream',
       buffer: moduleBytes(),
@@ -65,17 +62,19 @@ test.describe('module import', () => {
     // A garbage score is worse than a clear failure: it looks like the file
     // imported and quietly is not the music.
     await gotoDashboard(page);
-    await createNewProject(page, 'Not A Module');
-    const before = await readScoreSummary(page);
 
-    await page.getByRole('button', { name: 'Import' }).click();
-    await page.getByLabel('Module file input').setInputFiles({
+    await page.getByRole('button', { name: 'Import MOD', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import module' });
+    await dialog.getByLabel('module file input').setInputFiles({
       name: 'notes.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('this is not a tracker module'),
     });
 
-    await expect(page.getByLabel('Edit project title')).toHaveText('Not A Module');
-    expect(await readScoreSummary(page)).toEqual(before);
+    // The dialog stays open and says so, rather than navigating to a project
+    // full of nonsense. A garbage score is worse than a clear failure: it
+    // looks like the file imported and quietly is not the music.
+    await expect(dialog.getByRole('alert')).toBeVisible({ timeout: 15_000 });
+    await expect(dialog).toBeVisible();
   });
 });
