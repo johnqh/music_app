@@ -1119,6 +1119,11 @@ export function ScoreEditorView({
       dragStateRef.current = { start: point, moved: false, additive: event.shiftKey };
       containerRef.current?.setPointerCapture?.(event.pointerId);
     },
+    // Deps are narrow on purpose: anything read in here that changes per frame
+    // goes through a ref (`pitchDragRef`, `dropTargetRef`). Listing the rule's
+    // suggestions captures a stale value instead — that shipped as a bug once,
+    // and only the e2e caught it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pointFromEvent, setDropTargetBoth],
   );
 
@@ -1177,6 +1182,11 @@ export function ScoreEditorView({
         autoscrollRafRef.current = requestAnimationFrame(stepAutoscroll);
       }
     },
+    // Deps are narrow on purpose: anything read in here that changes per frame
+    // goes through a ref (`pitchDragRef`, `dropTargetRef`). Listing the rule's
+    // suggestions captures a stale value instead — that shipped as a bug once,
+    // and only the e2e caught it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pointFromEvent, stepAutoscroll, layoutPlan, snapGrid, setDropTargetBoth],
   );
 

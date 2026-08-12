@@ -57,6 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+/**
+ * Lives beside its provider on purpose: a hook that only reads this context is
+ * not worth a second module, and splitting it to satisfy fast refresh would put
+ * the consumer a file away from the thing it consumes. The cost is that editing
+ * this file remounts the tree in dev rather than hot-swapping it.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');

@@ -1,10 +1,13 @@
-[
-  "percussion_0",
-  "percussion_8",
-  "percussion_16",
-  "percussion_24",
-  "percussion_25",
-  "percussion_32",
-  "percussion_40",
-  "percussion_48"
-]
+{
+  "soundfontSha256": "2aacd036d7058d40a371846ef2f5dc5f130d648ab3837fe2626591ba49a71254",
+  "packs": [
+    "percussion_0",
+    "percussion_8",
+    "percussion_16",
+    "percussion_24",
+    "percussion_25",
+    "percussion_32",
+    "percussion_40",
+    "percussion_48"
+  ]
+}
