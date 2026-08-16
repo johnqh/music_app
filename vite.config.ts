@@ -47,13 +47,23 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: true,
     exclude: ['node_modules', 'dist', 'e2e'],
-    // music_lib ships ESM that imports CJS deps (@tonejs/midi); Node's ESM
-    // loader can't interop those named imports, so let vite transform the
-    // package instead of externalizing it.
+    // Two reasons to inline, both the same shape: Node's ESM loader is
+    // stricter than what these packages are built for.
+    //
+    // music_lib ships ESM that imports CJS deps (@tonejs/midi), whose named
+    // imports Node cannot interop. consumables_client is compiled by tsc with
+    // extensionless relative imports -- the house style it shares with
+    // entity_client -- which Node rejects as ERR_UNSUPPORTED_DIR_IMPORT. The
+    // browser never sees either problem, because Vite resolves both; only
+    // vitest, which hands bare dependencies to Node, does.
+    //
+    // consumables_pages needs no entry: it is Vite-bundled like entity_pages,
+    // so its output has no relative imports at all.
     server: {
       deps: {
         inline: [
           /@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/,
+          /@sudobility\/consumables_client/,
         ],
       },
     },

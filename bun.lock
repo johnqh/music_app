@@ -11,8 +11,8 @@
         "@sudobility/auth_lib": "^0.0.89",
         "@sudobility/building_blocks": "^0.0.285",
         "@sudobility/components": "^5.3.5",
-        "@sudobility/consumables_client": "0.0.20",
-        "@sudobility/consumables_pages": "0.0.41",
+        "@sudobility/consumables_client": "0.0.22",
+        "@sudobility/consumables_pages": "0.0.43",
         "@sudobility/design": "^1.1.47",
         "@sudobility/di": "^1.5.59",
         "@sudobility/di_web": "^0.1.218",
@@ -416,9 +416,9 @@
 
     "@sudobility/components": ["@sudobility/components@5.3.5", "", { "optionalDependencies": { "@rollup/rollup-linux-x64-gnu": "4.52.5", "@rollup/rollup-linux-x64-musl": "4.52.5" }, "peerDependencies": { "@heroicons/react": ">=2.0.0", "@radix-ui/react-alert-dialog": ">=1.0.0", "@radix-ui/react-dialog": ">=1.0.0", "@radix-ui/react-label": ">=2.0.0", "@radix-ui/react-select": ">=2.0.0", "@radix-ui/react-slot": ">=1.0.0", "@radix-ui/react-switch": ">=1.0.0", "@radix-ui/react-tabs": ">=1.0.0", "@sudobility/design": "^1.1.46", "@sudobility/types": "^1.9.64", "class-variance-authority": ">=0.7.0", "clsx": ">=2.0.0", "i18next": ">=23.0.0", "react": ">=18.0.0", "react-dom": ">=18.0.0", "react-i18next": ">=14.0.0", "react-router-dom": ">=6.0.0", "tailwind-merge": ">=2.0.0", "web-vitals": ">=3.0.0" } }, "sha512-AIuvyW7l6LIc+pdurJ4xXQhXT59e3+en9UZYf7eLFeUL3XEJ2bFsv+aCJ4YmtNo6qDJbBG8BbDglinafACTW4Q=="],
 
-    "@sudobility/consumables_client": ["@sudobility/consumables_client@0.0.20", "", { "peerDependencies": { "@revenuecat/purchases-js": "^1.0.0", "@sudobility/types": "^1.9.64", "react": "^18.0.0 || ^19.0.0", "react-native-purchases": ">=7.0.0" }, "optionalPeers": ["@revenuecat/purchases-js", "react-native-purchases"] }, "sha512-OmvBRpXF4ofdNXjc/gPPK+IbgOoNRlBSnJYD+XtZZ9r+ZYAV+mT3M3bJLw/Keh/Gx1lPevgUbV96IocDr4AbLg=="],
+    "@sudobility/consumables_client": ["@sudobility/consumables_client@0.0.22", "", { "peerDependencies": { "@revenuecat/purchases-js": "^1.0.0", "@sudobility/types": "^1.9.65", "react": "^18.0.0 || ^19.0.0", "react-native-purchases": ">=7.0.0" }, "optionalPeers": ["@revenuecat/purchases-js", "react-native-purchases"] }, "sha512-+pJ7MCbYk8/Cx/7O3mwgRzJBYQb0ia8epdWtClGG3yeFuW3ttVANkim4MVWyaPMtjZ85oI9W/+bz/CB8I1fvWQ=="],
 
-    "@sudobility/consumables_pages": ["@sudobility/consumables_pages@0.0.41", "", { "dependencies": { "@sudobility/design": "^1.1.47" }, "peerDependencies": { "@sudobility/consumables_client": "^0.0.18", "@sudobility/types": "1.9.65", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-yPVCjj8tiIX5Nes/emhAzzS5PKhNyoQTHfvrO99gm9kQFF87aB0Vjv/vdFNUJxi3yO6nYkX3kwrlz+CRbBik1w=="],
+    "@sudobility/consumables_pages": ["@sudobility/consumables_pages@0.0.43", "", { "dependencies": { "@sudobility/design": "^1.1.47" }, "peerDependencies": { "@sudobility/consumables_client": "^0.0.21", "@sudobility/types": "1.9.65", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-wnjkeYJVyokYHtbLfCtd07LmyLeNeHmFAjQIGF9rLepvCuj0DviDWfdNQH1SoUvOZ8n+ff2T363bvqv/iAoreQ=="],
 
     "@sudobility/design": ["@sudobility/design@1.1.47", "", { "peerDependencies": { "clsx": ">=2.0.0", "tailwind-merge": ">=2.0.0" } }, "sha512-QUAi0tht2EgIp5/4bIcXSw8uLlsM3DgHS9QZ1rHiykXerAJNwg/Odwi5NDdkb/j+nXAkp1xYXjbIiBpiqqAnjQ=="],
 
