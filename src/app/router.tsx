@@ -6,6 +6,8 @@
  * `ProjectRoute` keeps the store's open project in sync with the URL.
  */
 import { Suspense, lazy, useEffect, useRef } from 'react';
+import { CreditsHistoryPage } from '@/features/credits/CreditsHistoryPage';
+import { CreditsPage } from '@/features/credits/CreditsPage';
 import {
   BrowserRouter,
   Navigate,
@@ -131,6 +133,8 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
           <Route index element={<HomePage />} />
           <Route path="projects" element={<DashboardRoute store={store} />} />
           <Route path="settings" element={<SettingsRoute store={store} />} />
+          <Route path="credits" element={<CreditsPage />} />
+          <Route path="credits/history" element={<CreditsHistoryPage />} />
         </Route>
         <Route path="project/:id" element={<ProjectRoute store={store} />} />
         <Route path="project/:id/print" element={<PrintRoute store={store} />} />
