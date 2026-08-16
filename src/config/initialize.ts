@@ -23,6 +23,11 @@ import {
   type User,
 } from 'firebase/auth';
 import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
+import { ConsumablesApiClient, initializeConsumables } from '@sudobility/consumables_client';
+import {
+  configureConsumablesWebAdapter,
+  createConsumablesWebAdapter,
+} from '@sudobility/consumables_client/adapter/web';
 import { configureTheme } from '@sudobility/design';
 import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
@@ -245,6 +250,27 @@ export function initializeApp(): AppServices {
   const baseUrl = CONSTANTS.API_URL;
   const networkClient = new FetchNetworkClient();
   const musicClient = new MusicClient(networkClient, baseUrl);
+
+  /**
+   * Credits.
+   *
+   * Handed the same `NetworkClient` `MusicClient` uses: `ConsumablesApiClient`
+   * takes `@sudobility/types`' `NetworkClient`, which is exactly what
+   * `FetchNetworkClient` implements. That keeps this app's single `fetch()`
+   * call site single — there is no second networking stack.
+   *
+   * The sandbox key in every non-production build, so a developer or an e2e run
+   * cannot reach a live payment.
+   */
+  configureConsumablesWebAdapter(
+    import.meta.env.PROD
+      ? import.meta.env.VITE_REVENUECAT_API_KEY
+      : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX
+  );
+  initializeConsumables({
+    adapter: createConsumablesWebAdapter(),
+    apiClient: new ConsumablesApiClient({ baseUrl, networkClient }),
+  });
   const auth = isE2e ? e2eBackend() : firebaseBackend();
   const prefsStorage: PrefsStorage = {
     getItem: (key) => window.localStorage.getItem(key),

@@ -21,10 +21,13 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@revenuecat/purchases-js": "^1.52.3",
     "@sudobility/auth-components": "^1.0.11",
     "@sudobility/auth_lib": "^0.0.89",
     "@sudobility/building_blocks": "^0.0.285",
     "@sudobility/components": "^5.3.5",
+    "@sudobility/consumables_client": "0.0.20",
+    "@sudobility/consumables_pages": "0.0.40",
     "@sudobility/design": "^1.1.47",
     "@sudobility/di": "^1.5.59",
     "@sudobility/di_web": "^0.1.218",

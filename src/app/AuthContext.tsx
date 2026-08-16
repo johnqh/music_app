@@ -6,6 +6,7 @@
  */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { setConsumablesUserId } from '@sudobility/consumables_client';
 import { getAppServices, type AuthUser } from '@/config/initialize';
 
 export type AuthContextValue = {
@@ -32,6 +33,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = services.auth.observe((nextUser) => {
       setUser(nextUser);
       setLoading(false);
+      // The credit balance is per-user and the consumables singleton caches it.
+      // Without this it would serve the previous user's balance after a
+      // sign-out and sign-in.
+      // Fire-and-forget, but never unhandled: this runs inside an auth
+      // callback, and a rejection with no catch would surface as an unhandled
+      // rejection that takes down a test run or spams production logs. Credits
+      // failing to follow a sign-in is not a reason to break signing in.
+      setConsumablesUserId(nextUser?.uid, nextUser?.email ?? undefined).catch(
+        (err: unknown) => {
+          console.error('[credits] could not follow the signed-in user', err);
+        },
+      );
       if (nextUser) {
         void services.auth.getToken().then(setToken);
       } else {
