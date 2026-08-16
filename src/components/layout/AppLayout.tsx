@@ -91,6 +91,7 @@ import {
 import type { ReplaceScope } from '@sudobility/music_lib';
 import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
+import { CreditBadge } from '@/features/credits/CreditBadge';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
@@ -721,6 +722,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </div>
 
           <div className="flex-1" />
+
+          {/* Its own subscriber: the balance changes on every generation, and
+              reading it here would re-render the notation canvas with it. */}
+          <CreditBadge />
 
           <div ref={themeMenu.ref} className="relative">
             <Tooltip placement="bottom" content="Theme">
