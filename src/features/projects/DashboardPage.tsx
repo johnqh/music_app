@@ -213,7 +213,19 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         { name: request.title?.trim() || 'Generated score', score: emptyScoreFor(request) },
         token,
       );
-      await client.createJob({ projectId: project.id, kind: 'generate-score', request }, token);
+      try {
+        await client.createJob({ projectId: project.id, kind: 'generate-score', request }, token);
+      } catch (jobErr) {
+        // The project exists only to hold the generation. If the job is
+        // refused — out of credits, over quota, another of this user's jobs
+        // already queued on it — leaving the empty shell behind litters the
+        // dashboard with "Generated score" rows that contain nothing. A user
+        // with no credits would collect one on every attempt.
+        await client.deleteProject(project.id, token).catch(() => {
+          // Best effort: the refusal is what the user needs to hear about.
+        });
+        throw jobErr;
+      }
       setGenerateOpen(false);
       await refresh();
     } catch (err) {

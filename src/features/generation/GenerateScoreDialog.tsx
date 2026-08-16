@@ -51,6 +51,8 @@
  * keep the required "Generating" accessible name on a library swap.
  */
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useBalance } from '@sudobility/consumables_client';
 import type { ChangeEvent } from 'react';
 import {
   Button,
@@ -244,8 +246,32 @@ export function GenerateScoreDialog({
 
   const durationMeasures = Number(measures);
   const tracks = INSTRUMENT_OPTIONS.filter((opt) => instruments.has(opt.key)).map(toRequestTrack);
+
+  const { balance } = useBalance();
+  /**
+   * Bars times instruments: what the request asks for, and what the server
+   * bills. A four-bar quartet costs about four times a four-bar solo to
+   * produce, so an estimate from the bar count alone would understate every
+   * wide score four-fold.
+   *
+   * The charge counts what the model actually *produced*, which agrees whenever
+   * generation returns the requested length and is otherwise smaller — so this
+   * is never exceeded. Hence "about", and never a re-quote afterwards.
+   */
+  const estimatedCredits = Number.isFinite(durationMeasures)
+    ? Math.max(0, durationMeasures) * tracks.length
+    : 0;
+  /**
+   * Refused only at zero or below, matching `POST /jobs`.
+   *
+   * Deliberately not `estimatedCredits > balance`: a job may overdraw once by
+   * design, and a stricter rule here would refuse work the API would accept.
+   */
+  const outOfCredits = balance !== null && balance <= 0;
+
   const canGenerate =
     !submitting &&
+    !outOfCredits &&
     prompt.trim() !== '' &&
     tracks.length > 0 &&
     Number.isFinite(durationMeasures) &&
@@ -302,6 +328,22 @@ export function GenerateScoreDialog({
       ]}
     >
       <div className="flex flex-col gap-4">
+        {outOfCredits ? (
+          <p className="text-sm text-theme-text-secondary">
+            You&rsquo;re out of credits.{' '}
+            <Link to="/en/credits" className="underline">
+              Buy more
+            </Link>{' '}
+            to keep generating.
+          </p>
+        ) : (
+          estimatedCredits > 0 && (
+            <p className="text-xs text-theme-text-secondary">
+              This will use about {estimatedCredits} credits.
+            </p>
+          )
+        )}
+
         {/* Named up front: every generated project would otherwise be called
           "Generated score", which is useless the moment you have two. */}
         <label className="flex flex-col gap-1">
