@@ -118,6 +118,58 @@ class FetchNetworkClient implements NetworkClient {
   }
 }
 
+/**
+ * A `NetworkClient` that attaches the current bearer token to every request.
+ *
+ * `MusicClient` takes a token per call, so `FetchNetworkClient` deliberately
+ * adds no auth of its own. `ConsumablesApiClient` has no token parameter at all
+ * and expects its client to be authenticated already — so it gets this wrapper
+ * rather than a second `fetch()` implementation.
+ *
+ * The token is read per request, never captured: it expires, and a client
+ * holding the one that was current at construction would start failing an hour
+ * into a session.
+ */
+class AuthenticatedNetworkClient implements NetworkClient {
+  constructor(
+    private readonly inner: NetworkClient,
+    private readonly getToken: () => Promise<string | null>,
+  ) {}
+
+  private async withAuth(
+    options?: NetworkRequestOptions | null,
+  ): Promise<NetworkRequestOptions> {
+    const token = await this.getToken();
+    return {
+      ...options,
+      headers: {
+        ...(options?.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+  }
+
+  async request<T = unknown>(url: string, options?: NetworkRequestOptions | null) {
+    return this.inner.request<T>(url, await this.withAuth(options));
+  }
+
+  async get<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+    return this.inner.get<T>(url, await this.withAuth(options));
+  }
+
+  async post<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+    return this.inner.post<T>(url, body, await this.withAuth(options));
+  }
+
+  async put<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+    return this.inner.put<T>(url, body, await this.withAuth(options));
+  }
+
+  async delete<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+    return this.inner.delete<T>(url, await this.withAuth(options));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Auth (Firebase, or the e2e shim)
 // ---------------------------------------------------------------------------
@@ -251,13 +303,16 @@ export function initializeApp(): AppServices {
   const networkClient = new FetchNetworkClient();
   const musicClient = new MusicClient(networkClient, baseUrl);
 
+  const auth = isE2e ? e2eBackend() : firebaseBackend();
+
   /**
    * Credits.
    *
-   * Handed the same `NetworkClient` `MusicClient` uses: `ConsumablesApiClient`
-   * takes `@sudobility/types`' `NetworkClient`, which is exactly what
-   * `FetchNetworkClient` implements. That keeps this app's single `fetch()`
-   * call site single — there is no second networking stack.
+   * `ConsumablesApiClient` has no token of its own — it expects the
+   * `NetworkClient` it is given to carry authentication, where `MusicClient`
+   * takes a token per call. So it gets `FetchNetworkClient` wrapped in
+   * `AuthenticatedNetworkClient`, which is still the one `fetch()` call site;
+   * only the headers differ.
    *
    * The sandbox key in every non-production build, so a developer or an e2e run
    * cannot reach a live payment.
@@ -269,9 +324,11 @@ export function initializeApp(): AppServices {
   );
   initializeConsumables({
     adapter: createConsumablesWebAdapter(),
-    apiClient: new ConsumablesApiClient({ baseUrl, networkClient }),
+    apiClient: new ConsumablesApiClient({
+      baseUrl,
+      networkClient: new AuthenticatedNetworkClient(networkClient, () => auth.getToken()),
+    }),
   });
-  const auth = isE2e ? e2eBackend() : firebaseBackend();
   const prefsStorage: PrefsStorage = {
     getItem: (key) => window.localStorage.getItem(key),
     setItem: (key, value) => {

@@ -15,7 +15,7 @@ import { execSync } from 'node:child_process';
 export default function globalSetup(): void {
   try {
     execSync(
-      `psql postgres://localhost:5432/music_test -c "TRUNCATE projects, ai_usage, generation_jobs CASCADE" -q`,
+      `psql postgres://localhost:5432/music_test -c "TRUNCATE projects, ai_usage, generation_jobs, consumable_balances, consumable_purchases, consumable_usages CASCADE" -q`,
       {
         stdio: 'inherit',
       },
