@@ -10,7 +10,7 @@ import { createAppStore, loadPrefs, savePrefs, type TestStoreContext } from '@su
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn(), stop: vi.fn(), stopPreview: vi.fn() },
+  playbackController: { togglePlay: vi.fn(), stop: vi.fn() },
 }));
 
 import { App } from '@/app/App';

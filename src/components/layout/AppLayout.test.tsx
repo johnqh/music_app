@@ -17,7 +17,6 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   playbackController: {
     togglePlay: vi.fn(),
     stop: vi.fn(),
-    stopPreview: vi.fn(),
     seek: vi.fn(),
     seekToMeasure: vi.fn(),
     goToStart: vi.fn(),

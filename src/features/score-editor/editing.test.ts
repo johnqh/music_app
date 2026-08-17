@@ -13,6 +13,7 @@ import {
   deleteSelected,
   duplicateSelected,
   findAdjacentEventId,
+  insertChordAtCaret,
   insertNoteAtCaret,
   insertRestAtSelection,
   moveSelectionHorizontal,
@@ -429,5 +430,26 @@ describe('dispatchTracked', () => {
     changeVelocity(store, 90);
 
     expect(store.getState().toasts).toEqual([]);
+  });
+});
+
+describe('the playback edit lock, at the entry points', () => {
+  it('refuses note entry while playing', () => {
+    const store = makeStore();
+    store.getState().setPlaybackState('playing');
+    const before = store.getState().score;
+
+    insertNoteAtCaret(store, { step: 'C', accidental: 0, octave: 5 });
+
+    expect(store.getState().score).toBe(before);
+  });
+
+  it('refuses chord entry while playing, which is the piano keyboard route', () => {
+    const store = makeStore();
+    store.getState().setPlaybackState('playing');
+    const before = store.getState().score;
+
+    expect(insertChordAtCaret(store, [{ step: 'C', accidental: 0, octave: 5 }])).toBe(false);
+    expect(store.getState().score).toBe(before);
   });
 });

@@ -10,7 +10,7 @@ import { createAppStore, testStoreContext } from '@sudobility/music_lib';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn(), stop: vi.fn(), stopPreview: vi.fn() },
+  playbackController: { togglePlay: vi.fn(), stop: vi.fn() },
 }));
 
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';

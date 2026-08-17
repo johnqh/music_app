@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  allNotes,
   changeClefCommand,
   changeTrackPropsCommand,
   createAppStore,
+  gmInstrumentRange,
+  pitchToMidi,
   testStoreContext,
   twoTrackScore,
 } from '@sudobility/music_lib';
@@ -15,6 +18,12 @@ function makeStore(): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });
   store.getState().setScore(twoTrackScore());
   return store;
+}
+
+function trackMidis(store: EditorStoreApi, trackId: string): number[] {
+  return allNotes(store.getState().score!)
+    .filter((note) => note.trackId === trackId)
+    .map((note) => pitchToMidi(note.pitch));
 }
 
 describe('TrackEditorPanel', () => {
@@ -66,6 +75,31 @@ describe('TrackEditorPanel', () => {
     const track = store.getState().score!.tracks[0];
     expect(track.midiProgram).toBe(56);
     expect(track.instrumentName).toBe('Trumpet');
+  });
+
+  it('fits existing notes into the newly selected instrument range', async () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    const trackId = score.tracks[0].id;
+    const beforeMidis = trackMidis(store, trackId);
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`));
+    await user.click(await screen.findByRole('option', { name: /^Piccolo$/ }));
+
+    const track = store.getState().score!.tracks[0];
+    const range = gmInstrumentRange(72);
+    const midis = trackMidis(store, trackId);
+    expect(track.midiProgram).toBe(72);
+    expect(track.instrumentName).toBe('Piccolo');
+    expect(Math.min(...midis)).toBeGreaterThanOrEqual(range.min);
+    expect(Math.max(...midis)).toBeLessThanOrEqual(range.max);
+    expect(midis[0] - beforeMidis[0]).toBe(24);
+
+    act(() => store.getState().undo());
+    expect(store.getState().score!.tracks[0].midiProgram).toBe(score.tracks[0].midiProgram);
+    expect(trackMidis(store, trackId)).toEqual(beforeMidis);
   });
 
   it('offers drum kits, not instruments, for a percussion track', async () => {
@@ -231,5 +265,32 @@ describe('TrackEditorPanel', () => {
     expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toHaveTextContent(
       'Violin',
     );
+  });
+});
+
+describe('TrackEditorPanel during playback', () => {
+  it('keeps mute and solo usable, because mixing is not editing', async () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    act(() => store.getState().setPlaybackState('playing'));
+    render(<TrackEditorPanel store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText(`Mute: ${score.tracks[0].name}`));
+
+    expect(store.getState().score!.tracks[0].muted).toBe(true);
+  });
+
+  it('disables the instrument picker, the clef and the name field', () => {
+    const store = makeStore();
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    act(() => store.getState().setPlaybackState('playing'));
+    render(<TrackEditorPanel store={store} />);
+
+    expect(screen.getByLabelText(`Instrument: ${score.tracks[0].name}`)).toBeDisabled();
+    expect(screen.getByLabelText(`Clef: ${score.tracks[0].clef}`)).toBeDisabled();
+    expect(screen.getByLabelText(`Track name: ${score.tracks[0].name}`)).toBeDisabled();
   });
 });

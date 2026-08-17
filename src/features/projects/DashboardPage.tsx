@@ -45,6 +45,7 @@ import { parseScore } from '@sudobility/music_types';
 import {
   createEmptyScore,
   modToScore,
+  playbackController,
   projectTemplates,
   reportError,
   useAppStore,
@@ -87,6 +88,10 @@ async function clientAndToken() {
 
 /** How often the list refetches while any project is generating. Minutes of work, so seconds of latency cost nothing. */
 const GENERATION_POLL_MS = 3000;
+
+function resetOpenedProjectTransport(): void {
+  playbackController.stop();
+}
 
 /**
  * The placeholder a Generate Score project holds until its job fills it in.
@@ -240,6 +245,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const openProject = async (id: string): Promise<void> => {
     try {
       await store.getState().openProject(id);
+      resetOpenedProjectTransport();
       onNavigate?.(`/project/${id}`);
     } catch (err) {
       reportError(err, { context: 'Failed to open project', store });
@@ -253,6 +259,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     try {
       await store.getState().newProject({ name });
       const id = store.getState().projectId;
+      resetOpenedProjectTransport();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       reportError(err, { context: 'Failed to create project', store });
@@ -265,6 +272,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     try {
       await store.getState().newProject({ name: template.name, score: template.build() });
       const id = store.getState().projectId;
+      resetOpenedProjectTransport();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       reportError(err, { context: 'Failed to create project from template', store });
@@ -311,6 +319,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       // immediately downloading the same bytes back.
       await store.getState().newProject({ name, score });
       const id = store.getState().projectId;
+      resetOpenedProjectTransport();
       setJsonImportOpen(false);
       await refresh();
       if (id) onNavigate?.(`/project/${id}`);
@@ -340,6 +349,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const score = modToScore(mod);
       await store.getState().newProject({ name: mod.title || file.name, score });
       const id = store.getState().projectId;
+      resetOpenedProjectTransport();
       setModImportOpen(false);
       await refresh();
       if (id) onNavigate?.(`/project/${id}`);
@@ -641,6 +651,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         forceNewProject
         onImportedNewProject={(projectId) => {
           setMidiImportOpen(false);
+          resetOpenedProjectTransport();
           onNavigate?.(`/project/${projectId}`);
         }}
       />
@@ -700,6 +711,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         forceNewProject
         onImportedNewProject={(projectId) => {
           setMusicXmlImportOpen(false);
+          resetOpenedProjectTransport();
           onNavigate?.(`/project/${projectId}`);
         }}
       />

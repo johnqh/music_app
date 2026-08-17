@@ -136,9 +136,7 @@ class AuthenticatedNetworkClient implements NetworkClient {
     private readonly getToken: () => Promise<string | null>,
   ) {}
 
-  private async withAuth(
-    options?: NetworkRequestOptions | null,
-  ): Promise<NetworkRequestOptions> {
+  private async withAuth(options?: NetworkRequestOptions | null): Promise<NetworkRequestOptions> {
     const token = await this.getToken();
     return {
       ...options,
@@ -153,19 +151,33 @@ class AuthenticatedNetworkClient implements NetworkClient {
     return this.inner.request<T>(url, await this.withAuth(options));
   }
 
-  async get<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+  async get<T = unknown>(
+    url: string,
+    options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null,
+  ) {
     return this.inner.get<T>(url, await this.withAuth(options));
   }
 
-  async post<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+  async post<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: Omit<NetworkRequestOptions, 'method'> | null,
+  ) {
     return this.inner.post<T>(url, body, await this.withAuth(options));
   }
 
-  async put<T = unknown>(url: string, body?: unknown, options?: Omit<NetworkRequestOptions, 'method'> | null) {
+  async put<T = unknown>(
+    url: string,
+    body?: unknown,
+    options?: Omit<NetworkRequestOptions, 'method'> | null,
+  ) {
     return this.inner.put<T>(url, body, await this.withAuth(options));
   }
 
-  async delete<T = unknown>(url: string, options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null) {
+  async delete<T = unknown>(
+    url: string,
+    options?: Omit<NetworkRequestOptions, 'method' | 'body'> | null,
+  ) {
     return this.inner.delete<T>(url, await this.withAuth(options));
   }
 }
@@ -320,7 +332,7 @@ export function initializeApp(): AppServices {
   configureConsumablesWebAdapter(
     import.meta.env.PROD
       ? import.meta.env.VITE_REVENUECAT_API_KEY
-      : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX
+      : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX,
   );
   initializeConsumables({
     adapter: createConsumablesWebAdapter(),

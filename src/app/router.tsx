@@ -97,6 +97,9 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
     store
       .getState()
       .openProject(id)
+      .then(() => {
+        playbackController.stop();
+      })
       .catch((err: unknown) => {
         reportError(err, { context: 'Failed to open project', store });
         navigate(`/${lang}/projects`);
@@ -104,12 +107,9 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
   }, [id, store, navigate, lang]);
 
   // Leaving the editor (back to dashboard, settings, etc.) unmounts this
-  // route; stop any sounding playback — both a candidate preview and the
-  // main transport — so audio never keeps playing outside the editor.
-  // `stopPreview()` is a no-op when no preview is active.
+  // route; stop the transport so audio never keeps playing outside the editor.
   useEffect(() => {
     return () => {
-      playbackController.stopPreview();
       playbackController.stop();
     };
   }, []);

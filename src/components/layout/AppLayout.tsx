@@ -69,6 +69,7 @@ import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobilit
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { renderEvents } from '@sudobility/music_lib';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
+import { playbackController } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -215,6 +216,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     store,
     onApplied: async () => {
       if (!projectId) return;
+      // Before the score is replaced. This write bypasses the edit lock — it
+      // does not go through `dispatchCommand` — so without stopping first, the
+      // controller would read the new score as a mix change and carry on
+      // playing the old one from its queue.
+      playbackController.stop();
       await store.getState().openProject(projectId);
 
       // Mark what the generation actually wrote, so it colours as generated
@@ -361,6 +367,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       // The server replaces the live project and hands back the result, so the
       // editor takes its score straight from the response rather than reloading.
       const project = await musicClient.openSnapshot(snapshotId, token);
+      // Stopped *before* the score is adopted, for the same reason the
+      // generation reload above is: this write bypasses the edit lock, so the
+      // controller must not still be playing when the new score arrives.
+      playbackController.stop();
       store.getState().setScore(project.score);
       // This client made that change and is showing the result; say so, or the
       // generation poll reads the new `updatedAt` as somebody else's write.

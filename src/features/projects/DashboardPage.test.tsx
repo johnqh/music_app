@@ -10,12 +10,18 @@ import userEvent from '@testing-library/user-event';
 import {
   createAppStore,
   createEmptyScore,
+  playbackController,
   projectTemplates,
   type TestStoreContext,
 } from '@sudobility/music_lib';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+
+vi.mock('@sudobility/music_lib', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  playbackController: { stop: vi.fn() },
+}));
 
 function setup(): { store: EditorStoreApi; context: TestStoreContext } {
   const context = installTestAppServices();
@@ -25,6 +31,7 @@ function setup(): { store: EditorStoreApi; context: TestStoreContext } {
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   resetTestAppServices();
 });
 
@@ -169,6 +176,7 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: 'Open project: Openable' }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(`/project/${record.id}`));
     expect(store.getState().projectId).toBe(record.id);
+    expect(playbackController.stop).toHaveBeenCalledTimes(1);
   });
 
   it('Duplicate copies a project; Delete (after confirming) removes it', async () => {

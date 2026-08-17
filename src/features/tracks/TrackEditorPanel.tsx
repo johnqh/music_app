@@ -17,7 +17,8 @@
 import { useEffect, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Button, Input, SheetSelector, Slider, Tooltip, cn } from '@sudobility/components';
-import type { Clef, Track, UUID } from '@sudobility/music_types';
+import { isNoteEvent } from '@sudobility/music_types';
+import type { Clef, Score, Track, UUID } from '@sudobility/music_types';
 import {
   GM_FAMILIES,
   GM_FAMILY_LABELS,
@@ -28,13 +29,19 @@ import {
   deleteTrackCommand,
   findTrack,
   gmInstrument,
+  gmInstrumentRange,
   gmInstrumentsByFamily,
   gmKit,
   gmKitAt,
   isPercussionTrack,
+  pitchToMidi,
   selectActiveTrackId,
+  transformCommand,
+  transposePitch,
   useAppStore,
+  withTracks,
 } from '@sudobility/music_lib';
+import type { MidiRange } from '@sudobility/music_lib';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -80,9 +87,95 @@ const TOGGLE_BUTTON_CLASS = cn(
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
+type TrackPropsPatch = Parameters<typeof changeTrackPropsCommand>[1];
+type InstrumentPatch = Pick<Track, 'midiProgram' | 'instrumentName'>;
+
+function closestToZero(min: number, max: number): number {
+  if (min <= 0 && max >= 0) return 0;
+  return min > 0 ? min : max;
+}
+
+function shiftToFitRange(midis: number[], range: MidiRange): number | null {
+  if (midis.length === 0) return 0;
+
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const midi of midis) {
+    min = Math.min(min, midi);
+    max = Math.max(max, midi);
+  }
+  if (min >= range.min && max <= range.max) return 0;
+  if (max - min > range.max - range.min) return null;
+
+  const minOctaves = Math.ceil((range.min - min) / 12);
+  const maxOctaves = Math.floor((range.max - max) / 12);
+  if (minOctaves <= maxOctaves) return closestToZero(minOctaves, maxOctaves) * 12;
+
+  const minSemitones = range.min - min;
+  const maxSemitones = range.max - max;
+  return minSemitones <= maxSemitones ? closestToZero(minSemitones, maxSemitones) : null;
+}
+
+function noteMidis(track: Track): number[] {
+  const midis: number[] = [];
+  for (const measure of track.measures) {
+    for (const voice of measure.voices) {
+      for (const event of voice.events) {
+        if (isNoteEvent(event)) midis.push(pitchToMidi(event.pitch));
+      }
+    }
+  }
+  return midis;
+}
+
+function fitShiftForInstrument(score: Score, trackId: UUID, midiProgram: number): number | null {
+  const track = findTrack(score, trackId);
+  return track ? shiftToFitRange(noteMidis(track), gmInstrumentRange(midiProgram)) : null;
+}
+
+function changeInstrumentAndFitNotesCommand(trackId: UUID, patch: InstrumentPatch) {
+  return transformCommand('Change track instrument', (score) => {
+    const shift = fitShiftForInstrument(score, trackId, patch.midiProgram);
+    if (shift === null) return score;
+
+    const tracks = score.tracks.map((candidate) => {
+      if (candidate.id !== trackId) return candidate;
+
+      const measures =
+        shift === 0
+          ? candidate.measures
+          : candidate.measures.map((measure) => ({
+              ...measure,
+              voices: measure.voices.map((voice) => ({
+                ...voice,
+                events: voice.events.map((event) =>
+                  isNoteEvent(event)
+                    ? { ...event, pitch: transposePitch(event.pitch, shift, measure.keySignature) }
+                    : event,
+                ),
+              })),
+            }));
+
+      return { ...candidate, ...patch, measures };
+    });
+
+    return withTracks(score, tracks);
+  });
+}
+
 export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps) {
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
+  /**
+   * Content editing is refused while the transport plays (`score-slice`'s edit
+   * lock), so name, instrument, kit, clef and delete say so rather than looking
+   * live and doing nothing.
+   *
+   * Mute, solo, volume and pan stay enabled: they are mixing, not editing, and
+   * they reach the engine live through `applyMix`. Mixing while listening is
+   * the point.
+   */
+  const isPlaying = store((s) => s.state === 'playing');
   const [pendingDelete, setPendingDelete] = useState(false);
 
   const track: Track | null = score && activeTrackId ? findTrack(score, activeTrackId) : null;
@@ -94,9 +187,22 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
     setNameDraft(track?.name ?? '');
   }, [track?.id, track?.name]);
 
-  const patch = (props: Parameters<typeof changeTrackPropsCommand>[1]): void => {
+  const patch = (props: TrackPropsPatch): void => {
     if (!track) return;
     store.getState().dispatchCommand(changeTrackPropsCommand(track.id, props));
+  };
+
+  const changeInstrument = (instrument: InstrumentPatch): void => {
+    if (!track || !score) return;
+    if (fitShiftForInstrument(score, track.id, instrument.midiProgram) === null) {
+      store.getState().pushToast({
+        message: `${instrument.instrumentName} cannot cover this track's note span without changing intervals.`,
+        severity: 'error',
+      });
+      return;
+    }
+
+    store.getState().dispatchCommand(changeInstrumentAndFitNotesCommand(track.id, instrument));
   };
 
   const header = (
@@ -113,7 +219,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           variant="ghost"
           size="icon"
           aria-label="Delete track"
-          disabled={!track}
+          disabled={!track || isPlaying}
           onClick={() => setPendingDelete(true)}
           className={ICON_BUTTON_CLASS}
         >
@@ -143,6 +249,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           <Input
             value={nameDraft}
             aria-label={`Track name: ${track.name}`}
+            disabled={isPlaying}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
             onBlur={() => {
               const next = nameDraft.trim();
@@ -158,6 +265,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
               <SheetSelector
                 title="Drum kit"
                 aria-label={`Drum kit: ${track.name}`}
+                disabled={isPlaying}
                 options={KIT_OPTIONS}
                 // Through `gmKitAt`, so a track sitting at an address no kit is
                 // at still selects the kit it actually plays rather than
@@ -177,14 +285,20 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
               <SheetSelector
                 title="Instrument"
                 aria-label={`Instrument: ${track.name}`}
+                disabled={isPlaying}
                 options={INSTRUMENT_OPTIONS}
                 value={String(track.midiProgram)}
                 onChange={(value: string) => {
                   const instrument = gmInstrument(Number(value));
                   if (!instrument) return;
                   // Both together: `instrumentName` is free text and could
-                  // otherwise drift from `midiProgram`.
-                  patch({ midiProgram: instrument.program, instrumentName: instrument.name });
+                  // otherwise drift from `midiProgram`. Existing notes move
+                  // with the new instrument when their current range would sit
+                  // outside its playable compass.
+                  changeInstrument({
+                    midiProgram: instrument.program,
+                    instrumentName: instrument.name,
+                  });
                 }}
                 size="large"
                 className="h-auto w-full px-1 py-0.5 text-xs"
@@ -195,6 +309,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           <SheetSelector
             title="Clef"
             aria-label={`Clef: ${track.clef}`}
+            disabled={isPlaying}
             options={CLEF_SELECT_OPTIONS}
             value={track.clef}
             onChange={(value) =>

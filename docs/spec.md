@@ -221,7 +221,7 @@ interface PlaybackEngine {
 }
 ```
 
-Requirements: start audio only after user interaction; schedule notes accurately; support tempo changes; pause/resume; seeking; looping; mute/solo; per-track volume and pan; highlight active notes; update playback cursor smoothly; avoid drift during long playback; reschedule safely after edits; stop stuck notes; handle browser tab suspension gracefully.
+Requirements: start audio only after user interaction; schedule notes accurately; support tempo changes; pause/resume; seeking; looping; mute/solo; per-track volume and pan; highlight active notes; update playback cursor smoothly; avoid drift during long playback; refuse content edits while playing and apply mix changes without rescheduling; stop stuck notes; handle browser tab suspension gracefully.
 
 Instruments (synthesized, fallback synth if samples unavailable; structure so SoundFont/sample libraries can be added later): Piano, Electric piano, Strings, Bass, Synth lead, Drum kit.
 

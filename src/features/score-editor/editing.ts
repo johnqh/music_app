@@ -148,6 +148,11 @@ export function insertNoteAtCaret(
 ): void {
   const state = store.getState();
   if (!state.score) return;
+  // Note entry is content, and content is immutable while the transport plays.
+  // The store would refuse the command anyway; refusing here keeps the caret
+  // and the toolbar's duration state from advancing as though something had
+  // been written.
+  if (state.state === 'playing') return;
   const target = resolveInsertTarget(
     state.score,
     selectActiveTrackId(state),
@@ -230,6 +235,10 @@ export function insertChordAtCaret(
 ): boolean {
   const state = store.getState();
   if (!state.score || pitches.length === 0) return false;
+  // Content is immutable while playing; see `insertNoteAtCaret`. This is also
+  // the piano keyboard's write-on-release path, so auditioning still sounds —
+  // only the write is suppressed.
+  if (state.state === 'playing') return false;
   const target = resolveInsertTarget(
     state.score,
     selectActiveTrackId(state),

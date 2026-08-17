@@ -394,14 +394,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           disabled={!hasScore}
           onClick={() => {
             // Stop both the main transport and any candidate preview
-            // (spec §13/§22): a preview and the main transport share
-            // playback-slice's `state`, so the global Stop button must
-            // cleanly resync the engine back to the committed score even
-            // if a `CandidateList` preview (not the main transport) is
-            // what's actually sounding. `stopPreview()` is a no-op when
-            // no preview is active.
             playbackController.stop();
-            playbackController.stopPreview();
           }}
           className={ICON_BUTTON_CLASS}
         >

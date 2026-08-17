@@ -6,7 +6,7 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn(), stop: vi.fn(), stopPreview: vi.fn() },
+  playbackController: { togglePlay: vi.fn(), stop: vi.fn() },
 }));
 
 import { AppRouter } from '@/app/router';
@@ -78,6 +78,7 @@ describe('AppRouter', () => {
     );
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
+    expect(playbackController.stop).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
   });
 
@@ -129,12 +130,10 @@ describe('AppRouter', () => {
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
     vi.mocked(playbackController.stop).mockClear();
-    vi.mocked(playbackController.stopPreview).mockClear();
 
     unmount();
 
     expect(playbackController.stop).toHaveBeenCalledTimes(1);
-    expect(playbackController.stopPreview).toHaveBeenCalledTimes(1);
   });
 
   it('a nonexistent project id falls back to the dashboard with an error toast', async () => {

@@ -290,8 +290,22 @@ export function EditorToolbar({
         : `Stack needs an instrument that can play more than one note at a time — ${activeTrack?.instrumentName ?? 'this one'} cannot`,
     },
   ];
+  /**
+   * Content editing is refused while the transport plays (`score-slice`'s edit
+   * lock), so the controls that would dispatch a content command say so rather
+   * than looking live and doing nothing.
+   *
+   * A boolean, so this re-renders on a transport transition only — not one of
+   * the high-frequency reads that must stay out of a component's top level.
+   *
+   * Deliberately still enabled: Copy, which only reads the selection, and the
+   * duration buttons, which also set the default insert duration and are
+   * therefore useful with nothing selected.
+   */
+  const isPlaying = store((s) => s.state === 'playing');
   const zoom = store((s) => s.zoom);
   const hasScore = score !== null;
+  const canEdit = hasScore && !isPlaying;
 
   /**
    * Whether anything is selected.
@@ -410,7 +424,7 @@ export function EditorToolbar({
             <Tooltip placement="bottom" content="Add Track">
               <SelectTrigger
                 aria-label="Add Track"
-                disabled={!score}
+                disabled={!score || isPlaying}
                 // Not the square icon class: this trigger carries the library's
                 // own dropdown chevron beside the plus, and that chevron is
                 // 16px by default — the one glyph in either bar that was not
@@ -520,7 +534,7 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content="Set the accidental on the selected notes">
             <SelectTrigger
               aria-label="Accidental"
-              disabled={!hasScore || !hasSelection}
+              disabled={!canEdit || !hasSelection}
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               <SharpIcon className={ICON_GLYPH_CLASS} />
@@ -552,8 +566,8 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content="Add an articulation to the selection">
             <SelectTrigger
               aria-label="Articulation"
-              disabled={!hasScore || !hasSelection}
-              className={cn(ICON_BUTTON_CLASS, 'gap-1 [&_svg]:size-[18px]')}
+              disabled={!canEdit || !hasSelection}
+              className={cn(ICON_BUTTON_CLASS, '[&>svg:last-child]:hidden [&_svg]:size-[18px]')}
             >
               <ArticulationIcon className={ICON_GLYPH_CLASS} />
             </SelectTrigger>
@@ -573,7 +587,7 @@ export function EditorToolbar({
             variant="ghost"
             size="icon"
             aria-label="Toggle tie"
-            disabled={!hasScore || !hasSelection}
+            disabled={!canEdit || !hasSelection}
             onClick={() => toggleTie(store, 'tieStart')}
             className={ICON_BUTTON_CLASS}
           >
@@ -605,7 +619,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label="Insert note"
-            disabled={!hasScore}
+            disabled={!canEdit}
             onClick={handleInsertNote}
             className={ICON_BUTTON_CLASS}
           >
@@ -617,7 +631,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label="Insert rest"
-            disabled={!hasScore}
+            disabled={!canEdit}
             onClick={handleInsertRest}
             className={ICON_BUTTON_CLASS}
           >
@@ -642,7 +656,7 @@ export function EditorToolbar({
               type="button"
               variant="outline"
               aria-label="Cut"
-              disabled={!hasScore || !hasSelection}
+              disabled={!canEdit || !hasSelection}
               onClick={onCut}
               className={ICON_BUTTON_CLASS}
             >
@@ -654,7 +668,7 @@ export function EditorToolbar({
               type="button"
               variant="outline"
               aria-label="Paste"
-              disabled={!hasScore}
+              disabled={!canEdit}
               onClick={onPaste}
               className={ICON_BUTTON_CLASS}
             >
@@ -668,7 +682,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label="Delete selection"
-            disabled={!hasScore || !hasSelection}
+            disabled={!canEdit || !hasSelection}
             onClick={() => deleteSelected(store)}
             className={ICON_BUTTON_CLASS}
           >
@@ -707,7 +721,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label="Quantize"
-            disabled={!hasScore || !hasSelection}
+            disabled={!canEdit || !hasSelection}
             onClick={handleQuantize}
             className={ICON_BUTTON_CLASS}
           >
