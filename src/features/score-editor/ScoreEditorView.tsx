@@ -53,6 +53,7 @@ import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
+import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { useClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
@@ -142,7 +143,10 @@ function PlaybackCaret({
   layoutMode,
   scrollBoxRef,
 }: PlaybackCaretProps) {
-  const positionTick = store((s) => s.positionTick);
+  // From the bus, not the store — this is the ~30Hz value the whole split
+  // exists to keep out of Zustand. Still isolated to this component for the
+  // same reason it always was: reading it higher up re-renders the notation.
+  const positionTick = usePlaybackPosition();
   const playbackState = store((s) => s.state);
   const tempoMultiplier = store((s) => s.tempoMultiplier);
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -773,8 +777,8 @@ export function ScoreEditorView({
   // Selection and measure changes are low-frequency, so they can ride the
   // normal render path.
   useEffect(() => {
-    repaintColors(colorsWithPlaying(store.getState().activeNoteIds));
-  }, [noteColors, selectedMeasureIds, repaintColors, colorsWithPlaying, store]);
+    repaintColors(colorsWithPlaying(playbackController.bus.sounding.map((n) => n.noteId)));
+  }, [noteColors, selectedMeasureIds, repaintColors, colorsWithPlaying]);
 
   /**
    * Sounding notes, straight off the store — never through React.
@@ -785,15 +789,13 @@ export function ScoreEditorView({
    * note. Subscribing here keeps the repaint (1-5ms of canvas work) without
    * the re-render (the expensive part).
    */
-  useEffect(() => {
-    let previous = store.getState().activeNoteIds;
-    return store.subscribe((state) => {
-      const next = state.activeNoteIds;
-      if (next === previous) return;
-      previous = next;
-      repaintColors(colorsWithPlaying(next));
-    });
-  }, [store, repaintColors, colorsWithPlaying]);
+  useEffect(
+    () =>
+      playbackController.bus.onSounding((notes) => {
+        repaintColors(colorsWithPlaying(notes.map((n) => n.noteId)));
+      }),
+    [repaintColors, colorsWithPlaying],
+  );
 
   const stopAutoscroll = useCallback(() => {
     if (autoscrollRafRef.current !== null) {
@@ -1031,15 +1033,15 @@ export function ScoreEditorView({
             ? [activeTrackId]
             : [];
         state.setSelection({
-          eventIds: noteIdsInTickRange(state.score, state.positionTick, clickedTick, scopeTrackIds),
+          eventIds: noteIdsInTickRange(state.score, state.caretTick, clickedTick, scopeTrackIds),
           measureIds: [],
           trackIds: [],
           // The explicit range matters: regenerating a span of empty measures
           // must still work, and `selectionToRange` can't derive a span from
           // an empty eventIds list.
           range: {
-            startTick: Math.min(state.positionTick, clickedTick),
-            endTick: Math.max(state.positionTick, clickedTick),
+            startTick: Math.min(state.caretTick, clickedTick),
+            endTick: Math.max(state.caretTick, clickedTick),
             trackIds: scopeTrackIds,
           },
         });

@@ -4,10 +4,18 @@ import { createAppStore, createEmptyScore, type TestStoreContext } from '@sudobi
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn(), stop: vi.fn() },
-}));
+vi.mock('@sudobility/music_lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+  return {
+    ...actual,
+    playbackController: {
+      // A real bus: playback position and sounding notes live on it now.
+      bus: new actual.PlaybackBus(),
+      togglePlay: vi.fn(),
+      stop: vi.fn(),
+    },
+  };
+});
 
 import { AppRouter } from '@/app/router';
 import { AuthProvider } from '@/app/AuthContext';

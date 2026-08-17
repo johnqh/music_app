@@ -26,8 +26,8 @@ import {
 import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editing';
 import { chordSelection } from '@/features/piano-keyboard/selection-editing';
 import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
+import { useSoundingNotes } from '@/features/score-editor/usePlayback';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
-import type { Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
@@ -164,7 +164,6 @@ const FALLBACK_KEY_HEIGHT = 96;
 type KeyRowProps = {
   store: EditorStoreApi;
   keys: ReturnType<typeof computeKeys>;
-  score: Score | null;
   activeTrackId: string | null;
   heldKeys: ReadonlySet<number>;
   selectedMidis: ReadonlySet<number>;
@@ -188,7 +187,6 @@ type KeyRowProps = {
 const PianoKeyRow = memo(function PianoKeyRow({
   store,
   keys,
-  score,
   activeTrackId,
   heldKeys,
   selectedMidis,
@@ -197,18 +195,22 @@ const PianoKeyRow = memo(function PianoKeyRow({
   onPress,
   onRelease,
 }: KeyRowProps) {
-  const activeNoteIds = store((s) => s.activeNoteIds);
+  const sounding = useSoundingNotes();
   const playbackState = store((s) => s.state);
 
   /**
-   * Gated on `playbackState`, not just on `activeNoteIds` being non-empty:
-   * the Tone engine clears active notes on `stop()` but NOT on `pause()`, so
-   * without the gate a pause would leave whatever was mid-chord stuck lit.
+   * Gated on `playbackState`, not just on the set being non-empty: the engine
+   * clears sounding notes on `stop()` but not on `pause()`, so without the gate
+   * a pause would leave whatever was mid-chord stuck lit.
+   *
+   * The notes arrive with their track and pitch already resolved, so this is a
+   * filter. It used to call `findEvent` per sounding note — a linear scan of
+   * every track, measure and voice in the score, twenty times a second.
    */
   const lit = useMemo(() => {
-    if (playbackState !== 'playing' || !score) return new Set<number>();
-    return playingPitchesForTrack(score, activeNoteIds, activeTrackId);
-  }, [playbackState, score, activeNoteIds, activeTrackId]);
+    if (playbackState !== 'playing') return new Set<number>();
+    return playingPitchesForTrack(sounding, activeTrackId);
+  }, [playbackState, sounding, activeTrackId]);
 
   return (
     <>
@@ -484,7 +486,6 @@ export function PianoKeyboardView({
           <PianoKeyRow
             store={store}
             keys={keys}
-            score={score}
             activeTrackId={activeTrackId}
             heldKeys={heldKeys}
             selectedMidis={selectedMidis}

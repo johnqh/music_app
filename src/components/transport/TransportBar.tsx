@@ -52,6 +52,7 @@ import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
+import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import type { MeasureBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
@@ -228,17 +229,18 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
 }
 
 function PositionScrubber({
-  store,
   maxTick,
   disabled,
   onScrub,
 }: {
-  store: PlaybackStoreApi;
   maxTick: number;
   disabled: boolean;
   onScrub: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const positionTick = store((s) => s.positionTick);
+  // From the bus, not the store: the engine reports position on every seek and
+  // stop as well as while playing, so this is always current — and it is the
+  // subscription that keeps a 30Hz value out of every other component.
+  const positionTick = usePlaybackPosition();
   return (
     // `wrapperClassName` keeps the scrubber full-width: Tooltip's wrapper is
     // inline-block, which would otherwise collapse it to its intrinsic size.
@@ -258,17 +260,15 @@ function PositionScrubber({
 }
 
 function Timecode({
-  store,
   maxTick,
   tempoMap,
   totalSeconds,
 }: {
-  store: PlaybackStoreApi;
   maxTick: number;
   tempoMap: TempoMap | null;
   totalSeconds: number;
 }) {
-  const positionTick = store((s) => s.positionTick);
+  const positionTick = usePlaybackPosition();
   const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
   return (
     <Tooltip content="Elapsed time / total duration">
@@ -503,15 +503,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </div>
 
       <div className="min-w-[120px] flex-1">
-        <PositionScrubber
-          store={store}
-          maxTick={maxTick}
-          disabled={!hasScore}
-          onScrub={handleScrub}
-        />
+        <PositionScrubber maxTick={maxTick} disabled={!hasScore} onScrub={handleScrub} />
       </div>
 
-      <Timecode store={store} maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
+      <Timecode maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
 
       {/* Last, so it never shifts the controls: it appears only while loading. */}
       <SynthLoadIndicator store={store} />

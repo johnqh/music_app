@@ -18,10 +18,17 @@ import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { stop: vi.fn() },
-}));
+vi.mock('@sudobility/music_lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+  return {
+    ...actual,
+    playbackController: {
+      // A real bus: playback position and sounding notes live on it now.
+      bus: new actual.PlaybackBus(),
+      stop: vi.fn(),
+    },
+  };
+});
 
 function setup(): { store: EditorStoreApi; context: TestStoreContext } {
   const context = installTestAppServices();

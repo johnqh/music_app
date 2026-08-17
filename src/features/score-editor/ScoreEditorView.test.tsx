@@ -23,12 +23,28 @@ import { playbackController } from '@sudobility/music_lib';
 // controller, so it falls back to the app-wide `playbackController`
 // singleton, which eagerly constructs a real Tone.js engine on import —
 // mocked out here since this suite never exercises the Space shortcut.
-vi.mock('@sudobility/music_lib', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn(), seek: vi.fn() },
-}));
+vi.mock('@sudobility/music_lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+  return {
+    ...actual,
+    // A real bus: the caret and the colour repaint both subscribe to it, and
+    // these tests drive it directly in place of the old store field.
+    playbackController: { togglePlay: vi.fn(), seek: vi.fn(), bus: new actual.PlaybackBus() },
+  };
+});
 
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
+
+/**
+ * What a seek actually does in the app: the edit caret moves and the engine
+ * reports the new position, which reaches the caret through the bus. Tests that
+ * used to write one store field now have to do both, because the two are
+ * genuinely separate values.
+ */
+function seekTo(store: EditorStoreApi, tick: number): void {
+  store.getState().setCaretTick(tick);
+  playbackController.bus.publishPosition(tick);
+}
 import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -126,6 +142,11 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.mocked(playbackController.seek).mockClear();
+  // The mocked bus is module-scoped, so it outlives a test the way the store
+  // does not. Without this, one test's playhead is the next one's starting
+  // position.
+  playbackController.bus.publishPosition(0);
+  playbackController.bus.publishSounding([]);
 });
 
 describe('ScoreEditorView', () => {
@@ -327,7 +348,9 @@ describe('ScoreEditorView', () => {
     const [first] = allNotes(store.getState().score!);
 
     act(() => {
-      store.getState().setActiveNoteIds([first.id]);
+      playbackController.bus.publishSounding([
+        { noteId: first.id, trackId: first.trackId, midi: 60 },
+      ]);
     });
 
     await flushRepaintFrame();
@@ -492,7 +515,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => store.getState().setPositionTick(tick));
+    act(() => seekTo(store, tick));
 
     expect(scrollToSpy).toHaveBeenCalled();
   });
@@ -502,11 +525,11 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => store.getState().setPositionTick(tick));
+    act(() => seekTo(store, tick));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
 
     // A small tick advance that's still within the same measure.
-    act(() => store.getState().setPositionTick(tick + 10));
+    act(() => seekTo(store, tick + 10));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -550,7 +573,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => store.getState().setPositionTick(tick));
+    act(() => seekTo(store, tick));
 
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
     vi.unstubAllGlobals();
@@ -615,7 +638,7 @@ describe('playback caret and click-to-seek', () => {
     const before = getByTestId('playback-caret').style.transform;
 
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => store.getState().setPositionTick(m1.startTick + Math.round(m1.durationTicks / 2)));
+    act(() => seekTo(store, m1.startTick + Math.round(m1.durationTicks / 2)));
 
     expect(getByTestId('playback-caret').style.transform).not.toBe(before);
   });
@@ -624,7 +647,7 @@ describe('playback caret and click-to-seek', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => store.getState().setPositionTick(m1.startTick));
+    act(() => seekTo(store, m1.startTick));
 
     // `left`/`top` stay pinned at the origin; all motion is in the transform.
     const caret = getByTestId('playback-caret');
@@ -641,7 +664,7 @@ describe('playback caret and click-to-seek', () => {
     const m1 = store.getState().score!.tracks[0].measures[1];
 
     act(() => {
-      store.getState().setPositionTick(m1.startTick);
+      seekTo(store, m1.startTick);
       store.getState().setPlaybackState('playing');
     });
     const atAnchor = getByTestId('playback-caret').style.transform;
@@ -659,7 +682,7 @@ describe('playback caret and click-to-seek', () => {
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
     act(() => {
-      store.getState().setPositionTick(m1.startTick);
+      seekTo(store, m1.startTick);
       store.getState().setPlaybackState('playing');
     });
 
@@ -805,7 +828,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     const score = store.getState().score!;
     const notes = allNotes(score);
     act(() => {
-      store.getState().setPositionTick(notes[0].startTick);
+      seekTo(store, notes[0].startTick);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -829,7 +852,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     const score = store.getState().score!;
     const notes = allNotes(score);
     act(() => {
-      store.getState().setPositionTick(notes[0].startTick);
+      seekTo(store, notes[0].startTick);
     });
     vi.mocked(playbackController.seek).mockClear();
 
@@ -843,7 +866,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      store.getState().setPositionTick(0);
+      seekTo(store, 0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -861,7 +884,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      store.getState().setPositionTick(0);
+      seekTo(store, 0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -880,7 +903,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      store.getState().setPositionTick(0);
+      seekTo(store, 0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -949,7 +972,11 @@ describe('playback repaint cost', () => {
     render(<ScoreEditorView store={store} />);
     const before = renderSpy.mock.calls.length;
 
-    act(() => store.getState().setActiveNoteIds(['not-a-note-in-this-score']));
+    act(() =>
+      playbackController.bus.publishSounding([
+        { noteId: 'not-a-note-in-this-score', trackId: 'nope', midi: 60 },
+      ]),
+    );
     await flushRepaintFrame();
 
     expect(renderSpy.mock.calls.length).toBe(before);
@@ -966,7 +993,11 @@ describe('playback repaint cost', () => {
     render(<ScoreEditorView store={store} />);
     const before = renderSpy.mock.calls.length;
 
-    act(() => store.getState().setActiveNoteIds([first.id]));
+    act(() =>
+      playbackController.bus.publishSounding([
+        { noteId: first.id, trackId: first.trackId, midi: 60 },
+      ]),
+    );
     await flushRepaintFrame();
 
     expect(renderSpy.mock.calls.length).toBeGreaterThan(before);
@@ -981,9 +1012,13 @@ describe('playback repaint cost', () => {
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
 
-    act(() => store.getState().setActiveNoteIds([first.id]));
+    act(() =>
+      playbackController.bus.publishSounding([
+        { noteId: first.id, trackId: first.trackId, midi: 60 },
+      ]),
+    );
     await flushRepaintFrame();
-    act(() => store.getState().setActiveNoteIds([]));
+    act(() => playbackController.bus.publishSounding([]));
     await flushRepaintFrame();
 
     const options = renderSpy.mock.calls.at(-1)?.[2] as
@@ -997,12 +1032,20 @@ describe('playback repaint cost', () => {
     const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
     render(<ScoreEditorView store={store} />);
 
-    act(() => store.getState().setActiveNoteIds([first.id]));
+    act(() =>
+      playbackController.bus.publishSounding([
+        { noteId: first.id, trackId: first.trackId, midi: 60 },
+      ]),
+    );
     await flushRepaintFrame();
     const afterFirstPaint = renderSpy.mock.calls.length;
 
     // Same sounding set, a fresh array identity — a held chord reporting again.
-    act(() => store.getState().setActiveNoteIds([first.id]));
+    act(() =>
+      playbackController.bus.publishSounding([
+        { noteId: first.id, trackId: first.trackId, midi: 60 },
+      ]),
+    );
     await flushRepaintFrame();
 
     expect(renderSpy.mock.calls.length).toBe(afterFirstPaint);
@@ -1016,9 +1059,9 @@ describe('playback repaint cost', () => {
     const before = renderSpy.mock.calls.length;
 
     act(() => {
-      store.getState().setActiveNoteIds([notes[0].id]);
-      store.getState().setActiveNoteIds([notes[1].id]);
-      store.getState().setActiveNoteIds([notes[2].id]);
+      for (const n of notes.slice(0, 3)) {
+        playbackController.bus.publishSounding([{ noteId: n.id, trackId: n.trackId, midi: 60 }]);
+      }
     });
     await flushRepaintFrame();
 
@@ -1032,7 +1075,7 @@ describe('playback repaint cost', () => {
     const before = renderSpy.mock.calls.length;
 
     act(() => {
-      for (let i = 1; i <= 20; i += 1) store.getState().setPositionTick(i * 24);
+      for (let i = 1; i <= 20; i += 1) seekTo(store, i * 24);
     });
     await flushRepaintFrame();
 
@@ -1315,7 +1358,7 @@ describe('ScoreEditorView: following playback never cancels its own smooth scrol
     act(() => store.getState().setPlaybackState('playing'));
     const measures = store.getState().score!.tracks[0].measures;
     for (let i = 0; i < 10; i++) {
-      act(() => store.getState().setPositionTick(measures[i].startTick + 1));
+      act(() => seekTo(store, measures[i].startTick + 1));
     }
 
     expect(scrollTo).not.toHaveBeenCalled();

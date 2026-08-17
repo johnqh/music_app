@@ -19,10 +19,17 @@ vi.mock('@sudobility/music_lib', async () => {
     // Replaced wholesale, not spread: the real export is a lazy Proxy that
     // builds a Tone graph on first property access, which jsdom has no audio
     // for and which would demand an initialized platform.
-    playbackController: { noteOn: vi.fn(), noteOff: vi.fn(), seek: vi.fn() },
+    // A real bus, because the keyboard subscribes to it for its key lighting;
+    // the rest is replaced so nothing builds an audio graph in jsdom.
+    playbackController: {
+      noteOn: vi.fn(),
+      noteOff: vi.fn(),
+      seek: vi.fn(),
+      bus: new actual.PlaybackBus(),
+    },
   };
 });
-import type { Score } from '@sudobility/music_types';
+import type { Score, SoundingNote } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { addNoteCommand, createEmptyScore } from '@sudobility/music_lib';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -40,11 +47,24 @@ function key(container: HTMLElement, midi: number): HTMLElement {
   return el;
 }
 
-/** Puts the store in the one state where keys light: actually playing. */
-function play(store: EditorStoreApi, ids: string[]): void {
+/**
+ * Puts the store in the one state where keys light: actually playing.
+ *
+ * Sounding notes arrive resolved now, so the fixture states the track and pitch
+ * rather than an id the component would have to look up.
+ */
+function asSounding(note: {
+  id: string;
+  trackId: string;
+  pitch: Parameters<typeof pitchToMidi>[0];
+}): SoundingNote {
+  return { noteId: note.id, trackId: note.trackId, midi: pitchToMidi(note.pitch) };
+}
+
+function play(store: EditorStoreApi, notes: SoundingNote[]): void {
   act(() => {
     store.getState().setPlaybackState('playing');
-    store.getState().setActiveNoteIds(ids);
+    playbackController.bus.publishSounding(notes);
   });
 }
 
@@ -180,7 +200,7 @@ describe('PianoKeyboardView', () => {
     const { container } = render(<PianoKeyboardView store={store} />);
     const note = allNotes(store.getState().score!)[0];
 
-    play(store, [note.id]);
+    play(store, [asSounding(note)]);
 
     expect(key(container, pitchToMidi(note.pitch)).dataset.playing).toBe('true');
   });
@@ -190,7 +210,7 @@ describe('PianoKeyboardView', () => {
     const { container } = render(<PianoKeyboardView store={store} />);
     const note = allNotes(store.getState().score!)[0];
 
-    play(store, [note.id]);
+    play(store, [asSounding(note)]);
 
     const el = key(container, pitchToMidi(note.pitch));
     expect(el.style.transform).toContain('translateY');
@@ -205,7 +225,7 @@ describe('PianoKeyboardView', () => {
     const { container } = render(<PianoKeyboardView store={store} />);
     const other = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
 
-    play(store, [other.id]);
+    play(store, [asSounding(other)]);
 
     expect(key(container, pitchToMidi(other.pitch)).dataset.playing).toBe('false');
   });
@@ -216,7 +236,7 @@ describe('PianoKeyboardView', () => {
     const store = makeStore();
     const { container } = render(<PianoKeyboardView store={store} />);
     const note = allNotes(store.getState().score!)[0];
-    play(store, [note.id]);
+    play(store, [asSounding(note)]);
     expect(key(container, pitchToMidi(note.pitch)).dataset.playing).toBe('true');
 
     act(() => store.getState().setPlaybackState('paused'));
@@ -228,7 +248,7 @@ describe('PianoKeyboardView', () => {
     const store = makeStore();
     const { container } = render(<PianoKeyboardView store={store} />);
     const note = allNotes(store.getState().score!)[0];
-    play(store, [note.id]);
+    play(store, [asSounding(note)]);
 
     act(() => store.getState().setPlaybackState('stopped'));
 
@@ -258,7 +278,7 @@ describe('PianoKeyboardView', () => {
     const store = makeStore();
     const { container } = render(<PianoKeyboardView store={store} />);
     const note = allNotes(store.getState().score!)[0];
-    play(store, [note.id]);
+    play(store, [asSounding(note)]);
 
     // Same role the notation colors a sounding note with.
     expect(LIGHT_RENDER_THEME.notePlaying).toBe('#1565c0');

@@ -6,24 +6,29 @@ import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: {
-    togglePlay: vi.fn(),
-    stop: vi.fn(),
-    seek: vi.fn(),
-    seekToMeasure: vi.fn(),
-    goToStart: vi.fn(),
-    previousMeasure: vi.fn(),
-    nextMeasure: vi.fn(),
-    setLoopFromSelection: vi.fn(),
-    clearLoop: vi.fn(),
-    toggleLoop: vi.fn(),
-    setTempoMultiplier: vi.fn(),
-    setMetronome: vi.fn(),
-    setMasterVolume: vi.fn(),
-  },
-}));
+vi.mock('@sudobility/music_lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+  return {
+    ...actual,
+    playbackController: {
+      // A real bus: the scrubber and the timecode read the playhead from it.
+      bus: new actual.PlaybackBus(),
+      togglePlay: vi.fn(),
+      stop: vi.fn(),
+      seek: vi.fn(),
+      seekToMeasure: vi.fn(),
+      goToStart: vi.fn(),
+      previousMeasure: vi.fn(),
+      nextMeasure: vi.fn(),
+      setLoopFromSelection: vi.fn(),
+      clearLoop: vi.fn(),
+      toggleLoop: vi.fn(),
+      setTempoMultiplier: vi.fn(),
+      setMetronome: vi.fn(),
+      setMasterVolume: vi.fn(),
+    },
+  };
+});
 
 import { playbackController } from '@sudobility/music_lib';
 import { TransportBar } from '@/components/transport/TransportBar';
@@ -140,7 +145,7 @@ describe('TransportBar: position display', () => {
   it('shows measure.beat for the current position', () => {
     const store = makeStore();
     const score = store.getState().score!;
-    store.getState().setPositionTick(score.tracks[0].measures[1].startTick);
+    store.getState().setCaretTick(score.tracks[0].measures[1].startTick);
     renderBar(store);
 
     expect(screen.getByLabelText('Current measure and beat')).toHaveTextContent('2.1');
@@ -258,7 +263,9 @@ describe('TransportBar: accessibility', () => {
 describe('TransportBar: timecode', () => {
   it('shows score-time position and total from the tempo map (twinkle: 120bpm, 8 measures = 16s)', () => {
     const store = makeStore();
-    act(() => store.getState().setPositionTick(1920)); // one 4/4 measure at 120bpm = 2s
+    // The timecode reads the playhead off the bus, which is where the engine
+    // reports it — the store's caret is a different value now.
+    act(() => playbackController.bus.publishPosition(1920)); // one 4/4 measure at 120bpm = 2s
     renderBar(store);
     expect(screen.getByTestId('playback-timecode').textContent).toBe('0:02.0 / 0:16.0');
   });

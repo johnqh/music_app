@@ -156,7 +156,7 @@ export function insertNoteAtCaret(
   const target = resolveInsertTarget(
     state.score,
     selectActiveTrackId(state),
-    state.positionTick,
+    state.caretTick,
     state.activeVoiceIndex,
   );
   if (!target) return;
@@ -242,7 +242,7 @@ export function insertChordAtCaret(
   const target = resolveInsertTarget(
     state.score,
     selectActiveTrackId(state),
-    state.positionTick,
+    state.caretTick,
     state.activeVoiceIndex,
   );
   if (!target) return false;
@@ -458,7 +458,7 @@ export function deleteMeasureAtCaret(store: EditorStoreApi): void {
     return;
   }
 
-  const tick = Math.max(0, state.positionTick);
+  const tick = Math.max(0, state.caretTick);
   const measure =
     track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ??
     track.measures[track.measures.length - 1];

@@ -7,7 +7,12 @@ vi.mock('@sudobility/music_lib', async () => {
     ...actual,
     // Replaced wholesale, not spread: the real export is a lazy Proxy bound to
     // the global app store, and these tests drive an isolated one.
-    playbackController: { noteOn: vi.fn(), noteOff: vi.fn(), seek: vi.fn() },
+    playbackController: {
+      bus: new actual.PlaybackBus(),
+      noteOn: vi.fn(),
+      noteOff: vi.fn(),
+      seek: vi.fn(),
+    },
   };
 });
 

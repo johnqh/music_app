@@ -14,10 +14,17 @@ import type { PlaybackToggle } from '@/features/score-editor/useEditorShortcuts'
 // `playbackController` singleton, which eagerly constructs a real Tone.js
 // engine on import — every test below instead passes its own fake
 // `PlaybackToggle`, so this module is never imported for real here.
-vi.mock('@sudobility/music_lib', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  playbackController: { togglePlay: vi.fn() },
-}));
+vi.mock('@sudobility/music_lib', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+  return {
+    ...actual,
+    playbackController: {
+      // A real bus: playback position and sounding notes live on it now.
+      bus: new actual.PlaybackBus(),
+      togglePlay: vi.fn(),
+    },
+  };
+});
 
 function makeStore(): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });
