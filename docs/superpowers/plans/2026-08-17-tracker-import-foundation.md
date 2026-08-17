@@ -24,18 +24,18 @@
 
 ## File Structure
 
-| Repo | File | Responsibility | Change |
-| --- | --- | --- | --- |
-| types | `src/platform/mod.ts` | tracker model + codec contract | Rewrite as `TrackerModule` / `TrackerCodec` |
-| io | `src/shared/mod/read.ts` | MOD byte reading | Modify: emit `TrackerCell`, convert periods |
-| io | `src/shared/mod/period.ts` | **new** — Amiga period → MIDI | Create (moved from `music_lib`) |
-| io | `src/shared/mod/codec.ts` | the `TrackerCodec` implementation | Modify: rename, detect magic |
-| io | `src/shared/mod/fixture.ts` | hand-built MOD buffer for tests | Modify: unchanged bytes, new expectations |
-| lib | `src/adapters/mod/import.ts` | `modToScore` | Rewrite as `trackerToScore` |
-| lib | `src/adapters/mod/fill.ts` | **new** — gap filling with rests | Create |
-| lib | `src/adapters/mod/timing.ts` | tempo arithmetic | Modify: drop `periodToMidi`, read neutral fields |
-| lib | `src/adapters/mod/types.ts` | re-export | Modify: re-export `TrackerModule` |
-| app | `src/features/projects/DashboardPage.tsx:348` | import handler | Modify: `trackerToScore` |
+| Repo  | File                                          | Responsibility                    | Change                                           |
+| ----- | --------------------------------------------- | --------------------------------- | ------------------------------------------------ |
+| types | `src/platform/mod.ts`                         | tracker model + codec contract    | Rewrite as `TrackerModule` / `TrackerCodec`      |
+| io    | `src/shared/mod/read.ts`                      | MOD byte reading                  | Modify: emit `TrackerCell`, convert periods      |
+| io    | `src/shared/mod/period.ts`                    | **new** — Amiga period → MIDI     | Create (moved from `music_lib`)                  |
+| io    | `src/shared/mod/codec.ts`                     | the `TrackerCodec` implementation | Modify: rename, detect magic                     |
+| io    | `src/shared/mod/fixture.ts`                   | hand-built MOD buffer for tests   | Modify: unchanged bytes, new expectations        |
+| lib   | `src/adapters/mod/import.ts`                  | `modToScore`                      | Rewrite as `trackerToScore`                      |
+| lib   | `src/adapters/mod/fill.ts`                    | **new** — gap filling with rests  | Create                                           |
+| lib   | `src/adapters/mod/timing.ts`                  | tempo arithmetic                  | Modify: drop `periodToMidi`, read neutral fields |
+| lib   | `src/adapters/mod/types.ts`                   | re-export                         | Modify: re-export `TrackerModule`                |
+| app   | `src/features/projects/DashboardPage.tsx:348` | import handler                    | Modify: `trackerToScore`                         |
 
 ---
 
@@ -44,9 +44,11 @@
 **Repo:** `music_types`
 
 **Files:**
+
 - Modify: `src/platform/mod.ts`
 
 **Interfaces:**
+
 - Produces: `TrackerFormat`, `TrackerInstrument`, `TrackerCell`, `TrackerModule`, `TrackerCodec` — all exported from the package root. `ModFile`, `ModCell`, `ModSample` and `ModCodec` are **deleted**, not deprecated: there is one consumer of each and leaving both would mean two models to keep in step.
 
 - [ ] **Step 1: Replace the file's contents**
@@ -150,10 +152,12 @@ Expected: `music_io` and `music_lib` now fail typecheck. That is the next two ta
 **Repo:** `music_io`
 
 **Files:**
+
 - Create: `src/shared/mod/period.ts`, `src/shared/mod/period.test.ts`
 - Modify: `src/shared/mod/read.ts`, `src/shared/mod/read.test.ts`, `src/shared/mod/codec.ts`
 
 **Interfaces:**
+
 - Consumes: `TrackerCell`, `TrackerModule`, `TrackerCodec` from Task 1.
 - Produces: `periodToMidi(period: number): number | null` from `src/shared/mod/period.js`; `readMod(buffer: ArrayBuffer): TrackerModule`; `SharedTrackerCodec` implementing `TrackerCodec`, replacing `SharedModCodec`.
 
@@ -294,9 +298,11 @@ rm -rf ../music_app/node_modules/.vite
 **Repo:** `music_lib`
 
 **Files:**
+
 - Create: `src/adapters/mod/fill.ts`, `src/adapters/mod/fill.test.ts`
 
 **Interfaces:**
+
 - Consumes: `decomposeDuration(ticks, ppq)` from `src/domain/time/durations.js`, `createId` from `src/domain/score/ids.js`.
 - Produces:
 
@@ -341,7 +347,11 @@ function note(startTick: number, durationTicks: number): NoteEvent {
 }
 
 /** What the validator checks: the events must tile the measure exactly. */
-function covers(events: ReturnType<typeof fillVoiceWithRests>, start: number, duration: number): boolean {
+function covers(
+  events: ReturnType<typeof fillVoiceWithRests>,
+  start: number,
+  duration: number,
+): boolean {
   let at = start;
   for (const e of events) {
     if (e.startTick !== at) return false;
@@ -482,10 +492,12 @@ Delete the `if (at < measureEnd) addRests(at, measureEnd);` line. Expected: "fil
 **Repo:** `music_lib`
 
 **Files:**
+
 - Modify: `src/adapters/mod/import.ts`, `src/adapters/mod/import.test.ts`, `src/adapters/mod/timing.ts`, `src/adapters/mod/timing.test.ts`, `src/adapters/mod/types.ts`
 - Modify: `src/index.ts` (export rename)
 
 **Interfaces:**
+
 - Consumes: `fillVoiceWithRests` (Task 3), `TrackerModule`/`TrackerCell` (Task 1).
 - Produces: `trackerToScore(module: TrackerModule): Score`, replacing `modToScore`. `periodToMidi` is **no longer exported from `music_lib`** — it moved to `music_io` in Task 2.
 
@@ -733,7 +745,12 @@ Update `timing.test.ts`: drop the `periodToMidi` cases (now in `music_io`), and 
 
 ```ts
 /** The shape `music_io`'s `TrackerCodec.decode` produces. */
-export type { TrackerCell, TrackerFormat, TrackerInstrument, TrackerModule } from '@sudobility/music_types';
+export type {
+  TrackerCell,
+  TrackerFormat,
+  TrackerInstrument,
+  TrackerModule,
+} from '@sudobility/music_types';
 ```
 
 In `src/index.ts`, `modToScore` becomes `trackerToScore` and `periodToMidi` is no longer exported. `effectiveBpm` and `tempoChanges` stay.
@@ -763,6 +780,7 @@ rm -rf ../music_app/node_modules/.vite
 **Repo:** `music_app`
 
 **Files:**
+
 - Modify: `src/features/projects/DashboardPage.tsx:348-349`
 - Modify: `src/features/projects/DashboardPage.test.tsx` if it references `modToScore`
 

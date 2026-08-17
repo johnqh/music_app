@@ -23,27 +23,27 @@ importer was not at fault — the API happened to be down, and the failure was
 `Failed to fetch`. Recorded here because the investigation produced the
 measurements this design rests on:
 
-| Check | Result |
-| --- | --- |
-| `readMod` on the reported file | 4 channels, 24 patterns, 34 order entries |
-| `readMod` on 8 top-rated modarchive `.mod` files | all decoded |
-| `modToScore` on the reported file | 13 tracks, 136 measures, 5 tempo changes |
-| Resulting score | 1.13 MB JSON, 3113 events — ~100 KB gzipped |
-| `validateScore` | **554 warnings**, no errors |
+| Check                                            | Result                                      |
+| ------------------------------------------------ | ------------------------------------------- |
+| `readMod` on the reported file                   | 4 channels, 24 patterns, 34 order entries   |
+| `readMod` on 8 top-rated modarchive `.mod` files | all decoded                                 |
+| `modToScore` on the reported file                | 13 tracks, 136 measures, 5 tempo changes    |
+| Resulting score                                  | 1.13 MB JSON, 3113 events — ~100 KB gzipped |
+| `validateScore`                                  | **554 warnings**, no errors                 |
 
 Those 554 warnings are all `measure-underfull` and they are a real defect; see
 §4.
 
 ## Formats
 
-| Format | Tracker | Notes |
-| --- | --- | --- |
-| MOD | ProTracker | Already supported. Amiga periods, fixed 64 rows, sample-as-instrument. |
-| S3M | Scream Tracker 3 | Parapointer table, packed rows, `A`/`T` for speed/tempo, AdLib instrument slots to skip. |
-| XM | FastTracker 2 | Packed rows with a compression bit, instrument layer whose header length is itself a field, `F` split at `0x20`. |
-| IT | Impulse Tracker | Packed rows with channel-mask run-length, separate instrument and sample tables, `A`/`T`. Instruments may be absent, in which case samples are the instruments. |
-| DSM | DSIK / DSMI | RIFF-chunked `SONG`/`INST`/`PATT`. The simplest of the five. |
-| MPTM | OpenMPT | **IT underneath** — same `IMPM` magic and container, extensions in a trailing block. Rides on the IT decoder plus a detection rule. |
+| Format | Tracker          | Notes                                                                                                                                                           |
+| ------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOD    | ProTracker       | Already supported. Amiga periods, fixed 64 rows, sample-as-instrument.                                                                                          |
+| S3M    | Scream Tracker 3 | Parapointer table, packed rows, `A`/`T` for speed/tempo, AdLib instrument slots to skip.                                                                        |
+| XM     | FastTracker 2    | Packed rows with a compression bit, instrument layer whose header length is itself a field, `F` split at `0x20`.                                                |
+| IT     | Impulse Tracker  | Packed rows with channel-mask run-length, separate instrument and sample tables, `A`/`T`. Instruments may be absent, in which case samples are the instruments. |
+| DSM    | DSIK / DSMI      | RIFF-chunked `SONG`/`INST`/`PATT`. The simplest of the five.                                                                                                    |
+| MPTM   | OpenMPT          | **IT underneath** — same `IMPM` magic and container, extensions in a trailing block. Rides on the IT decoder plus a detection rule.                             |
 
 ## 1. The neutral model (`music_types`)
 
@@ -95,7 +95,7 @@ leaking into shared musical code.
 
 **`effect`/`param` are gone.** Today's importer reads exactly one effect: `F`,
 for speed and tempo. Notation import has no use for portamento, vibrato or
-arpeggio. Since *which* effect carries tempo is format knowledge, each decoder
+arpeggio. Since _which_ effect carries tempo is format knowledge, each decoder
 normalises to the neutral `speed`/`bpm` fields and nothing downstream branches
 on format. The model is therefore smaller than today's, not larger.
 
@@ -121,13 +121,13 @@ riskiest part of each format.
 **Detection is by magic bytes, not file extension**, so a mis-named file still
 imports and an unrecognised one fails naming what it found:
 
-| Format | Magic |
-| --- | --- |
-| MOD | `M.K.` / `M!K!` / `4CHN` / `6CHN` / `8CHN` / `FLT4` / `CD81` / `OKTA` at offset 1080 |
-| S3M | `SCRM` at offset 44 |
-| XM | `Extended Module: ` at offset 0 |
-| IT / MPTM | `IMPM` at offset 0; MPTM distinguished by OpenMPT's tracker-version field |
-| DSM | `RIFF` at 0 with `DSMF` at 8 |
+| Format    | Magic                                                                                |
+| --------- | ------------------------------------------------------------------------------------ |
+| MOD       | `M.K.` / `M!K!` / `4CHN` / `6CHN` / `8CHN` / `FLT4` / `CD81` / `OKTA` at offset 1080 |
+| S3M       | `SCRM` at offset 44                                                                  |
+| XM        | `Extended Module: ` at offset 0                                                      |
+| IT / MPTM | `IMPM` at offset 0; MPTM distinguished by OpenMPT's tracker-version field            |
+| DSM       | `RIFF` at 0 with `DSMF` at 8                                                         |
 
 ## 3. Score mapping (`music_lib`)
 
@@ -153,8 +153,8 @@ and gaining three:
 ## 4. The defect this fixes
 
 `modToScore` does not pad gaps with rests. Measured on the reported file: 554
-`measure-underfull` warnings, e.g. *"Voice 1 in measure 3 covers 1200 ticks,
-short of the measure's 1920"*. Those bars render short and wrong.
+`measure-underfull` warnings, e.g. _"Voice 1 in measure 3 covers 1200 ticks,
+short of the measure's 1920"_. Those bars render short and wrong.
 
 It does not block import, which is why it survived. Building five more
 importers on the same mapping would multiply it, so `trackerToScore` fills every

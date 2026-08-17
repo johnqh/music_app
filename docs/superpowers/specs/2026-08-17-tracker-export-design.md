@@ -33,8 +33,8 @@ straight in.
 the honest cost of notes-only export. Unstated, it reads as a broken export and
 generates a bug report.
 
-`music_app/CLAUDE.md` currently says *"Import only: writing `.MOD` means
-embedding sample data."* That reasoning is what this design overturns: writing a
+`music_app/CLAUDE.md` currently says _"Import only: writing `.MOD` means
+embedding sample data."_ That reasoning is what this design overturns: writing a
 module means embedding sample data **only if you want it to make sound**, and
 under the notes/audio split we explicitly do not.
 
@@ -106,12 +106,12 @@ Computing the report before scope would describe the wrong thing.
 
 ## 5. Formats and their limits
 
-| Target | Channels | Instruments | Note range | Notes |
-| --- | --- | --- | --- | --- |
-| MOD | 4 | 31 | 3 octaves | Iconic and by far the most lossy. |
-| S3M | 32 | 99 | 8 octaves | Fine; XM and IT dominate it. |
-| XM | 32 | 128 | 8 octaves | Best target — comfortable and universally read. |
-| IT | 64 | 99 | 10 octaves | Also comfortable; read natively by OpenMPT and Schism. |
+| Target | Channels | Instruments | Note range | Notes                                                  |
+| ------ | -------- | ----------- | ---------- | ------------------------------------------------------ |
+| MOD    | 4        | 31          | 3 octaves  | Iconic and by far the most lossy.                      |
+| S3M    | 32       | 99          | 8 octaves  | Fine; XM and IT dominate it.                           |
+| XM     | 32       | 128         | 8 octaves  | Best target — comfortable and universally read.        |
+| IT     | 64       | 99          | 10 octaves | Also comfortable; read natively by OpenMPT and Schism. |
 
 **DSM and MPTM are import-only.** Nothing reads DSM that does not read a better
 format, and OpenMPT reads IT natively so writing MPTM buys nothing. Reading an
