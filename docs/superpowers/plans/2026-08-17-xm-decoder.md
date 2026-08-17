@@ -4,7 +4,7 @@
 
 **Goal:** Import FastTracker 2 `.xm` modules — the first format with self-sized headers, variable rows per pattern, and an explicit key-off in every real file.
 
-**Architecture:** A forward walk in which almost nothing has a fixed size: the file header, each pattern header and each *instrument* header all declare their own length, and the reader must seek by those declarations rather than by constants. Patterns come before instruments, so instruments can only be found by walking every pattern first. Effects reuse `applyProTrackerEffect` — verified, XM splits `F` at `0x20` exactly as MOD does. No change to `TrackerModule` or `trackerToScore`.
+**Architecture:** A forward walk in which almost nothing has a fixed size: the file header, each pattern header and each _instrument_ header all declare their own length, and the reader must seek by those declarations rather than by constants. Patterns come before instruments, so instruments can only be found by walking every pattern first. Effects reuse `applyProTrackerEffect` — verified, XM splits `F` at `0x20` exactly as MOD does. No change to `TrackerModule` or `trackerToScore`.
 
 **Tech Stack:** TypeScript (strict, ESM, extensionless relative imports built by `tsc`), Vitest.
 
@@ -24,17 +24,17 @@ Measured against `sunlight.xm` (142447), `wily.xm` (58823), `mercury.xm` (153249
 
 **File header.** `Extended Module: ` (17 bytes) at 0; module name (20) at 17; `0x1A` at 37; tracker name (20) at 38; version uint16 at 58; **header size uint32 at 60, counted from offset 60**. Then:
 
-| Offset | Field | sunlight | wily | mercury |
-| --- | --- | --- | --- | --- |
-| 64 | songLength | 20 | 26 | 92 |
-| 66 | restartPosition | — | — | — |
-| 68 | numChannels | 18 | 8 | 18 |
-| 70 | numPatterns | 16 | 26 | 92 |
-| 72 | numInstruments | 15 | 16 | 64 |
-| 74 | flags | — | — | — |
-| 76 | defaultSpeed | 6 | 3 | 6 |
-| 78 | defaultBPM | 125 | 150 | 125 |
-| 80 | order table, `songLength` bytes | max 15 | max 25 | max 91 |
+| Offset | Field                           | sunlight | wily   | mercury |
+| ------ | ------------------------------- | -------- | ------ | ------- |
+| 64     | songLength                      | 20       | 26     | 92      |
+| 66     | restartPosition                 | —        | —      | —       |
+| 68     | numChannels                     | 18       | 8      | 18      |
+| 70     | numPatterns                     | 16       | 26     | 92      |
+| 72     | numInstruments                  | 15       | 16     | 64      |
+| 74     | flags                           | —        | —      | —       |
+| 76     | defaultSpeed                    | 6        | 3      | 6       |
+| 78     | defaultBPM                      | 125      | 150    | 125     |
+| 80     | order table, `songLength` bytes | max 15   | max 25 | max 91  |
 
 Header size was 276 in all four, putting the first pattern at `60 + 276 = 336`. The order maximum equalled `numPatterns - 1` in every file.
 
@@ -43,25 +43,25 @@ Header size was 276 in all four, putting the first pattern at `60 + 276 = 336`. 
 **Packed events**, read left to right, filling channel 0…numChannels-1 then advancing a row:
 
 - Read a byte. **If bit 7 is set** it is a field mask: bit 0 note, bit 1 instrument, bit 2 volume, bit 3 effect, bit 4 parameter — each present field follows in that order.
-- **If bit 7 is clear**, the byte *is* the note, and instrument, volume, effect and parameter all follow uncompressed (four more bytes).
+- **If bit 7 is clear**, the byte _is_ the note, and instrument, volume, effect and parameter all follow uncompressed (four more bytes).
 
 **Note values:** 0 none, 1–96 notes with 1 = C-0, **97 = key off**. MIDI is `note + 11`. Observed 13–93 across the four files.
 
 **Effects are ProTracker's.** Effect `F` (15) carried parameters 1–24 and 125 across the corpus — below `0x20` a speed, above it a BPM, exactly MOD's split. Effect `D` (13) appeared as a pattern break. So `applyProTrackerEffect` is reused rather than rewritten.
 
-### Finding 1: instrument header size varies *within* a file
+### Finding 1: instrument header size varies _within_ a file
 
 This is the trap the spec predicted, and it is real:
 
-| File | `(instrumentHeaderSize, numSamples)` |
-| --- | --- |
-| sunlight.xm | `(263, 1) × 7`, **`(33, 0) × 8`** |
-| mercury.xm | `(263, 1) × 22`, **`(33, 0) × 42`** |
-| wily.xm | `(263, 1) × 16` |
+| File        | `(instrumentHeaderSize, numSamples)` |
+| ----------- | ------------------------------------ |
+| sunlight.xm | `(263, 1) × 7`, **`(33, 0) × 8`**    |
+| mercury.xm  | `(263, 1) × 22`, **`(33, 0) × 42`**  |
+| wily.xm     | `(263, 1) × 16`                      |
 
 An instrument with no samples writes a 33-byte header; one with samples writes 263. **Assuming 263 desynchronises everything after the first empty instrument** — and `sunlight.xm` has eight of them among fifteen. The reader must read the size from each instrument and seek by it.
 
-Finding the *next* instrument then needs three quantities: the header size, the sample-header size (uint32 at instrument+29, present only when `numSamples > 0`), and the sum of every sample's length (uint32 at each sample header's own offset 0):
+Finding the _next_ instrument then needs three quantities: the header size, the sample-header size (uint32 at instrument+29, present only when `numSamples > 0`), and the sum of every sample's length (uint32 at each sample header's own offset 0):
 
 ```
 next = start + instrumentHeaderSize + numSamples * sampleHeaderSize + Σ sampleLengths
@@ -85,15 +85,15 @@ Note value 97 appears in **all four** files. DSM and S3M gave no note-off in any
 
 ## File Structure
 
-| File | Responsibility | Change |
-| --- | --- | --- |
-| `src/shared/tracker/xm.ts` | the XM reader | **Create** |
-| `src/shared/tracker/xm.test.ts` | | **Create** |
-| `src/shared/tracker/xm-fixture.ts` | hand-built XM buffer | **Create** |
-| `src/shared/mod/codec.ts` | `SharedTrackerCodec` | Modify: detect `Extended Module: ` |
-| `src/shared/mod/codec.test.ts` | | Modify: an XM case |
-| `src/shared/tracker/fixtures/` | real modules | Add `sunlight.xm`, `wily.xm` |
-| `music_app/src/features/projects/DashboardPage.tsx` | file input + copy | Modify: add `.xm` |
+| File                                                | Responsibility       | Change                             |
+| --------------------------------------------------- | -------------------- | ---------------------------------- |
+| `src/shared/tracker/xm.ts`                          | the XM reader        | **Create**                         |
+| `src/shared/tracker/xm.test.ts`                     |                      | **Create**                         |
+| `src/shared/tracker/xm-fixture.ts`                  | hand-built XM buffer | **Create**                         |
+| `src/shared/mod/codec.ts`                           | `SharedTrackerCodec` | Modify: detect `Extended Module: ` |
+| `src/shared/mod/codec.test.ts`                      |                      | Modify: an XM case                 |
+| `src/shared/tracker/fixtures/`                      | real modules         | Add `sunlight.xm`, `wily.xm`       |
+| `music_app/src/features/projects/DashboardPage.tsx` | file input + copy    | Modify: add `.xm`                  |
 
 **Fixture choice matters here.** `sunlight.xm` (43 KB) is the file with the mixed 33/263 instrument headers; `wily.xm` (48 KB) is the one with the 76-row pattern and four empty patterns. Between them they exercise every finding above. `mercury.xm` (1.1 MB) and `1funk.xm` (777 KB) are too large to commit and add nothing the other two do not cover.
 
@@ -102,9 +102,11 @@ Note value 97 appears in **all four** files. DSM and S3M gave no note-off in any
 ### Task 1: The fixture builder
 
 **Files:**
+
 - Create: `src/shared/tracker/xm-fixture.ts`
 
 **Interfaces:**
+
 - Produces: `export function buildXm(opts?: XmOptions): ArrayBuffer;`
 
 Exercised by every test in Tasks 2–4. It is its own task because it must be able to produce the awkward cases deliberately — an instrument with no samples, a pattern with no data, a pattern that is not 64 rows — and reviewing that against the findings above is a different activity from reviewing a parser.
@@ -221,8 +223,7 @@ export function buildXm(opts: XmOptions = {}): ArrayBuffer {
     const samples = ins.samples ?? 0;
     const lengths = ins.sampleLengths ?? Array.from({ length: samples }, () => 64);
     const headerSize = samples > 0 ? INSTRUMENT_HEADER_WITH_SAMPLES : INSTRUMENT_HEADER_EMPTY;
-    const total =
-      headerSize + samples * SAMPLE_HEADER_SIZE + lengths.reduce((n, l) => n + l, 0);
+    const total = headerSize + samples * SAMPLE_HEADER_SIZE + lengths.reduce((n, l) => n + l, 0);
     const out = new Uint8Array(total);
     const view = new DataView(out.buffer);
     view.setUint32(0, headerSize, true);
@@ -285,9 +286,11 @@ Expected: PASS. Task 2 is its first exercise.
 ### Task 2: Header and order list
 
 **Files:**
+
 - Create: `src/shared/tracker/xm.ts`, `src/shared/tracker/xm.test.ts`
 
 **Interfaces:**
+
 - Produces: `export function readXm(buffer: ArrayBuffer): TrackerModule;`
 
 - [ ] **Step 1: Write the failing tests**
@@ -425,9 +428,11 @@ There is no sabotage check here, and that is worth saying rather than faking one
 ### Task 3: Pattern unpacking
 
 **Files:**
+
 - Modify: `src/shared/tracker/xm.ts`, `src/shared/tracker/xm.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyProTrackerEffect`.
 - Produces: no new exports; `readXm` returns populated patterns.
 
@@ -454,7 +459,10 @@ describe('readXm: pattern unpacking', () => {
       buildXm({
         channels: 1,
         patterns: [
-          { rows: 1, cells: [[{ note: 49, instrument: 5, effect: 0xf, param: 6, uncompressed: true }]] },
+          {
+            rows: 1,
+            cells: [[{ note: 49, instrument: 5, effect: 0xf, param: 6, uncompressed: true }]],
+          },
         ],
       }),
     );
@@ -623,14 +631,14 @@ function readPattern(
 and in `readXm`, replace the placeholder patterns:
 
 ```ts
-  const numPatterns = view.getUint16(70, true);
-  let at = HEADER_SIZE_AT + headerSize;
-  const patterns: TrackerCell[][][] = [];
-  for (let p = 0; p < numPatterns && at + 9 <= bytes.length; p += 1) {
-    const { rows, next } = readPattern(bytes, view, at, channels);
-    patterns.push(rows);
-    at = next;
-  }
+const numPatterns = view.getUint16(70, true);
+let at = HEADER_SIZE_AT + headerSize;
+const patterns: TrackerCell[][][] = [];
+for (let p = 0; p < numPatterns && at + 9 <= bytes.length; p += 1) {
+  const { rows, next } = readPattern(bytes, view, at, channels);
+  patterns.push(rows);
+  at = next;
+}
 ```
 
 removing the `void headerSize;` line and the placeholder `const patterns` declaration.
@@ -653,9 +661,11 @@ Change `Array.from({ length: numRows }, …)` to `Array.from({ length: 64 }, …
 ### Task 4: Instrument walking — the trap
 
 **Files:**
+
 - Modify: `src/shared/tracker/xm.ts`, `src/shared/tracker/xm.test.ts`
 
 **Interfaces:**
+
 - Produces: no new exports; `readXm` returns populated instruments.
 
 This is the task the whole plan exists for. `sunlight.xm` mixes 33-byte and 263-byte instrument headers, and a reader that assumes either one loses every instrument after the first of the other kind.
@@ -666,7 +676,12 @@ This is the task the whole plan exists for. `sunlight.xm` mixes 33-byte and 263-
 describe('readXm: instruments', () => {
   it('reads instrument names', () => {
     const xm = readXm(
-      buildXm({ instruments: [{ name: 'fndr  -|', samples: 1 }, { name: 'sunshine', samples: 1 }] }),
+      buildXm({
+        instruments: [
+          { name: 'fndr  -|', samples: 1 },
+          { name: 'sunshine', samples: 1 },
+        ],
+      }),
     );
     expect(xm.instruments[0]).toEqual({ index: 1, name: 'fndr  -|' });
     expect(xm.instruments[1]).toEqual({ index: 2, name: 'sunshine' });
@@ -779,13 +794,13 @@ function readInstrument(
 and in `readXm`, after the pattern loop:
 
 ```ts
-  const numInstruments = view.getUint16(72, true);
-  const instruments: TrackerInstrument[] = [];
-  for (let i = 0; i < numInstruments && at + 4 <= bytes.length; i += 1) {
-    const { instrument, next } = readInstrument(bytes, view, at, i + 1);
-    instruments.push(instrument);
-    at = next;
-  }
+const numInstruments = view.getUint16(72, true);
+const instruments: TrackerInstrument[] = [];
+for (let i = 0; i < numInstruments && at + 4 <= bytes.length; i += 1) {
+  const { instrument, next } = readInstrument(bytes, view, at, i + 1);
+  instruments.push(instrument);
+  at = next;
+}
 ```
 
 replacing the placeholder `const instruments` declaration from Task 2.
@@ -808,6 +823,7 @@ Delete `total` from the `next` calculation, leaving `next += numSamples * sample
 ### Task 5: Format detection
 
 **Files:**
+
 - Modify: `src/shared/mod/codec.ts`, `src/shared/mod/codec.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -832,8 +848,8 @@ Expected: FAIL — falls through to `readMod`, which rejects it.
 In `SharedTrackerCodec.decode`, add before the MOD fallback:
 
 ```ts
-    // 17 characters, so not a fourCC — checked as a string prefix.
-    if (asciiAt(view, 0, 17) === 'Extended Module: ') return readXm(bytes);
+// 17 characters, so not a fourCC — checked as a string prefix.
+if (asciiAt(view, 0, 17) === 'Extended Module: ') return readXm(bytes);
 ```
 
 with a small helper beside `fourCC`:
@@ -863,6 +879,7 @@ Change the prefix to `'Extended Module:'` (16 characters, no trailing space) whi
 ### Task 6: Real files, the app, and shipping
 
 **Files:**
+
 - Add: `src/shared/tracker/fixtures/sunlight.xm`, `src/shared/tracker/fixtures/dr_wily.xm`
 - Modify: `src/shared/tracker/fixtures/README.md`, `src/shared/tracker/acceptance.test.ts`
 - Modify: `music_app/src/features/projects/DashboardPage.tsx`
@@ -975,7 +992,7 @@ rm -rf ../music_app/node_modules/.vite
 In `music_app/src/features/projects/DashboardPage.tsx`:
 
 ```tsx
-accept=".mod,.dsm,.s3m,.xm,audio/mod,application/octet-stream"
+accept = '.mod,.dsm,.s3m,.xm,audio/mod,application/octet-stream';
 ```
 
 The tooltip reads `Import a tracker module (.MOD, .DSM, .S3M)` and the dialog description names the same three; both become `.MOD, .DSM, .S3M, .XM`.
@@ -1006,6 +1023,6 @@ Say what both XM fixtures imported as, whether the instrument-header sabotage ge
 
 **Deliberately out of scope:** IT and MPTM; moving MOD into `src/shared/tracker/`; renaming the `modCodec` service property; XM's instrument envelopes, panning and relative-note fields, none of which notation import reads.
 
-**Known unknowns:** XM's *relative note* and *finetune* per sample would shift pitches, and this reader ignores both — every note is read at its written value. No file in the corpus was checked for a non-zero relative note, so a module using it will import transposed. Recorded here rather than discovered later; the same class of limitation as MOD's finetune.
+**Known unknowns:** XM's _relative note_ and _finetune_ per sample would shift pitches, and this reader ignores both — every note is read at its written value. No file in the corpus was checked for a non-zero relative note, so a module using it will import transposed. Recorded here rather than discovered later; the same class of limitation as MOD's finetune.
 
-**Type consistency, checked:** `readXm(buffer: ArrayBuffer)` matches its call in Tasks 5 and 6. `readPattern` and `readInstrument` both return `{ …, next: number }` and are consumed that way. `buildXm`'s options match their uses in Tasks 2, 3, 4 and 5. `NOTE_BASE` is 11 here, matching DSM's linear numbering and deliberately *not* S3M's 12, which compensates for that format packing an octave into the high nibble.
+**Type consistency, checked:** `readXm(buffer: ArrayBuffer)` matches its call in Tasks 5 and 6. `readPattern` and `readInstrument` both return `{ …, next: number }` and are consumed that way. `buildXm`'s options match their uses in Tasks 2, 3, 4 and 5. `NOTE_BASE` is 11 here, matching DSM's linear numbering and deliberately _not_ S3M's 12, which compensates for that format packing an octave into the high nibble.
