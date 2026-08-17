@@ -15,6 +15,7 @@
 - **`music_io` must not import React, DOM globals at module scope, or `music_app`.** It is a library serving both web and React Native.
 - **Every command runs with `bun`:** `bun run test`, `bun run typecheck`, `bun run lint`, `bun run verify`.
 - **Do not change the `PlaybackEngine` interface** (`music_types/src/platform/playback.ts`). Every method keeps its current signature, including `onActiveNotes(ids: string[])`. The observer contract changes in step 3 of the spec, not here.
+- **Do not touch the React Native engine.** `src/rn/playback/sample-engine.ts` imports `NoteQueue` (line 42) and `planDispatch` (line 45) from `src/shared/playback/`, and calls `drainUntil(horizonTick)` with one argument at line 345. It is sample-based on `react-native-audio-api` with no fluidsynth sequencer to hand a horizon to, so it keeps the lookahead-and-grace model and needs its own analysis later. Two consequences for this plan, both already folded into Task 5: `drainUntil`'s new `maxCount` is **optional**, and `pump-window.ts` is **kept** — only the web engine stops importing it.
 - **Never select a melodic program on MIDI channel 9.** Measured: it silences the channel. The guard in `SynthHost.programSelect` stays.
 - **Tests must not use real time or a real audio device.** Use the existing `stubHost()` / `stubContext()` / `manualPump()` helpers in `src/web/playback/soundfont-engine.test.ts`.
 - **Verify by sabotage.** After each task's tests pass, break the implementation line the test targets, confirm that test (and only sensible neighbours) fails, then restore.
@@ -35,8 +36,8 @@
 | `src/shared/playback/note-queue.test.ts` | queue behaviour | Modify |
 | `src/shared/playback/sounding-set.ts` | **new** — which notes are sounding, by cursor | Create |
 | `src/shared/playback/sounding-set.test.ts` | **new** | Create |
-| `src/shared/playback/pump-window.ts` | lookahead/grace planning | **Delete** |
-| `src/shared/playback/pump-window.test.ts` | | **Delete** |
+| `src/shared/playback/pump-window.ts` | lookahead/grace planning | Modify doc only — **kept**, see below |
+| `src/shared/playback/pump-window.test.ts` | | Unchanged |
 | `src/web/playback/soundfont-engine.ts` | the transport | Modify: horizon scheduling |
 | `src/web/playback/soundfont-engine.test.ts` | transport behaviour | Modify |
 | `src/web/playback/governor.ts` | adaptive quality | Modify: measure lateness, stop acting on it |
@@ -687,12 +688,12 @@ the commit after next."
 
 **Files:**
 - Modify: `src/shared/playback/note-queue.ts`, `src/shared/playback/note-queue.test.ts`
+- Modify: `src/shared/playback/pump-window.ts` (doc comment only)
 - Modify: `src/web/playback/soundfont-engine.ts`, `src/web/playback/soundfont-engine.test.ts`
-- Delete: `src/shared/playback/pump-window.ts`, `src/shared/playback/pump-window.test.ts`
 
 **Interfaces:**
 - Consumes: `SynthHost.noteAt` from Task 4.
-- Produces: `NoteQueue.drainUntil(tick: number, maxCount: number): ScheduledNote[]` — the second parameter is new and required.
+- Produces: `NoteQueue.drainUntil(tick: number, maxCount?: number): ScheduledNote[]` — the second parameter is new and **optional**, defaulting to unbounded, because `src/rn/playback/sample-engine.ts:345` calls it with one argument and is out of scope.
 
 **The two bounds.** The horizon is bounded in seconds (`HORIZON_SECONDS`, memory in the worklet) and in events per refill (`MAX_EVENTS_PER_REFILL`, main-thread `postMessage` cost per tick). The spec calls the second bound "events in flight"; per-refill is the simpler realisation and bounds the same thing that matters — a single tick's burst — because the pump runs every 50ms and catches up across ticks.
 
@@ -735,12 +736,16 @@ In `src/shared/playback/note-queue.ts`, change `drainUntil`:
  * Every not-yet-returned note starting at or before `tick`, up to `maxCount`
  * of them, advancing the cursor past what it returns.
  *
- * The cap bounds one pump tick's cost: each note becomes a `postMessage` to the
- * worklet sequencer, and a four-second horizon over a two-hundred-track score
- * is thousands of them. Whatever the cap leaves behind is picked up 50ms later,
- * long before it is due.
+ * The cap bounds one pump tick's cost: on the web engine each note becomes a
+ * `postMessage` to the worklet sequencer, and a four-second horizon over a
+ * two-hundred-track score is thousands of them. Whatever the cap leaves behind
+ * is picked up 50ms later, long before it is due.
+ *
+ * Unbounded by default, because the React Native sample engine drains its whole
+ * horizon in one go — it posts nothing across a thread boundary, so it has
+ * nothing to bound.
  */
-drainUntil(tick: number, maxCount: number): ScheduledNote[] {
+drainUntil(tick: number, maxCount = Number.MAX_SAFE_INTEGER): ScheduledNote[] {
   const out: ScheduledNote[] = [];
   while (
     out.length < maxCount &&
@@ -757,7 +762,7 @@ drainUntil(tick: number, maxCount: number): ScheduledNote[] {
 - [ ] **Step 4: Run the queue tests**
 
 Run: `bun run test -- src/shared/playback/note-queue.test.ts`
-Expected: PASS. Existing callers in that file that pass one argument now fail to typecheck — update them to pass a large cap such as `Number.MAX_SAFE_INTEGER`.
+Expected: PASS. Existing one-argument callers keep working — `maxCount` is optional precisely so the RN engine at `src/rn/playback/sample-engine.ts:345` is untouched.
 
 - [ ] **Step 5: Write the failing engine tests**
 
@@ -876,7 +881,16 @@ for (const note of due) {
 }
 ```
 
-Then delete `src/shared/playback/pump-window.ts` and `src/shared/playback/pump-window.test.ts`, and remove any re-export of them from `src/web/index.ts` or `src/shared/` barrels (grep for `pump-window` and `planDispatch` before deleting).
+Then remove the `planDispatch` import from `soundfont-engine.ts` and the `see pump-window.ts` reference in the deleted `GRACE_SECONDS` doc.
+
+**Keep `src/shared/playback/pump-window.ts` and its test.** `src/rn/playback/sample-engine.ts:45` still imports `planDispatch`, and the RN sample engine keeps the lookahead-and-grace model. Update only its module doc to record that it now has one consumer:
+
+```
+ * The React Native sample engine is now its only consumer. The web engine
+ * hands a four-second horizon to the fluidsynth sequencer instead, so nothing
+ * there is ever dispatched late enough to need skipping — see
+ * `soundfont-engine.ts`'s HORIZON_SECONDS.
+```
 
 - [ ] **Step 8: Run the tests**
 
@@ -890,7 +904,7 @@ Set `HORIZON_SECONDS = 0.2`. Run the engine tests. Expected: "queues several sec
 - [ ] **Step 10: Commit**
 
 ```bash
-git add -A src/shared/playback src/web/playback/soundfont-engine.ts src/web/playback/soundfont-engine.test.ts
+git add src/shared/playback src/web/playback/soundfont-engine.ts src/web/playback/soundfont-engine.test.ts
 git commit -m "feat(playback): keep a four-second horizon in the sequencer
 
 The pump drained a 200ms lookahead and skipped anything more than 200ms late,
@@ -899,8 +913,11 @@ notation redraw measures 119ms, which made three unlucky frames enough.
 
 Timing now lives in the worklet: the pump tops up a rolling horizon, bounded in
 seconds for worklet memory and in events per tick for postMessage cost. The
-skip-late rule and pump-window.ts go with it — a note whose moment passed during
-a stall now sounds at once, because the sequencer holds its release."
+skip-late rule goes with it — a note whose moment passed during a stall now
+sounds at once, because the sequencer holds its release.
+
+pump-window.ts stays for the React Native sample engine, which has no sequencer
+to hand a horizon to and keeps the old model."
 ```
 
 ---
