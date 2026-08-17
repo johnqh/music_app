@@ -128,8 +128,10 @@ horizon of `note` events — one event per score note, carrying its own
   values are tunable constants, not part of the contract.
 - **The pump's job** becomes "top up the buffer by one slice" — a fixed,
   bounded cost per tick regardless of score size.
-- **Seek, stop and edit** flush with `removeAllEvents()` and refill from the new
-  position, as today.
+- **Seek and stop** flush with `removeAllEvents()` and refill from the new
+  position, as today. Edits do not appear in that list: the edit lock (3.4)
+  means content cannot change while the horizon is live, so nothing but a
+  transport action ever invalidates the queue.
 - **Tempo multiplier changes** flush and reschedule. This is a user action, not
   a per-frame one. Tempo *maps* are handled at schedule time, since score ticks
   are converted to seconds via `TempoMap` before scheduling.
@@ -318,29 +320,10 @@ Play starts from `caretTick`, so "play from the caret" still needs no plumbing.
 Pause, stop and seek commit the engine's final position back to `caretTick`, so
 when stopped the two coincide exactly as they do now.
 
-**Note entry is disallowed during playback.** Today, typing a note while playing
-inserts wherever the music currently is, because `resolveInsertTarget` reads
-`positionTick` — a behaviour that follows from the two values being one value
-rather than from a decision. Under the split it is refused outright:
-`resolveInsertTarget` reads `caretTick` and nothing else, and the entry paths
-(duration-toolbar insert, chord entry, and the piano keyboard's write-on-release)
-are inert while `state === 'playing'`.
-
-Every entry route funnels through two functions in
-`features/score-editor/editing.ts` — `insertNoteAtCaret` and
-`insertChordAtCaret` — and both already read `positionTick` in the same place.
-The refusal is one guard in each, which is what makes it a property of note
-entry rather than a rule each caller has to remember: the duration toolbar,
-`useEditorShortcuts`, chord entry and the piano keyboard's write-on-release all
-reach it, and so does any caller added later.
-
-Refused visibly, not silently: the note-entry affordances go disabled while
-playing, so a keypress that does nothing has a reason on screen.
-
-**Auditioning still works while playing.** Pressing a piano key sounds through
-`noteOn`/`noteOff`, which already touch no transport state by design — only the
-write on release is suppressed. Playing along with the piece stays possible;
-only recording into it does not.
+`resolveInsertTarget` reads `caretTick` and nothing else. Note entry during
+playback — which today lands wherever the music currently is, as a consequence
+of the two values being one value rather than as a decision — is refused
+outright by the edit lock in 3.4.
 
 ### 3.3 What the UI does
 
@@ -353,6 +336,84 @@ only recording into it does not.
 - **Readouts** (`Timecode`, `MeasureBeatReadout`, `PositionScrubber`): each
   subscribes to `onPosition` via `useSyncExternalStore`. Still isolated, but now
   because that is the only way to reach the data.
+
+### 3.4 The playback edit lock
+
+**While `state === 'playing'`, the score's musical content is immutable.**
+
+This is a product decision, but it pays for itself architecturally: it is what
+lets `handleScoreChange` stop being the most intricate code in the repo.
+
+#### Content and mix
+
+Commands divide in two:
+
+- **Mix** — mute, solo, volume, pan. Applied live during playback and pushed
+  straight to the engine (`setTrackMute`, `setTrackSolo`, CC7), which is what
+  those engine methods have always been for. Mixing while listening is how an
+  arrangement gets listened to; it is not editing.
+- **Content** — everything else: notes, measures, tracks, clefs, instruments,
+  tempo, plus undo and redo. Refused while playing.
+
+The split cannot be made on command *type*, because `changeTrackPropsCommand`
+carries a partial patch and serves both — `{ muted }` is mix, `{ name }` and
+`{ midiProgram }` are content. So `ScoreCommand` gains a declared `kind`, and
+`changeTrackPropsCommand` computes its own from the patch it was handed. The
+classification lives with the command that knows its contents rather than in a
+switch somewhere else that has to be kept in step.
+
+The guard is then one line in `score-slice.dispatchCommand`, plus `undo` and
+`redo`. Every editing route in the app reaches it, including any added later.
+
+#### What this buys the controller
+
+`PlaybackController.handleScoreChange` becomes two branches:
+
+- **Playing** — the lock guarantees the only thing that can have changed is mix
+  state, so re-apply track audibility and levels. **No reload, no reschedule.**
+- **Not playing** — load the score.
+
+Deleted with it: `pendingResume`, `scoreChangeGeneration`, and the interlocking
+reasoning about superseded calls, stop-clears-resume, and failed loads clearing
+a newer call's resume. That machinery exists solely to make stop-reload-seek-
+resume safe under a burst of edits during playback, and there are no longer any.
+
+The soundness of the no-reload branch rests entirely on the lock. It is stated
+here as an invariant so that a future change to the lock cannot quietly
+invalidate it: **while playing, the only score changes are mix changes.**
+
+#### Foreign score arrivals
+
+A generation result landing or a snapshot being opened changes the score without
+going through `dispatchCommand`. These **stop playback first**, rather than
+rescheduling underneath the listener. `useGenerationJob`'s reload and the
+snapshot-open path each stop the transport before adopting the new score, which
+also keeps the invariant above true by construction.
+
+#### In the UI
+
+Content-editing affordances go disabled while playing; mix controls stay
+enabled. A gesture that would commit a content command — pitch drag, note move —
+does not start while playing, so there is no dead drag that silently does
+nothing on release. Selection is not an edit and stays available, as does
+scrolling, zooming and track visibility (which is UI state, not score state).
+
+Auditioning also stays: pressing a piano key sounds through `noteOn`/`noteOff`,
+which touch no transport state by design. Only the write on release is
+suppressed. Playing along with the piece stays possible; recording into it does
+not.
+
+### 3.5 Dead preview subsystem
+
+`playPreview` has no callers. `stopPreview()` is called in four places, all
+defensively, and since `previewing` is only ever set by `playPreview`, every one
+of them is a permanent no-op — a leftover from the candidate-preview removal.
+
+`previewing`, `previewGeneration`, `playPreview`, `stopPreview`,
+`resyncEngineToCommittedScore`, `togglePlay`'s preview branch and the
+subscription's `if (this.previewing) return` are all deleted, along with the four
+call sites. Independent of the rest of this design, but it lands in the same file
+as 3.4 and leaving it would obscure what that file now does.
 
 ---
 
@@ -397,6 +458,10 @@ New pure units, each tested directly:
 | Formatted-measure cache | hit/miss and every invalidation axis |
 | Colour delta encoder | set/clear pairs |
 | Worker protocol | encode/decode, dirty tracking, when bbox maps are resent |
+| Command `kind` | `changeTrackPropsCommand` classifies from its patch: `{muted}` is mix, `{name}`/`{midiProgram}` is content, a mixed patch is content |
+| Edit lock | every content command and undo/redo refused while playing; mix commands accepted; refusal leaves the score reference untouched |
+| Controller mix path | a mix change while playing re-applies levels and does **not** reload the engine |
+| Foreign arrivals | generation reload and snapshot open each stop the transport before adopting a score |
 
 Two tests carry disproportionate weight:
 
@@ -422,31 +487,36 @@ the right tests fail.
 
 ## 6. Migration order
 
-Seven steps, each independently shippable and verifiable.
+Eight steps, each independently shippable and verifiable.
 
 1. **Engine: single 256-channel synth + sequencer-owned timing** — `music_io`
    only, no app changes. Biggest audio win.
-2. **`PlaybackBus` + store split** — `music_lib` + `music_app`. Ends the 20 Hz
+2. **Edit lock + controller simplification** — `music_lib` + `music_app`.
+   Command `kind`, the `dispatchCommand` guard, the two-branch
+   `handleScoreChange`, foreign-arrival stops, and the dead preview deletion.
+   Sequenced before the bus because the lock is what makes the controller
+   collapse, and the collapsed controller is what the bus then wires into.
+3. **`PlaybackBus` + store split** — `music_lib` + `music_app`. Ends the 20 Hz
    store writes.
-3. **Per-stave culling + geometry determinism** — `music_lib` only.
-4. **Formatted-measure cache** — `music_lib` only; after 3, since the cache key
+4. **Per-stave culling + geometry determinism** — `music_lib` only.
+5. **Formatted-measure cache** — `music_lib` only; after 4, since the cache key
    depends on the culling geometry.
-5. **`LayoutPlan` derived boxes** — `music_lib` only.
-6. **Render host seam + `MainThreadRenderHost`** — `music_app`, pure refactor,
+6. **`LayoutPlan` derived boxes** — `music_lib` only.
+7. **Render host seam + `MainThreadRenderHost`** — `music_app`, pure refactor,
    no behaviour change. Proves the seam before anything depends on it.
-7. **`WorkerRenderHost` + patch protocol + fallback** — `music_app`.
+8. **`WorkerRenderHost` + patch protocol + fallback** — `music_app`.
 
-**Steps 1–5 alone deliver smooth playback at hundreds of tracks.** Steps 6–7
-deliver smooth scrolling. If step 7 hits trouble, everything before it stands.
+**Steps 1–6 alone deliver smooth playback at hundreds of tracks.** Steps 7–8
+deliver smooth scrolling. If step 8 hits trouble, everything before it stands.
 
 This is too large for one implementation plan. Each step gets its own plan and
 its own verification pass; this document is the shared design they refer back
-to. Steps 3–5 touch only `music_lib` and are independent of 1–2, so they can be
+to. Steps 4–6 touch only `music_lib` and are independent of 1–3, so they can be
 run in either order or in parallel.
 
-**Spike before step 6:** VexFlow must run in a worker without touching
+**Spike before step 7:** VexFlow must run in a worker without touching
 `document` — font metrics and glyph setup are the likely offenders. A negative
-result means stopping at step 5 with most of the value banked, so this must be
+result means stopping at step 6 with most of the value banked, so this must be
 resolved before the seam work begins, not after.
 
 ---
@@ -460,6 +530,10 @@ resolved before the seam work begins, not after.
   `ChannelAssignment.instance`
 - `positionTick` and `activeNoteIds` from the store
 - `findEvent` from the playback hot path (the function stays for other callers)
+- `pendingResume`, `scoreChangeGeneration`, and the stop-reload-seek-resume path
+  in `handleScoreChange` — made unnecessary by the edit lock (3.4)
+- The dead preview subsystem in `controller.ts` and its four no-op call sites
+  (3.5)
 - The `__followScroll` diagnostic in `ScoreEditorView` and `e2e/__diag.spec.ts`,
   currently uncommitted in the working tree
 
@@ -480,3 +554,8 @@ Updating these is part of the work, not a follow-up.
   still true; the source becomes the bus.
 - The engine and channel-allocation gotchas describing multiple synth instances.
 - `docs/architecture.md`'s playback data flow.
+- **`docs/spec.md` §10**, which lists "reschedule safely after edits" among the
+  playback requirements. The edit lock (3.4) removes the situation rather than
+  handling it; the requirement becomes "refuse edits during playback, and apply
+  mix changes without rescheduling." This is a product-spec change, not just an
+  implementation note.
