@@ -96,11 +96,16 @@ Four tiers, each with one job and a narrow interface.
 
 `Synthesizer.init(sampleRate, { midiChannelCount: 256, polyphony })`.
 
-Deleted: `ChannelAssignment.instance`, `SynthHost.ensureInstances`,
-`SynthHost.grow`, the serialising `growing` promise, and the
-`synths[]`/`sequencers[]`/`sfontIds[]` arrays. One soundfont copy, one
-AudioWorkletNode, one master chain. `allocateChannels` becomes a flat
-`trackId -> channel` map.
+**The instance machinery stays; the constant changes.** `CHANNELS_PER_INSTANCE`
+goes from 16 to 256, so `ensureInstances`, `grow`, the serialising `growing`
+promise and the `synths[]`/`sequencers[]`/`sfontIds[]` arrays all remain — they
+are what keeps track 257 audible rather than silent, which is the failure class
+this design is removing, not adding. What changes is that they stop engaging at
+realistic track counts: every score up to 256 tracks now runs on one instance,
+one soundfont copy, one AudioWorkletNode and one master chain.
+
+The win is not deleted code. It is that the multi-instance path becomes rare
+instead of routine — reached at 257 tracks rather than at 17.
 
 **Percussion rule:** channels where `c % 16 === 9` are reserved for percussion
 and never assigned to a pitched track. Drum tracks take those first; overflow
@@ -109,9 +114,15 @@ uses the existing measured type-switch plus bank-128 program-select path. The
 and becomes structurally unreachable rather than defensive.
 
 **Above 256 tracks:** the allocator opens a second instance exactly as it does
-today. The code does not disappear; it stops engaging below 256, so the memory
-cost of crossing that line is a documented, deliberate cliff rather than
-something that happens silently at 17 tracks.
+today, at the cost of a second soundfont copy. That cliff is documented and
+deliberate, where today an equivalent one is crossed silently at 17 tracks.
+
+**The offline renderer shares the allocator.** `audio/soundfont-render.ts` calls
+`allocateChannels` and renders one pass per instance, and
+`audio/offline-synth.ts` calls `synth.init(sampleRate)` with no settings. Both
+must move to 256 channels in the same change, or export would address channels
+its synth does not have. This is not scope creep: the allocator's semantics
+cannot change for one caller only.
 
 ### 1.2 The sequencer owns timing
 
@@ -526,8 +537,6 @@ resolved before the seam work begins, not after.
 - `pendingOffs`, `releaseDue`, `GRACE_SECONDS`, and `shared/playback/pump-window.ts`
   in its entirety — with the skip-late rule gone, `planDispatch` is a `map` and
   the module has no reason to exist
-- `ensureInstances`, `grow`, the `growing` promise, the instance arrays,
-  `ChannelAssignment.instance`
 - `positionTick` and `activeNoteIds` from the store
 - `findEvent` from the playback hot path (the function stays for other callers)
 - `pendingResume`, `scoreChangeGeneration`, and the stop-reload-seek-resume path
