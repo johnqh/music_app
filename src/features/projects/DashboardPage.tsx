@@ -570,7 +570,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             Import Audio
           </Button>
         </Tooltip>
-        <Tooltip content="Import an Amiga tracker module (.MOD)">
+        <Tooltip content="Import a tracker module (.MOD, .DSM)">
           <Button
             type="button"
             variant="outline"
@@ -673,7 +673,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       <FileImportModal
         open={modImportOpen}
         title="Import module"
-        accept=".mod,audio/mod,application/octet-stream"
+        accept=".mod,.dsm,audio/mod,application/octet-stream"
         fileKind="module file"
         onFile={(file) => void handleImportModFile(file)}
         busy={modBusy}
@@ -685,7 +685,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           setModImportOpen(false);
           setModError(null);
         }}
-        description="Opens an Amiga tracker module as a new project. Notes are grouped by sample rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of measures."
+        description="Opens a tracker module (.MOD, .DSM) as a new project. Notes are grouped by instrument rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of measures."
       />
       <FileImportModal
         open={jsonImportOpen}

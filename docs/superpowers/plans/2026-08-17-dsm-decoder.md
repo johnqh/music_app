@@ -27,41 +27,41 @@ Every offset below was measured against `flying_tigers_-_race_against_time.dsm` 
 
 **`SONG` payload, 192 bytes:**
 
-| Offset | Type | Field | Measured |
-| --- | --- | --- | --- |
-| 0 | char[28] | title | `Race against time` |
-| 28 | uint16 | version | 0 |
-| 30 | uint16 | flags | 0 |
-| 32 | uint16 | orderPos | 0 |
-| 34 | uint16 | restartPos | 127 |
-| **36** | uint16 | **numOrders** | 31 |
-| 38 | uint16 | numSamples | 31 (= 31 `INST` chunks) |
-| 40 | uint16 | numPatterns | 24 (= 24 `PATT` chunks) |
-| 42 | uint16 | numChannels | 4 |
-| 44 | uint8 | globalVolume | 64 |
-| 45 | uint8 | masterVolume | 192 |
-| 46 | uint8 | initSpeed | 6 |
-| 47 | uint8 | initBPM | 125 |
-| 48 | uint8[16] | channelPan | `[0,128,128,0,0…]` |
-| 64 | uint8[128] | orders | 31 used, max 23 |
+| Offset | Type       | Field         | Measured                |
+| ------ | ---------- | ------------- | ----------------------- |
+| 0      | char[28]   | title         | `Race against time`     |
+| 28     | uint16     | version       | 0                       |
+| 30     | uint16     | flags         | 0                       |
+| 32     | uint16     | orderPos      | 0                       |
+| 34     | uint16     | restartPos    | 127                     |
+| **36** | uint16     | **numOrders** | 31                      |
+| 38     | uint16     | numSamples    | 31 (= 31 `INST` chunks) |
+| 40     | uint16     | numPatterns   | 24 (= 24 `PATT` chunks) |
+| 42     | uint16     | numChannels   | 4                       |
+| 44     | uint8      | globalVolume  | 64                      |
+| 45     | uint8      | masterVolume  | 192                     |
+| 46     | uint8      | initSpeed     | 6                       |
+| 47     | uint8      | initBPM       | 125                     |
+| 48     | uint8[16]  | channelPan    | `[0,128,128,0,0…]`      |
+| 64     | uint8[128] | orders        | 31 used, max 23         |
 
 `numOrders` sits at **+36**, not +34 as often documented. The order list read from +64 gave 31 entries with a maximum of 23, exactly `numPatterns - 1`; reading it at +34 gives 127, which is `restartPos`.
 
 **`INST` payload, 64-byte header then raw PCM:**
 
-| Offset | Type | Field |
-| --- | --- | --- |
-| 0 | char[13] | filename |
-| 13 | uint16 | flags |
-| 15 | uint8 | volume |
-| 16 | uint32 | length |
-| 20 | uint32 | loopStart |
-| 24 | uint32 | loopEnd |
-| 28 | uint32 | reserved |
-| 32 | uint16 | c2spd |
-| 34 | uint16 | period |
-| **36** | char[28] | **name** |
-| 64 | | sample data (`length` bytes) |
+| Offset | Type     | Field                        |
+| ------ | -------- | ---------------------------- |
+| 0      | char[13] | filename                     |
+| 13     | uint16   | flags                        |
+| 15     | uint8    | volume                       |
+| 16     | uint32   | length                       |
+| 20     | uint32   | loopStart                    |
+| 24     | uint32   | loopEnd                      |
+| 28     | uint32   | reserved                     |
+| 32     | uint16   | c2spd                        |
+| 34     | uint16   | period                       |
+| **36** | char[28] | **name**                     |
+| 64     |          | sample data (`length` bytes) |
 
 Confirmed by arithmetic: `64 + length` equalled the chunk length for all 31 instruments, and reading +36 gave real names — `Blast`, `Poly`, `Beep`, `Swisch`, `Snare`, `Saw`, `String`, `Symph`.
 
@@ -84,20 +84,20 @@ All 24 patterns unpacked to exactly 64 rows consuming exactly their chunk, byte 
 
 ## File Structure
 
-| File | Responsibility | Change |
-| --- | --- | --- |
-| `src/shared/tracker/riff.ts` | RIFF chunk walking | **Create** |
-| `src/shared/tracker/riff.test.ts` | | **Create** |
-| `src/shared/tracker/protracker-effects.ts` | `F`/`D` → neutral `speed`/`bpm`/`patternBreak` | **Create** (MOD moves onto it) |
-| `src/shared/tracker/protracker-effects.test.ts` | | **Create** |
-| `src/shared/tracker/dsm.ts` | the DSM reader | **Create** |
-| `src/shared/tracker/dsm.test.ts` | | **Create** |
-| `src/shared/tracker/dsm-fixture.ts` | hand-built DSM buffer | **Create** |
-| `src/shared/mod/read.ts` | MOD reader | Modify: use the shared effect normaliser |
-| `src/shared/mod/codec.ts` | `SharedTrackerCodec` | Modify: magic-byte detection |
-| `src/shared/mod/codec.test.ts` | | **Create** |
-| `src/shared/tracker/fixtures/` | real modules | **Create** — see Task 6 |
-| `music_app/src/features/projects/DashboardPage.tsx:676` | file input `accept` | Modify: add `.dsm` |
+| File                                                    | Responsibility                                 | Change                                   |
+| ------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| `src/shared/tracker/riff.ts`                            | RIFF chunk walking                             | **Create**                               |
+| `src/shared/tracker/riff.test.ts`                       |                                                | **Create**                               |
+| `src/shared/tracker/protracker-effects.ts`              | `F`/`D` → neutral `speed`/`bpm`/`patternBreak` | **Create** (MOD moves onto it)           |
+| `src/shared/tracker/protracker-effects.test.ts`         |                                                | **Create**                               |
+| `src/shared/tracker/dsm.ts`                             | the DSM reader                                 | **Create**                               |
+| `src/shared/tracker/dsm.test.ts`                        |                                                | **Create**                               |
+| `src/shared/tracker/dsm-fixture.ts`                     | hand-built DSM buffer                          | **Create**                               |
+| `src/shared/mod/read.ts`                                | MOD reader                                     | Modify: use the shared effect normaliser |
+| `src/shared/mod/codec.ts`                               | `SharedTrackerCodec`                           | Modify: magic-byte detection             |
+| `src/shared/mod/codec.test.ts`                          |                                                | **Create**                               |
+| `src/shared/tracker/fixtures/`                          | real modules                                   | **Create** — see Task 6                  |
+| `music_app/src/features/projects/DashboardPage.tsx:676` | file input `accept`                            | Modify: add `.dsm`                       |
 
 **On directory naming:** new decoders go in `src/shared/tracker/`; MOD stays in `src/shared/mod/` for now. Moving it is a pure rename touching three barrel files, and doing it while four more decoders are still unwritten risks conflicting with them. Move it when the last decoder lands, as one change.
 
@@ -106,9 +106,11 @@ All 24 patterns unpacked to exactly 64 rows consuming exactly their chunk, byte 
 ### Task 1: RIFF chunk walking
 
 **Files:**
+
 - Create: `src/shared/tracker/riff.ts`, `src/shared/tracker/riff.test.ts`
 
 **Interfaces:**
+
 - Produces:
 
 ```ts
@@ -148,7 +150,13 @@ function riff(form: string, chunks: Array<[string, number]>): Uint8Array {
 
 describe('readRiffChunks', () => {
   it('lists every chunk with its payload offset and length', () => {
-    const chunks = readRiffChunks(riff('DSMF', [['SONG', 4], ['PATT', 8]]), 'DSMF');
+    const chunks = readRiffChunks(
+      riff('DSMF', [
+        ['SONG', 4],
+        ['PATT', 8],
+      ]),
+      'DSMF',
+    );
     expect(chunks).toEqual([
       { id: 'SONG', start: 20, length: 4 },
       { id: 'PATT', start: 32, length: 8 },
@@ -251,10 +259,12 @@ Change `start: at + 8` to `start: at`. Expected: both the offset test and the pa
 ### Task 2: ProTracker effect normalisation, shared
 
 **Files:**
+
 - Create: `src/shared/tracker/protracker-effects.ts`, `src/shared/tracker/protracker-effects.test.ts`
 - Modify: `src/shared/mod/read.ts`
 
 **Interfaces:**
+
 - Produces:
 
 ```ts
@@ -357,22 +367,22 @@ Expected: PASS.
 In `src/shared/mod/read.ts`, replace the inline effect block:
 
 ```ts
-        // Effect F carries both knobs: at or below 0x1f the parameter is
-        // speed (ticks per row), above it the tempo in BPM.
-        if (effect === 0xf) {
-          if (param <= 0x1f) cell.speed = param;
-          else cell.bpm = param;
-        }
-        // Effect D ends the pattern on this row. Ignored before this, which is
-        // why a module using breaks imported with too many bars.
-        if (effect === 0xd) cell.patternBreak = true;
+// Effect F carries both knobs: at or below 0x1f the parameter is
+// speed (ticks per row), above it the tempo in BPM.
+if (effect === 0xf) {
+  if (param <= 0x1f) cell.speed = param;
+  else cell.bpm = param;
+}
+// Effect D ends the pattern on this row. Ignored before this, which is
+// why a module using breaks imported with too many bars.
+if (effect === 0xd) cell.patternBreak = true;
 ```
 
 with:
 
 ```ts
-        // DSM letters its effects the same way, so this is shared.
-        applyProTrackerEffect(cell, effect, param);
+// DSM letters its effects the same way, so this is shared.
+applyProTrackerEffect(cell, effect, param);
 ```
 
 and import it from `../tracker/protracker-effects.js`.
@@ -391,9 +401,11 @@ Change `SPEED_LIMIT` to `0xff`. Expected: "reads F at or above 0x20 as beats per
 ### Task 3: The DSM song header
 
 **Files:**
+
 - Create: `src/shared/tracker/dsm.ts`, `src/shared/tracker/dsm-fixture.ts`, `src/shared/tracker/dsm.test.ts`
 
 **Interfaces:**
+
 - Consumes: `readRiffChunks` (Task 1).
 - Produces: `readDsm(buffer: ArrayBuffer): TrackerModule`, and from the fixture module `buildDsm(opts): ArrayBuffer`.
 
@@ -613,14 +625,13 @@ export function readDsm(buffer: ArrayBuffer): TrackerModule {
     .filter((c) => c.id === 'INST')
     .map((chunk, i) => ({
       index: i + 1,
-      name: chunk.length >= INST_HEADER_BYTES
-        ? ascii(bytes, chunk.start + INST_NAME_AT, INST_NAME_LENGTH)
-        : '',
+      name:
+        chunk.length >= INST_HEADER_BYTES
+          ? ascii(bytes, chunk.start + INST_NAME_AT, INST_NAME_LENGTH)
+          : '',
     }));
 
-  const patterns: TrackerCell[][][] = chunks
-    .filter((c) => c.id === 'PATT')
-    .map(() => []);
+  const patterns: TrackerCell[][][] = chunks.filter((c) => c.id === 'PATT').map(() => []);
 
   return { format: 'dsm', title, channels, instruments, order, patterns };
 }
@@ -640,9 +651,11 @@ Change `song + 36` to `song + 34`. Expected: "reads the order list, trimmed to n
 ### Task 4: Pattern unpacking
 
 **Files:**
+
 - Modify: `src/shared/tracker/dsm.ts`, `src/shared/tracker/dsm.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyProTrackerEffect` (Task 2).
 - Produces: no new exports; `readDsm` now returns populated patterns.
 
@@ -653,9 +666,7 @@ Change `song + 36` to `song + 34`. Expected: "reads the order list, trimmed to n
 ```ts
 describe('readDsm: pattern unpacking', () => {
   it('unpacks a cell into channel, note and instrument', () => {
-    const dsm = readDsm(
-      buildDsm({ patterns: [[[{ channel: 2, note: 49, instrument: 3 }]]] }),
-    );
+    const dsm = readDsm(buildDsm({ patterns: [[[{ channel: 2, note: 49, instrument: 3 }]]] }));
     // Note 1 is C-0, so MIDI is note + 11.
     expect(dsm.patterns[0][0][2]).toMatchObject({ note: 60, instrument: 3 });
   });
@@ -681,9 +692,7 @@ describe('readDsm: pattern unpacking', () => {
   });
 
   it('normalises effect F above 0x20 into bpm', () => {
-    const dsm = readDsm(
-      buildDsm({ patterns: [[[{ channel: 0, effect: 0xf, param: 0x72 }]]] }),
-    );
+    const dsm = readDsm(buildDsm({ patterns: [[[{ channel: 0, effect: 0xf, param: 0x72 }]]] }));
     expect(dsm.patterns[0][0][0].bpm).toBe(0x72);
   });
 
@@ -704,7 +713,14 @@ describe('readDsm: pattern unpacking', () => {
   it('unpacks several events in one row, in channel order', () => {
     const dsm = readDsm(
       buildDsm({
-        patterns: [[[{ channel: 0, note: 49 }, { channel: 2, note: 61 }]]],
+        patterns: [
+          [
+            [
+              { channel: 0, note: 49 },
+              { channel: 2, note: 61 },
+            ],
+          ],
+        ],
       }),
     );
     expect(dsm.patterns[0][0][0].note).toBe(60);
@@ -747,7 +763,12 @@ const emptyCell = (): TrackerCell => ({ instrument: 0, note: null });
  * which is why the volume column has a test of its own — MOD has no equivalent
  * of it.
  */
-function unpackPattern(bytes: Uint8Array, start: number, length: number, channels: number): TrackerCell[][] {
+function unpackPattern(
+  bytes: Uint8Array,
+  start: number,
+  length: number,
+  channels: number,
+): TrackerCell[][] {
   const rows: TrackerCell[][] = [];
   // The payload opens with a uint16 of its own length, which the chunk header
   // already told us; skip it rather than trusting two sources.
@@ -798,9 +819,9 @@ function unpackPattern(bytes: Uint8Array, start: number, length: number, channel
 and replace the placeholder patterns line in `readDsm` with:
 
 ```ts
-  const patterns: TrackerCell[][][] = chunks
-    .filter((c) => c.id === 'PATT')
-    .map((chunk) => unpackPattern(bytes, chunk.start, chunk.length, channels));
+const patterns: TrackerCell[][][] = chunks
+  .filter((c) => c.id === 'PATT')
+  .map((chunk) => unpackPattern(bytes, chunk.start, chunk.length, channels));
 ```
 
 Import `applyProTrackerEffect` from `./protracker-effects.js`.
@@ -819,10 +840,12 @@ Delete the `if (flag & 0x20) { at += 1; }` block. Expected: "reads a volume byte
 ### Task 5: Format detection
 
 **Files:**
+
 - Modify: `src/shared/mod/codec.ts`
 - Create: `src/shared/mod/codec.test.ts`
 
 **Interfaces:**
+
 - Consumes: `readDsm` (Tasks 3-4), `readMod`.
 - Produces: `SharedTrackerCodec.decode` dispatching on magic bytes.
 
@@ -907,6 +930,7 @@ Change `'DSMF'` to `'WAVE'`. Expected: "decodes a DSM module" FAILS. Restore.
 ### Task 6: Real files, the note base, and shipping
 
 **Files:**
+
 - Create: `src/shared/tracker/fixtures/` with real modules and a `README.md`
 - Create: `src/shared/tracker/acceptance.test.ts`
 - Modify: `music_app/src/features/projects/DashboardPage.tsx:676`
@@ -1025,7 +1049,7 @@ If OpenMPT disagrees, adjust `NOTE_BASE` by the difference, update its doc comme
 In `music_app/src/features/projects/DashboardPage.tsx`, widen the file input:
 
 ```tsx
-accept=".mod,.dsm,audio/mod,application/octet-stream"
+accept = '.mod,.dsm,audio/mod,application/octet-stream';
 ```
 
 and change the dialog copy so it no longer says ProTracker specifically. Grep for "ProTracker" and "tracker module" in that file and in `src/components/dialogs/` to find every string.
@@ -1056,7 +1080,7 @@ Say what the real DSM imported as (tracks, measures, issues), whether OpenMPT co
 
 **Deliberately out of scope:** S3M, XM, IT and MPTM; moving MOD into `src/shared/tracker/`; renaming the `modCodec` service property. Each is noted where it would otherwise look like an oversight.
 
-**The known unknown:** `NOTE_BASE`. The real file fixes note *spacing* but not the absolute base, because it contains no reference pitch and no note-off. Task 6 Step 6 is a manual check against OpenMPT, and it is called out as unskippable because an octave error moves every note together and so passes every automated test in this plan.
+**The known unknown:** `NOTE_BASE`. The real file fixes note _spacing_ but not the absolute base, because it contains no reference pitch and no note-off. Task 6 Step 6 is a manual check against OpenMPT, and it is called out as unskippable because an octave error moves every note together and so passes every automated test in this plan.
 
 **Type consistency, checked:** `readRiffChunks` returns `start` as the payload offset in Task 1 and is consumed that way in Task 3. `applyProTrackerEffect(cell, effect, param)` has the same three parameters in Tasks 2 and 4. `readDsm(buffer: ArrayBuffer)` matches its call in Task 5. `buildDsm`'s options match its uses in Tasks 3, 4 and 5.
 
