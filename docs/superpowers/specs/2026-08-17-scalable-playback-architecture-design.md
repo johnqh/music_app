@@ -318,11 +318,29 @@ Play starts from `caretTick`, so "play from the caret" still needs no plumbing.
 Pause, stop and seek commit the engine's final position back to `caretTick`, so
 when stopped the two coincide exactly as they do now.
 
-**Semantics are preserved.** Today, typing a note during playback inserts where
-the music currently is, because `resolveInsertTarget` reads `positionTick`. The
-controller exposes a `livePositionTick()` accessor and `resolveInsertTarget`
-uses it, keeping that behaviour identical. The split is about write frequency,
-not meaning.
+**Note entry is disallowed during playback.** Today, typing a note while playing
+inserts wherever the music currently is, because `resolveInsertTarget` reads
+`positionTick` — a behaviour that follows from the two values being one value
+rather than from a decision. Under the split it is refused outright:
+`resolveInsertTarget` reads `caretTick` and nothing else, and the entry paths
+(duration-toolbar insert, chord entry, and the piano keyboard's write-on-release)
+are inert while `state === 'playing'`.
+
+Every entry route funnels through two functions in
+`features/score-editor/editing.ts` — `insertNoteAtCaret` and
+`insertChordAtCaret` — and both already read `positionTick` in the same place.
+The refusal is one guard in each, which is what makes it a property of note
+entry rather than a rule each caller has to remember: the duration toolbar,
+`useEditorShortcuts`, chord entry and the piano keyboard's write-on-release all
+reach it, and so does any caller added later.
+
+Refused visibly, not silently: the note-entry affordances go disabled while
+playing, so a keypress that does nothing has a reason on screen.
+
+**Auditioning still works while playing.** Pressing a piano key sounds through
+`noteOn`/`noteOff`, which already touch no transport state by design — only the
+write on release is suppressed. Playing along with the piece stays possible;
+only recording into it does not.
 
 ### 3.3 What the UI does
 
