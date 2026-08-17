@@ -4,7 +4,7 @@
 
 **Goal:** Refuse content edits while the transport is playing, keep mixing live, and collapse `PlaybackController.handleScoreChange` from a stop-reload-seek-resume interlock into two branches.
 
-**Architecture:** Commands declare whether they are *content* or *mix*. One guard in `score-slice.dispatchCommand` (plus `undo`/`redo`) refuses content while playing. Because content is then immutable during playback, the controller's "score changed while playing" branch can push mix state to the engine and never reload — which deletes `pendingResume`, `scoreChangeGeneration` and the whole burst-of-edits interlock they exist for.
+**Architecture:** Commands declare whether they are _content_ or _mix_. One guard in `score-slice.dispatchCommand` (plus `undo`/`redo`) refuses content while playing. Because content is then immutable during playback, the controller's "score changed while playing" branch can push mix state to the engine and never reload — which deletes `pendingResume`, `scoreChangeGeneration` and the whole burst-of-edits interlock they exist for.
 
 **Tech Stack:** TypeScript (strict, ESM, extensionless relative imports built by `tsc`), Zustand + immer, Vitest, React 19 + Testing Library.
 
@@ -34,22 +34,22 @@ Task 3 adds one method, `applyMix(score)`, rather than a setter per property: it
 
 ## File Structure
 
-| Repo | File | Responsibility | Change |
-| --- | --- | --- | --- |
-| types | `src/platform/playback.ts` | engine contract | Modify: `applyMix` |
-| io | `src/web/playback/soundfont-engine.ts` | web engine | Modify: implement `applyMix` |
-| io | `src/rn/playback/sample-engine.ts` | RN engine | Modify: implement `applyMix` |
-| lib | `src/domain/commands/types.ts` | `ScoreCommand` | Modify: `kind` |
-| lib | `src/domain/commands/snapshot.ts` | command base | Modify: default `kind` |
-| lib | `src/domain/commands/structure-commands.ts` | `changeTrackPropsCommand` | Modify: classify from patch |
-| lib | `src/store/slices/score-slice.ts` | dispatch/undo/redo | Modify: the guard |
-| lib | `src/services/playback/controller.ts` | store ↔ engine bridge | Modify: collapse; delete preview |
-| app | `src/features/score-editor/editing.ts` | note entry | Modify: refuse while playing |
-| app | `src/components/layout/AppLayout.tsx` | snapshot open, generation reload | Modify: stop first; drop `stopPreview` |
-| app | `src/app/router.tsx`, `src/features/projects/DashboardPage.tsx`, `src/components/transport/TransportBar.tsx` | dead `stopPreview` calls | Modify: delete |
-| app | `src/features/score-editor/EditorToolbar.tsx` | content controls | Modify: disable while playing |
-| app | `src/features/tracks/TrackEditorPanel.tsx` | track controls | Modify: disable content, keep mix |
-| app | `src/features/score-editor/useEditorShortcuts.ts` | keyboard | No change — guard is upstream |
+| Repo  | File                                                                                                         | Responsibility                   | Change                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------ | -------------------------------- | -------------------------------------- |
+| types | `src/platform/playback.ts`                                                                                   | engine contract                  | Modify: `applyMix`                     |
+| io    | `src/web/playback/soundfont-engine.ts`                                                                       | web engine                       | Modify: implement `applyMix`           |
+| io    | `src/rn/playback/sample-engine.ts`                                                                           | RN engine                        | Modify: implement `applyMix`           |
+| lib   | `src/domain/commands/types.ts`                                                                               | `ScoreCommand`                   | Modify: `kind`                         |
+| lib   | `src/domain/commands/snapshot.ts`                                                                            | command base                     | Modify: default `kind`                 |
+| lib   | `src/domain/commands/structure-commands.ts`                                                                  | `changeTrackPropsCommand`        | Modify: classify from patch            |
+| lib   | `src/store/slices/score-slice.ts`                                                                            | dispatch/undo/redo               | Modify: the guard                      |
+| lib   | `src/services/playback/controller.ts`                                                                        | store ↔ engine bridge            | Modify: collapse; delete preview       |
+| app   | `src/features/score-editor/editing.ts`                                                                       | note entry                       | Modify: refuse while playing           |
+| app   | `src/components/layout/AppLayout.tsx`                                                                        | snapshot open, generation reload | Modify: stop first; drop `stopPreview` |
+| app   | `src/app/router.tsx`, `src/features/projects/DashboardPage.tsx`, `src/components/transport/TransportBar.tsx` | dead `stopPreview` calls         | Modify: delete                         |
+| app   | `src/features/score-editor/EditorToolbar.tsx`                                                                | content controls                 | Modify: disable while playing          |
+| app   | `src/features/tracks/TrackEditorPanel.tsx`                                                                   | track controls                   | Modify: disable content, keep mix      |
+| app   | `src/features/score-editor/useEditorShortcuts.ts`                                                            | keyboard                         | No change — guard is upstream          |
 
 ---
 
@@ -58,12 +58,14 @@ Task 3 adds one method, `applyMix(score)`, rather than a setter per property: it
 **Repo:** `music_lib`
 
 **Files:**
+
 - Modify: `src/domain/commands/types.ts`
 - Modify: `src/domain/commands/snapshot.ts:60`
 - Modify: `src/domain/commands/structure-commands.ts:214-224`
 - Test: `src/domain/commands/structure-commands.test.ts`
 
 **Interfaces:**
+
 - Produces: `ScoreCommand.kind: CommandKind` where `type CommandKind = 'content' | 'mix'`, both exported from `src/domain/commands/types.js`. `snapshotCommand(label, mutate, kind = 'content')`. Every one of the 31 command factories routes through `snapshotCommand` or `transformCommand`, so they all inherit `'content'` and only `changeTrackPropsCommand` overrides.
 
 **Why the field is required, not optional:** a command written later without thinking about the lock must be refused during playback, not admitted. Making `kind` required means a hand-rolled command literal fails to typecheck rather than defaulting to whatever is convenient.
@@ -150,10 +152,14 @@ export function transformCommand(
   transform: (score: Score) => Score,
   kind: CommandKind = 'content',
 ): ScoreCommand {
-  return snapshotCommand(label, (draft) => {
-    const next = transform(current(draft) as Score);
-    Object.assign(draft, next);
-  }, kind);
+  return snapshotCommand(
+    label,
+    (draft) => {
+      const next = transform(current(draft) as Score);
+      Object.assign(draft, next);
+    },
+    kind,
+  );
 }
 ```
 
@@ -228,10 +234,12 @@ the lock should be refused during playback, not admitted by a default."
 **Repo:** `music_lib`
 
 **Files:**
+
 - Modify: `src/store/slices/score-slice.ts:75-110`
 - Test: `src/store/slices/score-slice.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ScoreCommand.kind` from Task 1.
 - Produces: no new API. `dispatchCommand` becomes a no-op for a content command while `state === 'playing'`; `undo` and `redo` become no-ops while playing.
 
@@ -387,12 +395,14 @@ stop reloading the score on the strength of it."
 **Repos:** `music_types`, then `music_io`
 
 **Files:**
+
 - Modify: `music_types/src/platform/playback.ts`
 - Modify: `music_io/src/web/playback/soundfont-engine.ts`
 - Modify: `music_io/src/rn/playback/sample-engine.ts`
 - Test: `music_io/src/web/playback/soundfont-engine.test.ts`
 
 **Interfaces:**
+
 - Produces: `PlaybackEngine.applyMix(score: Score): void`.
 
 **Why one method and not four setters:** the controller has exactly one thing to say — "the mix changed, here is the score" — and saying it once is both idempotent and impossible to get half-right. Four setters would need the controller to diff which property changed, which is work it has no reason to do.
@@ -542,10 +552,12 @@ git commit -am "feat(playback): implement applyMix in both engines"
 **Repo:** `music_lib`
 
 **Files:**
+
 - Modify: `src/services/playback/controller.ts`
 - Test: `src/services/playback/controller.test.ts`
 
 **Interfaces:**
+
 - Consumes: the lock (Task 2), `applyMix` (Task 3).
 - Produces: `handleScoreChange` becomes private and two-branched. `pendingResume` and `scoreChangeGeneration` are gone.
 
@@ -685,6 +697,7 @@ If the edit lock is ever loosened, this is the code that has to come back."
 **Repos:** `music_lib`, then `music_app`
 
 **Files:**
+
 - Modify: `music_lib/src/services/playback/controller.ts`
 - Modify: `music_app/src/app/router.tsx:101,116`, `src/features/projects/DashboardPage.tsx:93`, `src/components/transport/TransportBar.tsx:404`, `src/components/layout/AppLayout.tsx:366`
 
@@ -760,6 +773,7 @@ them is a permanent no-op — a leftover from the candidate-preview removal."
 **Repo:** `music_app`
 
 **Files:**
+
 - Modify: `src/components/layout/AppLayout.tsx:215-220` (generation reload), `:357-374` (`openSnapshot`)
 - Test: `src/components/layout/AppLayout.test.tsx`
 
@@ -840,6 +854,7 @@ change' true by construction rather than by luck."
 **Repo:** `music_app`
 
 **Files:**
+
 - Modify: `src/features/score-editor/editing.ts` (`insertNoteAtCaret:143`, `insertChordAtCaret:229`)
 - Modify: `src/features/score-editor/EditorToolbar.tsx`
 - Modify: `src/features/tracks/TrackEditorPanel.tsx`
@@ -958,6 +973,7 @@ The fader is the one to watch. It is the case the spec missed, and a unit test c
 - [ ] **Step 3: Update the docs**
 
 `music_app/CLAUDE.md`:
+
 - The caret entry — "the red caret IS `playback-slice.positionTick`" — is **not** yet the split described in spec §3.2; that lands in step 3. Leave it, and do not let this task's changes imply otherwise.
 - Add: content is immutable while playing; the classification lives on the command; mixing stays live through `applyMix`; a foreign score arrival stops the transport first.
 
@@ -983,4 +999,4 @@ Report: how many lines left `controller.ts`, which tests were deleted and why, w
 
 **Riskiest task:** Task 4. It deletes the most intricate reasoning in the repo, and the tests being deleted with it are the ones that documented why it was there. The invariant is restated in the code comment and in `score-slice.ts` so that loosening the lock later has a chance of surfacing it.
 
-**Verified against the code, not assumed:** all 31 command factories route through `snapshotCommand`/`transformCommand`; `changeTrackPropsCommand` is the only one serving both kinds; `playPreview` has no callers; `openSnapshot` already calls `stop()` but *after* `setScore`; `PlaybackEngine` has no per-track volume or pan setter.
+**Verified against the code, not assumed:** all 31 command factories route through `snapshotCommand`/`transformCommand`; `changeTrackPropsCommand` is the only one serving both kinds; `playPreview` has no callers; `openSnapshot` already calls `stop()` but _after_ `setScore`; `PlaybackEngine` has no per-track volume or pan setter.

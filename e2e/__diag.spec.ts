@@ -45,7 +45,9 @@ test('open a many-track project and play, touching nothing', async ({ page }) =>
   await box.evaluate((el) => {
     (window as DiagWindow).__calls = [];
     const orig = el.scrollTo.bind(el);
-    (el as unknown as { scrollTo: (o: ScrollToOptions) => void }).scrollTo = (o: ScrollToOptions) => {
+    (el as unknown as { scrollTo: (o: ScrollToOptions) => void }).scrollTo = (
+      o: ScrollToOptions,
+    ) => {
       (window as DiagWindow).__calls?.push({ ...o, from: el.scrollTop });
       return orig(o);
     };

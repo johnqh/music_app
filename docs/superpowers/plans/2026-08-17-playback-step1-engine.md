@@ -24,39 +24,41 @@
 
 ## File Structure
 
-| File | Responsibility | Change |
-| --- | --- | --- |
-| `src/web/playback/channel-allocator.ts` | track → (instance, channel) | Modify: 256 channels per instance |
-| `src/web/playback/channel-allocator.test.ts` | allocator rules | Modify |
-| `src/web/playback/synth-host.ts` | the one module talking to `js-synthesizer` | Modify: init settings, `noteAt` |
-| `src/web/playback/synth-host.test.ts` | host rules | Modify |
-| `src/web/audio/offline-synth.ts` | shared offline synth for export | Modify: init settings |
-| `src/web/audio/soundfont-render.ts` | offline render passes | No code change; test updated |
-| `src/shared/playback/note-queue.ts` | notes with a cursor | Modify: capped drain, end index |
-| `src/shared/playback/note-queue.test.ts` | queue behaviour | Modify |
-| `src/shared/playback/sounding-set.ts` | **new** — which notes are sounding, by cursor | Create |
-| `src/shared/playback/sounding-set.test.ts` | **new** | Create |
-| `src/shared/playback/pump-window.ts` | lookahead/grace planning | Modify doc only — **kept**, see below |
-| `src/shared/playback/pump-window.test.ts` | | Unchanged |
-| `src/web/playback/soundfont-engine.ts` | the transport | Modify: horizon scheduling |
-| `src/web/playback/soundfont-engine.test.ts` | transport behaviour | Modify |
-| `src/web/playback/governor.ts` | adaptive quality | Modify: measure lateness, stop acting on it |
-| `src/web/playback/governor.test.ts` | | Modify |
-| `src/web/playback/instrument-routing.test.ts` | routing across instances | Modify: 257 not 17 |
+| File                                          | Responsibility                                | Change                                      |
+| --------------------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| `src/web/playback/channel-allocator.ts`       | track → (instance, channel)                   | Modify: 256 channels per instance           |
+| `src/web/playback/channel-allocator.test.ts`  | allocator rules                               | Modify                                      |
+| `src/web/playback/synth-host.ts`              | the one module talking to `js-synthesizer`    | Modify: init settings, `noteAt`             |
+| `src/web/playback/synth-host.test.ts`         | host rules                                    | Modify                                      |
+| `src/web/audio/offline-synth.ts`              | shared offline synth for export               | Modify: init settings                       |
+| `src/web/audio/soundfont-render.ts`           | offline render passes                         | No code change; test updated                |
+| `src/shared/playback/note-queue.ts`           | notes with a cursor                           | Modify: capped drain, end index             |
+| `src/shared/playback/note-queue.test.ts`      | queue behaviour                               | Modify                                      |
+| `src/shared/playback/sounding-set.ts`         | **new** — which notes are sounding, by cursor | Create                                      |
+| `src/shared/playback/sounding-set.test.ts`    | **new**                                       | Create                                      |
+| `src/shared/playback/pump-window.ts`          | lookahead/grace planning                      | Modify doc only — **kept**, see below       |
+| `src/shared/playback/pump-window.test.ts`     |                                               | Unchanged                                   |
+| `src/web/playback/soundfont-engine.ts`        | the transport                                 | Modify: horizon scheduling                  |
+| `src/web/playback/soundfont-engine.test.ts`   | transport behaviour                           | Modify                                      |
+| `src/web/playback/governor.ts`                | adaptive quality                              | Modify: measure lateness, stop acting on it |
+| `src/web/playback/governor.test.ts`           |                                               | Modify                                      |
+| `src/web/playback/instrument-routing.test.ts` | routing across instances                      | Modify: 257 not 17                          |
 
 ---
 
 ### Task 1: Allocator addresses 256 channels per instance
 
 **Files:**
+
 - Modify: `src/web/playback/channel-allocator.ts`
 - Test: `src/web/playback/channel-allocator.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `allocateChannels(tracks: readonly AllocatorTrack[]): { assignments: Map<string, ChannelAssignment>; instanceCount: number }` — unchanged signature. `ChannelAssignment` is `{ instance: number; channel: number; needsDrumTypeSwitch: boolean }`, unchanged. New exported constant `CHANNELS_PER_INSTANCE = 256`.
 
-**Why the drum-channel rule is conservative:** channel 9 is General MIDI's drum channel and fluidsynth treats it as one by default. Whether it *also* treats 25, 41, … 249 (every `c % 16 === 9`) as drum channels when `midiChannelCount` exceeds 16 is not documented and cannot be tested without a real synth. So those channels are reserved for percussion and never given to a pitched track — safe under either behaviour — while only literal channel 9 gets `needsDrumTypeSwitch: false`. Every other percussion channel is switched explicitly, which `SynthHost.setChannelPercussion` already does and which is a no-op if fluidsynth had already typed it.
+**Why the drum-channel rule is conservative:** channel 9 is General MIDI's drum channel and fluidsynth treats it as one by default. Whether it _also_ treats 25, 41, … 249 (every `c % 16 === 9`) as drum channels when `midiChannelCount` exceeds 16 is not documented and cannot be tested without a real synth. So those channels are reserved for percussion and never given to a pitched track — safe under either behaviour — while only literal channel 9 gets `needsDrumTypeSwitch: false`. Every other percussion channel is switched explicitly, which `SynthHost.setChannelPercussion` already does and which is a no-op if fluidsynth had already typed it.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -258,16 +260,18 @@ correct under either behaviour."
 ### Task 2: SynthHost opens 256-channel instances
 
 **Files:**
+
 - Modify: `src/web/playback/synth-host.ts`
 - Test: `src/web/playback/synth-host.test.ts`
 
 **Interfaces:**
+
 - Consumes: `CHANNELS_PER_INSTANCE` from Task 1.
 - Produces: `SynthInstance.init(sampleRate: number, settings?: SynthSettings): void` where `SynthSettings` is `{ midiChannelCount?: number; polyphony?: number }`.
 
 **Polyphony is an init-time setting and nothing else.** `js-synthesizer`'s `ISynthesizer` exposes `setInterpolation` and `setGain` but no polyphony setter — verified in `node_modules/js-synthesizer/dist/lib/ISynthesizer.d.ts`. So the voice ceiling is chosen once, generously, and fluidsynth's overflow priority steals above it. This is why Task 7 does not give the governor a polyphony rung.
 
-**Note on the test stubs:** `stubSynth()` in `synth-host.test.ts` records into a plain `calls: Record<string, unknown[][]>` object via a `record(name)` helper — `init` is **not** a `vi.fn`, so `toHaveBeenCalledWith` does not work on it. Assert against `synths[0].calls.init` instead. `loadSFont` and `createAudioNode` *are* `vi.fn`s.
+**Note on the test stubs:** `stubSynth()` in `synth-host.test.ts` records into a plain `calls: Record<string, unknown[][]>` object via a `record(name)` helper — `init` is **not** a `vi.fn`, so `toHaveBeenCalledWith` does not work on it. Assert against `synths[0].calls.init` instead. `loadSFont` and `createAudioNode` _are_ `vi.fn`s.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -367,10 +371,12 @@ the newest note."
 ### Task 3: The offline renderer moves to 256 channels
 
 **Files:**
+
 - Modify: `src/web/audio/offline-synth.ts:76`
 - Test: `src/web/audio/soundfont-render.test.ts` (if absent, create it — check first with `ls src/web/audio/`)
 
 **Interfaces:**
+
 - Consumes: `CHANNELS_PER_INSTANCE` from Task 1.
 - Produces: nothing new.
 
@@ -443,7 +449,10 @@ const building = (async (): Promise<LoadedOfflineSynth> => {
   // The same channel count playback uses, because both share `allocateChannels`
   // — an export on a 16-channel synth would silently lose every track past the
   // sixteenth.
-  synth.init(request.sampleRate, { midiChannelCount: CHANNELS_PER_INSTANCE, polyphony: OFFLINE_POLYPHONY });
+  synth.init(request.sampleRate, {
+    midiChannelCount: CHANNELS_PER_INSTANCE,
+    polyphony: OFFLINE_POLYPHONY,
+  });
   const sfontId = await synth.loadSFont(await request.loadFont(request.fontUrl));
   return { synth, sfontId, sampleRate: request.sampleRate };
 })();
@@ -479,10 +488,12 @@ have — silently losing every track past the sixteenth."
 ### Task 4: Notes are scheduled with their own duration
 
 **Files:**
+
 - Modify: `src/web/playback/synth-host.ts`
 - Test: `src/web/playback/synth-host.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `SynthHost.noteAt(instance: number, channel: number, midi: number, velocity: number, delaySeconds: number, durationSeconds: number): void`. `noteOnAt` is removed; `noteOn`/`noteOff` stay for auditioning.
 
@@ -612,7 +623,13 @@ Expected: PASS.
 In `src/web/playback/soundfont-engine.ts`, in `dispatchTick`, change the dispatch call to pass a duration and stop recording a pending off. Replace:
 
 ```ts
-this.deps.host.noteOnAt(instance, channel, note.midi, note.velocity, (atSeconds - position) / speed);
+this.deps.host.noteOnAt(
+  instance,
+  channel,
+  note.midi,
+  note.velocity,
+  (atSeconds - position) / speed,
+);
 this.activeNoteIds.add(note.noteId);
 this.pendingOffs.push({
   atSeconds: this.secondsForTick(note.tick + note.durTicks),
@@ -639,7 +656,8 @@ this.deps.host.noteAt(
 Then delete the `PendingOff` type, the `pendingOffs` field, the `releaseDue` method and its call in `dispatchTick`, and change `clearSounding` to drop its `this.pendingOffs = []` line. The end-of-piece check loses its `pendingOffs.length === 0` term; replace that whole line for now with:
 
 ```ts
-if (this.queue.exhausted && this.clock.isRunning && position >= this.lastNoteEndSeconds) this.stop();
+if (this.queue.exhausted && this.clock.isRunning && position >= this.lastNoteEndSeconds)
+  this.stop();
 ```
 
 and add the field plus its assignment in `loadScore`:
@@ -665,7 +683,7 @@ Hoist `flattenScoreForPlayback(score)` into a local so it is called once and pas
 - [ ] **Step 6: Run the suite and record what is expected to fail**
 
 Run: `bun run test`
-Expected: `soundfont-engine.test.ts` fails only on active-note/highlighting assertions. Any *other* failure means this step went wrong — read it before continuing. Do not "fix" a highlighting failure here.
+Expected: `soundfont-engine.test.ts` fails only on active-note/highlighting assertions. Any _other_ failure means this step went wrong — read it before continuing. Do not "fix" a highlighting failure here.
 
 - [ ] **Step 7: Commit**
 
@@ -687,11 +705,13 @@ the commit after next."
 ### Task 5: A rolling horizon replaces the lookahead window
 
 **Files:**
+
 - Modify: `src/shared/playback/note-queue.ts`, `src/shared/playback/note-queue.test.ts`
 - Modify: `src/shared/playback/pump-window.ts` (doc comment only)
 - Modify: `src/web/playback/soundfont-engine.ts`, `src/web/playback/soundfont-engine.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SynthHost.noteAt` from Task 4.
 - Produces: `NoteQueue.drainUntil(tick: number, maxCount?: number): ScheduledNote[]` — the second parameter is new and **optional**, defaulting to unbounded, because `src/rn/playback/sample-engine.ts:345` calls it with one argument and is out of scope.
 
@@ -925,10 +945,12 @@ to hand a horizon to and keeps the old model."
 ### Task 6: Sounding notes from a cursor query, emitted only on change
 
 **Files:**
+
 - Create: `src/shared/playback/sounding-set.ts`, `src/shared/playback/sounding-set.test.ts`
 - Modify: `src/web/playback/soundfont-engine.ts`, `src/web/playback/soundfont-engine.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ScheduledNote` from `src/shared/playback/schedule.js`.
 - Produces:
 
@@ -1212,10 +1234,12 @@ number of notes that actually started or stopped, not the size of the score."
 ### Task 7: Retire the governor's lateness signal
 
 **Files:**
+
 - Modify: `src/web/playback/governor.ts`, `src/web/playback/governor.test.ts`
 - Modify: `src/web/playback/soundfont-engine.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `Governor.record(lateBySeconds: number): void` — unchanged signature. `Governor` gains a documented `stalled` reading; nothing else changes shape.
 
@@ -1324,6 +1348,7 @@ out to have no runtime setter in js-synthesizer — it is set once at init."
 ### Task 8: Verify, document, and hand off
 
 **Files:**
+
 - Modify: `CLAUDE.md` (in `music_io`)
 
 - [ ] **Step 1: Full verification**
@@ -1382,4 +1407,4 @@ Summarise: which tests were deleted and why (the grace-window and governor-step-
 
 **Constant naming:** the spec calls the second scheduling bound `MAX_QUEUED_EVENTS` ("events in flight"); the plan implements `MAX_EVENTS_PER_REFILL`, which bounds the same thing that matters — one tick's `postMessage` burst — without needing to track completions. Task 5 says so at the point of use.
 
-**Test-double gotcha, checked:** `stubSynth` in `synth-host.test.ts` records into a plain `calls` object via a `record(name)` helper, so `init`, `midiNoteOn` and friends are **not** `vi.fn`s and `toHaveBeenCalledWith` does not work on them. Assertions in Tasks 2 and 4 use `synths[i].calls.<name>`. `loadSFont`, `createAudioNode` and every member of `stubSequencer` *are* `vi.fn`s.
+**Test-double gotcha, checked:** `stubSynth` in `synth-host.test.ts` records into a plain `calls` object via a `record(name)` helper, so `init`, `midiNoteOn` and friends are **not** `vi.fn`s and `toHaveBeenCalledWith` does not work on them. Assertions in Tasks 2 and 4 use `synths[i].calls.<name>`. `loadSFont`, `createAudioNode` and every member of `stubSequencer` _are_ `vi.fn`s.

@@ -19,18 +19,18 @@ Measured in the jsdom harness with the stub 2D context, so these are the
 JavaScript costs only (VexFlow construction, formatting, bbox maths) with no
 rasterization at all:
 
-| Score | ms per draw |
-| --- | --- |
-| 4 tracks, quarter notes, zoom 1 | 27 |
-| 12 tracks, quarter notes, zoom 1 | 14 |
-| 12 tracks, 16th notes, zoom 1 | 20 |
-| 12 tracks, 16th notes, zoom 0.5 | 119 |
+| Score                            | ms per draw |
+| -------------------------------- | ----------- |
+| 4 tracks, quarter notes, zoom 1  | 27          |
+| 12 tracks, quarter notes, zoom 1 | 14          |
+| 12 tracks, 16th notes, zoom 1    | 20          |
+| 12 tracks, 16th notes, zoom 0.5  | 119         |
 
 The trigger rate is ~20 Hz. `SoundfontPlaybackEngine.report()` calls
 `onActiveNotes([...this.activeNoteIds])` every pump tick with a fresh array,
 unconditionally, even when the sounding set is unchanged. `ScoreEditorView`'s
 subscription rebuilds the colour map and a signature string each time; the
-signature suppresses the *draw* only while no visible note starts or stops,
+signature suppresses the _draw_ only while no visible note starts or stops,
 which on a dense multi-track score is almost never.
 
 20 × 20 ms is 400 ms of work per second. 20 × 119 ms is over 2 s of work per
@@ -47,8 +47,8 @@ Two further limits block the stated goal of hundreds of tracks:
 - **Notation.** `drawSystem` culls horizontally by measure but iterates
   `plan.trackLayouts` with no vertical culling. At 200 tracks one system is
   ~24,000 px tall: ~8 staves are visible and 200 are built and formatted, every
-  frame. The renderer windows by *system*; at this scale the meaningful axis is
-  the *stave*.
+  frame. The renderer windows by _system_; at this scale the meaningful axis is
+  the _stave_.
 
 ## Goal
 
@@ -64,8 +64,7 @@ the score, and no tier may depend on another tier's promptness.**
 Both verified against the installed `js-synthesizer` (`dist/lib/*.d.ts`) rather
 than assumed.
 
-1. **`SynthesizerSettings.midiChannelCount` is `int [16-256]`, in multiples of
-   16.** One fluidsynth instance addresses up to 256 channels with one soundfont
+1. **`SynthesizerSettings.midiChannelCount` is `int [16-256]`, in multiples of 16.** One fluidsynth instance addresses up to 256 channels with one soundfont
    copy and one AudioWorkletNode. The multi-instance tier works around a limit
    that does not exist. `polyphony` (`int [1-65535]`, default 256) and
    fluidsynth's overflow-priority settings (`overflowVolume`, `overflowAge`,
@@ -81,12 +80,12 @@ than assumed.
 
 Four tiers, each with one job and a narrow interface.
 
-| Tier | Owns | Lives in |
-| --- | --- | --- |
-| Synth | channels, programs, levels, voices | `music_io/web/playback` |
-| Scheduler | score to timed MIDI stream, kept a horizon ahead | `music_io/shared/playback` |
+| Tier         | Owns                                             | Lives in                      |
+| ------------ | ------------------------------------------------ | ----------------------------- |
+| Synth        | channels, programs, levels, voices               | `music_io/web/playback`       |
+| Scheduler    | score to timed MIDI stream, kept a horizon ahead | `music_io/shared/playback`    |
 | Playback bus | transport state and per-note events, change-only | `music_lib/services/playback` |
-| Render host | where notation drawing runs | `music_app` |
+| Render host  | where notation drawing runs                      | `music_app`                   |
 
 ---
 
@@ -144,7 +143,7 @@ horizon of `note` events — one event per score note, carrying its own
   means content cannot change while the horizon is live, so nothing but a
   transport action ever invalidates the queue.
 - **Tempo multiplier changes** flush and reschedule. This is a user action, not
-  a per-frame one. Tempo *maps* are handled at schedule time, since score ticks
+  a per-frame one. Tempo _maps_ are handled at schedule time, since score ticks
   are converted to seconds via `TempoMap` before scheduling.
 - **Mute, solo and volume** stay immediate CC7 writes, not scheduled — they take
   effect mid-playback without rescheduling, as today.
@@ -207,7 +206,7 @@ rather than an optimisation:
 - **Begin-modifier width.** `Stave.formatBegModifiers(measureStaves)` aligns
   clef, key and time across whatever staves it is passed. That width depends
   only on clef, key signature and time signature — never on notes — so it is
-  computed per measure column for *all* tracks once, stored in `LayoutPlan`, and
+  computed per measure column for _all_ tracks once, stored in `LayoutPlan`, and
   read by each drawn stave.
 - **Tick alignment.** Format the visible staves' voices together with one
   additional invisible voice holding the union of every onset in the column.
@@ -334,13 +333,13 @@ types rather than a convention.
 
 ### 3.2 The caret split
 
-Today the red caret *is* `playback-slice.positionTick` — one value serving two
+Today the red caret _is_ `playback-slice.positionTick` — one value serving two
 purposes, which is why "play from the caret" needs no plumbing, and also why the
 store takes a write 20 times a second.
 
-- **`caretTick`** stays in the store: where the *user* is editing. Written by
+- **`caretTick`** stays in the store: where the _user_ is editing. Written by
   clicks, seeks, arrow keys, note entry. Low frequency.
-- **Playback position** lives on the bus: where the *audio* is. Exists only
+- **Playback position** lives on the bus: where the _audio_ is. Exists only
   while playing.
 
 Play starts from `caretTick`, so "play from the caret" still needs no plumbing.
@@ -381,7 +380,7 @@ Commands divide in two:
 - **Content** — everything else: notes, measures, tracks, clefs, instruments,
   tempo, plus undo and redo. Refused while playing.
 
-The split cannot be made on command *type*, because `changeTrackPropsCommand`
+The split cannot be made on command _type_, because `changeTrackPropsCommand`
 carries a partial patch and serves both — `{ muted }` is mix, `{ name }` and
 `{ midiProgram }` are content. So `ScoreCommand` gains a declared `kind`, and
 `changeTrackPropsCommand` computes its own from the patch it was handed. The
@@ -410,7 +409,7 @@ score" — and saying it once is idempotent and leaves no way to get it half
 right. Both engines implement it; the React Native one is compiled and reviewed
 here but, as always, verified on a device.
 
-`applyMix` being *called* is unit-testable. `applyMix` being *audible*, with no
+`applyMix` being _called_ is unit-testable. `applyMix` being _audible_, with no
 gap in playback, is not — that check is by hand.
 
 #### What this buys the controller
@@ -497,19 +496,19 @@ survive.
 
 New pure units, each tested directly:
 
-| Unit | Test |
-| --- | --- |
-| Flat channel allocation | percussion reserved to `c % 16 === 9`; no pitched track lands there; >256 opens instance 2 |
-| Horizon scheduler | what is queued given position, horizon and event cap; flush on seek |
-| Sounding-set cursors | delta emission; emits nothing when nothing changed |
-| Identity diff | one-note edit produces one measure; undo, import and generation all diff correctly |
-| Formatted-measure cache | hit/miss and every invalidation axis |
-| Colour delta encoder | set/clear pairs |
-| Worker protocol | encode/decode, dirty tracking, when bbox maps are resent |
-| Command `kind` | `changeTrackPropsCommand` classifies from its patch: `{muted}` is mix, `{name}`/`{midiProgram}` is content, a mixed patch is content |
-| Edit lock | every content command and undo/redo refused while playing; mix commands accepted; refusal leaves the score reference untouched |
-| Controller mix path | a mix change while playing re-applies levels and does **not** reload the engine |
-| Foreign arrivals | generation reload and snapshot open each stop the transport before adopting a score |
+| Unit                    | Test                                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Flat channel allocation | percussion reserved to `c % 16 === 9`; no pitched track lands there; >256 opens instance 2                                           |
+| Horizon scheduler       | what is queued given position, horizon and event cap; flush on seek                                                                  |
+| Sounding-set cursors    | delta emission; emits nothing when nothing changed                                                                                   |
+| Identity diff           | one-note edit produces one measure; undo, import and generation all diff correctly                                                   |
+| Formatted-measure cache | hit/miss and every invalidation axis                                                                                                 |
+| Colour delta encoder    | set/clear pairs                                                                                                                      |
+| Worker protocol         | encode/decode, dirty tracking, when bbox maps are resent                                                                             |
+| Command `kind`          | `changeTrackPropsCommand` classifies from its patch: `{muted}` is mix, `{name}`/`{midiProgram}` is content, a mixed patch is content |
+| Edit lock               | every content command and undo/redo refused while playing; mix commands accepted; refusal leaves the score reference untouched       |
+| Controller mix path     | a mix change while playing re-applies levels and does **not** reload the engine                                                      |
+| Foreign arrivals        | generation reload and snapshot open each stop the transport before adopting a score                                                  |
 
 Two tests carry disproportionate weight:
 
