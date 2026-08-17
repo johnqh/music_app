@@ -52,9 +52,9 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 // must wrap and color identically to what the component draws.
 const THEME: RenderTheme = LIGHT_RENDER_THEME;
 
-function makeStore(): EditorStoreApi {
+function makeStore(score: Score = twinkleScore()): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });
-  store.getState().setScore(twinkleScore());
+  store.getState().setScore(score);
   return store;
 }
 
@@ -355,6 +355,50 @@ describe('ScoreEditorView', () => {
 
     await flushRepaintFrame();
     expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(first.id)).toBe('playing');
+  });
+
+  it('does not highlight a sounding note on an inactive track', async () => {
+    // Every track's sounding notes used to light up. On a large score that
+    // scatters colour across whichever parts happen to be sounding, which reads
+    // as random rather than as a playhead — and the track you are actually
+    // reading goes dark whenever it rests.
+    const store = makeStore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const other = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
+
+    act(() => {
+      playbackController.bus.publishSounding([
+        { noteId: other.id, trackId: other.trackId, midi: 60 },
+      ]);
+    });
+
+    await flushRepaintFrame();
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(other.id)).toBeUndefined();
+  });
+
+  it('highlights a sounding note on the active track, and follows a track change', async () => {
+    const store = makeStore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[1].id));
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} />);
+    const onTrackTwo = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
+
+    act(() => {
+      playbackController.bus.publishSounding([
+        { noteId: onTrackTwo.id, trackId: onTrackTwo.trackId, midi: 60 },
+      ]);
+    });
+    await flushRepaintFrame();
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(onTrackTwo.id)).toBe('playing');
+
+    // Switching tracks re-colours without any new report from the engine.
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    await flushRepaintFrame();
+    expect(renderSpy.mock.calls.at(-1)![2].noteColors?.get(onTrackTwo.id)).toBeUndefined();
   });
 
   it('passes the active track and selected measures to the renderer', async () => {

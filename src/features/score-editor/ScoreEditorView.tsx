@@ -37,7 +37,7 @@ import {
 } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
-import type { GenerateScoreRequest, Pitch, Score } from '@sudobility/music_types';
+import type { GenerateScoreRequest, Pitch, Score, SoundingNote } from '@sudobility/music_types';
 import {
   changePitchCommand,
   findEvent,
@@ -570,15 +570,27 @@ export function ScoreEditorView({
     [selection.eventIds, selectionRegenerated],
   );
 
-  /** The colours actually painted: `noteColors` with the currently sounding notes merged over it. */
+  /**
+   * The colours actually painted: `noteColors` with the sounding notes merged
+   * over it.
+   *
+   * **Only the active track's sounding notes light up.** Every track's used to,
+   * on the reasoning that a state colour marks a note as needing attention
+   * wherever it is — which is right for selection, where cmd-shift-click spans
+   * tracks deliberately. It is wrong for playback: on a large score the lit
+   * notes then scatter across whichever parts happen to be sounding, which
+   * reads as random rather than as a playhead, and the one track you are
+   * actually reading goes dark whenever it rests. The keyboard already showed
+   * the active track alone; this makes the notation agree with it.
+   */
   const colorsWithPlaying = useCallback(
-    (playingIds: readonly string[]) =>
+    (sounding: readonly SoundingNote[]) =>
       buildNoteColors({
         selectedIds: selection.eventIds,
-        playingIds: [...playingIds],
+        playingIds: sounding.filter((n) => n.trackId === activeTrackId).map((n) => n.noteId),
         regenerated: selectionRegenerated,
       }),
-    [selection.eventIds, selectionRegenerated],
+    [selection.eventIds, selectionRegenerated, activeTrackId],
   );
 
   const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);
@@ -777,7 +789,7 @@ export function ScoreEditorView({
   // Selection and measure changes are low-frequency, so they can ride the
   // normal render path.
   useEffect(() => {
-    repaintColors(colorsWithPlaying(playbackController.bus.sounding.map((n) => n.noteId)));
+    repaintColors(colorsWithPlaying(playbackController.bus.sounding));
   }, [noteColors, selectedMeasureIds, repaintColors, colorsWithPlaying]);
 
   /**
@@ -792,7 +804,7 @@ export function ScoreEditorView({
   useEffect(
     () =>
       playbackController.bus.onSounding((notes) => {
-        repaintColors(colorsWithPlaying(notes.map((n) => n.noteId)));
+        repaintColors(colorsWithPlaying(notes));
       }),
     [repaintColors, colorsWithPlaying],
   );
