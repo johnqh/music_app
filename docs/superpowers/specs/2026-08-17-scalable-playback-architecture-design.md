@@ -156,15 +156,31 @@ loads the audio thread.
 
 A 500 ms main-thread stall becomes inaudible instead of becoming dropped notes.
 
-### 1.3 Voice budget replaces the governor's signal
+### 1.3 The governor stops acting on a signal that stopped meaning anything
 
-`Governor` currently infers audio-thread health from main-thread pump lateness.
-After 1.2 those are uncorrelated by construction, and its only knob
-(interpolation order) could never have relieved main-thread cost anyway.
+**Amended after implementation.** This section originally had the governor drive
+the `polyphony` cap from the concurrent-voice count. That is not available:
+`js-synthesizer`'s `ISynthesizer` exposes `setInterpolation` and `setGain` and
+**no polyphony setter**, so the ceiling can only be chosen at `init`. Changing
+it at runtime would mean re-initialising the synth, which means reloading the
+23MB font.
 
-The governor instead drives the `polyphony` cap from the concurrent-voice count
-it already knows from the schedule. Interpolation order stays as the second
-rung. Fluidsynth's overflow priorities do the per-voice stealing.
+What actually ships:
+
+- **Polyphony is set once at init, generously (2048).** A voice slot is a small
+  struct and only sounding voices cost CPU. Above the ceiling fluidsynth steals
+  by its own overflow priority — quietest and oldest first — which is the
+  per-voice degradation this design wanted, already implemented in the synth.
+- **The governor keeps measuring pump lateness and stops acting on it.** It used
+  to step interpolation down after ten consecutive frames over 100ms late, on
+  the reasoning that a starved pump meant a starved synth. §1.2 killed that
+  reasoning: the worklet holds four seconds of queued audio, so the main thread
+  can stall for a second with nothing audible happening. Degrading timbre for
+  every listener because a notation redraw took 119ms is a cost with no benefit.
+- **No audio-thread load signal exists to replace it with.** `AudioWorkletNode`
+  exposes none, and `AudioContext` offers only latency figures that do not move
+  under voice pressure. The lateness count is kept, unread, because it is free
+  and because it is the shape such a signal would take.
 
 ### 1.4 Sounding notes become a cursor query
 
