@@ -376,9 +376,8 @@ lets `handleScoreChange` stop being the most intricate code in the repo.
 Commands divide in two:
 
 - **Mix** — mute, solo, volume, pan. Applied live during playback and pushed
-  straight to the engine (`setTrackMute`, `setTrackSolo`, CC7), which is what
-  those engine methods have always been for. Mixing while listening is how an
-  arrangement gets listened to; it is not editing.
+  straight to the engine. Mixing while listening is how an arrangement gets
+  listened to; it is not editing.
 - **Content** — everything else: notes, measures, tracks, clefs, instruments,
   tempo, plus undo and redo. Refused while playing.
 
@@ -392,12 +391,34 @@ switch somewhere else that has to be kept in step.
 The guard is then one line in `score-slice.dispatchCommand`, plus `undo` and
 `redo`. Every editing route in the app reaches it, including any added later.
 
+#### Mix needs an engine method it does not have
+
+**Found while planning; the design above was wrong about this.** `PlaybackEngine`
+declares `setTrackMute` and `setTrackSolo` and nothing for volume or pan. In
+`SoundfontPlaybackEngine`, `TrackState.volume` is populated only in `loadScore`
+and `applyTrackLevels` reads it from there, so a volume change that does not
+reload cannot reach CC7 — and pan cannot reach CC10 at all.
+
+A mix change is precisely the thing that does not reload. So as written, moving
+a fader during playback would move the fader and not the sound.
+
+`PlaybackEngine` therefore gains **`applyMix(score: Score): void`**: re-read
+every track's volume, pan, mute and solo from the score and push them, touching
+nothing that is scheduled. One method rather than a setter per property, because
+the controller has exactly one thing to say — "the mix changed, here is the
+score" — and saying it once is idempotent and leaves no way to get it half
+right. Both engines implement it; the React Native one is compiled and reviewed
+here but, as always, verified on a device.
+
+`applyMix` being *called* is unit-testable. `applyMix` being *audible*, with no
+gap in playback, is not — that check is by hand.
+
 #### What this buys the controller
 
 `PlaybackController.handleScoreChange` becomes two branches:
 
 - **Playing** — the lock guarantees the only thing that can have changed is mix
-  state, so re-apply track audibility and levels. **No reload, no reschedule.**
+  state, so call `engine.applyMix(score)`. **No reload, no reschedule.**
 - **Not playing** — load the score.
 
 Deleted with it: `pendingResume`, `scoreChangeGeneration`, and the interlocking
