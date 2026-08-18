@@ -7,7 +7,7 @@ The ScoreSmith web app: routing, pages, and UI only. One of six repos in the Sco
 - React 19, TypeScript (strict), Vite, React Router
 - **Tailwind CSS** (`@sudobility/design`'s preset, `darkMode: 'class'`) — **no MUI/Emotion** (removed in T13; see Gotchas)
 - `@sudobility/components` / `@sudobility/building_blocks` / `@sudobility/auth-components` for shared UI primitives (buttons, dialogs, spinners, sign-in forms)
-- Zustand app store, VexFlow rendering (windowed **canvas** via `CanvasScoreRenderer`, one canvas, no per-glyph DOM), Tone.js playback — all via `@sudobility/music_lib`, never imported directly here
+- Zustand app store, VexFlow rendering (windowed **canvas** via `CanvasScoreRenderer`, one canvas, no per-glyph DOM), soundfont playback (`js-synthesizer`, **not** Tone.js — see Gotchas) — all via `@sudobility/music_lib`, never imported directly here
 - `@tanstack/react-query` for server-state (dashboard project list) via `@sudobility/music_client`'s hooks
 - Firebase Auth (real backend) / an in-process e2e shim (`VITE_E2E=1`)
 - Bun for scripts; Vitest + Testing Library + jsdom for unit/component tests; Playwright for e2e

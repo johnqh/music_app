@@ -37,7 +37,12 @@ export default defineConfig({
     // No `dexie`: it went with the IndexedDB persistence the server-backed
     // store replaced, and naming an uninstalled package here makes Vite log a
     // resolve failure on every dev start.
-    include: ['@tonejs/midi', 'immer', 'zustand', 'tone', 'vexflow', 'zod'],
+    // No `tone`: the soundfont engine replaced Tone.js and the dependency is
+    // gone. Vite only re-resolves this list when the lockfile changes, so a
+    // stale entry here sits harmless for weeks and then fails a dev start that
+    // has nothing to do with whatever changed. `@tonejs/midi` is unrelated to
+    // `tone` and is still a real dependency.
+    include: ['@tonejs/midi', 'immer', 'zustand', 'vexflow', 'zod'],
   },
   test: {
     environment: 'jsdom',
