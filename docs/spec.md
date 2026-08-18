@@ -18,9 +18,10 @@ Core capabilities:
 10. Import MIDI files and convert them into editable notation.
 11. Export compositions as MIDI.
 12. Export compositions as MusicXML.
-13. Save and reopen projects.
-14. Support multiple tracks and instruments.
-15. Provide a piano-roll view synchronized with the notation view.
+13. Export compositions as tracker modules (XM; MOD, S3M and IT to follow). Notes only — instrument slots are named after each track's instrument and left empty, so the file is silent until samples are added in a tracker. Anything the format cannot hold (row grid, channel count, note range) is counted and shown before the file is written.
+14. Save and reopen projects.
+15. Support multiple tracks and instruments.
+16. Provide a piano-roll view synchronized with the notation view.
 
 The application must work locally without requiring an AI provider: include a deterministic mock generation provider so all functionality can be tested offline. Design AI integration through a provider abstraction so real LLM or music-generation services can be added later.
 

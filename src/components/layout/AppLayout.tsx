@@ -65,6 +65,9 @@ import {
 } from '@/components/icons/notation-icons';
 import { variants } from '@sudobility/design';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
+import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
+import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
+import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { renderEvents } from '@sudobility/music_lib';
@@ -393,6 +396,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * this dialog having to reconstruct them.
    */
   const [pendingExport, setPendingExport] = useState<null | ((scope: ExportScope) => void)>(null);
+  const [pendingModule, setPendingModule] = useState<null | {
+    format: WritableTrackerFormat;
+    report: TrackerFitReport;
+    write: () => Promise<void>;
+  }>(null);
 
   /**
    * Runs `write` against the score the user asked for, asking first only when
@@ -440,6 +448,37 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           new Uint8Array(bytes),
           format === 'wav' ? 'audio/wav' : 'audio/mpeg',
         );
+      } catch (err) {
+        reportError(err, { context: `${format.toUpperCase()} export failed`, store });
+      }
+    });
+    exportMenu.setOpen(false);
+  };
+
+  /**
+   * Export a tracker module.
+   *
+   * Scope runs first because the fit depends on it: exporting visible tracks
+   * only may bring a score within a channel limit that all tracks exceed.
+   */
+  const handleExportModule = (format: WritableTrackerFormat): void => {
+    withExportScope(async (target) => {
+      try {
+        const { module, report } = scoreToTracker(target, { format });
+        const write = async (): Promise<void> => {
+          const bytes = getAppServices().io.modCodec.encode(module);
+          await getAppServices().io.fileExporter.save(
+            `${midiSafeFilename(target.metadata.title)}.${format}`,
+            new Uint8Array(bytes),
+            'application/octet-stream',
+          );
+        };
+        // A clean fit must not cost a click.
+        if (isCleanFit(report)) {
+          await write();
+          return;
+        }
+        setPendingModule({ format, report, write });
       } catch (err) {
         reportError(err, { context: `${format.toUpperCase()} export failed`, store });
       }
@@ -717,6 +756,16 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   className={MENU_ITEM_CLASS}
                 >
                   MusicXML
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  role="menuitem"
+                  onClick={() => handleExportModule('xm')}
+                  disabled={!score}
+                  className={MENU_ITEM_CLASS}
+                >
+                  XM Module
                 </Button>
                 <Button
                   type="button"
@@ -1030,6 +1079,21 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         onChoose={(scope) => pendingExport?.(scope)}
         onCancel={() => setPendingExport(null)}
       />
+      {pendingModule && (
+        <TrackerFitDialog
+          open
+          format={pendingModule.format.toUpperCase()}
+          report={pendingModule.report}
+          onCancel={() => setPendingModule(null)}
+          onConfirm={() => {
+            const pending = pendingModule;
+            setPendingModule(null);
+            void pending.write().catch((err) => {
+              reportError(err, { context: 'Module export failed', store });
+            });
+          }}
+        />
+      )}
       {developerMode && (
         <DeveloperSettingsDialog
           open={dialogs.devSettings === true}

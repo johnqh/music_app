@@ -3,7 +3,7 @@ import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
-import { threeTrackScore, twinkleScore } from '@sudobility/music_lib';
+import { threeTrackScore, twinkleScore, midiToPitch } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { addMeasureCommand, changeVelocityCommand } from '@sudobility/music_lib';
@@ -291,6 +291,70 @@ describe('AppLayout export scope', () => {
   async function openExportMenu(user: ReturnType<typeof userEvent.setup>): Promise<void> {
     await user.click(screen.getByLabelText('Export menu'));
   }
+
+  it('writes an XM module with no extra click when the score fits', async () => {
+    // A clean fit is the common case for XM and must not cost a dialog. The
+    // file is decoded back to prove it is a real module rather than bytes.
+    const user = userEvent.setup();
+    const store = await makeStoreWithProject(threeTrackScore());
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'XM Module' }));
+
+    expect(screen.queryByText(/does not fit/)).toBeNull();
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+
+    const saved = savedFiles().at(-1)!;
+    expect(saved.name).toMatch(/\.xm$/);
+    const bytes = saved.data as Uint8Array;
+    const back = getAppServices().io.modCodec.decode(bytes.buffer as ArrayBuffer);
+    expect(back.format).toBe('xm');
+    expect(back.instruments).toHaveLength(3);
+  });
+
+  it('shows what will be lost and writes nothing until confirmed', async () => {
+    // The whole point of the fit report: an export that loses material must
+    // say so first. A note below XM's lowest (MIDI 12) forces an octave clamp.
+    const user = userEvent.setup();
+    const base = threeTrackScore();
+    const lossy = {
+      ...base,
+      tracks: base.tracks.map((t, ti) =>
+        ti !== 0
+          ? t
+          : {
+              ...t,
+              measures: t.measures.map((m, mi) =>
+                mi !== 0
+                  ? m
+                  : {
+                      ...m,
+                      voices: m.voices.map((v) => ({
+                        ...v,
+                        events: v.events.map((e) =>
+                          'pitch' in e ? { ...e, pitch: midiToPitch(5) } : e,
+                        ),
+                      })),
+                    },
+              ),
+            },
+      ),
+    };
+    const store = await makeStoreWithProject(lossy);
+    render(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'XM Module' }));
+
+    expect(await screen.findByText(/does not fit/)).toBeInTheDocument();
+    expect(screen.getByText(/moved by whole octaves/)).toBeInTheDocument();
+    // Nothing written while the question is on screen.
+    expect(savedFiles()).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: 'Export anyway' }));
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+  });
 
   it('exports without asking when nothing is hidden', async () => {
     const user = userEvent.setup();
