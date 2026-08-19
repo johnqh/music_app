@@ -28,17 +28,22 @@
  * `MidiImportWizard`'s file picker).
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import {
   Button,
+  Heading,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Text,
   Tooltip,
   cn,
 } from '@sudobility/components';
+import { EmptyState } from '@sudobility/building_blocks';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
@@ -82,7 +87,8 @@ function formatDate(iso: string): string {
 async function clientAndToken() {
   const { musicClient } = getAppServices();
   const token = await getAppServices().auth.getToken();
-  if (!token) throw new Error('You must be signed in.');
+  // Surfaces through `reportError`'s toast, so it is user-facing copy.
+  if (!token) throw new Error(i18n.t('errors.mustSignIn'));
   return { client: musicClient, token };
 }
 
@@ -137,6 +143,7 @@ const ROW_BUTTON_CLASS = `${ROW_CONTROL_CLASS} justify-center px-3`;
 const CARD_CLASS = cn(variants.card.default.base(), 'flex flex-col overflow-hidden rounded-md');
 
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
@@ -172,11 +179,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const rows = await client.listProjects(token, { sort: sortBy });
       setProjects(rows);
     } catch (err) {
-      reportError(err, { context: 'Failed to load projects', store });
+      reportError(err, { context: t('errors.loadProjects'), store });
     } finally {
       setLoaded(true);
     }
-  }, [sortBy, store]);
+  }, [sortBy, store, t]);
 
   useEffect(() => {
     void refresh();
@@ -202,7 +209,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       await client.cancelProjectGeneration(projectId, token);
       await refresh();
     } catch (err) {
-      reportError(err, { context: 'Failed to cancel generation', store });
+      reportError(err, { context: t('errors.cancelGeneration'), store });
     }
   };
 
@@ -234,7 +241,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       setGenerateOpen(false);
       await refresh();
     } catch (err) {
-      reportError(err, { context: 'Failed to start generation', store });
+      reportError(err, { context: t('errors.startGeneration'), store });
     } finally {
       setCreatingGeneration(false);
     }
@@ -248,7 +255,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       resetOpenedProjectTransport();
       onNavigate?.(`/project/${id}`);
     } catch (err) {
-      reportError(err, { context: 'Failed to open project', store });
+      reportError(err, { context: t('errors.openProject'), store });
     }
   };
 
@@ -262,7 +269,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       resetOpenedProjectTransport();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
-      reportError(err, { context: 'Failed to create project', store });
+      reportError(err, { context: t('errors.createProject'), store });
     }
   };
 
@@ -275,7 +282,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       resetOpenedProjectTransport();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
-      reportError(err, { context: 'Failed to create project from template', store });
+      reportError(err, { context: t('errors.createFromTemplate'), store });
     }
   };
 
@@ -288,7 +295,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       await client.duplicateProject(project.id, {}, token);
       await refresh();
     } catch (err) {
-      reportError(err, { context: 'Failed to duplicate project', store });
+      reportError(err, { context: t('errors.duplicateProject'), store });
     }
   };
 
@@ -301,7 +308,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       await client.deleteProject(project.id, token);
       await refresh();
     } catch (err) {
-      reportError(err, { context: 'Failed to delete project', store });
+      reportError(err, { context: t('errors.deleteProject'), store });
     }
   };
 
@@ -325,7 +332,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       setJsonError(err instanceof Error ? err.message : 'That file is not a project export.');
-      reportError(err, { context: 'Project JSON import failed', store });
+      reportError(err, { context: t('errors.projectJsonImport'), store });
     } finally {
       setJsonBusy(false);
     }
@@ -357,7 +364,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       setModError(
         err instanceof Error ? err.message : 'That file could not be read as a tracker module.',
       );
-      reportError(err, { context: 'Module import failed', store });
+      reportError(err, { context: t('errors.moduleImport'), store });
     } finally {
       setModBusy(false);
     }
@@ -383,7 +390,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         onNavigate?.(`/project/${saved.id}`);
       } catch (err) {
         setAudioError(err instanceof Error ? err.message : 'That recording could not be sent.');
-        reportError(err, { context: 'Audio import failed', store });
+        reportError(err, { context: t('errors.audioImport'), store });
       } finally {
         setAudioBusy(false);
       }
@@ -395,17 +402,19 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       <Button
         type="button"
         variant="ghost"
-        aria-label={`Open project: ${project.name}`}
+        aria-label={t('dashboard.openProject', { name: project.name })}
         onClick={() => void openProject(project.id)}
         className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
       >
-        <span className="text-sm font-medium text-theme-text-primary">{project.name}</span>
+        <Text size="sm" weight="medium">
+          {project.name}
+        </Text>
         <span className="text-xs text-theme-text-secondary">
-          Updated {formatDate(project.updatedAt)}
+          {t('dashboard.updated', { date: formatDate(project.updatedAt) })}
         </span>
         {project.status === 'generating' && (
           <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">
-            Generating…
+            {t('dashboard.generating')}
           </span>
         )}
       </Button>
@@ -414,21 +423,21 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           <Button
             type="button"
             variant="ghost"
-            aria-label={`Cancel generation: ${project.name}`}
+            aria-label={t('dashboard.cancelGenerationFor', { name: project.name })}
             onClick={() => void cancelGeneration(project.id)}
             className="px-3 py-1"
           >
-            Cancel generation
+            {t('dashboard.cancelGeneration')}
           </Button>
         )}
         <Button
           type="button"
           variant="ghost"
-          aria-label={`Duplicate project: ${project.name}`}
+          aria-label={t('dashboard.duplicateProject', { name: project.name })}
           onClick={() => void handleDuplicate(project)}
           className="px-3 py-1"
         >
-          Duplicate
+          {t('dashboard.duplicate')}
         </Button>
         {/* `variant="ghost"` + an explicit className override, not
             `variant="destructive-outline"`: see `DeveloperSettingsDialog`'s
@@ -438,11 +447,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         <Button
           type="button"
           variant="ghost"
-          aria-label={`Delete project: ${project.name}`}
+          aria-label={t('dashboard.deleteProject', { name: project.name })}
           onClick={() => setPendingDelete(project)}
           className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1')}
         >
-          Delete
+          {t('common.delete')}
         </Button>
       </div>
     </div>
@@ -451,26 +460,26 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   return (
     <div className="p-6">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="flex-1 text-xl font-semibold text-theme-text-primary">
+        <Heading level={1} size="xl" weight="semibold" className="flex-1">
           {CONSTANTS.APP_NAME}
-        </h1>
+        </Heading>
 
         <Input
           type="text"
-          aria-label="Search projects"
-          placeholder="Search projects"
+          aria-label={t('dashboard.searchProjects')}
+          placeholder={t('dashboard.searchProjects')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className={TEXT_INPUT_CLASS}
         />
 
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
-          <SelectTrigger aria-label="Sort projects" className={SELECT_TRIGGER_CLASS}>
+          <SelectTrigger aria-label={t('dashboard.sortProjects')} className={SELECT_TRIGGER_CLASS}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="updatedAt">Last modified</SelectItem>
-            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="updatedAt">{t('dashboard.sortUpdated')}</SelectItem>
+            <SelectItem value="name">{t('dashboard.sortName')}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -479,7 +488,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             <Input
               autoFocus
               type="text"
-              aria-label="New project name"
+              aria-label={t('dashboard.newProjectName')}
               value={creatingName}
               onChange={(e) => setCreatingName(e.target.value)}
               onKeyDown={(e) => {
@@ -491,63 +500,63 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             <Button
               type="button"
               variant="primary"
-              aria-label="Create"
+              aria-label={t('dashboard.create')}
               onClick={() => void handleCreate()}
               className={ROW_BUTTON_CLASS}
             >
-              Create
+              {t('dashboard.create')}
             </Button>
           </div>
         ) : (
           <Button
             type="button"
             variant="primary"
-            aria-label="New project"
+            aria-label={t('dashboard.newProject')}
             onClick={() => setCreatingName('Untitled Project')}
             className={ROW_BUTTON_CLASS}
           >
-            New Project
+            {t('dashboard.newProject')}
           </Button>
         )}
 
-        <Tooltip content="Generate a whole score with AI">
+        <Tooltip content={t('dashboard.generateScoreHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Generate Score"
+            aria-label={t('dashboard.generateScore')}
             onClick={() => setGenerateOpen(true)}
             className={ROW_BUTTON_CLASS}
           >
-            Generate Score
+            {t('dashboard.generateScore')}
           </Button>
         </Tooltip>
-        <Tooltip content="Import MIDI">
+        <Tooltip content={t('dashboard.importMidi')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Import MIDI"
+            aria-label={t('dashboard.importMidi')}
             onClick={() => setMidiImportOpen(true)}
             className={ROW_BUTTON_CLASS}
           >
-            Import MIDI
+            {t('dashboard.importMidi')}
           </Button>
         </Tooltip>
-        <Tooltip content="Import MusicXML">
+        <Tooltip content={t('dashboard.importMusicXml')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Import MusicXML"
+            aria-label={t('dashboard.importMusicXml')}
             onClick={() => setMusicXmlImportOpen(true)}
             className={ROW_BUTTON_CLASS}
           >
-            Import MusicXML
+            {t('dashboard.importMusicXml')}
           </Button>
         </Tooltip>
-        <Tooltip content="Import audio (WAV, MP3, MPA)">
+        <Tooltip content={t('dashboard.importAudioHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Import Audio"
+            aria-label={t('dashboard.importAudio')}
             onClick={() => {
               setAudioError(null);
               setAudioImportOpen(true);
@@ -567,44 +576,44 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             }}
             className={ROW_BUTTON_CLASS}
           >
-            Import Audio
+            {t('dashboard.importAudio')}
           </Button>
         </Tooltip>
-        <Tooltip content="Import a tracker module (.MOD, .DSM, .S3M, .XM)">
+        <Tooltip content={t('dashboard.importModuleHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Import MOD"
+            aria-label={t('dashboard.importModule')}
             onClick={() => setModImportOpen(true)}
             className={ROW_BUTTON_CLASS}
           >
-            Import MOD
+            {t('dashboard.importModule')}
           </Button>
         </Tooltip>
-        <Tooltip content="Import project JSON">
+        <Tooltip content={t('dashboard.importProject')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Import project JSON"
+            aria-label={t('dashboard.importProject')}
             onClick={() => setJsonImportOpen(true)}
             className={ROW_BUTTON_CLASS}
           >
-            Import Project JSON
+            {t('dashboard.importProject')}
           </Button>
         </Tooltip>
       </div>
 
-      <div className="mt-6" aria-label="Templates">
-        <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">
-          Templates
-        </p>
+      <div className="mt-6" aria-label={t('dashboard.templates')}>
+        <Text as="p" size="xs" weight="medium" color="muted" className="uppercase tracking-wide">
+          {t('dashboard.templates')}
+        </Text>
         <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {projectTemplates.map((template) => (
             <Button
               key={template.id}
               type="button"
               variant="ghost"
-              aria-label={`New from template: ${template.name}`}
+              aria-label={t('dashboard.newFromTemplate', { name: template.name })}
               onClick={() => void handleCreateFromTemplate(template.id)}
               className={cn(
                 variants.card.default.interactive(),
@@ -619,16 +628,29 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       </div>
 
       {loaded && filtered.length === 0 && (
-        <p className="mt-8 text-sm text-theme-text-secondary">
-          No projects yet. Create one, or import a MIDI/MusicXML/project file to get started.
-        </p>
+        // The shared empty state, which pairs the message with the action it
+        // describes — the previous bare sentence told you to create a project
+        // and then left you to find the button yourself.
+        <div className="mt-8">
+          <EmptyState
+            message={
+              search.trim() === ''
+                ? t('dashboard.emptyNoProjects')
+                : t('dashboard.emptyNoMatch', { query: search.trim() })
+            }
+            buttonLabel={search.trim() === '' ? t('dashboard.newProject') : t('common.clearSearch')}
+            onPress={() =>
+              search.trim() === '' ? setCreatingName('Untitled Project') : setSearch('')
+            }
+          />
+        </div>
       )}
 
       {filtered.length > 0 && (
-        <div className="mt-6" aria-label="Your projects">
-          <p className="text-xs font-medium uppercase tracking-wide text-theme-text-secondary">
-            Your projects
-          </p>
+        <div className="mt-6" aria-label={t('dashboard.yourProjects')}>
+          <Text as="p" size="xs" weight="medium" color="muted" className="uppercase tracking-wide">
+            {t('dashboard.yourProjects')}
+          </Text>
           <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {filtered.map(renderCard)}
           </div>
@@ -637,9 +659,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
       <ConfirmDialog
         open={pendingDelete !== null}
-        title="Delete project"
-        message={pendingDelete ? `Delete "${pendingDelete.name}"? This cannot be undone.` : ''}
-        confirmLabel="Delete"
+        title={t('dashboard.deleteTitle')}
+        message={pendingDelete ? t('dashboard.deleteMessage', { name: pendingDelete.name }) : ''}
+        confirmLabel={t('common.delete')}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => void handleDelete()}
       />
@@ -672,12 +694,12 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           happen, and somewhere to report a file that cannot be read. */}
       <FileImportModal
         open={modImportOpen}
-        title="Import module"
+        title={t('dashboard.importModuleTitle')}
         accept=".mod,.dsm,.s3m,.xm,.it,.mptm,audio/mod,application/octet-stream"
-        fileKind="module file"
+        fileKind={t('dashboard.moduleFileKind')}
         onFile={(file) => void handleImportModFile(file)}
         busy={modBusy}
-        busyLabel="Decoding the module…"
+        busyLabel={t('dashboard.decodingModule')}
         error={modError}
         canImport={false}
         onImport={() => {}}
@@ -685,16 +707,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           setModImportOpen(false);
           setModError(null);
         }}
-        description="Opens a tracker module (.MOD, .DSM, .S3M, .XM, .IT, .MPTM) as a new project. Notes are grouped by instrument rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of measures."
+        description={t('dashboard.moduleDescription')}
       />
       <FileImportModal
         open={jsonImportOpen}
-        title="Import project JSON"
+        title={t('dashboard.importProject')}
         accept="application/json"
-        fileKind="project file"
+        fileKind={t('dashboard.projectFileKind')}
         onFile={(file) => void handleImportJsonFile(file)}
         busy={jsonBusy}
-        busyLabel="Reading the project…"
+        busyLabel={t('dashboard.readingProject')}
         error={jsonError}
         canImport={false}
         onImport={() => {}}
@@ -702,7 +724,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           setJsonImportOpen(false);
           setJsonError(null);
         }}
-        description="Opens a project exported from this app as a new project. The one already open is untouched."
+        description={t('dashboard.projectDescription')}
       />
       <MusicXmlImportDialog
         open={musicXmlImportOpen}

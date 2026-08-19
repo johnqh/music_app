@@ -65,7 +65,9 @@ describe('CreditsPage', () => {
     // "Track-measure" is the billing unit and means nothing to a musician;
     // "a bar for one instrument" is the same quantity in words they use.
     setup(96);
-    expect(screen.getByText(/one bar for one instrument/i)).toBeInTheDocument();
+    // Said twice on purpose: once in the explainer above the store, and again
+    // under each package, which is where someone about to pay is looking.
+    expect(screen.getAllByText(/one bar for one instrument/i).length).toBeGreaterThan(0);
   });
 
   it('shows a zero balance rather than hiding it', () => {

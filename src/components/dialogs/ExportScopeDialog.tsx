@@ -7,6 +7,7 @@
  * question is asked exactly when the two answers differ, and never otherwise.
  */
 import { FormModal } from '@sudobility/components';
+import { useTranslation } from 'react-i18next';
 
 export type ExportScope = 'all' | 'visible';
 
@@ -24,21 +25,26 @@ export function ExportScopeDialog({
   onChoose,
   onCancel,
 }: ExportScopeDialogProps) {
+  const { t } = useTranslation();
   return (
     <FormModal
       open={open}
-      title="Export hidden tracks?"
+      title={t('exportScope.title')}
       onClose={onCancel}
       size="small"
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
       actions={[
-        { label: 'Cancel', onClick: onCancel, variant: 'ghost' },
-        { label: 'Visible tracks only', onClick: () => onChoose('visible'), variant: 'outline' },
-        { label: 'Whole score', onClick: () => onChoose('all'), variant: 'primary' },
+        { label: t('common.cancel'), onClick: onCancel, variant: 'ghost' },
+        {
+          label: t('exportScope.visibleOnly'),
+          onClick: () => onChoose('visible'),
+          variant: 'outline',
+        },
+        { label: t('print.wholeScore'), onClick: () => onChoose('all'), variant: 'primary' },
       ]}
     >
       <p className="text-sm text-theme-text-secondary">
-        This score has {hiddenCount} hidden {hiddenCount === 1 ? 'track' : 'tracks'}.
+        {t('exportScope.hiddenCount', { count: hiddenCount })}
       </p>
     </FormModal>
   );

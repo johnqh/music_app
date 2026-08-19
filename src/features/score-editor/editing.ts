@@ -20,6 +20,9 @@
  * are not re-announced on every subsequent unrelated edit.
  */
 import type { createAppStore } from '@sudobility/music_lib';
+// The i18next singleton, not `useTranslation`: these are store commands, not
+// components, so there is no hook to call.
+import i18n from '@/i18n';
 import type {
   Accidental,
   Articulation,
@@ -453,7 +456,7 @@ export function deleteMeasureAtCaret(store: EditorStoreApi): void {
   if (!track || track.measures.length <= 1) {
     state.pushToast({
       severity: 'warning',
-      message: 'A score needs at least one measure, so this one was kept.',
+      message: i18n.t('editor.lastMeasureKept'),
     });
     return;
   }

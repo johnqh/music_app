@@ -5,7 +5,8 @@
  * the same shell with a non-scrollable page config (set by AppLayout).
  * `ProjectRoute` keeps the store's open project in sync with the URL.
  */
-import { Suspense, lazy, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CreditsHistoryPage } from '@/features/credits/CreditsHistoryPage';
 import { CreditsPage } from '@/features/credits/CreditsPage';
 import {
@@ -21,13 +22,18 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { LanguageValidator as SharedLanguageValidator } from '@sudobility/components';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { CommunityPage } from '@/features/community/CommunityPage';
+import { PublishedView } from '@/features/community/PublishedView';
+import HomePage from '@/pages/HomePage';
+import ResourcesPage from '@/pages/ResourcesPage';
+import LoginPage from '@/pages/LoginPage';
+import SettingsPage from '@/pages/SettingsPage';
 import { PrintView } from '@/features/print/PrintView';
 import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
-import { SUPPORTED_LANGUAGES } from '@/i18n';
-
-const HomePage = lazy(() => import('@/pages/HomePage'));
-const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+import { isLanguageSupported } from '@/i18n';
 
 export type AppRouterProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
@@ -35,10 +41,11 @@ export type AppRouterProps = {
 };
 
 function LoadingFallback() {
-  return <div className="p-8 text-theme-text-secondary">Loading…</div>;
+  const { t } = useTranslation();
+  return <div className="p-8 text-theme-text-secondary">{t('common.loading')}</div>;
 }
 
-function ScreenContainerLayout() {
+export function ScreenContainerLayout() {
   return (
     <ScreenContainer>
       <Suspense fallback={<LoadingFallback />}>
@@ -48,21 +55,22 @@ function ScreenContainerLayout() {
   );
 }
 
-function LanguageValidator() {
-  const { lang } = useParams<{ lang: string }>();
-  if (!lang || !(SUPPORTED_LANGUAGES as readonly string[]).includes(lang)) {
-    return <Navigate to="/en" replace />;
-  }
-  return <Outlet />;
+/**
+ * Validates the `:lang` segment, using the shared implementation.
+ *
+ * The hand-rolled version this replaces redirected every unsupported language
+ * to bare `/en`, discarding the rest of the path: `/fr/community` lost the
+ * community page rather than landing on the English one. The shared component
+ * keeps path, query and hash, and picks the target language from the stored
+ * preference then the browser's own, which is what `sudojo_app` uses.
+ */
+export function LanguageValidator() {
+  return <SharedLanguageValidator isLanguageSupported={isLanguageSupported} defaultLanguage="en" />;
 }
 
 function DashboardRoute({ store }: { store: EditorStoreApi }) {
   const navigate = useLocalizedNavigate();
   return <DashboardPage store={store} onNavigate={navigate} />;
-}
-
-function SettingsRoute({ store }: { store: EditorStoreApi }) {
-  return <SettingsPage store={store} />;
 }
 
 /**
@@ -81,6 +89,7 @@ function PrintRoute({ store }: { store: EditorStoreApi }) {
 }
 
 function ProjectRoute({ store }: { store: EditorStoreApi }) {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const lang = useCurrentLanguage();
@@ -101,10 +110,10 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
         playbackController.stop();
       })
       .catch((err: unknown) => {
-        reportError(err, { context: 'Failed to open project', store });
+        reportError(err, { context: t('errors.openProject'), store });
         navigate(`/${lang}/projects`);
       });
-  }, [id, store, navigate, lang]);
+  }, [id, store, navigate, lang, t]);
 
   // Leaving the editor (back to dashboard, settings, etc.) unmounts this
   // route; stop the transport so audio never keeps playing outside the editor.
@@ -119,10 +128,14 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
 }
 
 /**
- * The signed-in route table, rendered behind the auth gate.
+ * The route table — one table, public and gated together, as `sudojo_app` has
+ * it. Auth is applied per route with `ProtectedRoute` rather than by a
+ * catch-all gate wrapped around everything: a gate that owns the whole tree
+ * has to render the sign-in form *instead of* the app, which costs the visitor
+ * the shell and puts a sign-in screen at whatever URL they asked for.
  *
- * Public routes are declared in `App.tsx` and matched *before* this, so the
- * gate never sees them — which is what lets a stranger open a shared snapshot.
+ * Everything inside `ScreenContainerLayout` keeps the topbar and footer,
+ * signed in or not — including the sign-in page itself.
  */
 export function AppRoutes({ store = useAppStore }: AppRouterProps) {
   return (
@@ -130,14 +143,59 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
       <Route path="/" element={<Navigate to="/en" replace />} />
       <Route path="/:lang" element={<LanguageValidator />}>
         <Route element={<ScreenContainerLayout />}>
+          {/* Public. */}
           <Route index element={<HomePage />} />
-          <Route path="projects" element={<DashboardRoute store={store} />} />
-          <Route path="settings" element={<SettingsRoute store={store} />} />
-          <Route path="credits" element={<CreditsPage />} />
-          <Route path="credits/history" element={<CreditsHistoryPage />} />
+          <Route path="community" element={<CommunityPage />} />
+          <Route path="resources" element={<ResourcesPage />} />
+          <Route path="settings" element={<SettingsPage store={store} />} />
+          <Route path="signin" element={<LoginPage />} />
+
+          {/* Needs an account. */}
+          <Route
+            path="projects"
+            element={
+              <ProtectedRoute>
+                <DashboardRoute store={store} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="credits"
+            element={
+              <ProtectedRoute>
+                <CreditsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="credits/history"
+            element={
+              <ProtectedRoute>
+                <CreditsHistoryPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
-        <Route path="project/:id" element={<ProjectRoute store={store} />} />
-        <Route path="project/:id/print" element={<PrintRoute store={store} />} />
+
+        {/* Full-bleed reader for one shared score: deliberately no shell. */}
+        <Route path="p/:publicId" element={<PublishedView />} />
+
+        <Route
+          path="project/:id"
+          element={
+            <ProtectedRoute>
+              <ProjectRoute store={store} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="project/:id/print"
+          element={
+            <ProtectedRoute>
+              <PrintRoute store={store} />
+            </ProtectedRoute>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/en" replace />} />
     </Routes>

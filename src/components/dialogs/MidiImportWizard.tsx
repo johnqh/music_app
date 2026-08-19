@@ -41,6 +41,7 @@
  * input's picker the way a real `<label>` wrapping it does.
  */
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Button,
   Checkbox,
@@ -103,14 +104,15 @@ export type MidiImportWizardProps = {
 };
 
 const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
-const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName | 'none'; label: string }> = [
-  { value: 'none', label: 'No quantization' },
-  { value: 'whole', label: 'Whole' },
-  { value: 'half', label: 'Half' },
-  { value: 'quarter', label: 'Quarter' },
-  { value: 'eighth', label: 'Eighth' },
-  { value: 'sixteenth', label: 'Sixteenth' },
-  { value: 'thirtysecond', label: 'Thirty-second' },
+/** Keys, not labels: the text is resolved at render so it follows the language. */
+const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName | 'none'; labelKey: string }> = [
+  { value: 'none', labelKey: 'importMidi.gridNone' },
+  { value: 'whole', labelKey: 'importMidi.gridWhole' },
+  { value: 'half', labelKey: 'importMidi.gridHalf' },
+  { value: 'quarter', labelKey: 'importMidi.gridQuarter' },
+  { value: 'eighth', labelKey: 'importMidi.gridEighth' },
+  { value: 'sixteenth', labelKey: 'importMidi.gridSixteenth' },
+  { value: 'thirtysecond', labelKey: 'importMidi.gridThirtySecond' },
 ];
 
 /** A short, human-readable preview of the first few notes (by start tick), e.g. "C4, E4, G4, C5, ...". */
@@ -137,6 +139,7 @@ export function MidiImportWizard({
   onImportedNewProject,
   forceNewProject = false,
 }: MidiImportWizardProps) {
+  const { t } = useTranslation();
   const service = useMemo<MidiImportApi>(
     () =>
       midiService ?? {
@@ -233,7 +236,7 @@ export function MidiImportWizard({
         if (projectId) onImportedNewProject?.(projectId);
       }
     } catch (err) {
-      reportError(err, { context: 'MIDI import failed', store });
+      reportError(err, { context: t('errors.midiImport'), store });
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
@@ -272,19 +275,19 @@ export function MidiImportWizard({
     <>
       <FileImportModal
         open={open}
-        title="Import MIDI"
+        title={t('dashboard.importMidi')}
         accept=".mid,.midi,audio/midi"
-        fileKind="MIDI file"
+        fileKind={t('importMidi.fileKind')}
         fileName={fileName}
         onFile={(file) => void handleFile(file)}
         busy={busy}
-        busyLabel="Reading the file…"
+        busyLabel={t('import.readingFile')}
         error={error}
         canImport={Boolean(summary && options)}
         onImport={handleImportClick}
         onClose={handleClose}
         size="large"
-        description="Opens a MIDI file as a new project. Choose which tracks to bring and how to read their timing below."
+        description={t('importMidi.description')}
       >
         {summary && options && (
           <>
@@ -302,15 +305,15 @@ export function MidiImportWizard({
             </p>
 
             <div className="overflow-x-auto rounded-md border border-theme-border">
-              <table aria-label="MIDI track summary" className="w-full text-left text-sm">
+              <table aria-label={t('importMidi.trackSummary')} className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-theme-border text-theme-text-secondary">
-                    <th className="px-2 py-1.5 font-medium">Include</th>
-                    <th className="px-2 py-1.5 font-medium">Track</th>
-                    <th className="px-2 py-1.5 font-medium">Channel</th>
-                    <th className="px-2 py-1.5 font-medium">Program</th>
-                    <th className="px-2 py-1.5 font-medium">Notes</th>
-                    <th className="px-2 py-1.5 font-medium">Clef</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colInclude')}</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colTrack')}</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colChannel')}</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colProgram')}</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colNotes')}</th>
+                    <th className="px-2 py-1.5 font-medium">{t('importMidi.colClef')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,7 +329,7 @@ export function MidiImportWizard({
                       >
                         <td className="px-2 py-1.5">
                           <Checkbox
-                            label={`Include track: ${track.name}`}
+                            label={t('importMidi.includeTrack', { name: track.name })}
                             checked={selection.include}
                             onChange={(checked) =>
                               patchTrackSelection(track.index, { include: checked })
@@ -368,20 +371,25 @@ export function MidiImportWizard({
 
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-theme-text-secondary">Quantize grid</span>
+                <span className="text-xs text-theme-text-secondary">
+                  {t('importMidi.quantizeGrid')}
+                </span>
                 <Select
                   value={options.quantizeGrid ?? 'none'}
                   onValueChange={(v) =>
                     patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })
                   }
                 >
-                  <SelectTrigger aria-label="Quantize grid" className={SELECT_TRIGGER_CLASS}>
+                  <SelectTrigger
+                    aria-label={t('importMidi.quantizeGrid')}
+                    className={SELECT_TRIGGER_CLASS}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {QUANTIZE_GRID_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -389,19 +397,19 @@ export function MidiImportWizard({
               </label>
 
               <Checkbox
-                label="Triplet detection"
+                label={t('importMidi.tripletDetection')}
                 checked={options.tripletDetection}
                 onChange={(checked) => patchOptions({ tripletDetection: checked })}
               />
 
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-theme-text-secondary">
-                  Min. note duration (ticks)
+                  {t('importMidi.minDurationShort')}
                 </span>
                 <Input
                   type="number"
                   min={0}
-                  aria-label="Minimum note duration (ticks)"
+                  aria-label={t('importMidi.minDuration')}
                   value={options.minDurationTicks}
                   onChange={(e) =>
                     patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })
@@ -411,44 +419,46 @@ export function MidiImportWizard({
               </label>
 
               <Checkbox
-                label="Merge near-duplicate notes"
+                label={t('importMidi.mergeDuplicates')}
                 checked={options.mergeNearDuplicates}
                 onChange={(checked) => patchOptions({ mergeNearDuplicates: checked })}
               />
 
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-theme-text-secondary">Sustain pedal handling</span>
+                <span className="text-xs text-theme-text-secondary">{t('importMidi.sustain')}</span>
                 <Select
                   value={options.sustainPedal}
                   onValueChange={(v) => patchOptions({ sustainPedal: v as 'extend' | 'ignore' })}
                 >
                   <SelectTrigger
-                    aria-label="Sustain pedal handling"
+                    aria-label={t('importMidi.sustain')}
                     className={SELECT_TRIGGER_CLASS}
                   >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="extend">Extend notes through sustain</SelectItem>
-                    <SelectItem value="ignore">Ignore sustain pedal</SelectItem>
+                    <SelectItem value="extend">{t('importMidi.sustainExtend')}</SelectItem>
+                    <SelectItem value="ignore">{t('importMidi.sustainIgnore')}</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
 
               <Checkbox
-                label="Piano staff split"
+                label={t('importMidi.pianoSplit')}
                 checked={options.pianoStaffSplit}
                 onChange={(checked) => patchOptions({ pianoStaffSplit: checked })}
               />
 
               {options.pianoStaffSplit && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-theme-text-secondary">Split point (MIDI note)</span>
+                  <span className="text-xs text-theme-text-secondary">
+                    {t('importMidi.splitPoint')}
+                  </span>
                   <Input
                     type="number"
                     min={0}
                     max={127}
-                    aria-label="Split point (MIDI note number)"
+                    aria-label={t('importMidi.splitPointLabel')}
                     value={options.splitPointMidi}
                     onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
                     className={TEXT_INPUT_CLASS}
@@ -457,7 +467,7 @@ export function MidiImportWizard({
               )}
 
               <Checkbox
-                label="Detect key"
+                label={t('importMidi.detectKey')}
                 checked={options.detectKey}
                 onChange={(checked) => patchOptions({ detectKey: checked })}
               />
@@ -466,12 +476,12 @@ export function MidiImportWizard({
             <Button
               type="button"
               variant="outline"
-              aria-label="Preview import"
+              aria-label={t('importMidi.previewImport')}
               disabled={busy}
               onClick={() => void handlePreview()}
               className="self-start px-3 py-1.5"
             >
-              Preview
+              {t('importMidi.preview')}
             </Button>
 
             {preview && (
@@ -497,9 +507,9 @@ export function MidiImportWizard({
 
       <ConfirmDialog
         open={confirmingReplace}
-        title="Replace current score"
-        message="Importing this MIDI file will replace the current project's score. This can be undone with Undo."
-        confirmLabel="Replace"
+        title={t('importXml.replaceTitle')}
+        message={t('importMidi.replaceMessage')}
+        confirmLabel={t('importXml.replace')}
         onCancel={() => setConfirmingReplace(false)}
         onConfirm={() => {
           setConfirmingReplace(false);

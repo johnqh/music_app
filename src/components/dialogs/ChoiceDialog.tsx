@@ -10,6 +10,7 @@
  * prompt whose options do the same thing is a click the user cannot get wrong
  * and therefore should not be shown.
  */
+import { useTranslation } from 'react-i18next';
 import { Button, FormModal } from '@sudobility/components';
 
 export type DialogChoice<T extends string> = {
@@ -39,16 +40,17 @@ export function ChoiceDialog<T extends string>({
   onChoose,
   onCancel,
 }: ChoiceDialogProps<T>) {
+  const { t } = useTranslation();
   return (
     <FormModal
       open={open}
       title={title}
       onClose={onCancel}
       size="small"
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
       // The choices are the content, not the footer: each is a full-width
       // two-line button, which a footer row of peer actions cannot carry.
-      actions={[{ label: 'Cancel', onClick: onCancel, variant: 'ghost' }]}
+      actions={[{ label: t('common.cancel'), onClick: onCancel, variant: 'ghost' }]}
     >
       <div className="flex flex-col gap-4">
         <p className="text-sm text-theme-text-secondary">{message}</p>

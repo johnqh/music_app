@@ -7,6 +7,7 @@
  * with print rules.
  */
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@sudobility/components';
 import {
   computeLayout,
@@ -31,19 +32,26 @@ export type PrintViewProps = {
 /** Sentinel for "everything": a Select cannot carry an empty value. */
 const WHOLE_SCORE = 'whole-score';
 
-/** Display names, and the CSS `size` keyword for each paper. */
-const PAPERS: { value: PaperSize; label: string; css: string }[] = [
+/**
+ * Paper sizes and orientations, with the CSS `size` keyword for each paper.
+ *
+ * `A4` stays a literal: it is an ISO designation, not a word. The other two are
+ * translated — "Letter" and "Legal" are names a reader outside the US will not
+ * recognise, and orientation is plain vocabulary.
+ */
+const PAPERS: { value: PaperSize; label?: string; labelKey?: string; css: string }[] = [
   { value: 'a4', label: 'A4', css: 'A4' },
-  { value: 'letter', label: 'Letter', css: 'letter' },
-  { value: 'legal', label: 'Legal', css: 'legal' },
+  { value: 'letter', labelKey: 'print.paperLetter', css: 'letter' },
+  { value: 'legal', labelKey: 'print.paperLegal', css: 'legal' },
 ];
 
-const ORIENTATIONS: { value: PaperOrientation; label: string }[] = [
-  { value: 'portrait', label: 'Portrait' },
-  { value: 'landscape', label: 'Landscape' },
+const ORIENTATIONS: { value: PaperOrientation; labelKey: string }[] = [
+  { value: 'portrait', labelKey: 'print.portrait' },
+  { value: 'landscape', labelKey: 'print.landscape' },
 ];
 
 export function PrintView({ store, onBack }: PrintViewProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const visibleTrackIds = store(selectVisibleTrackIds);
   const [scope, setScope] = useState<string>(WHOLE_SCORE);
@@ -106,11 +114,11 @@ export function PrintView({ store, onBack }: PrintViewProps) {
       <style>{`@page { size: ${PAPERS.find((p) => p.value === paper)?.css} ${orientation}; margin: ${PAGE_MARGIN_MM}mm; }`}</style>
       <div className="print-chrome flex flex-wrap items-center gap-3 border-b border-neutral-300 px-4 py-3">
         <Select value={scope} onValueChange={setScope}>
-          <SelectTrigger aria-label="What to print" className="h-auto w-auto px-3 py-1.5">
+          <SelectTrigger aria-label={t('print.whatToPrint')} className="h-auto w-auto px-3 py-1.5">
             <span>{scopeLabel}</span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={WHOLE_SCORE}>Whole score</SelectItem>
+            <SelectItem value={WHOLE_SCORE}>{t('print.wholeScore')}</SelectItem>
             {(score?.tracks ?? []).map((track) => (
               <SelectItem key={track.id} value={track.id}>
                 {track.name}
@@ -120,36 +128,46 @@ export function PrintView({ store, onBack }: PrintViewProps) {
         </Select>
 
         <Select value={paper} onValueChange={(v) => setPaper(v as PaperSize)}>
-          <SelectTrigger aria-label="Paper" className="h-auto w-auto px-3 py-1.5">
-            <span>{PAPERS.find((p) => p.value === paper)?.label}</span>
+          <SelectTrigger aria-label={t('print.paper')} className="h-auto w-auto px-3 py-1.5">
+            <span>
+              {(() => {
+                const found = PAPERS.find((option) => option.value === paper);
+                return found?.label ?? (found?.labelKey ? t(found.labelKey) : '');
+              })()}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {PAPERS.map((p) => (
               <SelectItem key={p.value} value={p.value}>
-                {p.label}
+                {p.label ?? t(p.labelKey!)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={orientation} onValueChange={(v) => setOrientation(v as PaperOrientation)}>
-          <SelectTrigger aria-label="Orientation" className="h-auto w-auto px-3 py-1.5">
-            <span>{ORIENTATIONS.find((o) => o.value === orientation)?.label}</span>
+          <SelectTrigger aria-label={t('print.orientation')} className="h-auto w-auto px-3 py-1.5">
+            <span>
+              {(() => {
+                const key = ORIENTATIONS.find((o) => o.value === orientation)?.labelKey;
+                return key ? t(key) : '';
+              })()}
+            </span>
           </SelectTrigger>
           <SelectContent>
             {ORIENTATIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
-                {o.label}
+                {t(o.labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Button type="button" variant="primary" onClick={() => window.print()}>
-          Print
+          {t('print.action')}
         </Button>
         <Button type="button" variant="ghost" onClick={onBack}>
-          Back to editor
+          {t('print.backToEditor')}
         </Button>
       </div>
 
@@ -169,7 +187,7 @@ export function PrintView({ store, onBack }: PrintViewProps) {
           ))}
         </div>
       ) : (
-        <p className="px-4 py-6 text-sm text-neutral-600">There is nothing to print yet.</p>
+        <p className="px-4 py-6 text-sm text-neutral-600">{t('print.nothingToPrint')}</p>
       )}
     </div>
   );

@@ -6,28 +6,37 @@
  * "add a bass line" with a piano-programmed track, which reads as the feature
  * being broken rather than under-specified.
  *
+ * The instrument menu comes from the shared catalog: all 128 GM programs
+ * grouped by family, and the eight drum kits ahead of them.
+ *
  * `FormModal` rather than `Dialog`: full-screen on a phone, centred dialog
- * from `sm` up, with the title bar and sticky confirm button supplied. It also
- * owns the confirm-disabled state, so the blank-prompt guard is `canSave`
- * rather than a check inside the handler.
+ * from `sm` up, with the title bar and sticky confirm button supplied.
  */
 import { useEffect, useState } from 'react';
-import { FormModal } from '@sudobility/components';
-import { GM_FAMILIES, GM_FAMILY_LABELS, gmInstrumentsByFamily } from '@sudobility/music_lib';
-
-const INSTRUMENTS = GM_FAMILIES.flatMap((family) =>
-  gmInstrumentsByFamily(family).map((instrument) => ({
-    program: instrument.program,
-    name: instrument.name,
-    group: GM_FAMILY_LABELS[family],
-  })),
-);
+import { useTranslation } from 'react-i18next';
+import {
+  FormModal,
+  InfoBox,
+  Select,
+  SelectContent,
+  SelectTrigger,
+  SelectValue,
+  Stack,
+  Text,
+  TextArea,
+} from '@sudobility/components';
+import {
+  DEFAULT_INSTRUMENT_VALUE,
+  instrumentChoiceFor,
+  type InstrumentChoice,
+} from '@/features/instruments/instrument-catalog';
+import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 
 export type GenerateTrackDialogProps = {
   open: boolean;
   pending: boolean;
   error?: string | null;
-  onGenerate: (prompt: string, midiProgram: number) => void;
+  onGenerate: (prompt: string, instrument: InstrumentChoice) => void;
   onClose: () => void;
 };
 
@@ -38,8 +47,9 @@ export function GenerateTrackDialog({
   onGenerate,
   onClose,
 }: GenerateTrackDialogProps) {
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
-  const [program, setProgram] = useState(0);
+  const [value, setValue] = useState(DEFAULT_INSTRUMENT_VALUE);
 
   useEffect(() => {
     if (open) setPrompt('');
@@ -50,49 +60,52 @@ export function GenerateTrackDialog({
   return (
     <FormModal
       open={open}
-      title="Generate track"
+      title={t('generateTrack.title')}
       onClose={onClose}
-      onSave={() => onGenerate(trimmed, program)}
+      onSave={() => onGenerate(trimmed, instrumentChoiceFor(value))}
       saving={pending}
       canSave={trimmed.length > 0}
-      saveLabel="Generate"
+      saveLabel={t('generate.action')}
       size="small"
     >
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-theme-text-secondary">
-          Adds one new track to this score, matching its key, tempo and length.
-        </p>
+      <Stack direction="vertical" spacing="md">
+        <Text as="p" size="sm" color="muted">
+          {t('generateTrack.intro')}
+        </Text>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">What should it play?</span>
-          <textarea
-            aria-label="Prompt"
+        <Stack direction="vertical" spacing="xs">
+          <Text as="label" size="sm" color="muted">
+            {t('generateTrack.promptLabel')}
+          </Text>
+          <TextArea
             rows={3}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="A walking bass line under the melody"
-            className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+            onChange={(next) => setPrompt(next)}
+            placeholder={t('generateTrack.promptPlaceholder')}
+            textareaProps={{ 'aria-label': t('generate.prompt') }}
           />
-        </label>
+        </Stack>
 
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">Instrument</span>
-          <select
-            aria-label="Instrument"
-            value={program}
-            onChange={(e) => setProgram(Number(e.target.value))}
-            className="rounded border border-theme-border bg-theme-surface px-2 py-1"
-          >
-            {INSTRUMENTS.map((i) => (
-              <option key={i.program} value={i.program}>
-                {i.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Stack direction="vertical" spacing="xs">
+          <Text as="label" size="sm" color="muted">
+            {t('generate.instrument')}
+          </Text>
+          <Select value={value} onValueChange={setValue}>
+            <SelectTrigger aria-label={t('generate.instrument')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <InstrumentSelectItems />
+            </SelectContent>
+          </Select>
+        </Stack>
 
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      </div>
+        {error && (
+          <InfoBox variant="danger" size="sm">
+            {error}
+          </InfoBox>
+        )}
+      </Stack>
     </FormModal>
   );
 }

@@ -9,16 +9,15 @@
  */
 import { Component, useEffect, useRef, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Spinner, cn } from '@sudobility/components';
+import { cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { applyDocumentTheme, type ColorSchemeMode, resolveColorScheme } from '@/app/theme';
 import { AppRoutes } from '@/app/router';
-import { AuthProvider, useAuth } from '@/app/AuthContext';
-import { SignInScreen } from '@/app/SignInScreen';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { CommunityPage } from '@/features/community/CommunityPage';
-import { PublishedView } from '@/features/community/PublishedView';
+import { useTranslation } from 'react-i18next';
+import { AuthProvider } from '@/app/AuthContext';
+import { useDocumentLanguage } from '@/hooks/useDocumentLanguage';
+import { BrowserRouter } from 'react-router-dom';
 import { loadPrefs, savePrefs, useAppStore } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
@@ -26,6 +25,33 @@ import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 type ErrorBoundaryProps = { children: ReactNode };
 type ErrorBoundaryState = { error: Error | null };
+
+/**
+ * The crash screen's copy.
+ *
+ * A function component so it can read translations: `ErrorBoundary` has to be a
+ * class (only classes can catch render errors), and a class cannot call hooks.
+ */
+function ErrorFallback() {
+  const { t } = useTranslation();
+  return (
+    <div className="mx-auto max-w-[480px] p-8">
+      <div className="flex flex-col gap-4">
+        <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+          {t('error.crashed', { appName: CONSTANTS.APP_NAME })}
+        </div>
+        <p className="text-sm text-theme-text-secondary">{t('error.autosaved')}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className={cn(variants.button.primary.default(), 'self-start')}
+        >
+          {t('error.reload')}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** Spec §28: catches any render-time error in the app tree and shows a plain-language fallback. */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -41,25 +67,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   render(): ReactNode {
     if (!this.state.error) return this.props.children;
-    return (
-      <div className="mx-auto max-w-[480px] p-8">
-        <div className="flex flex-col gap-4">
-          <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
-            Something went wrong and {CONSTANTS.APP_NAME} couldn't continue.
-          </div>
-          <p className="text-sm text-theme-text-secondary">
-            Your work is autosaved as you go, so reloading is usually safe.
-          </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className={cn(variants.button.primary.default(), 'self-start')}
-          >
-            Reload
-          </button>
-        </div>
-      </div>
-    );
+    return <ErrorFallback />;
   }
 }
 
@@ -68,20 +76,9 @@ export type AppProps = {
   store?: EditorStoreApi;
 };
 
-function AuthGate({ store }: { store: EditorStoreApi }) {
-  const { user, loading } = useAuth();
-  if (loading) {
-    return (
-      <div className="grid min-h-screen place-items-center">
-        <Spinner ariaLabel="Loading" size="large" />
-      </div>
-    );
-  }
-  if (!user) return <SignInScreen />;
-  return <AppRoutes store={store} />;
-}
-
 export function App({ store = useAppStore }: AppProps) {
+  // Keeps <html lang> honest about what the page is actually rendering.
+  useDocumentLanguage();
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
@@ -160,15 +157,10 @@ export function App({ store = useAppStore }: AppProps) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          {/* One route table, in `router.tsx`. Auth is applied per route
+              there with `ProtectedRoute`, the way `sudojo_app` does it. */}
           <BrowserRouter>
-            <Routes>
-              {/* No auth gate on these two: being reachable signed-out is the
-                  whole feature. Matched before the catch-all, so the gate
-                  never sees them. */}
-              <Route path="/:lang/community" element={<CommunityPage />} />
-              <Route path="/:lang/p/:publicId" element={<PublishedView />} />
-              <Route path="*" element={<AuthGate store={store} />} />
-            </Routes>
+            <AppRoutes store={store} />
           </BrowserRouter>
         </AuthProvider>
       </QueryClientProvider>

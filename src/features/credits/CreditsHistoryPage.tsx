@@ -5,6 +5,7 @@
  * data and the copy.
  */
 import { usePurchaseHistory, useUsageHistory } from '@sudobility/consumables_client';
+import { useTranslation } from 'react-i18next';
 import { PurchaseHistoryPage, UsageHistoryPage } from '@sudobility/consumables_pages';
 
 /** Rows per page. Must match what is passed to the hooks, for the `hasMore` rule below. */
@@ -28,6 +29,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function CreditsHistoryPage() {
+  const { t } = useTranslation();
   const purchases = usePurchaseHistory(PAGE_SIZE);
   const usages = useUsageHistory(PAGE_SIZE);
 
@@ -40,14 +42,14 @@ export function CreditsHistoryPage() {
         onLoadMore={() => void purchases.loadMore()}
         hasMore={mayHaveMore(purchases.purchases.length)}
         labels={{
-          title: 'Purchases',
-          columnDate: 'Date',
-          columnCredits: 'Credits',
-          columnSource: 'Source',
-          columnProduct: 'Package',
-          columnAmount: 'Amount',
-          noRecords: 'No purchases yet.',
-          loadMore: 'Load more',
+          title: t('nav.purchases'),
+          columnDate: t('history.date'),
+          columnCredits: t('credits.title'),
+          columnSource: t('history.source'),
+          columnProduct: t('history.package'),
+          columnAmount: t('history.amount'),
+          noRecords: t('history.noPurchases'),
+          loadMore: t('history.loadMore'),
         }}
         formatters={{
           formatDate,
@@ -56,8 +58,12 @@ export function CreditsHistoryPage() {
           // The free grant arrives as a purchase from source "free", which is
           // the honest word for it — it was not bought.
           formatSource: (source) =>
-            ({ web: 'Web', apple: 'App Store', google: 'Google Play', free: 'Free' })[source] ??
-            source,
+            ({
+              web: t('history.sourceWeb'),
+              apple: t('history.sourceApple'),
+              google: t('history.sourceGoogle'),
+              free: t('history.sourceFree'),
+            })[source] ?? source,
         }}
       />
 
@@ -68,14 +74,14 @@ export function CreditsHistoryPage() {
         onLoadMore={() => void usages.loadMore()}
         hasMore={mayHaveMore(usages.usages.length)}
         labels={{
-          title: 'Usage',
-          columnDate: 'Date',
+          title: t('history.usage'),
+          columnDate: t('history.date'),
           // The rows carry a `reference` like "generate-track — 4
           // track-measures"; the shared component prefers it over `filename`.
-          columnFilename: 'Generation',
-          columnCredits: 'Credits',
-          noRecords: 'No credits spent yet.',
-          loadMore: 'Load more',
+          columnFilename: t('history.generation'),
+          columnCredits: t('credits.title'),
+          noRecords: t('history.noUsage'),
+          loadMore: t('history.loadMore'),
         }}
         formatters={{ formatDate }}
       />

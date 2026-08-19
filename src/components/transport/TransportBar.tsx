@@ -33,6 +33,7 @@
  * there's no draft/commit split to preserve and no benefit to wrapping it.
  */
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import {
   Button,
@@ -119,6 +120,7 @@ function formatTimecode(seconds: number): string {
  * space in the bar.
  */
 function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
+  const { t } = useTranslation();
   const load = store((s) => s.synthLoad);
   if (load.status === 'idle' || load.status === 'ready') return null;
 
@@ -129,7 +131,7 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
         className="flex items-center gap-1.5 whitespace-nowrap text-xs text-theme-error"
       >
         <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <span>Instruments failed to load</span>
+        <span>{t('transport.loadFailed')}</span>
       </div>
     );
   }
@@ -146,7 +148,7 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
         // Determinate while downloading; the synth digesting the font reports
         // nothing, so that half is a moving bar rather than a false percentage.
         role="progressbar"
-        aria-label="Preparing instruments"
+        aria-label={t('transport.preparing')}
         {...(percent === null
           ? {}
           : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
@@ -180,13 +182,14 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
  * starts playing says so.
  */
 function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScore: boolean }) {
+  const { t } = useTranslation();
   const playbackState = store((s) => s.state);
   const preparing = store((s) => s.synthLoad.status === 'loading');
   const label = preparing
-    ? 'Preparing instruments'
+    ? t('transport.preparing')
     : playbackState === 'playing'
-      ? 'Pause'
-      : 'Play';
+      ? t('player.pause')
+      : t('player.play');
 
   return (
     <Tooltip content={label}>
@@ -215,11 +218,12 @@ function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScor
 }
 
 function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
+  const { t } = useTranslation();
   const measureBeat = store(selectCurrentMeasureBeat);
   return (
-    <Tooltip content="Current measure and beat">
+    <Tooltip content={t('transport.measureBeat')}>
       <span
-        aria-label="Current measure and beat"
+        aria-label={t('transport.measureBeat')}
         className="min-w-[40px] text-center text-sm text-theme-text-primary"
       >
         {formatMeasureBeat(measureBeat)}
@@ -237,6 +241,7 @@ function PositionScrubber({
   disabled: boolean;
   onScrub: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
+  const { t } = useTranslation();
   // From the bus, not the store: the engine reports position on every seek and
   // stop as well as while playing, so this is always current — and it is the
   // subscription that keeps a 30Hz value out of every other component.
@@ -244,10 +249,10 @@ function PositionScrubber({
   return (
     // `wrapperClassName` keeps the scrubber full-width: Tooltip's wrapper is
     // inline-block, which would otherwise collapse it to its intrinsic size.
-    <Tooltip content="Drag to scrub through the score" wrapperClassName="w-full">
+    <Tooltip content={t('transport.scrub')} wrapperClassName="w-full">
       <input
         type="range"
-        aria-label="Playback position"
+        aria-label={t('transport.position')}
         min={0}
         max={maxTick}
         value={Math.min(positionTick, maxTick)}
@@ -268,13 +273,14 @@ function Timecode({
   tempoMap: TempoMap | null;
   totalSeconds: number;
 }) {
+  const { t } = useTranslation();
   const positionTick = usePlaybackPosition();
   const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
   return (
-    <Tooltip content="Elapsed time / total duration">
+    <Tooltip content={t('transport.elapsed')}>
       <span
         data-testid="playback-timecode"
-        aria-label="Playback time"
+        aria-label={t('transport.time')}
         className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
       >
         {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
@@ -284,6 +290,7 @@ function Timecode({
 }
 
 export function TransportBar({ store = useAppStore }: TransportBarProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   // `state` is deliberately not read here: `PlayPauseButton` is the only
   // control that needs it, and it subscribes for itself.
@@ -354,16 +361,16 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
   return (
     <div
       role="toolbar"
-      aria-label="Playback transport"
+      aria-label={t('transport.transport')}
       // Same reasoning as the editor toolbar: one row, scrolled, never wrapped.
       className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-theme-border px-2 py-1"
     >
-      <Tooltip content="Go to start">
+      <Tooltip content={t('transport.goToStart')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Go to start"
+          aria-label={t('transport.goToStart')}
           disabled={!hasScore}
           onClick={() => playbackController.goToStart()}
           className={ICON_BUTTON_CLASS}
@@ -371,12 +378,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           <GoToStartIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
-      <Tooltip content="Previous measure">
+      <Tooltip content={t('transport.previousMeasure')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Previous measure"
+          aria-label={t('transport.previousMeasure')}
           disabled={!hasScore}
           onClick={() => playbackController.previousMeasure()}
           className={ICON_BUTTON_CLASS}
@@ -385,12 +392,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Button>
       </Tooltip>
       <PlayPauseButton store={store} hasScore={hasScore} />
-      <Tooltip content="Stop">
+      <Tooltip content={t('transport.stop')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Stop"
+          aria-label={t('transport.stop')}
           disabled={!hasScore}
           onClick={() => {
             // Stop both the main transport and any candidate preview
@@ -401,12 +408,12 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           <StopIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
-      <Tooltip content="Next measure">
+      <Tooltip content={t('transport.nextMeasure')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Next measure"
+          aria-label={t('transport.nextMeasure')}
           disabled={!hasScore}
           onClick={() => playbackController.nextMeasure()}
           className={ICON_BUTTON_CLASS}
@@ -415,11 +422,11 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Button>
       </Tooltip>
 
-      <Tooltip content="Toggle loop">
+      <Tooltip content={t('transport.toggleLoop')}>
         <Button
           type="button"
           variant="ghost"
-          aria-label="Toggle loop"
+          aria-label={t('transport.toggleLoop')}
           aria-pressed={loopRange !== null}
           disabled={!hasScore}
           onClick={() => playbackController.toggleLoop()}
@@ -429,11 +436,11 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Button>
       </Tooltip>
 
-      <Tooltip content="Toggle metronome">
+      <Tooltip content={t('transport.toggleMetronome')}>
         <Button
           type="button"
           variant="ghost"
-          aria-label="Toggle metronome"
+          aria-label={t('transport.toggleMetronome')}
           aria-pressed={metronome}
           disabled={!hasScore}
           onClick={() => playbackController.setMetronome(!metronome)}
@@ -448,8 +455,8 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       {editingTempo ? (
         <Input
           type="number"
-          aria-label="Tempo (BPM)"
-          title="Tempo in beats per minute"
+          aria-label={t('transport.tempoBpm')}
+          title={t('transport.tempoHint')}
           value={tempoDraft}
           autoFocus
           onChange={(event: ChangeEvent<HTMLInputElement>) => setTempoDraft(event.target.value)}
@@ -458,11 +465,11 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           className={cn(TEXT_CONTROL_CLASS, 'w-[84px]')}
         />
       ) : (
-        <Tooltip content="Edit tempo">
+        <Tooltip content={t('transport.editTempo')}>
           <Button
             type="button"
             variant="ghost"
-            aria-label="Tempo (BPM)"
+            aria-label={t('transport.tempoBpm')}
             disabled={!hasScore}
             onClick={beginEditTempo}
             className={cn(
@@ -475,10 +482,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
         </Tooltip>
       )}
 
-      <Tooltip content="Playback speed multiplier">
+      <Tooltip content={t('transport.speedMultiplier')}>
         <Select value={String(tempoMultiplier)} onValueChange={handleSpeedChange}>
           <SelectTrigger
-            aria-label="Playback speed"
+            aria-label={t('transport.speed')}
             // Matches the bar's icon size; the trigger's chevron is 16px by default.
             className={cn(TEXT_CONTROL_CLASS, 'w-auto min-w-[64px] [&_svg]:size-[18px]')}
           >
@@ -497,7 +504,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       <div className="flex w-[120px] items-center gap-2">
         <span className="text-sm text-theme-text-primary">Vol</span>
         <label className="flex-1">
-          <span className="sr-only">Master volume</span>
+          <span className="sr-only">{t('transport.masterVolume')}</span>
           <Slider value={masterVolume} onChange={handleVolumeChange} min={0} max={1} step={0.01} />
         </label>
       </div>

@@ -8,6 +8,7 @@
  * so picking one and seeing nothing happen is not a reachable state.
  */
 import { CheckableSelect, Tooltip, cn } from '@sudobility/components';
+import { useTranslation } from 'react-i18next';
 import { selectActiveTrackId, selectVisibleTrackIds, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
@@ -17,6 +18,7 @@ export type TrackVisibilitySelectProps = {
 };
 
 export function TrackVisibilitySelect({ store = useAppStore }: TrackVisibilitySelectProps) {
+  const { t } = useTranslation();
   const tracks = store((s) => s.score?.tracks);
   const visibleTrackIds = store(selectVisibleTrackIds);
   const activeTrackId = store(selectActiveTrackId);
@@ -27,7 +29,7 @@ export function TrackVisibilitySelect({ store = useAppStore }: TrackVisibilitySe
   if (!tracks || tracks.length < 2 || !activeTrackId) return null;
 
   return (
-    <Tooltip placement="bottom" content="Active track, and which tracks are shown">
+    <Tooltip placement="bottom" content={t('editor.activeTrackHint')}>
       <CheckableSelect
         ariaLabel="Visible tracks"
         options={tracks.map((track) => ({ value: track.id, label: track.name }))}

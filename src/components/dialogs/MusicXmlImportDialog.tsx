@@ -15,6 +15,8 @@
  * plumbing for no behavioral benefit.
  */
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { InfoBox, Stack, Text } from '@sudobility/components';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
@@ -47,6 +49,7 @@ export function MusicXmlImportDialog({
   onImportedNewProject,
   forceNewProject = false,
 }: MusicXmlImportDialogProps) {
+  const { t } = useTranslation();
   const service = musicXmlService ?? new MusicXmlService(getAppServices().io.xmlParser);
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -98,7 +101,7 @@ export function MusicXmlImportDialog({
         handleClose();
         if (projectId) onImportedNewProject?.(projectId);
       })
-      .catch((err: unknown) => reportError(err, { context: 'MusicXML import failed', store }));
+      .catch((err: unknown) => reportError(err, { context: t('errors.musicXmlImport'), store }));
   };
 
   const handleImportClick = (): void => {
@@ -110,49 +113,48 @@ export function MusicXmlImportDialog({
     <>
       <FileImportModal
         open={open}
-        title="Import MusicXML"
+        title={t('dashboard.importMusicXml')}
         accept=".musicxml,.xml,application/vnd.recordare.musicxml+xml"
-        fileKind="MusicXML file"
+        fileKind={t('importXml.fileKind')}
         fileName={fileName}
         onFile={(file) => void handleFile(file)}
         busy={busy}
-        busyLabel="Reading the score…"
+        busyLabel={t('importXml.reading')}
         error={error}
         canImport={Boolean(result)}
         onImport={handleImportClick}
         onClose={handleClose}
-        description="Opens a MusicXML score as a new project."
+        description={t('importXml.description')}
       >
         {result && (
           <>
-            <p className="text-sm font-medium text-theme-text-primary">
-              {result.score.tracks.length} track(s), {allNotes(result.score).length} notes
-            </p>
+            <Text size="sm" weight="medium">
+              {t('importXml.summary', {
+                tracks: result.score.tracks.length,
+                notes: allNotes(result.score).length,
+              })}
+            </Text>
 
             {result.warnings.length > 0 ? (
               <>
-                <p className="text-sm text-theme-text-secondary">
-                  Unsupported elements were skipped and are reported below (import still proceeds
-                  safely):
-                </p>
-                <ul aria-label="Import warnings" className="flex flex-col gap-1">
+                <Text as="p" size="sm" color="muted">
+                  {t('importXml.skipped')}
+                </Text>
+                <Stack direction="vertical" spacing="xs" aria-label={t('importXml.warnings')}>
                   {result.warnings.map((warning) => (
-                    <li
-                      key={warning}
-                      className="rounded-md bg-theme-bg-secondary px-3 py-1.5 text-sm text-theme-text-primary"
-                    >
+                    <InfoBox key={warning} variant="warning" size="sm">
                       {warning}
-                    </li>
+                    </InfoBox>
                   ))}
-                </ul>
+                </Stack>
               </>
             ) : (
-              <div
-                role="status"
-                className="rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
-              >
-                No unsupported elements were found.
-              </div>
+              // `InfoBox`, not a hand-mixed green: the status colours it used
+              // were literal `green-600`/`green-700`, which ignore the theme
+              // tokens entirely and stay the same in dark mode.
+              <InfoBox variant="success" size="sm">
+                {t('importXml.allSupported')}
+              </InfoBox>
             )}
           </>
         )}
@@ -160,9 +162,9 @@ export function MusicXmlImportDialog({
 
       <ConfirmDialog
         open={confirmingReplace}
-        title="Replace current score"
-        message="Importing this MusicXML file will replace the current project's score. This can be undone with Undo."
-        confirmLabel="Replace"
+        title={t('importXml.replaceTitle')}
+        message={t('importXml.replaceMessage')}
+        confirmLabel={t('importXml.replace')}
         onCancel={() => setConfirmingReplace(false)}
         onConfirm={() => {
           setConfirmingReplace(false);

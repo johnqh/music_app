@@ -49,8 +49,8 @@ describe('App', () => {
     );
   });
 
-  it('shows the sign-in screen when the auth backend reports signed-out', async () => {
-    const { store } = setup();
+  /** Replaces the fake auth backend with one that reports nobody signed in. */
+  function signOut(): void {
     const services = getAppServices();
     const signedOut: AppServices = {
       ...services,
@@ -64,11 +64,28 @@ describe('App', () => {
       },
     };
     setAppServices(signedOut);
+  }
+
+  it('shows a signed-out visitor the home page, not a sign-in form', async () => {
+    // The gate used to render sign-in over the whole app, so a stranger met a
+    // password field instead of any explanation of what this is.
+    const { store } = setup();
+    signOut();
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the sign-in screen at its own route', async () => {
+    const { store } = setup();
+    signOut();
+    window.history.pushState({}, '', '/en/signin');
     render(<App store={store} />);
     await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument());
-    expect(
-      screen.queryByRole('heading', { name: 'Compose with AI, refine by hand' }),
-    ).not.toBeInTheDocument();
   });
 
   it('bootstraps persisted device prefs (theme + developer mode) into the store', async () => {

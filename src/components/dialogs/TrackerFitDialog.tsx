@@ -8,6 +8,8 @@
  * try XM instead.
  */
 import { FormModal } from '@sudobility/components';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { TrackerFitReport } from '@sudobility/music_lib';
 
 export type TrackerFitDialogProps = {
@@ -18,28 +20,26 @@ export type TrackerFitDialogProps = {
   onCancel: () => void;
 };
 
-export function fitReportLines(report: TrackerFitReport, format: string): string[] {
+/**
+ * The lines describing what this export will lose.
+ *
+ * Takes `t` rather than calling a hook, since it is a plain function; the
+ * counts pluralise through i18next rather than by appending an "s", which is
+ * an English-only rule.
+ */
+export function fitReportLines(report: TrackerFitReport, format: string, t: TFunction): string[] {
   const out: string[] = [];
-  const plural = (n: number) => (n === 1 ? '' : 's');
   if (report.clampedNotes > 0) {
-    out.push(
-      `${report.clampedNotes} note${plural(report.clampedNotes)} outside ${format}'s range were moved by whole octaves.`,
-    );
+    out.push(t('trackerFit.clampedNotes', { count: report.clampedNotes, format }));
   }
   if (report.droppedVoices > 0) {
-    out.push(
-      `${report.droppedVoices} voice${plural(report.droppedVoices)} did not fit ${format}'s channel count and will be missing.`,
-    );
+    out.push(t('trackerFit.droppedVoices', { count: report.droppedVoices, format }));
   }
   if (report.droppedShortNotes > 0) {
-    out.push(
-      `${report.droppedShortNotes} note${plural(report.droppedShortNotes)} shorter than one row were dropped.`,
-    );
+    out.push(t('trackerFit.droppedShortNotes', { count: report.droppedShortNotes }));
   }
   if (report.quantisedNotes > 0) {
-    out.push(
-      `${report.quantisedNotes} note${plural(report.quantisedNotes)} moved slightly to land on the row grid.`,
-    );
+    out.push(t('trackerFit.quantisedNotes', { count: report.quantisedNotes }));
   }
   return out;
 }
@@ -51,28 +51,26 @@ export function TrackerFitDialog({
   onConfirm,
   onCancel,
 }: TrackerFitDialogProps) {
+  const { t } = useTranslation();
   return (
     <FormModal
       open={open}
-      title={`Export as ${format}`}
+      title={t('trackerFit.title', { format })}
       onClose={onCancel}
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
       actions={[
-        { label: 'Cancel', onClick: onCancel },
-        { label: 'Export anyway', onClick: onConfirm },
+        { label: t('common.cancel'), onClick: onCancel },
+        { label: t('trackerFit.exportAnyway'), onClick: onConfirm },
       ]}
     >
       <div className="space-y-3 text-sm">
-        <p>This score does not fit {format} exactly:</p>
+        <p>{t('trackerFit.doesNotFit', { format })}</p>
         <ul className="list-disc space-y-1 pl-5">
-          {fitReportLines(report, format).map((line) => (
+          {fitReportLines(report, format, t).map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>
-        <p className="text-muted-foreground">
-          The file carries notes only — its instrument slots are named but empty, so it will be
-          silent until you add samples in a tracker.
-        </p>
+        <p className="text-muted-foreground">{t('trackerFit.notesOnly')}</p>
       </div>
     </FormModal>
   );

@@ -22,6 +22,7 @@
  * to the library `Button`.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Button,
   Select,
@@ -165,12 +166,12 @@ const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; Icon: NotationIcon; ariaLab
 /** Radix rejects an empty item value, so "None" travels under a sentinel. */
 const NO_ARTICULATION = 'none';
 
-const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; label: string }> = [
-  { value: undefined, label: 'None' },
-  { value: 'staccato', label: 'Staccato' },
-  { value: 'accent', label: 'Accent' },
-  { value: 'tenuto', label: 'Tenuto' },
-  { value: 'marcato', label: 'Marcato' },
+const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; labelKey: string }> = [
+  { value: undefined, labelKey: 'articulation.none' },
+  { value: 'staccato', labelKey: 'articulation.staccato' },
+  { value: 'accent', labelKey: 'articulation.accent' },
+  { value: 'tenuto', labelKey: 'articulation.tenuto' },
+  { value: 'marcato', labelKey: 'articulation.marcato' },
 ];
 
 /**
@@ -180,11 +181,11 @@ const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; label: stri
  * control on the bar, for a setting that is read at a glance and changed
  * rarely. The menu still spells them out.
  */
-const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName; short: string; label: string }> = [
-  { value: 'quarter', short: '1/4', label: 'Quarter' },
-  { value: 'eighth', short: '1/8', label: 'Eighth' },
-  { value: 'sixteenth', short: '1/16', label: 'Sixteenth' },
-  { value: 'thirtysecond', short: '1/32', label: 'Thirty-second' },
+const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName; short: string; labelKey: string }> = [
+  { value: 'quarter', short: '1/4', labelKey: 'importMidi.gridQuarter' },
+  { value: 'eighth', short: '1/8', labelKey: 'importMidi.gridEighth' },
+  { value: 'sixteenth', short: '1/16', labelKey: 'importMidi.gridSixteenth' },
+  { value: 'thirtysecond', short: '1/32', labelKey: 'importMidi.gridThirtySecond' },
 ];
 
 const MIN_ZOOM = 0.25;
@@ -232,6 +233,7 @@ export function EditorToolbar({
   onPaste,
   onGenerateTrack,
 }: EditorToolbarProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const snapGrid = store((s) => s.snapGrid);
   const selectedNotes = store(selectSelectedNotes);
@@ -272,22 +274,24 @@ export function EditorToolbar({
     {
       value: 'insert',
       Icon: InsertModeIcon,
-      label: 'Insert mode',
-      hint: "Insert: notes you add push this track's later notes out of the way",
+      label: t('editor.insertMode'),
+      hint: t('editor.insertModeHint'),
     },
     {
       value: 'replace',
       Icon: ReplaceModeIcon,
-      label: 'Replace mode',
-      hint: 'Replace: notes you add overwrite what was already there',
+      label: t('editor.replaceMode'),
+      hint: t('editor.replaceModeHint'),
     },
     {
       value: 'stack',
       Icon: ChordIcon,
-      label: 'Stack mode',
+      label: t('editor.stackMode'),
       hint: canStack
-        ? 'Stack: notes you add join what is already there, building a chord'
-        : `Stack needs an instrument that can play more than one note at a time — ${activeTrack?.instrumentName ?? 'this one'} cannot`,
+        ? t('editor.stackModeHint')
+        : t('editor.stackModeUnavailable', {
+            instrument: activeTrack?.instrumentName ?? t('editor.thisInstrument'),
+          }),
     },
   ];
   /**
@@ -395,7 +399,7 @@ export function EditorToolbar({
     <div className="flex shrink-0 items-stretch border-b border-theme-border">
       <div
         role="toolbar"
-        aria-label="Score editor toolbar"
+        aria-label={t('editor.toolbar')}
         // `flex-nowrap` + horizontal scroll, NOT `flex-wrap`: this app is bounded
         // to the viewport, and a wrapping toolbar grows without limit as the
         // window narrows. At 800px it reached 475px tall, overflowed the app
@@ -406,7 +410,7 @@ export function EditorToolbar({
         {/* Tracks first: which track you are on decides where every other
             control in this bar acts, so it reads left-to-right as "this track,
             then what to do to it". */}
-        <div role="group" aria-label="Tracks" className="flex items-center gap-0.5">
+        <div role="group" aria-label={t('editor.tracks')} className="flex items-center gap-0.5">
           <TrackVisibilitySelect store={store} />
           <Select
             value=""
@@ -421,9 +425,9 @@ export function EditorToolbar({
               }
             }}
           >
-            <Tooltip placement="bottom" content="Add Track">
+            <Tooltip placement="bottom" content={t('editor.addTrack')}>
               <SelectTrigger
-                aria-label="Add Track"
+                aria-label={t('editor.addTrack')}
                 disabled={!score || isPlaying}
                 // Not the square icon class: this trigger carries the library's
                 // own dropdown chevron beside the plus, and that chevron is
@@ -435,8 +439,8 @@ export function EditorToolbar({
               </SelectTrigger>
             </Tooltip>
             <SelectContent>
-              <SelectItem value="blank">Blank Track</SelectItem>
-              <SelectItem value="generate">Generate Track</SelectItem>
+              <SelectItem value="blank">{t('editor.blankTrack')}</SelectItem>
+              <SelectItem value="generate">{t('editor.generateTrack')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -464,7 +468,7 @@ export function EditorToolbar({
             }
           >
             <SelectTrigger
-              aria-label="Note duration"
+              aria-label={t('editor.noteDuration')}
               disabled={!hasScore}
               className={cn(TEXT_CONTROL_CLASS, 'w-[74px] justify-between [&_svg]:size-[18px]')}
             >
@@ -489,15 +493,16 @@ export function EditorToolbar({
           </SelectContent>
         </Select>
 
-        <div role="group" aria-label="Duration modifier" className="flex items-center gap-0.5">
-          <Tooltip
-            placement="bottom"
-            content="Dotted — half again as long (a dotted quarter lasts three eighths)"
-          >
+        <div
+          role="group"
+          aria-label={t('editor.durationModifier')}
+          className="flex items-center gap-0.5"
+        >
+          <Tooltip placement="bottom" content={t('editor.dottedHint')}>
             <Button
               type="button"
               variant="ghost"
-              aria-label="Dotted"
+              aria-label={t('editor.dotted')}
               aria-pressed={durationParts(snapGrid).modifier === 'dotted'}
               disabled={!hasScore}
               onClick={() => handleDurationClick(withModifier(snapGrid, 'dotted'))}
@@ -506,14 +511,11 @@ export function EditorToolbar({
               <DottedIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
-          <Tooltip
-            placement="bottom"
-            content="Triplet — three in the space of two (a triplet quarter lasts two thirds)"
-          >
+          <Tooltip placement="bottom" content={t('editor.tripletHint')}>
             <Button
               type="button"
               variant="ghost"
-              aria-label="Triplet"
+              aria-label={t('editor.triplet')}
               aria-pressed={durationParts(snapGrid).modifier === 'triplet'}
               disabled={!hasScore}
               onClick={() => handleDurationClick(withModifier(snapGrid, 'triplet'))}
@@ -531,9 +533,9 @@ export function EditorToolbar({
           entering notes — and five near-identical glyphs were a quarter of the
           bar's width for an occasional edit. */}
         <Select value="" onValueChange={handleAccidentalSelect}>
-          <Tooltip placement="bottom" content="Set the accidental on the selected notes">
+          <Tooltip placement="bottom" content={t('editor.accidentalHint')}>
             <SelectTrigger
-              aria-label="Accidental"
+              aria-label={t('editor.accidental')}
               disabled={!canEdit || !hasSelection}
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
@@ -563,9 +565,9 @@ export function EditorToolbar({
         selection, it does not hold one. The trigger shows a fixed icon.
       */}
         <Select value="" onValueChange={handleArticulationSelect}>
-          <Tooltip placement="bottom" content="Add an articulation to the selection">
+          <Tooltip placement="bottom" content={t('editor.articulationHint')}>
             <SelectTrigger
-              aria-label="Articulation"
+              aria-label={t('editor.articulation')}
               disabled={!canEdit || !hasSelection}
               className={cn(ICON_BUTTON_CLASS, '[&>svg:last-child]:hidden [&_svg]:size-[18px]')}
             >
@@ -574,19 +576,19 @@ export function EditorToolbar({
           </Tooltip>
           <SelectContent>
             {ARTICULATION_OPTIONS.map((option) => (
-              <SelectItem key={option.label} value={option.value ?? NO_ARTICULATION}>
-                {option.label}
+              <SelectItem key={option.labelKey} value={option.value ?? NO_ARTICULATION}>
+                {t(option.labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Tooltip placement="bottom" content="Toggle tie">
+        <Tooltip placement="bottom" content={t('editor.toggleTie')}>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Toggle tie"
+            aria-label={t('editor.toggleTie')}
             disabled={!canEdit || !hasSelection}
             onClick={() => toggleTie(store, 'tieStart')}
             className={ICON_BUTTON_CLASS}
@@ -597,7 +599,7 @@ export function EditorToolbar({
 
         <VerticalDivider />
 
-        <div role="group" aria-label="Edit mode" className="flex items-center gap-0.5">
+        <div role="group" aria-label={t('editor.editMode')} className="flex items-center gap-0.5">
           {editModeOptions.map((option) => (
             <Tooltip placement="bottom" key={option.value} content={option.hint}>
               <Button
@@ -614,11 +616,11 @@ export function EditorToolbar({
             </Tooltip>
           ))}
         </div>
-        <Tooltip placement="bottom" content="Insert a note at the caret">
+        <Tooltip placement="bottom" content={t('editor.insertNoteHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Insert note"
+            aria-label={t('editor.insertNote')}
             disabled={!canEdit}
             onClick={handleInsertNote}
             className={ICON_BUTTON_CLASS}
@@ -626,11 +628,11 @@ export function EditorToolbar({
             <InsertNoteIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
-        <Tooltip placement="bottom" content="Insert a rest at the caret">
+        <Tooltip placement="bottom" content={t('editor.insertRestHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Insert rest"
+            aria-label={t('editor.insertRest')}
             disabled={!canEdit}
             onClick={handleInsertRest}
             className={ICON_BUTTON_CLASS}
@@ -638,12 +640,12 @@ export function EditorToolbar({
             <InsertRestIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
-        <div role="group" aria-label="Clipboard" className="flex items-center gap-0.5">
-          <Tooltip placement="bottom" content="Copy the selected notes (Ctrl/Cmd+C)">
+        <div role="group" aria-label={t('editor.clipboard')} className="flex items-center gap-0.5">
+          <Tooltip placement="bottom" content={t('editor.copyHint')}>
             <Button
               type="button"
               variant="outline"
-              aria-label="Copy"
+              aria-label={t('editor.copy')}
               disabled={!hasScore || !hasSelection}
               onClick={() => store.getState().copySelection()}
               className={ICON_BUTTON_CLASS}
@@ -651,11 +653,11 @@ export function EditorToolbar({
               <DocumentDuplicateIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
-          <Tooltip placement="bottom" content="Cut the selected notes (Ctrl/Cmd+X)">
+          <Tooltip placement="bottom" content={t('editor.cutHint')}>
             <Button
               type="button"
               variant="outline"
-              aria-label="Cut"
+              aria-label={t('editor.cut')}
               disabled={!canEdit || !hasSelection}
               onClick={onCut}
               className={ICON_BUTTON_CLASS}
@@ -663,11 +665,11 @@ export function EditorToolbar({
               <ScissorsIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
-          <Tooltip placement="bottom" content="Paste at the caret (Ctrl/Cmd+V)">
+          <Tooltip placement="bottom" content={t('editor.pasteHint')}>
             <Button
               type="button"
               variant="outline"
-              aria-label="Paste"
+              aria-label={t('editor.paste')}
               disabled={!canEdit}
               onClick={onPaste}
               className={ICON_BUTTON_CLASS}
@@ -677,11 +679,11 @@ export function EditorToolbar({
           </Tooltip>
         </div>
 
-        <Tooltip placement="bottom" content="Delete the selected notes (Delete)">
+        <Tooltip placement="bottom" content={t('editor.deleteHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Delete selection"
+            aria-label={t('editor.deleteSelection')}
             disabled={!canEdit || !hasSelection}
             onClick={() => deleteSelected(store)}
             className={ICON_BUTTON_CLASS}
@@ -692,10 +694,10 @@ export function EditorToolbar({
 
         <VerticalDivider />
 
-        <Tooltip placement="bottom" content="Grid that Quantize snaps to">
+        <Tooltip placement="bottom" content={t('editor.quantizeGridHint')}>
           <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
             <SelectTrigger
-              aria-label="Quantize grid"
+              aria-label={t('editor.quantizeGrid')}
               // The trigger's own chevron is 16px by default; this brings it in
               // line with every other icon on the bar.
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
@@ -710,17 +712,17 @@ export function EditorToolbar({
             <SelectContent>
               {QUANTIZE_GRID_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Tooltip>
-        <Tooltip placement="bottom" content="Snap the selection to the quantize grid">
+        <Tooltip placement="bottom" content={t('editor.quantizeHint')}>
           <Button
             type="button"
             variant="outline"
-            aria-label="Quantize"
+            aria-label={t('editor.quantize')}
             disabled={!canEdit || !hasSelection}
             onClick={handleQuantize}
             className={ICON_BUTTON_CLASS}
@@ -737,7 +739,7 @@ export function EditorToolbar({
           against stems down on one stave. More than two is real notation too,
           but nothing else in the editor distinguishes voices yet, so offering
           four would be offering somewhere to lose notes. */}
-        <div role="group" aria-label="Voice" className="flex items-center gap-0.5">
+        <div role="group" aria-label={t('editor.voice')} className="flex items-center gap-0.5">
           {[0, 1].map((index) => (
             <Tooltip
               placement="bottom"
@@ -769,9 +771,9 @@ export function EditorToolbar({
           reached often enough to be worth permanent width on a bar that was
           already overflowing by 267px at 1440. */}
         <Select value="" onValueChange={handleMoreAction}>
-          <Tooltip placement="bottom" content="More actions">
+          <Tooltip placement="bottom" content={t('editor.moreActions')}>
             <SelectTrigger
-              aria-label="More actions"
+              aria-label={t('editor.moreActions')}
               disabled={!hasScore}
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
@@ -779,9 +781,9 @@ export function EditorToolbar({
             </SelectTrigger>
           </Tooltip>
           <SelectContent>
-            <SelectItem value="select-all">Select all notes</SelectItem>
-            <SelectItem value="add-measure">Add measure</SelectItem>
-            <SelectItem value="delete-measure">Delete measure at caret</SelectItem>
+            <SelectItem value="select-all">{t('editor.selectAllNotes')}</SelectItem>
+            <SelectItem value="add-measure">{t('editor.addMeasure')}</SelectItem>
+            <SelectItem value="delete-measure">{t('editor.deleteMeasure')}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -794,32 +796,32 @@ export function EditorToolbar({
           362px of the bar was unreachable, and zoom and layout were in it. */}
       <div className="flex shrink-0 items-center gap-0.5 border-l border-theme-border pl-1">
         <div className="flex items-center gap-0.5">
-          <Tooltip placement="bottom" content="Zoom out">
+          <Tooltip placement="bottom" content={t('editor.zoomOut')}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Zoom out"
+              aria-label={t('editor.zoomOut')}
               onClick={handleZoomOut}
               className={ICON_BUTTON_CLASS}
             >
               <MagnifyingGlassMinusIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
-          <Tooltip placement="bottom" content="Current zoom level">
+          <Tooltip placement="bottom" content={t('editor.currentZoom')}>
             <span
-              aria-label="Current zoom level"
+              aria-label={t('editor.currentZoom')}
               className="min-w-[40px] text-center text-sm text-theme-text-primary"
             >
               {zoomLabel}
             </span>
           </Tooltip>
-          <Tooltip placement="bottom" content="Zoom in">
+          <Tooltip placement="bottom" content={t('editor.zoomIn')}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Zoom in"
+              aria-label={t('editor.zoomIn')}
               onClick={handleZoomIn}
               className={ICON_BUTTON_CLASS}
             >
@@ -827,12 +829,12 @@ export function EditorToolbar({
             </Button>
           </Tooltip>
         </div>
-        <div role="group" aria-label="Layout mode" className="flex items-center gap-0.5">
-          <Tooltip placement="bottom" content="Wrap systems to the page width">
+        <div role="group" aria-label={t('editor.layoutMode')} className="flex items-center gap-0.5">
+          <Tooltip placement="bottom" content={t('editor.pageHint')}>
             <Button
               type="button"
               variant="ghost"
-              aria-label="Page layout"
+              aria-label={t('editor.pageLayout')}
               aria-pressed={layoutMode === 'page'}
               onClick={() => onLayoutModeChange('page')}
               className={TOGGLE_BUTTON_CLASS}
@@ -840,11 +842,11 @@ export function EditorToolbar({
               <PageLayoutIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
-          <Tooltip placement="bottom" content="Lay the score out in one scrolling line">
+          <Tooltip placement="bottom" content={t('editor.continuousHint')}>
             <Button
               type="button"
               variant="ghost"
-              aria-label="Continuous layout"
+              aria-label={t('editor.continuousLayout')}
               aria-pressed={layoutMode === 'continuous'}
               onClick={() => onLayoutModeChange('continuous')}
               className={TOGGLE_BUTTON_CLASS}
@@ -853,11 +855,12 @@ export function EditorToolbar({
             </Button>
           </Tooltip>
         </div>
-        <div role="group" aria-label="Pitch display" className="flex items-center gap-0.5">
-          <Tooltip
-            placement="bottom"
-            content="Show each player's written pitch, or what the score sounds"
-          >
+        <div
+          role="group"
+          aria-label={t('settings.pitchDisplay')}
+          className="flex items-center gap-0.5"
+        >
+          <Tooltip placement="bottom" content={t('editor.pitchDisplayHint')}>
             <Button
               type="button"
               variant="ghost"
@@ -887,7 +890,7 @@ export function EditorToolbar({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Toggle inspector panel"
+              aria-label={t('editor.toggleInspector')}
               onClick={onToggleInspector}
               className={ICON_BUTTON_CLASS}
             >

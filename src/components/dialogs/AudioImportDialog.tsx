@@ -12,6 +12,7 @@
  * `transcribing` state and fills itself in when the job lands.
  */
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 
 export type AudioImportDialogProps = {
@@ -50,6 +51,7 @@ export function AudioImportDialog({
   onImport,
   onClose,
 }: AudioImportDialogProps) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
 
   const long = file !== null && file.size > LONG_AUDIO_BYTES;
@@ -57,13 +59,13 @@ export function AudioImportDialog({
   return (
     <FileImportModal
       open={open}
-      title="Import audio"
+      title={t('importAudio.title')}
       accept=".wav,.mp3,.mpa,audio/wav,audio/mpeg"
-      fileKind="audio file"
+      fileKind={t('importAudio.fileKind')}
       fileName={file?.name ?? null}
       onFile={setFile}
       busy={busy}
-      busyLabel="Sending the recording…"
+      busyLabel={t('importAudio.sending')}
       error={error ?? null}
       canImport={Boolean(file) && canTranscribe}
       onImport={() => {
@@ -84,15 +86,14 @@ export function AudioImportDialog({
     >
       {!canTranscribe && (
         <p role="status" className="text-sm text-theme-text-secondary">
-          Audio transcription is not available on this server.
+          {t('importAudio.unavailable')}
         </p>
       )}
       {long && canTranscribe && (
         // Said rather than prevented: the server has the real limit, and this
         // cannot know the true duration without decoding the file.
         <p className="text-sm text-theme-text-secondary">
-          That is a large file — roughly {roughMinutes(file.size)} minutes. Transcribing it will
-          take a while, and very long recordings are refused.
+          {t('importAudio.largeFile', { minutes: roughMinutes(file.size) })}
         </p>
       )}
     </FileImportModal>

@@ -11,6 +11,7 @@
  * for notation because VexFlow requires it — not as a house style.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from '@sudobility/components';
 import {
   findTrack,
@@ -235,6 +236,7 @@ export function PianoKeyboardView({
   collapsed = false,
   onToggleCollapsed = () => undefined,
 }: PianoKeyboardViewProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
   const themeMode = store((s) => s.themeMode);
@@ -479,7 +481,7 @@ export function PianoKeyboardView({
       >
         <div
           role="img"
-          aria-label="Piano keyboard showing the notes being played"
+          aria-label={t('editor.pianoKeyboard')}
           className="relative"
           style={{ width: keyboardWidth(whiteKeyWidth), height: box.height }}
         >

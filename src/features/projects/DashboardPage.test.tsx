@@ -123,7 +123,10 @@ describe('DashboardPage', () => {
     render(<DashboardPage store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'New project' }));
+    // "New Project", matching the visible label: the aria-label used to read
+    // "New project" while the button read "New Project", which is exactly the
+    // mismatch WCAG's "Label in Name" is about. Localising them merged the two.
+    await user.click(screen.getByRole('button', { name: 'New Project' }));
     const nameField = screen.getByLabelText('New project name');
     await user.clear(nameField);
     await user.type(nameField, 'Brand New Song');

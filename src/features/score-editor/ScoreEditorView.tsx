@@ -19,6 +19,7 @@
  * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type React from 'react';
 import {
   CanvasScoreRenderer,
@@ -42,7 +43,6 @@ import {
   changePitchCommand,
   findEvent,
   relocateNotesCommand,
-  gmInstrument,
   selectionSummaryLabel,
   shiftDiatonic,
   ticksFor,
@@ -50,6 +50,7 @@ import {
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
+import type { InstrumentChoice } from '@/features/instruments/instrument-catalog';
 import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
@@ -384,6 +385,7 @@ export function ScoreEditorView({
   onToggleInspector,
   onGenerateTrackJob,
 }: ScoreEditorViewProps) {
+  const { t } = useTranslation();
   const clipboard = useClipboardPrompts(store);
   useEditorShortcuts(store, playbackController, clipboard);
 
@@ -463,7 +465,7 @@ export function ScoreEditorView({
    * coming back.
    */
   const generateTrack = useCallback(
-    async (prompt: string, midiProgram: number) => {
+    async (prompt: string, instrument: InstrumentChoice) => {
       const current = store.getState().score;
       if (!current || !onGenerateTrackJob) return;
 
@@ -471,7 +473,7 @@ export function ScoreEditorView({
       setGenerateTrackError(null);
       try {
         const first = current.tracks[0];
-        const instrumentName = gmInstrument(midiProgram)?.name ?? 'Piano';
+        const { midiProgram, instrumentName, clef } = instrument;
         await onGenerateTrackJob({
           prompt,
           // Matched to the open score, or the new track will not line up
@@ -489,7 +491,10 @@ export function ScoreEditorView({
               name: instrumentName,
               instrumentName,
               midiProgram,
-              clef: midiProgram >= 32 && midiProgram <= 39 ? 'bass' : 'treble',
+              // Chosen with the instrument, not derived from its program: a
+              // drum kit is not a GM program, so the percussion clef is the
+              // only thing that distinguishes it.
+              clef,
             },
           ],
         });
@@ -1338,18 +1343,18 @@ export function ScoreEditorView({
     <div className="flex h-full min-h-0 flex-col">
       <ChoiceDialog
         open={clipboard.pendingCut}
-        title="Cut these notes"
-        message="There is more music after them on this track."
+        title={t('editor.cutTitle')}
+        message={t('editor.cutMessage')}
         choices={[
           {
             value: 'silence' as const,
-            label: 'Leave silence',
+            label: t('editor.leaveSilence'),
             detail: 'The rest of the track stays where it is',
             primary: true,
           },
           {
             value: 'close' as const,
-            label: 'Close the gap',
+            label: t('editor.closeGap'),
             detail: 'Later notes on this track move earlier to fill it',
           },
         ]}
@@ -1358,18 +1363,18 @@ export function ScoreEditorView({
       />
       <ChoiceDialog
         open={clipboard.pendingPaste}
-        title="Paste over this music"
-        message="There is already something where this would land."
+        title={t('editor.pasteTitle')}
+        message={t('editor.pasteMessage')}
         choices={[
           {
             value: 'replace' as const,
-            label: 'Replace',
+            label: t('replace.action'),
             detail: 'What is there now is removed',
             primary: true,
           },
           {
             value: 'insert' as const,
-            label: 'Insert',
+            label: t('editor.insert'),
             detail: 'What is there now moves later on this track',
           },
         ]}
@@ -1394,7 +1399,7 @@ export function ScoreEditorView({
         open={generateTrackOpen}
         pending={generateTrackPending}
         error={generateTrackError}
-        onGenerate={(prompt, midiProgram) => void generateTrack(prompt, midiProgram)}
+        onGenerate={(prompt, instrument) => void generateTrack(prompt, instrument)}
         onClose={() => setGenerateTrackOpen(false)}
       />
       <div
@@ -1429,7 +1434,9 @@ export function ScoreEditorView({
           ref={containerRef}
           data-testid="score-editor-canvas"
           role="application"
-          aria-label={`Score notation. ${selectionSummaryLabel(selection, selectionRegenerated)}.`}
+          aria-label={t('editor.scoreNotation', {
+            summary: selectionSummaryLabel(selection, selectionRegenerated),
+          })}
           tabIndex={0}
           onClick={handleClick}
           onPointerDown={handlePointerDown}

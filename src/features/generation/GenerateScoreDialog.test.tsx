@@ -25,13 +25,16 @@ function open(balance: number) {
   );
 }
 
-/** Turns on `count` instrument checkboxes beyond whatever is on by default. */
+/**
+ * Brings the ensemble to exactly `count` instruments.
+ *
+ * The dialog starts with one (Piano) and refuses to drop below one, so this
+ * adds the remainder with the Add button rather than setting a checkbox set.
+ */
 function selectInstruments(count: number) {
-  const boxes = screen.getAllByRole('checkbox');
-  boxes.forEach((box) => {
-    if ((box as HTMLInputElement).checked) fireEvent.click(box);
-  });
-  boxes.slice(0, count).forEach((box) => fireEvent.click(box));
+  const add = screen.getByRole('button', { name: 'Add' });
+  const current = screen.getAllByRole('button', { name: /^Remove / }).length;
+  for (let i = current; i < count; i++) fireEvent.click(add);
 }
 
 function setMeasures(n: number) {
@@ -103,5 +106,51 @@ describe('GenerateScoreDialog cost', () => {
     selectInstruments(4);
 
     expect(screen.getByRole('button', { name: /generate/i })).toBeEnabled();
+  });
+});
+
+describe('GenerateScoreDialog instrumentation', () => {
+  it('starts as a piano solo and refuses to go empty', () => {
+    open(1000);
+    const removes = screen.getAllByRole('button', { name: /^Remove / });
+    expect(removes).toHaveLength(1);
+    // The floor is one: `canGenerate` requires a track, so an empty ensemble
+    // would be a form you cannot submit from.
+    expect(removes[0]).toBeDisabled();
+  });
+
+  it('offers the whole catalogue, kits included', () => {
+    open(1000);
+    fireEvent.click(screen.getByLabelText('Add instrument'));
+    // A kit, a melodic program from the far end of the table, and a family
+    // heading — the three things the old six-checkbox list could not show.
+    expect(screen.getByRole('option', { name: 'Jazz Kit' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Gunshot' })).toBeInTheDocument();
+    expect(screen.getByText('Sound Effects')).toBeInTheDocument();
+  });
+
+  it('marks the first non-percussion track as the one carrying the melody', () => {
+    // `classifyTrackRole` gives melody to the first treble-clef track, so the
+    // label has to follow that rule rather than simply meaning "first".
+    open(1000);
+    expect(screen.getByText(/1\. Acoustic Grand Piano \(melody\)/)).toBeInTheDocument();
+  });
+
+  it('adds the chosen instrument, and can add the same one twice', () => {
+    open(1000);
+    const add = screen.getByRole('button', { name: 'Add' });
+    fireEvent.click(add);
+    fireEvent.click(add);
+    // Two violins is a real ensemble, so repeats are allowed rather than
+    // silently collapsed the way a Set would.
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(3);
+  });
+
+  it('removes the instrument that was asked for', () => {
+    open(1000);
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove / })[1]);
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(1);
   });
 });

@@ -46,12 +46,10 @@ describe('AppRouter', () => {
       </AuthProvider>,
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
-    );
-    expect(window.location.pathname).toBe('/en');
+    // The home page itself is public and lives in `App.tsx`, matched before the
+    // auth gate — so it is not part of this (signed-in) route table. What this
+    // table still owns is the redirect to the localized root.
+    await waitFor(() => expect(window.location.pathname).toBe('/en'));
   });
 
   it('renders the dashboard at "/en/projects"', async () => {
@@ -114,12 +112,10 @@ describe('AppRouter', () => {
       </AuthProvider>,
     );
 
-    await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
-    );
-    expect(window.location.pathname).toBe('/en');
+    // The home page itself is public and lives in `App.tsx`, matched before the
+    // auth gate — so it is not part of this (signed-in) route table. What this
+    // table still owns is the redirect to the localized root.
+    await waitFor(() => expect(window.location.pathname).toBe('/en'));
   });
 
   it('stops playback (main transport and preview) when the project route unmounts', async () => {

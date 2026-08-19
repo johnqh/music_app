@@ -10,6 +10,7 @@
  * the whole point of a delete prompt.
  */
 import { FormModal } from '@sudobility/components';
+import { useTranslation } from 'react-i18next';
 
 export type ConfirmDialogProps = {
   open: boolean;
@@ -27,12 +28,18 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   destructive = true,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  // Resolved here rather than as parameter defaults: a default is evaluated
+  // once at module scope, which would freeze the label in whatever language
+  // was active when the module first loaded.
+  const confirm = confirmLabel ?? t('common.confirm');
+  const cancel = cancelLabel ?? t('common.cancel');
   return (
     <FormModal
       open={open}
@@ -42,11 +49,11 @@ export function ConfirmDialog({
       // Not `cancelLabel`: the footer already has a button by that name, and
       // two controls sharing an accessible name is ambiguous to a screen
       // reader and an outright strict-mode failure in tests.
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
       actions={[
-        { label: cancelLabel, onClick: onCancel, variant: 'ghost' },
+        { label: cancel, onClick: onCancel, variant: 'ghost' },
         {
-          label: confirmLabel,
+          label: confirm,
           onClick: onConfirm,
           variant: destructive ? 'destructive' : 'primary',
           autoFocus: true,

@@ -19,6 +19,7 @@
  * without script. `role="button"` keeps it addressable as the control it is.
  */
 import type { ChangeEvent, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FormModal, Spinner, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 
@@ -73,16 +74,21 @@ export function FileImportModal({
   fileName,
   onFile,
   busy = false,
-  busyLabel = 'Reading the file…',
+  busyLabel,
   progress = null,
   error,
   canImport,
-  importLabel = 'Import',
+  importLabel,
   onImport,
   onClose,
   size = 'small',
   children,
 }: FileImportModalProps) {
+  const { t } = useTranslation();
+  // Resolved here, not as parameter defaults: a default is evaluated once at
+  // module scope and would freeze the label in the language loaded first.
+  const busyText = busyLabel ?? t('import.readingFile');
+  const importText = importLabel ?? t('import.action');
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     // Cleared so picking the *same* file again still fires a change event —
@@ -101,12 +107,12 @@ export function FileImportModal({
       // `actions`, not `onSave`: a Cancel belongs beside an import that creates
       // a project, and the shorthand renders one full-width button.
       actions={[
-        { label: 'Cancel', onClick: onClose },
-        { label: importLabel, onClick: onImport, disabled: !canImport || busy },
+        { label: t('common.cancel'), onClick: onClose },
+        { label: importText, onClick: onImport, disabled: !canImport || busy },
       ]}
       // The top-bar × is named "Cancel" by default, which would collide with
       // the footer's Cancel and make both ambiguous.
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
     >
       {/* FormModal renders the title and names its own dialog, so neither is
           repeated here. */}
@@ -116,14 +122,14 @@ export function FileImportModal({
         <label
           role="button"
           tabIndex={0}
-          aria-label={`Choose ${fileKind}`}
+          aria-label={t('import.chooseFile', { kind: fileKind })}
           className={cn(
             variants.button.outline.default(),
             'cursor-pointer px-3 py-2 text-center',
             busy && 'pointer-events-none opacity-60',
           )}
         >
-          {fileName ?? `Choose ${fileKind}…`}
+          {fileName ?? t('import.chooseFileEllipsis', { kind: fileKind })}
           <input
             type="file"
             accept={accept}
@@ -145,7 +151,7 @@ export function FileImportModal({
               <span aria-hidden="true">
                 <Spinner ariaLabel="Working" size="small" />
               </span>
-              {busyLabel}
+              {busyText}
               {progress !== null && (
                 <span className="tabular-nums">{Math.round(progress * 100)}%</span>
               )}
@@ -153,7 +159,7 @@ export function FileImportModal({
             {progress !== null && (
               <div
                 role="progressbar"
-                aria-label={busyLabel}
+                aria-label={busyText}
                 aria-valuenow={Math.round(progress * 100)}
                 aria-valuemin={0}
                 aria-valuemax={100}

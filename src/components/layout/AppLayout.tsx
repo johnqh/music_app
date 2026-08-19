@@ -48,6 +48,7 @@
  * documented, checked reason rather than an assumed one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
 import {
@@ -122,10 +123,11 @@ const SIDE_PANEL_WIDTH = 280;
  */
 const PIANO_KEYBOARD_PANEL_HEIGHT = 190;
 
-const SAVE_STATE_LABEL: Record<string, string> = {
-  saved: 'Saved',
-  saving: 'Saving…',
-  unsaved: 'Unsaved',
+/** Keys, resolved at render so the label follows the language. */
+const SAVE_STATE_LABEL_KEY: Record<string, string> = {
+  saved: 'editor.saved',
+  saving: 'editor.saving',
+  unsaved: 'editor.unsaved',
 };
 const SAVE_STATE_CLASS: Record<string, string> = {
   saved: 'bg-success text-success-foreground',
@@ -186,15 +188,22 @@ function useMenu<T extends HTMLElement>() {
  * span re-renders.
  */
 function StatusPosition({ store }: { store: EditorStoreApi }) {
+  const { t } = useTranslation();
   const measureBeat = store(selectCurrentMeasureBeat);
   return (
-    <span aria-label="Position" className="text-xs text-theme-text-secondary">
-      {measureBeat ? `Measure ${measureBeat.measureIndex}, beat ${measureBeat.beat}` : '-.-'}
+    <span aria-label={t('editor.position')} className="text-xs text-theme-text-secondary">
+      {measureBeat
+        ? t('editor.measureBeat', {
+            measure: measureBeat.measureIndex,
+            beat: measureBeat.beat,
+          })
+        : '-.-'}
     </span>
   );
 }
 
 export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
+  const { t } = useTranslation();
   const projectName = store((s) => s.projectName);
   const saveState = store((s) => s.saveState);
   const canUndo = store((s) => s.canUndo);
@@ -496,7 +505,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           'audio/midi',
         );
       } catch (err) {
-        reportError(err, { context: 'MIDI export failed', store });
+        reportError(err, { context: t('errors.midiExport'), store });
       }
     });
     exportMenu.setOpen(false);
@@ -512,7 +521,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           'application/vnd.recordare.musicxml+xml',
         );
       } catch (err) {
-        reportError(err, { context: 'MusicXML export failed', store });
+        reportError(err, { context: t('errors.musicXmlExport'), store });
       }
     });
     exportMenu.setOpen(false);
@@ -535,7 +544,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         'application/json',
       );
     } catch (err) {
-      reportError(err, { context: 'Project JSON export failed', store });
+      reportError(err, { context: t('errors.projectJsonExport'), store });
     }
     exportMenu.setOpen(false);
   };
@@ -574,7 +583,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         <div className="flex items-center gap-1 px-2 py-1.5">
           <button
             type="button"
-            aria-label="Back to dashboard"
+            aria-label={t('editor.backToDashboard')}
             onClick={() => onNavigate?.('/projects')}
             className={ICON_BUTTON_CLASS}
           >
@@ -585,7 +594,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <input
               value={titleDraft}
               autoFocus
-              aria-label="Project title"
+              aria-label={t('editor.projectTitle')}
               onChange={(e) => setTitleDraft(e.target.value)}
               onBlur={commitTitle}
               onKeyDown={(e) => {
@@ -598,34 +607,39 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <button
               type="button"
               onClick={() => setTitleDraft(projectName)}
-              aria-label="Edit project title"
+              aria-label={t('editor.editProjectTitle')}
               className="rounded-md border-none bg-transparent px-1 py-0.5 text-lg font-medium text-inherit hover:bg-white/10"
             >
-              {projectName || 'Untitled project'}
+              {projectName || t('editor.untitledProject')}
             </button>
           )}
 
           <span
-            aria-label={`Save state: ${SAVE_STATE_LABEL[saveState]}`}
+            aria-label={t('editor.saveState', { state: t(SAVE_STATE_LABEL_KEY[saveState]) })}
             className={`rounded-full px-2 py-0.5 text-xs font-medium ${SAVE_STATE_CLASS[saveState]}`}
           >
-            {SAVE_STATE_LABEL[saveState]}
+            {t(SAVE_STATE_LABEL_KEY[saveState])}
           </span>
 
-          <Tooltip placement="bottom" content="Save now">
+          <Tooltip placement="bottom" content={t('editor.saveNow')}>
             <button
               type="button"
-              aria-label="Save"
+              aria-label={t('editor.save')}
               onClick={() => void store.getState().saveNow()}
               className={ICON_BUTTON_CLASS}
             >
               <ArrowDownTrayIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
-          <Tooltip placement="bottom" content={canUndo ? `Undo: ${undoLabel}` : 'Nothing to undo'}>
+          <Tooltip
+            placement="bottom"
+            content={
+              canUndo ? t('editor.undoWhat', { what: undoLabel }) : t('editor.nothingToUndo')
+            }
+          >
             <button
               type="button"
-              aria-label="Undo"
+              aria-label={t('editor.undo')}
               disabled={!canUndo}
               onClick={() => store.getState().undo()}
               className={ICON_BUTTON_CLASS}
@@ -633,10 +647,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               <ArrowUturnLeftIcon className={ICON_GLYPH_CLASS} />
             </button>
           </Tooltip>
-          <Tooltip placement="bottom" content={canRedo ? `Redo: ${redoLabel}` : 'Nothing to redo'}>
+          <Tooltip
+            placement="bottom"
+            content={
+              canRedo ? t('editor.redoWhat', { what: redoLabel }) : t('editor.nothingToRedo')
+            }
+          >
             <button
               type="button"
-              aria-label="Redo"
+              aria-label={t('editor.redo')}
               disabled={!canRedo}
               onClick={() => store.getState().redo()}
               className={ICON_BUTTON_CLASS}
@@ -648,7 +667,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           <div ref={projectMenu.ref} className="relative">
             <button
               type="button"
-              aria-label="Project menu"
+              aria-label={t('editor.projectMenu')}
               aria-haspopup="menu"
               aria-expanded={projectMenu.open}
               onClick={() => {
@@ -657,7 +676,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               }}
               className={TEXT_BUTTON_CLASS}
             >
-              Project
+              {t('editor.projectMenuLabel')}
             </button>
             {projectMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
@@ -672,7 +691,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  Create snapshot…
+                  {t('editor.createSnapshot')}
                 </Button>
                 <Button
                   type="button"
@@ -685,7 +704,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  Open snapshot…
+                  {t('editor.openSnapshot')}
                 </Button>
               </div>
             )}
@@ -694,13 +713,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           <div ref={exportMenu.ref} className="relative">
             <button
               type="button"
-              aria-label="Export menu"
+              aria-label={t('editor.exportMenu')}
               aria-haspopup="menu"
               aria-expanded={exportMenu.open}
               onClick={() => exportMenu.setOpen((v) => !v)}
               className={TEXT_BUTTON_CLASS}
             >
-              Export
+              {t('editor.export')}
             </button>
             {exportMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
@@ -715,7 +734,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  Print…
+                  {t('editor.print')}
                 </Button>
                 <Button
                   type="button"
@@ -725,7 +744,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  Audio (WAV)…
+                  {t('editor.audioWav')}
                 </Button>
                 <Button
                   type="button"
@@ -735,7 +754,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  Audio (MP3)…
+                  {t('editor.audioMp3')}
                 </Button>
                 <Button
                   type="button"
@@ -745,7 +764,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  MIDI
+                  {t('editor.midi')}
                 </Button>
                 <Button
                   type="button"
@@ -755,7 +774,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  MusicXML
+                  {t('editor.musicXml')}
                 </Button>
                 <Button
                   type="button"
@@ -765,7 +784,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  XM Module
+                  {t('editor.xmModule')}
                 </Button>
                 <Button
                   type="button"
@@ -774,7 +793,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   onClick={() => void handleExportProjectJson()}
                   className={MENU_ITEM_CLASS}
                 >
-                  Project JSON
+                  {t('editor.projectJson')}
                 </Button>
               </div>
             )}
@@ -787,10 +806,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           <CreditBadge />
 
           <div ref={themeMenu.ref} className="relative">
-            <Tooltip placement="bottom" content="Theme">
+            <Tooltip placement="bottom" content={t('settings.theme')}>
               <button
                 type="button"
-                aria-label="Theme menu"
+                aria-label={t('editor.themeMenu')}
                 aria-haspopup="menu"
                 aria-expanded={themeMenu.open}
                 onClick={() => themeMenu.setOpen((v) => !v)}
@@ -820,10 +839,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             )}
           </div>
 
-          <Tooltip placement="bottom" content="Keyboard shortcuts">
+          <Tooltip placement="bottom" content={t('editor.keyboardShortcuts')}>
             <button
               type="button"
-              aria-label="Keyboard shortcuts"
+              aria-label={t('editor.keyboardShortcuts')}
               onClick={() => store.getState().openDialog('shortcutHelp')}
               className={ICON_BUTTON_CLASS}
             >
@@ -832,10 +851,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </Tooltip>
 
           <div ref={settingsMenu.ref} className="relative">
-            <Tooltip placement="bottom" content="Settings">
+            <Tooltip placement="bottom" content={t('nav.settings')}>
               <button
                 type="button"
-                aria-label="Settings menu"
+                aria-label={t('editor.settingsMenu')}
                 aria-haspopup="menu"
                 aria-expanded={settingsMenu.open}
                 onClick={() => settingsMenu.setOpen((v) => !v)}
@@ -858,13 +877,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   }}
                   className={`${MENU_ITEM_CLASS} flex cursor-pointer items-center justify-between gap-4`}
                 >
-                  Developer mode
+                  {t('settings.developerMode')}
                   <input
                     type="checkbox"
                     checked={developerMode}
                     onChange={() => store.getState().setDeveloperMode(!developerMode)}
                     onClick={(e) => e.stopPropagation()}
-                    aria-label="Developer mode"
+                    aria-label={t('editor.developerMode')}
                     className="h-4 w-4"
                   />
                 </div>
@@ -879,7 +898,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  Developer settings…
+                  {t('editor.developerSettings')}
                 </Button>
               </div>
             )}
@@ -967,7 +986,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
       <div
         role="status"
-        aria-label="Status bar"
+        aria-label={t('editor.statusBar')}
         className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
         <span className="text-xs text-theme-text-secondary">
@@ -978,12 +997,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           <Button
             type="button"
             variant="ghost"
-            aria-label="Validation issues"
+            aria-label={t('editor.validationIssues')}
             onClick={() => issuesMenu.setOpen((v) => !v)}
             disabled={validationIssues.length === 0}
             className="gap-1.5 px-2 py-1 text-xs"
           >
-            Issues
+            {t('editor.issues')}
             <span
               className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white ${
                 errorIssues.length > 0 ? 'bg-destructive' : 'bg-warning'
@@ -999,9 +1018,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 'absolute bottom-full right-0 z-10 mb-1 min-w-[280px] max-h-[320px] overflow-auto rounded-md p-1 shadow-lg',
               )}
             >
-              <div role="list" aria-label="Validation issues list">
+              <div role="list" aria-label={t('editor.validationList')}>
                 {validationIssues.length === 0 && (
-                  <p className="p-1 text-sm text-theme-text-secondary">No issues.</p>
+                  <p className="p-1 text-sm text-theme-text-secondary">{t('editor.noIssues')}</p>
                 )}
                 {validationIssues.map((issue, i) => (
                   <div
@@ -1032,7 +1051,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           )}
         </div>
         <StatusPosition store={store} />
-        <span aria-label="Zoom level" className="text-xs text-theme-text-secondary">
+        <span aria-label={t('editor.zoomLevel')} className="text-xs text-theme-text-secondary">
           {Math.round(zoom * 100)}%
         </span>
       </div>
@@ -1089,7 +1108,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             const pending = pendingModule;
             setPendingModule(null);
             void pending.write().catch((err) => {
-              reportError(err, { context: 'Module export failed', store });
+              reportError(err, { context: t('errors.moduleExport'), store });
             });
           }}
         />

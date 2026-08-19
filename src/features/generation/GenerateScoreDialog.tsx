@@ -51,25 +51,32 @@
  * keep the required "Generating" accessible name on a library swap.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
 import type { ChangeEvent } from 'react';
 import {
   Button,
   FormModal,
-  Checkbox,
   Input,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Text,
   TextArea,
   cn,
 } from '@sudobility/components';
+import {
+  DEFAULT_INSTRUMENT_VALUE,
+  instrumentChoiceFor,
+  instrumentLabelFor,
+} from '@/features/instruments/instrument-catalog';
+import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { variants } from '@sudobility/design';
 
-import type { Clef, KeySignature, TimeSignature } from '@sudobility/music_types';
+import type { KeySignature, TimeSignature } from '@sudobility/music_types';
 import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@sudobility/music_types';
 
 export type GenerateScoreDialogProps = {
@@ -102,43 +109,8 @@ const COMPLEXITY_OPTIONS: NonNullable<GenerateScoreRequest['complexity']>[] = [
   'complex',
 ];
 
-type InstrumentKey = 'piano' | 'electric-piano' | 'strings' | 'bass' | 'synth-lead' | 'drums';
-
-/**
- * Instrumentation checklist (brief: "Piano/Electric Piano/Strings/Bass/
- * Synth Lead/Drums with sensible programs/clefs"). GM program numbers
- * chosen to land in `adapters/tone/instruments.ts`'s matching category
- * band, and order matters: `mock-provider.ts`'s `classifyTrackRole` gives
- * melody to the *first* treble-clef track, so Piano leading the list means
- * "just Piano" (the default selection) gets the melody, matching
- * `DEFAULT_TRACK`'s own single-piano fallback.
- */
-const INSTRUMENT_OPTIONS: Array<{
-  key: InstrumentKey;
-  label: string;
-  instrumentName: string;
-  midiProgram: number;
-  clef: Clef;
-}> = [
-  { key: 'piano', label: 'Piano', instrumentName: 'Piano', midiProgram: 0, clef: 'treble' },
-  {
-    key: 'electric-piano',
-    label: 'Electric Piano',
-    instrumentName: 'Electric Piano',
-    midiProgram: 4,
-    clef: 'treble',
-  },
-  { key: 'strings', label: 'Strings', instrumentName: 'Strings', midiProgram: 48, clef: 'treble' },
-  { key: 'bass', label: 'Bass', instrumentName: 'Bass', midiProgram: 32, clef: 'bass' },
-  {
-    key: 'synth-lead',
-    label: 'Synth Lead',
-    instrumentName: 'Synth Lead',
-    midiProgram: 80,
-    clef: 'treble',
-  },
-  { key: 'drums', label: 'Drums', instrumentName: 'Drums', midiProgram: 0, clef: 'percussion' },
-];
+/** One chosen instrument. `id` survives reordering and repeats of the same value. */
+type EnsembleEntry = { id: number; value: string };
 
 /** fifths -7..7, labeled by their major-key tonic (spec §21 "key"; the separate Mode select supplies major/minor). */
 const KEY_FIFTHS_OPTIONS: Array<{ fifths: number; label: string }> = [
@@ -173,12 +145,13 @@ const DEFAULT_MEASURES = 8;
 /** Sentinel for Style/Mood's "no selection" option: Radix `Select.Item` rejects an empty-string `value` (it's reserved to mean "cleared"). */
 const NONE_VALUE = '__none__';
 
-function toRequestTrack(option: (typeof INSTRUMENT_OPTIONS)[number]): GenerateScoreRequestTrack {
+function toRequestTrack(value: string): GenerateScoreRequestTrack {
+  const choice = instrumentChoiceFor(value);
   return {
-    name: option.label,
-    instrumentName: option.instrumentName,
-    midiProgram: option.midiProgram,
-    clef: option.clef,
+    name: choice.instrumentName,
+    instrumentName: choice.instrumentName,
+    midiProgram: choice.midiProgram,
+    clef: choice.clef,
   };
 }
 
@@ -220,13 +193,22 @@ export function GenerateScoreDialog({
   onSubmit,
   submitting = false,
 }: GenerateScoreDialogProps) {
+  const { t } = useTranslation();
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
   const [complexity, setComplexity] =
     useState<NonNullable<GenerateScoreRequest['complexity']>>('moderate');
-  const [instruments, setInstruments] = useState<Set<InstrumentKey>>(() => new Set(['piano']));
+  // An ordered list, not a set: `classifyTrackRole` gives the melody to the
+  // first treble-clef track, so which instrument comes first is a musical
+  // decision and has to be visible and controllable. Ids allow the same
+  // instrument twice — two violins is a real ensemble.
+  const [ensemble, setEnsemble] = useState<EnsembleEntry[]>(() => [
+    { id: 0, value: DEFAULT_INSTRUMENT_VALUE },
+  ]);
+  const [nextEntryId, setNextEntryId] = useState(1);
+  const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
   const [measures, setMeasures] = useState(String(DEFAULT_MEASURES));
   const [tempo, setTempo] = useState('');
   const [keyFifths, setKeyFifths] = useState(0);
@@ -245,7 +227,7 @@ export function GenerateScoreDialog({
   }, [presetOpen]);
 
   const durationMeasures = Number(measures);
-  const tracks = INSTRUMENT_OPTIONS.filter((opt) => instruments.has(opt.key)).map(toRequestTrack);
+  const tracks = ensemble.map((entry) => toRequestTrack(entry.value));
 
   const { balance } = useBalance();
   /**
@@ -277,14 +259,22 @@ export function GenerateScoreDialog({
     Number.isFinite(durationMeasures) &&
     durationMeasures > 0;
 
-  const toggleInstrument = (key: InstrumentKey): void => {
-    setInstruments((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const addInstrument = (): void => {
+    setEnsemble((prev) => [...prev, { id: nextEntryId, value: picker }]);
+    setNextEntryId((id) => id + 1);
   };
+
+  // The floor is one: a score with no tracks is not a score, and `canGenerate`
+  // would refuse it anyway — better to disable the last remove than to let the
+  // form reach a state it cannot submit from.
+  const removeInstrument = (id: number): void => {
+    setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
+  };
+
+  /** The first non-percussion track, which is the one the melody lands on. */
+  const melodyEntryId = ensemble.find(
+    (entry) => instrumentChoiceFor(entry.value).clef !== 'percussion',
+  )?.id;
 
   const handlePresetSelect = (text: string): void => {
     setPrompt(text);
@@ -311,14 +301,14 @@ export function GenerateScoreDialog({
   return (
     <FormModal
       open={open}
-      title="Generate a new score"
+      title={t('generateScore.title')}
       onClose={onClose}
       size="large"
-      closeAriaLabel="Close dialog"
+      closeAriaLabel={t('common.closeDialog')}
       actions={[
-        { label: 'Cancel', onClick: onClose, variant: 'ghost' },
+        { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
         {
-          label: 'Generate',
+          label: t('generate.action'),
           onClick: handleGenerate,
           variant: 'primary',
           disabled: !canGenerate,
@@ -330,16 +320,16 @@ export function GenerateScoreDialog({
       <div className="flex flex-col gap-4">
         {outOfCredits ? (
           <p className="text-sm text-theme-text-secondary">
-            You&rsquo;re out of credits.{' '}
-            <Link to="/en/credits" className="underline">
-              Buy more
-            </Link>{' '}
-            to keep generating.
+            {t('generate.outOfCreditsBefore')}{' '}
+            <LocalizedLink to="/credits" className="underline">
+              {t('generate.buyMore')}
+            </LocalizedLink>{' '}
+            {t('generate.outOfCreditsAfter')}
           </p>
         ) : (
           estimatedCredits > 0 && (
             <p className="text-xs text-theme-text-secondary">
-              This will use about {estimatedCredits} credits.
+              {t('generate.estimate', { count: estimatedCredits })}
             </p>
           )
         )}
@@ -347,19 +337,19 @@ export function GenerateScoreDialog({
         {/* Named up front: every generated project would otherwise be called
           "Generated score", which is useless the moment you have two. */}
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-theme-text-secondary">Title</span>
+          <span className="text-xs text-theme-text-secondary">{t('generateScore.titleField')}</span>
           <Input
             value={title}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-            placeholder="Generated score"
-            aria-label="Title"
+            placeholder={t('generateScore.titlePlaceholder')}
+            aria-label={t('generateScore.titleField')}
             className="px-2 py-1.5 text-sm"
           />
         </label>
 
         <div className="flex items-start gap-2">
           <label className="flex flex-1 flex-col gap-1">
-            <span className="text-xs text-theme-text-secondary">Prompt</span>
+            <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
             <TextArea
               value={prompt}
               onChange={setPrompt}
@@ -371,13 +361,13 @@ export function GenerateScoreDialog({
             <Button
               type="button"
               variant="outline"
-              aria-label="Preset prompts"
+              aria-label={t('generateScore.presetPrompts')}
               aria-haspopup="menu"
               aria-expanded={presetOpen}
               onClick={() => setPresetOpen((open) => !open)}
               className="px-3 py-1.5"
             >
-              Presets
+              {t('generate.presets')}
             </Button>
             {presetOpen && (
               <div
@@ -409,11 +399,14 @@ export function GenerateScoreDialog({
             value={style === '' ? NONE_VALUE : style}
             onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}
           >
-            <SelectTrigger aria-label="Style" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectTrigger
+              aria-label={t('generateScore.style')}
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE_VALUE}>No style</SelectItem>
+              <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
               {STYLE_OPTIONS.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
@@ -425,11 +418,14 @@ export function GenerateScoreDialog({
             value={mood === '' ? NONE_VALUE : mood}
             onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
           >
-            <SelectTrigger aria-label="Mood" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectTrigger
+              aria-label={t('generateScore.mood')}
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE_VALUE}>No mood</SelectItem>
+              <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
               {MOOD_OPTIONS.map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
@@ -443,7 +439,10 @@ export function GenerateScoreDialog({
               setComplexity(v as NonNullable<GenerateScoreRequest['complexity']>)
             }
           >
-            <SelectTrigger aria-label="Complexity" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectTrigger
+              aria-label={t('generateScore.complexity')}
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -456,28 +455,80 @@ export function GenerateScoreDialog({
           </Select>
         </div>
 
-        <div role="group" aria-label="Instrumentation" className="flex flex-col gap-2">
-          <span className="text-sm text-theme-text-primary">Instrumentation</span>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {INSTRUMENT_OPTIONS.map((opt) => (
-              <Checkbox
-                key={opt.key}
-                label={`Include ${opt.label}`}
-                checked={instruments.has(opt.key)}
-                onChange={() => toggleInstrument(opt.key)}
-              />
-            ))}
+        <div
+          role="group"
+          aria-label={t('generateScore.instrumentation')}
+          className="flex flex-col gap-2"
+        >
+          <Text as="span" size="sm">
+            {t('generateScore.instrumentation')}
+          </Text>
+
+          <div className="flex gap-2">
+            <Select value={picker} onValueChange={setPicker}>
+              <SelectTrigger
+                aria-label={t('generateScore.addInstrument')}
+                className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <InstrumentSelectItems />
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" onClick={addInstrument}>
+              {t('common.add')}
+            </Button>
           </div>
+
+          {/* The order is the point: the first track that is not percussion is
+              the one the melody is written for, so it is labelled rather than
+              left to be inferred from position. */}
+          <ol className="flex flex-col gap-1">
+            {ensemble.map((entry, index) => (
+              <li key={entry.id} className="flex items-center justify-between gap-2">
+                <Text size="sm">
+                  {index + 1}. {instrumentLabelFor(entry.value)}
+                  {entry.id === melodyEntryId ? ` ${t('generateScore.melody')}` : ''}
+                </Text>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t('generateScore.removeInstrument', {
+                    instrument: instrumentLabelFor(entry.value),
+                  })}
+                  disabled={ensemble.length <= 1}
+                  onClick={() => removeInstrument(entry.id)}
+                >
+                  {t('common.remove')}
+                </Button>
+              </li>
+            ))}
+          </ol>
         </div>
 
         <div className="flex gap-2">
-          <LabeledInput label="Measures" value={measures} onChange={setMeasures} min={1} />
-          <LabeledInput label="Tempo" value={tempo} onChange={setTempo} min={1} />
+          <LabeledInput
+            label={t('generateScore.measures')}
+            value={measures}
+            onChange={setMeasures}
+            min={1}
+          />
+          <LabeledInput
+            label={t('generateScore.tempo')}
+            value={tempo}
+            onChange={setTempo}
+            min={1}
+          />
         </div>
 
         <div className="flex gap-2">
           <Select value={String(keyFifths)} onValueChange={(v) => setKeyFifths(Number(v))}>
-            <SelectTrigger aria-label="Key" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectTrigger
+              aria-label={t('generateScore.key')}
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -489,7 +540,10 @@ export function GenerateScoreDialog({
             </SelectContent>
           </Select>
           <Select value={keyMode} onValueChange={(v) => setKeyMode(v as KeySignature['mode'])}>
-            <SelectTrigger aria-label="Mode" className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}>
+            <SelectTrigger
+              aria-label={t('generateScore.mode')}
+              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -499,7 +553,7 @@ export function GenerateScoreDialog({
           </Select>
           <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>
             <SelectTrigger
-              aria-label="Time signature"
+              aria-label={t('generateScore.timeSignature')}
               className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
             >
               <SelectValue />

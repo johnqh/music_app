@@ -13,6 +13,7 @@
  * exact same accessible name with no visible-text change.
  */
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, FormModal, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
@@ -67,6 +68,7 @@ export function DeveloperSettingsDialog({
   store = useAppStore,
   benchmarkSizes,
 }: DeveloperSettingsDialogProps) {
+  const { t } = useTranslation();
   const devSettings = store((s) => s.devSettings);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
@@ -79,7 +81,7 @@ export function DeveloperSettingsDialog({
       window.localStorage.removeItem('scoresmith.prefs.v1');
       setResetDone(true);
     } catch (error) {
-      reportError(error, { context: 'Failed to reset the local database', store });
+      reportError(error, { context: t('errors.resetDatabase'), store });
     }
   };
 
@@ -141,10 +143,10 @@ export function DeveloperSettingsDialog({
     <>
       <FormModal
         open={open}
-        title="Developer settings"
+        title={t('devSettings.title')}
         onClose={onClose}
         size="small"
-        closeAriaLabel="Close"
+        closeAriaLabel={t('common.close')}
         // Every setting here applies on change, so there is nothing to confirm
         // and the top-bar close is the only exit -- a footer "Close" beside it
         // would just be a second control with the same name.
@@ -152,36 +154,36 @@ export function DeveloperSettingsDialog({
       >
         <div className="flex flex-col">
           <DevToggle
-            label="Enable generation diagnostics"
+            label={t('devSettings.generationDiagnostics')}
             checked={devSettings.enableDiagnostics}
             onChange={(checked) => store.getState().setDevSettings({ enableDiagnostics: checked })}
           />
           <DevToggle
-            label="Show score IDs"
+            label={t('devSettings.showScoreIds')}
             checked={devSettings.showIds}
             onChange={(checked) => store.getState().setDevSettings({ showIds: checked })}
           />
           <DevToggle
-            label="Show tick positions"
+            label={t('devSettings.showTicks')}
             checked={devSettings.showTicks}
             onChange={(checked) => store.getState().setDevSettings({ showTicks: checked })}
           />
           <DevToggle
-            label="Show measure boundaries"
+            label={t('devSettings.showMeasureBoundaries')}
             checked={devSettings.showMeasureBoundaries}
             onChange={(checked) =>
               store.getState().setDevSettings({ showMeasureBoundaries: checked })
             }
           />
           <DevToggle
-            label="Show playback scheduling data"
+            label={t('devSettings.showScheduling')}
             checked={devSettings.showPlaybackScheduling}
             onChange={(checked) =>
               store.getState().setDevSettings({ showPlaybackScheduling: checked })
             }
           />
           <DevToggle
-            label="Enable validation warnings"
+            label={t('devSettings.validationWarnings')}
             checked={devSettings.enableValidationWarnings}
             onChange={(checked) =>
               store.getState().setDevSettings({ enableValidationWarnings: checked })
@@ -193,16 +195,16 @@ export function DeveloperSettingsDialog({
           <Button
             type="button"
             variant="outline"
-            aria-label="Generate stress-test score"
+            aria-label={t('devSettings.stressTest')}
             onClick={handleGenerateStressTest}
             className="px-3 py-1.5"
           >
-            Generate stress-test score
+            {t('devSettings.stressTest')}
           </Button>
           <Button
             type="button"
             variant="outline"
-            aria-label="Run benchmark"
+            aria-label={t('devSettings.runBenchmark')}
             onClick={handleRunBenchmark}
             disabled={benchmarkRunning}
             className="px-3 py-1.5"
@@ -212,11 +214,11 @@ export function DeveloperSettingsDialog({
           <Button
             type="button"
             variant="outline"
-            aria-label="Export diagnostic JSON"
+            aria-label={t('devSettings.exportDiagnostics')}
             onClick={handleExportDiagnostics}
             className="px-3 py-1.5"
           >
-            Export diagnostic JSON
+            {t('devSettings.exportDiagnostics')}
           </Button>
           {/* `variant="ghost"` + an explicit className override, not
               `variant="destructive-outline"`: that CVA enum value has no
@@ -227,11 +229,11 @@ export function DeveloperSettingsDialog({
           <Button
             type="button"
             variant="ghost"
-            aria-label="Reset local database"
+            aria-label={t('devSettings.resetDatabase')}
             onClick={() => setConfirmingReset(true)}
             className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1.5')}
           >
-            Reset local database
+            {t('devSettings.resetDatabase')}
           </Button>
         </div>
 
@@ -250,7 +252,7 @@ export function DeveloperSettingsDialog({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Dismiss benchmark result"
+              aria-label={t('devSettings.dismissBenchmark')}
               onClick={() => setBenchmarkReport(null)}
               className="h-auto w-auto shrink-0 p-1"
             >
@@ -264,12 +266,12 @@ export function DeveloperSettingsDialog({
             role="status"
             className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
           >
-            <span>Local database cleared. Reload the app to start fresh.</span>
+            <span>{t('devSettings.databaseCleared')}</span>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="Dismiss reset confirmation"
+              aria-label={t('devSettings.dismissReset')}
               onClick={() => setResetDone(false)}
               className="h-auto w-auto shrink-0 p-1"
             >
@@ -281,9 +283,9 @@ export function DeveloperSettingsDialog({
 
       <ConfirmDialog
         open={confirmingReset}
-        title="Reset local database"
-        message="This permanently deletes every saved project and setting from this browser. This cannot be undone."
-        confirmLabel="Reset"
+        title={t('devSettings.resetDatabase')}
+        message={t('devSettings.resetMessage')}
+        confirmLabel={t('devSettings.reset')}
         onCancel={() => setConfirmingReset(false)}
         onConfirm={() => void handleResetDatabase()}
       />

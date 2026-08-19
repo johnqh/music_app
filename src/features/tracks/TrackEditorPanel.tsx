@@ -15,6 +15,7 @@
  * sheet and its controls here line up on the same column.
  */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ChangeEvent } from 'react';
 import { Button, Input, SheetSelector, Slider, Tooltip, cn } from '@sudobility/components';
 import { isNoteEvent } from '@sudobility/music_types';
@@ -164,6 +165,7 @@ function changeInstrumentAndFitNotesCommand(trackId: UUID, patch: InstrumentPatc
 }
 
 export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
   /**
@@ -196,7 +198,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
     if (!track || !score) return;
     if (fitShiftForInstrument(score, track.id, instrument.midiProgram) === null) {
       store.getState().pushToast({
-        message: `${instrument.instrumentName} cannot cover this track's note span without changing intervals.`,
+        message: t('track.instrumentRangeError', { instrument: instrument.instrumentName }),
         severity: 'error',
       });
       return;
@@ -213,12 +215,12 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
       <span className="flex-1 truncate text-xs font-medium text-theme-text-primary">
         {track ? track.name : 'No track'}
       </span>
-      <Tooltip content="Delete track">
+      <Tooltip content={t('track.delete')}>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Delete track"
+          aria-label={t('track.delete')}
           disabled={!track || isPlaying}
           onClick={() => setPendingDelete(true)}
           className={ICON_BUTTON_CLASS}
@@ -234,7 +236,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
       className="flex h-full min-h-0 shrink-0 flex-col border-r border-theme-border"
       style={{ width: TRACK_INFO_WIDTH }}
       role="region"
-      aria-label="Track editor"
+      aria-label={t('track.editor')}
     >
       {header}
 
@@ -248,7 +250,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
         <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain p-2">
           <Input
             value={nameDraft}
-            aria-label={`Track name: ${track.name}`}
+            aria-label={t('track.nameOf', { name: track.name })}
             disabled={isPlaying}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
             onBlur={() => {
@@ -263,8 +265,8 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
             <InstrumentIcon track={track} className="size-4 shrink-0" />
             {isPercussionTrack(track) ? (
               <SheetSelector
-                title="Drum kit"
-                aria-label={`Drum kit: ${track.name}`}
+                title={t('track.drumKit')}
+                aria-label={t('track.kitOf', { name: track.name })}
                 disabled={isPlaying}
                 options={KIT_OPTIONS}
                 // Through `gmKitAt`, so a track sitting at an address no kit is
@@ -283,7 +285,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
               />
             ) : (
               <SheetSelector
-                title="Instrument"
+                title={t('generate.instrument')}
                 aria-label={`Instrument: ${track.name}`}
                 disabled={isPlaying}
                 options={INSTRUMENT_OPTIONS}
@@ -307,7 +309,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           </div>
 
           <SheetSelector
-            title="Clef"
+            title={t('importMidi.colClef')}
             aria-label={`Clef: ${track.clef}`}
             disabled={isPlaying}
             options={CLEF_SELECT_OPTIONS}
@@ -357,7 +359,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
           </div>
 
           <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
-            <span className="w-8 shrink-0">Vol</span>
+            <span className="w-8 shrink-0">{t('track.volume')}</span>
             <span className="sr-only">{`Volume: ${track.name}`}</span>
             <Slider
               value={track.volume}
@@ -368,7 +370,7 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
             />
           </label>
           <label className="flex items-center gap-1 text-xs text-theme-text-secondary">
-            <span className="w-8 shrink-0">Pan</span>
+            <span className="w-8 shrink-0">{t('track.pan')}</span>
             <span className="sr-only">{`Pan: ${track.name}`}</span>
             {/*
               `origin={0}`: pan is bipolar, so the reading that matters is how
@@ -389,9 +391,9 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
 
       <ConfirmDialog
         open={pendingDelete}
-        title="Delete track"
-        message={`Delete "${track?.name ?? ''}" and all of its measures? This can be undone.`}
-        confirmLabel="Delete"
+        title={t('track.delete')}
+        message={t('track.deleteMessage', { name: track?.name ?? '' })}
+        confirmLabel={t('common.delete')}
         destructive
         onCancel={() => setPendingDelete(false)}
         onConfirm={() => {

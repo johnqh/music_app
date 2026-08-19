@@ -20,6 +20,7 @@
  * stay readable against its own background.
  */
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
@@ -43,6 +44,7 @@ const SEVERITY_CLASSES: Record<string, string> = {
 };
 
 export function Toasts({ store = useAppStore }: ToastsProps) {
+  const { t } = useTranslation();
   const toasts = store((s) => s.toasts);
   const current = toasts[0] ?? null;
 
@@ -83,7 +85,7 @@ export function Toasts({ store = useAppStore }: ToastsProps) {
         ) : undefined}
         <button
           type="button"
-          aria-label="Close"
+          aria-label={t('common.close')}
           className="shrink-0 rounded p-1 text-lg leading-none hover:opacity-80"
           onClick={dismiss}
         >

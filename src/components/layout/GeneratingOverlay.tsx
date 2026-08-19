@@ -7,6 +7,7 @@
  * so the user can work on another project and come back.
  */
 import { Button, Spinner } from '@sudobility/components';
+import { useTranslation } from 'react-i18next';
 
 export type GeneratingOverlayProps = {
   onCancel: () => void;
@@ -15,6 +16,7 @@ export type GeneratingOverlayProps = {
 };
 
 export function GeneratingOverlay({ onCancel, error }: GeneratingOverlayProps) {
+  const { t } = useTranslation();
   return (
     <div
       data-testid="generating-overlay"
@@ -29,7 +31,7 @@ export function GeneratingOverlay({ onCancel, error }: GeneratingOverlayProps) {
       <div aria-hidden="true">
         <Spinner ariaLabel="Generating" size="large" />
       </div>
-      <p className="text-sm font-medium text-theme-text-primary">Generating notes…</p>
+      <p className="text-sm font-medium text-theme-text-primary">{t('overlay.generatingNotes')}</p>
       <p className="max-w-xs text-center text-xs text-theme-text-secondary">
         This runs on the server. You can leave this project and work on another one — it will be
         here when it finishes.
@@ -40,7 +42,7 @@ export function GeneratingOverlay({ onCancel, error }: GeneratingOverlayProps) {
         </p>
       )}
       <Button type="button" variant="outline" onClick={onCancel}>
-        Cancel
+        {t('common.cancel')}
       </Button>
     </div>
   );

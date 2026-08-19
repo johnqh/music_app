@@ -44,6 +44,7 @@
  * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
   Button,
@@ -194,12 +195,12 @@ const ACCIDENTALS: Array<{ value: Accidental; label: string }> = [
   { value: 1, label: '#' },
   { value: 2, label: 'x' },
 ];
-const ARTICULATIONS: Array<{ value: Articulation | 'none'; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'staccato', label: 'Staccato' },
-  { value: 'accent', label: 'Accent' },
-  { value: 'tenuto', label: 'Tenuto' },
-  { value: 'marcato', label: 'Marcato' },
+const ARTICULATIONS: Array<{ value: Articulation | 'none'; labelKey: string }> = [
+  { value: 'none', labelKey: 'articulation.none' },
+  { value: 'staccato', labelKey: 'articulation.staccato' },
+  { value: 'accent', labelKey: 'articulation.accent' },
+  { value: 'tenuto', labelKey: 'articulation.tenuto' },
+  { value: 'marcato', labelKey: 'articulation.marcato' },
 ];
 const CLEFS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
 const MIXED_VALUE = '__mixed__';
@@ -224,6 +225,7 @@ function MixedSelect<T extends string>({
   onChange: (value: T) => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const selectValue = value === MIXED ? MIXED_VALUE : (value ?? undefined);
   return (
     <Select
@@ -240,7 +242,7 @@ function MixedSelect<T extends string>({
       <SelectContent>
         {value === MIXED && (
           <SelectItem value={MIXED_VALUE} disabled>
-            Mixed
+            {t('inspector.mixed')}
           </SelectItem>
         )}
         {options.map((opt) => (
@@ -278,6 +280,7 @@ function MixedNumberField({
   max?: number;
   step?: number;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState(value === MIXED || value === null ? '' : String(value));
 
   useEffect(() => {
@@ -295,7 +298,7 @@ function MixedNumberField({
       <Input
         type="number"
         value={draft}
-        placeholder={value === MIXED ? 'Mixed' : undefined}
+        placeholder={value === MIXED ? t('inspector.mixed') : undefined}
         disabled={disabled || value === null}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onBlur={commit}
@@ -390,22 +393,20 @@ function measureOfNote(score: Score, note: NoteEvent): Measure | null {
 }
 
 function NoteTab({ store, onReplace }: TabProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const pitchDisplay = store((s) => s.pitchDisplay);
 
-  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
+  if (!score)
+    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
   const noteIds = selectedNoteIds(score, selection);
   const notes = noteIds
     .map((id) => findEvent(score, id))
     .filter((e): e is NoteEvent => e !== null && isNoteEvent(e));
 
   if (notes.length === 0) {
-    return (
-      <p className="p-2 text-sm text-theme-text-secondary">
-        Select a note to inspect its properties.
-      </p>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectNote')}</p>;
   }
 
   /**
@@ -453,7 +454,9 @@ function NoteTab({ store, onReplace }: TabProps) {
   return (
     <div className="flex flex-col gap-4 p-2">
       <p className="text-sm font-semibold text-theme-text-primary">
-        {notes.length > 1 ? `${notes.length} notes selected` : 'Note'}
+        {notes.length > 1
+          ? t('inspector.notesSelected', { count: notes.length })
+          : t('inspector.note')}
       </p>
 
       <div className="flex gap-2">
@@ -470,14 +473,14 @@ function NoteTab({ store, onReplace }: TabProps) {
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField
-          label="Octave"
+          label={t('editor.octave')}
           value={octave}
           onCommit={(v) => applyPitchPatch({ octave: v })}
         />
       </div>
 
       <MixedNumberField
-        label="Duration (ticks)"
+        label={t('editor.durationTicks')}
         value={durationTicks}
         min={1}
         onCommit={(v) =>
@@ -486,7 +489,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       />
 
       <MixedNumberField
-        label="Start position (ticks)"
+        label={t('editor.startTicks')}
         value={notes.length === 1 ? startTick : null}
         min={0}
         onCommit={(v) => {
@@ -501,7 +504,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       />
 
       <MixedNumberField
-        label="Velocity"
+        label={t('editor.velocity')}
         value={velocity}
         min={0}
         max={127}
@@ -511,24 +514,24 @@ function NoteTab({ store, onReplace }: TabProps) {
       <MixedSelect
         value={articulation}
         ariaLabel="Articulation"
-        options={ARTICULATIONS.map((a) => ({ value: a.value, label: a.label }))}
+        options={ARTICULATIONS.map((a) => ({ value: a.value, label: t(a.labelKey) }))}
         onChange={(value) => dispatchArticulation(store, value === 'none' ? undefined : value)}
       />
 
       <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>Track</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.track')}</span>
         <Input
           value={trackName === MIXED ? '' : (trackName ?? '')}
-          placeholder={trackName === MIXED ? 'Mixed' : undefined}
+          placeholder={trackName === MIXED ? t('inspector.mixed') : undefined}
           disabled
-          aria-label="Track (read-only)"
+          aria-label={t('editor.trackReadOnly')}
           className={TEXT_INPUT_CLASS}
           readOnly
         />
       </label>
 
       <MixedNumberField
-        label="Voice"
+        label={t('editor.voice')}
         value={commonValue(
           notes.map((n) => {
             const measure = score.tracks
@@ -545,39 +548,42 @@ function NoteTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-4">
         <MixedCheckbox
-          label="Tie start"
+          label={t('editor.tieStart')}
           checked={tieStart === true}
           indeterminate={tieStart === MIXED}
           onChange={() => dispatchToggleTie(store, 'tieStart')}
         />
         <MixedCheckbox
-          label="Tie stop"
+          label={t('editor.tieStop')}
           checked={tieStop === true}
           indeterminate={tieStop === MIXED}
           onChange={() => dispatchToggleTie(store, 'tieStop')}
         />
       </div>
 
-      <ReplaceButton store={store} scope="notes" label="Replace Notes" onReplace={onReplace} />
+      <ReplaceButton
+        store={store}
+        scope="notes"
+        label={t('editor.replaceNotes')}
+        onReplace={onReplace}
+      />
     </div>
   );
 }
 
 function MeasureTab({ store, onReplace }: TabProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
 
-  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
+  if (!score)
+    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
   const measures = selection.measureIds
     .map((id) => findMeasure(score, id))
     .filter((m) => m !== null);
 
   if (measures.length === 0) {
-    return (
-      <p className="p-2 text-sm text-theme-text-secondary">
-        Select a measure to inspect its properties.
-      </p>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectMeasure')}</p>;
   }
 
   const timeSig = commonValue(measures.map((m) => m.timeSignature));
@@ -597,13 +603,16 @@ function MeasureTab({ store, onReplace }: TabProps) {
     <div className="flex flex-col gap-4 p-2">
       <p className="text-sm font-semibold text-theme-text-primary">
         {measures.length > 1
-          ? `Measures ${Math.min(...indices)}–${Math.max(...indices)}`
-          : `Measure ${indices[0]}`}
+          ? t('inspector.measureRange', {
+              from: Math.min(...indices),
+              to: Math.max(...indices),
+            })
+          : t('inspector.measureNumber', { number: indices[0] })}
       </p>
 
       <div className="flex gap-2">
         <MixedNumberField
-          label="Time sig. numerator"
+          label={t('editor.timeSigNumerator')}
           value={timeSig === MIXED ? MIXED : (timeSig?.numerator ?? null)}
           min={1}
           onCommit={(v) =>
@@ -614,7 +623,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
           }
         />
         <MixedNumberField
-          label="Time sig. denominator"
+          label={t('editor.timeSigDenominator')}
           value={timeSig === MIXED ? MIXED : (timeSig?.denominator ?? null)}
           min={1}
           onCommit={(v) =>
@@ -628,7 +637,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-2">
         <MixedNumberField
-          label="Key (fifths)"
+          label={t('editor.keyFifths')}
           value={keySig === MIXED ? MIXED : (keySig?.fifths ?? null)}
           min={-7}
           max={7}
@@ -658,7 +667,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
       <ReplaceButton
         store={store}
         scope="measures"
-        label="Replace Measures"
+        label={t('editor.replaceMeasures')}
         onReplace={onReplace}
       />
     </div>
@@ -666,6 +675,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
 }
 
 function TrackTab({ store, onReplace }: TabProps) {
+  const { t } = useTranslation();
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
 
@@ -691,20 +701,14 @@ function TrackTab({ store, onReplace }: TabProps) {
   const volume = commonValue(tracks.map((t) => t.volume));
   const pan = commonValue(tracks.map((t) => t.pan));
 
-  if (!score) return <p className="p-2 text-sm text-theme-text-primary">No score loaded.</p>;
+  if (!score)
+    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
 
   if (tracks.length === 0) {
-    return (
-      <p className="p-2 text-sm text-theme-text-secondary">
-        Select a track to inspect its properties.
-      </p>
-    );
+    return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectTrack')}</p>;
   }
 
   const name = commonValue(tracks.map((t) => t.name));
-  const instrumentName = commonValue(tracks.map((t) => t.instrumentName));
-  const midiProgram = commonValue(tracks.map((t) => t.midiProgram));
-  const midiChannel = commonValue(tracks.map((t) => t.midiChannel));
   const clef = commonValue(tracks.map((t) => t.clef));
   const muted = commonValue(tracks.map((t) => t.muted));
   const solo = commonValue(tracks.map((t) => t.solo));
@@ -716,48 +720,32 @@ function TrackTab({ store, onReplace }: TabProps) {
   return (
     <div className="flex flex-col gap-4 p-2">
       <p className="text-sm font-semibold text-theme-text-primary">
-        {tracks.length > 1 ? `${tracks.length} tracks selected` : 'Track'}
+        {tracks.length > 1
+          ? t('inspector.tracksSelected', { count: tracks.length })
+          : t('inspector.track')}
       </p>
 
       <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>Name</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.name')}</span>
         <Input
           value={name === MIXED ? '' : (name ?? '')}
-          placeholder={name === MIXED ? 'Mixed' : undefined}
+          placeholder={name === MIXED ? t('inspector.mixed') : undefined}
           onChange={(e: ChangeEvent<HTMLInputElement>) => patchAll({ name: e.target.value })}
-          aria-label="Track name"
+          aria-label={t('editor.trackName')}
           className={TEXT_INPUT_CLASS}
         />
       </label>
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>Instrument</span>
-        <Input
-          value={instrumentName === MIXED ? '' : (instrumentName ?? '')}
-          placeholder={instrumentName === MIXED ? 'Mixed' : undefined}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            patchAll({ instrumentName: e.target.value })
-          }
-          aria-label="Instrument"
-          className={TEXT_INPUT_CLASS}
-        />
-      </label>
-      <div className="flex gap-2">
-        <MixedNumberField
-          label="MIDI program"
-          value={midiProgram}
-          min={0}
-          max={127}
-          onCommit={(v) => patchAll({ midiProgram: Math.max(0, Math.min(127, Math.round(v))) })}
-        />
-        <MixedNumberField
-          label="MIDI channel"
-          value={midiChannel}
-          min={0}
-          max={15}
-          onCommit={(v) => patchAll({ midiChannel: Math.max(0, Math.min(15, Math.round(v))) })}
-        />
-      </div>
+      {/* No instrument here. It is set in `TrackEditorPanel`'s catalogue
+          picker, which is the only place that can keep `midiProgram` and
+          `instrumentName` in step — and on a percussion track resolve the
+          program as a *kit* rather than an instrument. A free-text field here
+          set the name alone, so the two drifted: the label read "Piano" while
+          the track still sounded whatever program it had.
 
+          The MIDI program and channel numbers went with it. Program was the
+          same value the picker owns, editable as a raw number with none of the
+          kit handling; channel was written but never read, since playback
+          allocates channels itself (`allocateChannels`). */}
       <MixedSelect
         value={clef}
         ariaLabel="Track clef"
@@ -769,9 +757,11 @@ function TrackTab({ store, onReplace }: TabProps) {
       />
 
       <div className="flex items-center gap-2">
-        <span className="min-w-[40px] text-xs text-theme-text-secondary">Volume</span>
+        <span className="min-w-[40px] text-xs text-theme-text-secondary">
+          {t('inspector.volume')}
+        </span>
         <CommitSlider
-          label="Track volume"
+          label={t('editor.trackVolume')}
           value={volume === MIXED || volume === null ? 1 : volume}
           onCommit={(v) => patchAll({ volume: v })}
           min={0}
@@ -782,7 +772,7 @@ function TrackTab({ store, onReplace }: TabProps) {
       <div className="flex items-center gap-2">
         <span className="min-w-[40px] text-xs text-theme-text-secondary">Pan</span>
         <CommitSlider
-          label="Track pan"
+          label={t('editor.trackPan')}
           value={pan === MIXED || pan === null ? 0 : pan}
           onCommit={(v) => patchAll({ pan: v })}
           min={-1}
@@ -793,20 +783,25 @@ function TrackTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-4">
         <MixedCheckbox
-          label="Muted"
+          label={t('editor.muted')}
           checked={muted === true}
           indeterminate={muted === MIXED}
           onChange={(checked) => patchAll({ muted: checked })}
         />
         <MixedCheckbox
-          label="Solo"
+          label={t('editor.solo')}
           checked={solo === true}
           indeterminate={solo === MIXED}
           onChange={(checked) => patchAll({ solo: checked })}
         />
       </div>
 
-      <ReplaceButton store={store} scope="track" label="Replace Track" onReplace={onReplace} />
+      <ReplaceButton
+        store={store}
+        scope="track"
+        label={t('editor.replaceTrack')}
+        onReplace={onReplace}
+      />
     </div>
   );
 }
@@ -823,13 +818,14 @@ function defaultTabFor(selection: {
   return 'note';
 }
 
-const TABS: Array<{ value: InspectorTab; label: string }> = [
-  { value: 'note', label: 'Note' },
-  { value: 'measure', label: 'Measure' },
-  { value: 'track', label: 'Track' },
+const TABS: Array<{ value: InspectorTab; labelKey: string }> = [
+  { value: 'note', labelKey: 'inspector.note' },
+  { value: 'measure', labelKey: 'inspector.measure' },
+  { value: 'track', labelKey: 'inspector.track' },
 ];
 
 export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPanelProps) {
+  const { t } = useTranslation();
   const selection = store((s) => s.selection);
   const [tab, setTab] = useState<InspectorTab>(() => defaultTabFor(selection));
 
@@ -842,12 +838,14 @@ export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPane
   }, [selection.eventIds, selection.measureIds, selection.trackIds]);
 
   return (
-    <div className="flex h-full flex-col overflow-auto" aria-label="Inspector panel">
+    <div className="flex h-full flex-col overflow-auto" aria-label={t('editor.inspectorPanel')}>
       <Tabs value={tab} onValueChange={(value) => setTab(value as InspectorTab)}>
-        <TabsList aria-label="Inspector tabs">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
-              {t.label}
+        <TabsList aria-label={t('editor.inspectorTabs')}>
+          {/* Not `t` as the parameter name: it would shadow the translation
+              function this now calls. */}
+          {TABS.map((tab_) => (
+            <TabsTrigger key={tab_.value} value={tab_.value}>
+              {t(tab_.labelKey)}
             </TabsTrigger>
           ))}
         </TabsList>

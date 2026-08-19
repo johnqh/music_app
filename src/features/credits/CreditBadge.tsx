@@ -5,11 +5,13 @@
  * and reading `useBalance()` in `AppLayout` would re-render the notation canvas
  * and the piano keyboard with it. Same rule as `StatusPosition` and `Timecode`.
  */
-import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
 import { CreditBalanceBadge } from '@sudobility/consumables_pages';
 
 export function CreditBadge() {
+  const { t } = useTranslation();
   const { balance } = useBalance();
 
   // Nothing rather than a placeholder: a badge showing "0" before the balance
@@ -22,12 +24,12 @@ export function CreditBadge() {
   if (balance === null) return null;
 
   return (
-    <Link
-      to="/en/credits"
-      aria-label={`${balance} credits remaining. Buy more.`}
+    <LocalizedLink
+      to="/credits"
+      aria-label={t('credits.remaining', { count: balance })}
       className="inline-flex items-center"
     >
       <CreditBalanceBadge balance={balance} isLoading={false} />
-    </Link>
+    </LocalizedLink>
   );
 }

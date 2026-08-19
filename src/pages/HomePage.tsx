@@ -19,8 +19,9 @@
  * ultrawide monitor is unreadable, while the feature grid wants the room.
  */
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Heading, Section, Text } from '@sudobility/components';
+import { Button, Card, Grid, Heading, Section, Text } from '@sudobility/components';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
+import { useAuth } from '@/app/AuthContext';
 
 /** Feature cards, in the order they read. Keys resolve against `app.json`. */
 const FEATURES = [
@@ -32,6 +33,9 @@ const FEATURES = [
 export default function HomePage() {
   const { t } = useTranslation();
   const navigate = useLocalizedNavigate();
+  // This page is public now, so the CTA cannot assume a dashboard to go to: a
+  // visitor has no projects and cannot reach the route behind the gate.
+  const { user } = useAuth();
 
   return (
     <>
@@ -48,17 +52,17 @@ export default function HomePage() {
             variant="primary"
             size="lg"
             className="mt-8 shadow"
-            onClick={() => navigate('/projects')}
+            onClick={() => navigate(user ? '/projects' : '/signin')}
           >
-            {t('home.cta')}
+            {user ? t('home.cta') : t('home.ctaVisitor')}
           </Button>
         </div>
       </Section>
 
       <Section spacing="3xl">
-        <div className="grid gap-8 sm:grid-cols-3">
+        <Grid cols={{ sm: 3 }} gap="xl">
           {FEATURES.map((feature) => (
-            <Card key={feature.key} variant="elevated" padding="lg" className="rounded-xl">
+            <Card key={feature.key} variant="elevated" padding="lg">
               <Heading level={2} size="lg" weight="semibold">
                 {t(feature.title)}
               </Heading>
@@ -67,7 +71,7 @@ export default function HomePage() {
               </Text>
             </Card>
           ))}
-        </div>
+        </Grid>
       </Section>
     </>
   );
