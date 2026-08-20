@@ -596,5 +596,118 @@
     "projectJsonExport": "项目 JSON 导出失败",
     "projectJsonImport": "项目 JSON 导入失败",
     "mustSignIn": "你必须先登录。"
+  },
+  "command": {
+    "addMeasure": "添加小节",
+    "addNote": "添加音符",
+    "addTrack": "添加音轨",
+    "changeAccidental": "更改临时记号",
+    "changeArticulation": "更改演奏法",
+    "changeClef": "更改谱号",
+    "changeDuration": "更改时值",
+    "changeKeySignature": "更改调号",
+    "changePitch": "更改音高",
+    "changeTempo": "更改速度",
+    "changeTimeSignature": "更改拍号",
+    "changeTrackProps": "更改音轨",
+    "changeVelocity": "更改力度",
+    "changeVoice": "更改声部",
+    "deleteEvents": "删除音符",
+    "deleteMeasure": "删除小节",
+    "deleteTrack": "删除音轨",
+    "importScore": "导入乐谱",
+    "insertWithRipple": "插入",
+    "moveNotes": "移动音符",
+    "pasteEvents": "粘贴",
+    "quantize": "量化",
+    "relocateNotes": "移动音符",
+    "resizeNotes": "调整时值",
+    "toggleTie": "连音线",
+    "transpose": "移调"
+  },
+  "templates": {
+    "lead-sheet": {
+      "name": "Lead sheet",
+      "description": "A single melody line with chord symbols."
+    },
+    "piano-grand-staff": {
+      "name": "Piano",
+      "description": "Treble and bass staves, braced together."
+    },
+    "string-quartet": {
+      "name": "String quartet",
+      "description": "Two violins, viola and cello."
+    },
+    "jazz-combo": {
+      "name": "Jazz combo",
+      "description": "Horns, piano, bass and drums."
+    },
+    "rock-band": {
+      "name": "Rock band",
+      "description": "Guitars, bass, keys and drums."
+    },
+    "satb-choir": {
+      "name": "SATB choir",
+      "description": "Soprano, alto, tenor and bass."
+    },
+    "drum-kit": {
+      "name": "Drum kit",
+      "description": "A single percussion staff."
+    },
+    "waltz": {
+      "name": "Waltz",
+      "description": "Three-four time, ready to fill in."
+    },
+    "jig": {
+      "name": "Jig",
+      "description": "Six-eight time, ready to fill in."
+    },
+    "gentle-piano-melody": {
+      "name": "Gentle piano melody",
+      "description": "A short piano piece to start from."
+    },
+    "pop-arrangement": {
+      "name": "Pop arrangement",
+      "description": "A two-track pop sketch."
+    },
+    "orchestral-passage": {
+      "name": "Orchestral passage",
+      "description": "A short passage for orchestra."
+    }
+  },
+  "selection": {
+    "notes_one": "{{count}} note",
+    "notes_other": "{{count}} notes",
+    "measures_one": "{{count}} measure",
+    "measures_other": "{{count}} measures",
+    "tracks_one": "{{count}} track",
+    "tracks_other": "{{count}} tracks",
+    "none": "Nothing selected",
+    "regenerated": "{{summary}} regenerated"
+  },
+  "musicXmlWarn": {
+    "unsupportedClef": "Unsupported clef {{sign}} on line {{line}}; treble was used instead.",
+    "unsupportedKeyMode": "Unsupported key mode \"{{mode}}\"; major was used instead.",
+    "unsupportedTime": "Unsupported time signature in measure {{measureNumber}}.",
+    "complexTimeSignature": "A composite time signature was simplified.",
+    "clefChangeDropped": "Clef change to {{clef}} in measure {{measureNumber}} was dropped.",
+    "unsupportedPitchStep": "Unsupported pitch step \"{{step}}\".",
+    "alterRounded": "Alteration {{alter}} was rounded to {{clamped}}.",
+    "graceNotes": "Grace notes were dropped.",
+    "lyrics": "Lyrics were dropped.",
+    "tuplets": "Tuplets were simplified.",
+    "ornaments": "Ornaments were dropped.",
+    "unsupportedNotation": "Unsupported notation <{{tag}}> was dropped.",
+    "unsupportedNoteElement": "Unsupported note element <{{tag}}> was dropped.",
+    "unsupportedArticulation": "Unsupported articulation <{{tag}}> was dropped.",
+    "multipleArticulations": "Only the first articulation on a note was kept.",
+    "unpitched": "Unpitched notes were placed on a percussion staff.",
+    "noPitchOrRest": "A note with neither pitch nor rest was skipped.",
+    "noDuration": "A note with no duration was skipped.",
+    "nonPositiveDuration": "A note with a non-positive duration was skipped.",
+    "noteTrimmed": "A note was trimmed to fit its measure.",
+    "unsupportedMeasureElement": "Unsupported measure element <{{tag}}> was dropped.",
+    "noTempo": "No tempo was given; {{defaultBpm}} BPM was used.",
+    "tempoClamped": "Tempo {{bpm}} was outside {{min}}-{{max}} and became {{clamped}}."
   }
 }

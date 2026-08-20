@@ -21,6 +21,7 @@
  * change, not just a skin -- only the trigger/item buttons inside it move
  * to the library `Button`.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -417,7 +418,10 @@ export function EditorToolbar({
             onValueChange={(value) => {
               if (value === 'blank') {
                 const id = createId();
-                dispatchTracked(store, addTrackCommand({ id, name: 'New track' }));
+                dispatchTracked(
+                  store,
+                  addTrackCommand({ id, name: 'New track' }, commandLabel('addTrack')),
+                );
                 // Active immediately: you added it to work on it.
                 store.getState().setActiveTrack(id);
               } else if (value === 'generate') {

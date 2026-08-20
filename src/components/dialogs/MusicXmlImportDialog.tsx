@@ -14,6 +14,8 @@
  * a `<label>`, so it can't reproduce that association without extra
  * plumbing for no behavioral benefit.
  */
+import { musicXmlWarnings } from '@/i18n/lib-copy';
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoBox, Stack, Text } from '@sudobility/components';
@@ -50,7 +52,8 @@ export function MusicXmlImportDialog({
   forceNewProject = false,
 }: MusicXmlImportDialogProps) {
   const { t } = useTranslation();
-  const service = musicXmlService ?? new MusicXmlService(getAppServices().io.xmlParser);
+  const service =
+    musicXmlService ?? new MusicXmlService(getAppServices().io.xmlParser, musicXmlWarnings());
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<MusicXmlImportResult | null>(null);
@@ -89,7 +92,9 @@ export function MusicXmlImportDialog({
     if (!result) return;
     const hasProject = !forceNewProject && store.getState().projectId !== null;
     if (hasProject) {
-      store.getState().dispatchCommand(importScoreCommand(result.score));
+      store
+        .getState()
+        .dispatchCommand(importScoreCommand(result.score, commandLabel('importScore')));
       handleClose();
       return;
     }

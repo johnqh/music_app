@@ -1,3 +1,4 @@
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -105,7 +106,9 @@ describe('AppLayout', () => {
 
     const note = allNotes(store.getState().score!)[0] as NoteEvent;
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
-    store.getState().dispatchCommand(changeVelocityCommand([note.id], 100));
+    store
+      .getState()
+      .dispatchCommand(changeVelocityCommand([note.id], 100, commandLabel('changeVelocity')));
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).not.toBeDisabled());
   });
@@ -488,7 +491,7 @@ describe('AppLayout — snapshots', () => {
     // An edit still inside the autosave debounce window: the server has not
     // seen it, and a snapshot taken now would pin the music without it.
     const before = store.getState().score!.tracks[0].measures.length;
-    act(() => store.getState().dispatchCommand(addMeasureCommand()));
+    act(() => store.getState().dispatchCommand(addMeasureCommand(commandLabel('addMeasure'))));
     expect(store.getState().dirty).toBe(true);
 
     await user.click(screen.getByRole('button', { name: 'Project menu' }));

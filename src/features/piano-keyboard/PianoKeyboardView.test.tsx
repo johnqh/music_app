@@ -1,3 +1,4 @@
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import {
@@ -137,10 +138,24 @@ describe('PianoKeyboardView', () => {
       const store = makeStore();
       const trackId = store.getState().score!.tracks[0].id;
       act(() => {
-        store.getState().dispatchCommand(changeTrackPropsCommand(trackId, { clef: 'percussion' }));
         store
           .getState()
-          .dispatchCommand(changeTrackPropsCommand(trackId, { midiProgram: program }));
+          .dispatchCommand(
+            changeTrackPropsCommand(
+              trackId,
+              { clef: 'percussion' },
+              commandLabel('changeTrackProps'),
+            ),
+          );
+        store
+          .getState()
+          .dispatchCommand(
+            changeTrackPropsCommand(
+              trackId,
+              { midiProgram: program },
+              commandLabel('changeTrackProps'),
+            ),
+          );
         store.getState().setActiveTrack(trackId);
       });
       return store;
@@ -292,10 +307,14 @@ describe('header names the active instrument', () => {
     const score = store.getState().score!;
     act(() => {
       store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[1].id, {
-          midiProgram: 56,
-          instrumentName: 'Trumpet',
-        }),
+        changeTrackPropsCommand(
+          score.tracks[1].id,
+          {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          },
+          commandLabel('changeTrackProps'),
+        ),
       );
       store.getState().setActiveTrack(score.tracks[1].id);
     });
@@ -310,16 +329,24 @@ describe('header names the active instrument', () => {
     const score = store.getState().score!;
     act(() => {
       store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[0].id, {
-          midiProgram: 40,
-          instrumentName: 'Violin',
-        }),
+        changeTrackPropsCommand(
+          score.tracks[0].id,
+          {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          },
+          commandLabel('changeTrackProps'),
+        ),
       );
       store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[1].id, {
-          midiProgram: 56,
-          instrumentName: 'Trumpet',
-        }),
+        changeTrackPropsCommand(
+          score.tracks[1].id,
+          {
+            midiProgram: 56,
+            instrumentName: 'Trumpet',
+          },
+          commandLabel('changeTrackProps'),
+        ),
       );
       store.getState().setActiveTrack(score.tracks[0].id);
     });
@@ -528,14 +555,17 @@ describe('the keyboard edits a selected chord', () => {
     const track = store.getState().score!.tracks[0];
     for (const step of ['C', 'E', 'G']) {
       store.getState().dispatchCommand(
-        addNoteCommand({
-          trackId: track.id,
-          measureId: track.measures[0].id,
-          voiceIndex: 0,
-          pitch: { step, accidental: 0, octave: 4 } as never,
-          startTick: 0,
-          durationTicks: store.getState().score!.ppq,
-        }),
+        addNoteCommand(
+          {
+            trackId: track.id,
+            measureId: track.measures[0].id,
+            voiceIndex: 0,
+            pitch: { step, accidental: 0, octave: 4 } as never,
+            startTick: 0,
+            durationTicks: store.getState().score!.ppq,
+          },
+          commandLabel('addNote'),
+        ),
       );
     }
     const ids = allNotes(store.getState().score!)
@@ -597,14 +627,17 @@ describe('the keyboard edits a selected chord', () => {
     const track = store.getState().score!.tracks[0];
     const ppq = store.getState().score!.ppq;
     store.getState().dispatchCommand(
-      addNoteCommand({
-        trackId: track.id,
-        measureId: track.measures[0].id,
-        voiceIndex: 0,
-        pitch: { step: 'A', accidental: 0, octave: 4 } as never,
-        startTick: ppq,
-        durationTicks: ppq,
-      }),
+      addNoteCommand(
+        {
+          trackId: track.id,
+          measureId: track.measures[0].id,
+          voiceIndex: 0,
+          pitch: { step: 'A', accidental: 0, octave: 4 } as never,
+          startTick: ppq,
+          durationTicks: ppq,
+        },
+        commandLabel('addNote'),
+      ),
     );
     const all = allNotes(store.getState().score!).map((n) => n.id);
     store.getState().setSelection({ eventIds: all, measureIds: [], trackIds: [] });

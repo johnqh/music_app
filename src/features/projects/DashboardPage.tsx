@@ -27,6 +27,7 @@
  * + hidden file input stays exactly as-is (same reasoning as
  * `MidiImportWizard`'s file picker).
  */
+import { templateCopy } from '@/i18n/lib-copy';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
@@ -274,7 +275,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   const handleCreateFromTemplate = async (templateId: string): Promise<void> => {
-    const template = projectTemplates.find((t) => t.id === templateId);
+    const template = projectTemplates(templateCopy()).find((tpl) => tpl.id === templateId);
     if (!template) return;
     try {
       await store.getState().newProject({ name: template.name, score: template.build() });
@@ -608,7 +609,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           {t('dashboard.templates')}
         </Text>
         <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-          {projectTemplates.map((template) => (
+          {projectTemplates(templateCopy()).map((template) => (
             <Button
               key={template.id}
               type="button"

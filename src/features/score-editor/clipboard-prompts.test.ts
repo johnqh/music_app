@@ -1,3 +1,4 @@
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { describe, expect, it } from 'vitest';
 import { addNoteCommand, allNotes, createEmptyScore } from '@sudobility/music_lib';
 import type { NoteEvent, Pitch, Score } from '@sudobility/music_types';
@@ -21,14 +22,17 @@ function melodyScore(): Score {
   });
   const track = score.tracks[0];
   ['C', 'D', 'E', 'F'].forEach((step, i) => {
-    score = addNoteCommand({
-      trackId: track.id,
-      measureId: track.measures[0].id,
-      voiceIndex: 0,
-      pitch: pitch(step),
-      startTick: i * score.ppq,
-      durationTicks: score.ppq,
-    }).execute(score);
+    score = addNoteCommand(
+      {
+        trackId: track.id,
+        measureId: track.measures[0].id,
+        voiceIndex: 0,
+        pitch: pitch(step),
+        startTick: i * score.ppq,
+        durationTicks: score.ppq,
+      },
+      commandLabel('addNote'),
+    ).execute(score);
   });
   return score;
 }

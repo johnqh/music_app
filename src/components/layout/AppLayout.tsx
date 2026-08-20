@@ -47,6 +47,7 @@
  * skin -- the honest characterization is still "kept native", just with a
  * documented, checked reason rather than an assumed one.
  */
+import { selectionSummaryCopy } from '@/i18n/lib-copy';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
@@ -990,7 +991,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
         <span className="text-xs text-theme-text-secondary">
-          {selectionSummaryLabel(selection, selectionRegenerated)}
+          {selectionSummaryLabel(selection, selectionSummaryCopy(), selectionRegenerated)}
         </span>
         <div className="flex-1" />
         <div ref={issuesMenu.ref} className="relative">

@@ -43,6 +43,7 @@
  *   continuous `onChange`, no commit-on-release callback of its own).
  * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
@@ -447,7 +448,9 @@ function NoteTab({ store, onReplace }: TabProps) {
       const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
       const next =
         pitchDisplay === 'written' && track ? soundingPitchForTrack(edited, track, key) : edited;
-      store.getState().dispatchCommand(changePitchCommand([note.id], next));
+      store
+        .getState()
+        .dispatchCommand(changePitchCommand([note.id], next, commandLabel('changePitch')));
     }
   };
 
@@ -484,7 +487,11 @@ function NoteTab({ store, onReplace }: TabProps) {
         value={durationTicks}
         min={1}
         onCommit={(v) =>
-          store.getState().dispatchCommand(resizeNotesCommand(noteIds, Math.max(1, Math.round(v))))
+          store
+            .getState()
+            .dispatchCommand(
+              resizeNotesCommand(noteIds, Math.max(1, Math.round(v)), commandLabel('resizeNotes')),
+            )
         }
       />
 
@@ -498,7 +505,11 @@ function NoteTab({ store, onReplace }: TabProps) {
           store
             .getState()
             .dispatchCommand(
-              moveNotesCommand([note.id], { deltaTicks: v - note.startTick, deltaSemitones: 0 }),
+              moveNotesCommand(
+                [note.id],
+                { deltaTicks: v - note.startTick, deltaSemitones: 0 },
+                commandLabel('moveNotes'),
+              ),
             );
         }}
       />
@@ -542,7 +553,11 @@ function NoteTab({ store, onReplace }: TabProps) {
         )}
         min={0}
         onCommit={(v) =>
-          store.getState().dispatchCommand(changeVoiceCommand(noteIds, Math.max(0, Math.round(v))))
+          store
+            .getState()
+            .dispatchCommand(
+              changeVoiceCommand(noteIds, Math.max(0, Math.round(v)), commandLabel('changeVoice')),
+            )
         }
       />
 
@@ -592,11 +607,19 @@ function MeasureTab({ store, onReplace }: TabProps) {
 
   const applyTimeSignature = (timeSignature: TimeSignature): void => {
     for (const id of selection.measureIds)
-      store.getState().dispatchCommand(changeTimeSignatureCommand(id, timeSignature));
+      store
+        .getState()
+        .dispatchCommand(
+          changeTimeSignatureCommand(id, timeSignature, commandLabel('changeTimeSignature')),
+        );
   };
   const applyKeySignature = (keySignature: KeySignature): void => {
     for (const id of selection.measureIds)
-      store.getState().dispatchCommand(changeKeySignatureCommand(id, keySignature));
+      store
+        .getState()
+        .dispatchCommand(
+          changeKeySignatureCommand(id, keySignature, commandLabel('changeKeySignature')),
+        );
   };
 
   return (
@@ -714,7 +737,10 @@ function TrackTab({ store, onReplace }: TabProps) {
   const solo = commonValue(tracks.map((t) => t.solo));
 
   const patchAll = (patch: Record<string, unknown>): void => {
-    for (const t of tracks) store.getState().dispatchCommand(changeTrackPropsCommand(t.id, patch));
+    for (const t of tracks)
+      store
+        .getState()
+        .dispatchCommand(changeTrackPropsCommand(t.id, patch, commandLabel('changeTrackProps')));
   };
 
   return (
@@ -752,7 +778,9 @@ function TrackTab({ store, onReplace }: TabProps) {
         options={CLEFS.map((c) => ({ value: c, label: c }))}
         onChange={(value) => {
           for (const t of tracks)
-            store.getState().dispatchCommand(changeClefCommand(t.id, value as Clef));
+            store
+              .getState()
+              .dispatchCommand(changeClefCommand(t.id, value as Clef, commandLabel('changeClef')));
         }}
       />
 

@@ -4,6 +4,8 @@
  * flows, navigation callbacks. App services are installed via the shared
  * test wiring so the component's getAppServices() reads resolve to fakes.
  */
+import { templateCopy as TEST_TEMPLATE_COPY_FN } from '@/i18n/lib-copy';
+const TEST_TEMPLATE_COPY = TEST_TEMPLATE_COPY_FN();
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -46,7 +48,7 @@ describe('DashboardPage', () => {
   it('shows every project template', () => {
     const { store } = setup();
     render(<DashboardPage store={store} />);
-    for (const template of projectTemplates) {
+    for (const template of projectTemplates(TEST_TEMPLATE_COPY)) {
       expect(
         screen.getByRole('button', { name: `New from template: ${template.name}` }),
       ).toBeInTheDocument();
@@ -146,11 +148,15 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
 
     await user.click(
-      screen.getByRole('button', { name: `New from template: ${projectTemplates[0].name}` }),
+      screen.getByRole('button', {
+        name: `New from template: ${projectTemplates(TEST_TEMPLATE_COPY)[0].name}`,
+      }),
     );
     await waitFor(() => expect(onNavigate).toHaveBeenCalled());
-    expect(store.getState().projectName).toBe(projectTemplates[0].name);
-    expect(store.getState().score?.metadata.title).toBe(projectTemplates[0].name);
+    expect(store.getState().projectName).toBe(projectTemplates(TEST_TEMPLATE_COPY)[0].name);
+    expect(store.getState().score?.metadata.title).toBe(
+      projectTemplates(TEST_TEMPLATE_COPY)[0].name,
+    );
   });
 
   it('search filters the project grid by name', async () => {

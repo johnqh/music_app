@@ -1,3 +1,4 @@
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, within } from '@testing-library/react';
@@ -472,7 +473,7 @@ describe('measure and delete controls', () => {
 
   it('removes the measure the caret is in', async () => {
     const store = makeStore();
-    store.getState().dispatchCommand(addMeasureCommand());
+    store.getState().dispatchCommand(addMeasureCommand(commandLabel('addMeasure')));
     const before = store.getState().score!.tracks[0].measures.length;
     renderToolbar(store);
 
@@ -486,7 +487,7 @@ describe('measure and delete controls', () => {
     // to sit, and no control left to get back except undo.
     const store = makeStore();
     while (store.getState().score!.tracks[0].measures.length > 1) {
-      store.getState().dispatchCommand(deleteMeasureCommand(0));
+      store.getState().dispatchCommand(deleteMeasureCommand(0, commandLabel('deleteMeasure')));
     }
     renderToolbar(store);
 

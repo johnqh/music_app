@@ -14,6 +14,7 @@
  * `TRACK_INFO_WIDTH` wide, matching the canvas gutter, so a track's label on the
  * sheet and its controls here line up on the same column.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent } from 'react';
@@ -191,7 +192,9 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
 
   const patch = (props: TrackPropsPatch): void => {
     if (!track) return;
-    store.getState().dispatchCommand(changeTrackPropsCommand(track.id, props));
+    store
+      .getState()
+      .dispatchCommand(changeTrackPropsCommand(track.id, props, commandLabel('changeTrackProps')));
   };
 
   const changeInstrument = (instrument: InstrumentPatch): void => {
@@ -315,7 +318,11 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
             options={CLEF_SELECT_OPTIONS}
             value={track.clef}
             onChange={(value) =>
-              store.getState().dispatchCommand(changeClefCommand(track.id, value as Clef))
+              store
+                .getState()
+                .dispatchCommand(
+                  changeClefCommand(track.id, value as Clef, commandLabel('changeClef')),
+                )
             }
             size="small"
             className="h-auto w-full px-1 py-0.5 text-xs"
@@ -399,7 +406,8 @@ export function TrackEditorPanel({ store = useAppStore }: TrackEditorPanelProps)
         onConfirm={() => {
           const id: UUID | null = track?.id ?? null;
           setPendingDelete(false);
-          if (id) store.getState().dispatchCommand(deleteTrackCommand(id));
+          if (id)
+            store.getState().dispatchCommand(deleteTrackCommand(id, commandLabel('deleteTrack')));
         }}
       />
     </div>

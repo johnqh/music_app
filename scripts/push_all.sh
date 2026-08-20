@@ -39,6 +39,10 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # update` resolves it where `bun add` and `bun install` do not.
 PROJECTS=(
     "../music_types:60"
+    # After music_types (which it peer-depends on) and before music_api (which
+    # depends on it). It needs its own wait for the same reason music_types
+    # does: music_api resolves it from npm, so the publish has to land first.
+    "../music_codecs:60"
     "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"

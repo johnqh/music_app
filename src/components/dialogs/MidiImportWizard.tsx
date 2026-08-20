@@ -40,6 +40,7 @@
  * `<button>`, not a `<label>`, so it can't drive a hidden native file
  * input's picker the way a real `<label>` wrapping it does.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -225,7 +226,9 @@ export function MidiImportWizard({
       const result = await service.import(fileBuffer, options);
       const hasProject = !forceNewProject && store.getState().projectId !== null;
       if (hasProject) {
-        store.getState().dispatchCommand(importScoreCommand(result.score));
+        store
+          .getState()
+          .dispatchCommand(importScoreCommand(result.score, commandLabel('importScore')));
         handleClose();
       } else {
         await store

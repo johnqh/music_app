@@ -18,6 +18,8 @@
  * `renderTheme` picks between `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`
  * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
+import { selectionSummaryCopy } from '@/i18n/lib-copy';
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type React from 'react';
@@ -1268,11 +1270,15 @@ export function ScoreEditorView({
           // One command for the whole gesture, so undo restores both the
           // source and the destination in a single step.
           store.getState().dispatchCommand(
-            relocateNotesCommand([...ids], {
-              targetTrackId: target.trackId,
-              deltaTicks: target.deltaTicks,
-              collision: collisionForEditMode(editMode),
-            }),
+            relocateNotesCommand(
+              [...ids],
+              {
+                targetTrackId: target.trackId,
+                deltaTicks: target.deltaTicks,
+                collision: collisionForEditMode(editMode),
+              },
+              commandLabel('relocateNotes'),
+            ),
           );
         }
         return;
@@ -1291,7 +1297,11 @@ export function ScoreEditorView({
           store
             .getState()
             .dispatchCommand(
-              changePitchCommand([pitchDrag.eventId], shiftDiatonic(pitchDrag.pitch, steps)),
+              changePitchCommand(
+                [pitchDrag.eventId],
+                shiftDiatonic(pitchDrag.pitch, steps),
+                commandLabel('changePitch'),
+              ),
             );
         }
         return;
@@ -1435,7 +1445,7 @@ export function ScoreEditorView({
           data-testid="score-editor-canvas"
           role="application"
           aria-label={t('editor.scoreNotation', {
-            summary: selectionSummaryLabel(selection, selectionRegenerated),
+            summary: selectionSummaryLabel(selection, selectionSummaryCopy(), selectionRegenerated),
           })}
           tabIndex={0}
           onClick={handleClick}

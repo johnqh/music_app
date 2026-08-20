@@ -1,5 +1,10 @@
 # music_app (ScoreSmith)
 
+> **Git policy — never auto-commit or auto-push.** Leave your work in the working tree.
+> Run `git commit`, `git push`, `gh pr create`, or `scripts/push_all.sh` **only when the user
+> explicitly asks in that turn**. Approval for an earlier change does not carry forward, and
+> finishing a task is not permission to commit it.
+
 The ScoreSmith web app: routing, pages, and UI only. One of six repos in the ScoreSmith family — see [Related Projects](#related-projects). All business logic (score model, commands, rendering adapters, Zustand store) lives in `@sudobility/music_lib`, which is platform-free; every platform-bound capability — audio playback, XML parsing, file export, the MIDI codec — is an interface in `@sudobility/music_types` implemented by `@sudobility/music_io`, which serves web and React Native from one import via a `react-native` export condition. All networking goes through `@sudobility/music_client`; the backend (OpenAI proxy + project persistence) is the sibling `music_api` repo. See [docs/architecture.md](docs/architecture.md) for the full six-repo picture and request flows.
 
 ## Tech Stack
@@ -117,3 +122,7 @@ The ScoreSmith web app: routing, pages, and UI only. One of six repos in the Sco
 - `music_lib` — domain model, commands, adapters, Zustand store (`@sudobility/music_lib`); platform-free
 - `music_io` — platform implementations for web and React Native (`@sudobility/music_io`)
 - `music_api` — backend: Hono + Drizzle + PostgreSQL, OpenAI proxy, Firebase auth (private, not published)
+
+## Git Workflow
+
+- Do not use feature branches for code changes. Always stay on the current branch.

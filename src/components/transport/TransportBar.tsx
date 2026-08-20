@@ -32,6 +32,7 @@
  * tick" control (every intermediate tick genuinely re-seeks playback), so
  * there's no draft/commit split to preserve and no benefit to wrapping it.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
@@ -331,7 +332,10 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     store
       .getState()
       .dispatchCommand(
-        changeTempoCommand({ tempoEventId: firstEvent?.id, tick: firstEvent?.tick ?? 0, bpm }),
+        changeTempoCommand(
+          { tempoEventId: firstEvent?.id, tick: firstEvent?.tick ?? 0, bpm },
+          commandLabel('changeTempo'),
+        ),
       );
   };
 

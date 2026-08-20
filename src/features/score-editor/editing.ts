@@ -19,6 +19,7 @@
  * validation error that wasn't already present. Existing pre-edit errors
  * are not re-announced on every subsequent unrelated edit.
  */
+import { commandLabel } from '@/features/score-editor/command-labels';
 import type { createAppStore } from '@sudobility/music_lib';
 // The i18next singleton, not `useTranslation`: these are store commands, not
 // components, so there is no hook to call.
@@ -170,15 +171,18 @@ export function insertNoteAtCaret(
   const durationTicks = ticksFor(duration ?? state.snapGrid, state.score.ppq);
   dispatchTracked(
     store,
-    addNoteCommand({
-      trackId: target.trackId,
-      measureId: target.measureId,
-      voiceIndex: target.voiceIndex,
-      pitch,
-      startTick: target.startTick,
-      durationTicks,
-      ...(articulation ? { articulation } : {}),
-    }),
+    addNoteCommand(
+      {
+        trackId: target.trackId,
+        measureId: target.measureId,
+        voiceIndex: target.voiceIndex,
+        pitch,
+        startTick: target.startTick,
+        durationTicks,
+        ...(articulation ? { articulation } : {}),
+      },
+      commandLabel('addNote'),
+    ),
   );
 
   // Step the caret past what was just written, so a run of taps lays out a
@@ -298,7 +302,8 @@ export function insertChordAtCaret(
           note.startTick + note.durationTicks > target.startTick,
       )
       .map((note) => note.id);
-    if (occupying.length > 0) dispatchTracked(store, deleteEventsCommand(occupying));
+    if (occupying.length > 0)
+      dispatchTracked(store, deleteEventsCommand(occupying, commandLabel('deleteEvents')));
   }
 
   pitches.forEach((pitch, index) => {
@@ -308,22 +313,28 @@ export function insertChordAtCaret(
     dispatchTracked(
       store,
       useRipple
-        ? insertWithRippleCommand({
-            trackId: target.trackId,
-            measureId: target.measureId,
-            voiceIndex: target.voiceIndex,
-            pitch,
-            startTick: target.startTick,
-            durationTicks,
-          })
-        : addNoteCommand({
-            trackId: target.trackId,
-            measureId: target.measureId,
-            voiceIndex: target.voiceIndex,
-            pitch,
-            startTick: target.startTick,
-            durationTicks,
-          }),
+        ? insertWithRippleCommand(
+            {
+              trackId: target.trackId,
+              measureId: target.measureId,
+              voiceIndex: target.voiceIndex,
+              pitch,
+              startTick: target.startTick,
+              durationTicks,
+            },
+            commandLabel('insertWithRipple'),
+          )
+        : addNoteCommand(
+            {
+              trackId: target.trackId,
+              measureId: target.measureId,
+              voiceIndex: target.voiceIndex,
+              pitch,
+              startTick: target.startTick,
+              durationTicks,
+            },
+            commandLabel('addNote'),
+          ),
     );
   });
 
@@ -351,7 +362,7 @@ export function transposeSemitone(store: EditorStoreApi, direction: 1 | -1): voi
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, transposeCommand(ids, direction));
+  dispatchTracked(store, transposeCommand(ids, direction, commandLabel('transpose')));
 }
 
 /** Transposes the selected notes by one octave (`direction` = +1 up / -1 down). No-op if no notes are selected. */
@@ -360,7 +371,7 @@ export function transposeOctave(store: EditorStoreApi, direction: 1 | -1): void 
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, transposeCommand(ids, direction * 12));
+  dispatchTracked(store, transposeCommand(ids, direction * 12, commandLabel('transpose')));
 }
 
 // ---- arrow-key selection movement ---------------------------------------------
@@ -431,14 +442,14 @@ export function deleteSelected(store: EditorStoreApi): void {
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, deleteEventsCommand(ids));
+  dispatchTracked(store, deleteEventsCommand(ids, commandLabel('deleteEvents')));
   state.clearSelection();
 }
 
 /** Appends one empty measure to every track, so the barlines stay aligned. */
 export function addMeasure(store: EditorStoreApi): void {
   if (!store.getState().score) return;
-  dispatchTracked(store, addMeasureCommand());
+  dispatchTracked(store, addMeasureCommand(commandLabel('addMeasure')));
 }
 
 /**
@@ -466,7 +477,7 @@ export function deleteMeasureAtCaret(store: EditorStoreApi): void {
     track.measures.find((m) => tick >= m.startTick && tick < m.startTick + m.durationTicks) ??
     track.measures[track.measures.length - 1];
 
-  dispatchTracked(store, deleteMeasureCommand(measure.index));
+  dispatchTracked(store, deleteMeasureCommand(measure.index, commandLabel('deleteMeasure')));
 }
 
 /**
@@ -479,7 +490,7 @@ export function deleteMeasureAtCaret(store: EditorStoreApi): void {
  */
 export function deleteEvents(store: EditorStoreApi, eventIds: UUID[]): void {
   if (eventIds.length === 0) return;
-  dispatchTracked(store, deleteEventsCommand(eventIds));
+  dispatchTracked(store, deleteEventsCommand(eventIds, commandLabel('deleteEvents')));
 }
 
 /** Duplicates the currently selected notes immediately after their own latest end tick, on the same track (voice 0 — MVP scope, see brief). No-op if no notes are selected. */
@@ -493,7 +504,10 @@ export function duplicateSelected(store: EditorStoreApi): void {
 
   const trackId = notes[0].trackId;
   const anchorTick = Math.max(...notes.map((n) => n.startTick + n.durationTicks));
-  dispatchTracked(store, pasteEventsCommand(notes, { trackId, voiceIndex: 0, anchorTick }));
+  dispatchTracked(
+    store,
+    pasteEventsCommand(notes, { trackId, voiceIndex: 0, anchorTick }, commandLabel('pasteEvents')),
+  );
 }
 
 // ---- select all / measure / track ----------------------------------------------
@@ -527,7 +541,7 @@ export function changeDuration(store: EditorStoreApi, duration: DurationName): v
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, changeDurationCommand(ids, duration));
+  dispatchTracked(store, changeDurationCommand(ids, duration, commandLabel('changeDuration')));
 }
 
 /** Sets the selected notes' velocity (0-127). No-op if no notes are selected. */
@@ -536,7 +550,7 @@ export function changeVelocity(store: EditorStoreApi, velocity: number): void {
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, changeVelocityCommand(ids, velocity));
+  dispatchTracked(store, changeVelocityCommand(ids, velocity, commandLabel('changeVelocity')));
 }
 
 /** Sets (or clears, with `undefined`) the selected notes' articulation. No-op if no notes are selected. */
@@ -548,7 +562,10 @@ export function changeArticulation(
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, changeArticulationCommand(ids, articulation));
+  dispatchTracked(
+    store,
+    changeArticulationCommand(ids, articulation, commandLabel('changeArticulation')),
+  );
 }
 
 /** Sets the selected notes' accidental. No-op if no notes are selected. */
@@ -557,7 +574,10 @@ export function changeAccidental(store: EditorStoreApi, accidental: Accidental):
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, changeAccidentalCommand(ids, accidental));
+  dispatchTracked(
+    store,
+    changeAccidentalCommand(ids, accidental, commandLabel('changeAccidental')),
+  );
 }
 
 /** Toggles `tieStart`/`tieStop` on the selected notes. No-op if no notes are selected. */
@@ -566,7 +586,7 @@ export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'):
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, toggleTieCommand(ids, which));
+  dispatchTracked(store, toggleTieCommand(ids, which, commandLabel('toggleTie')));
 }
 
 // ---- quantize -------------------------------------------------------------------
@@ -597,5 +617,5 @@ export async function quantizeSelection(
   if (!state.score) return;
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
-  dispatchTracked(store, quantizeCommand(ids, options));
+  dispatchTracked(store, quantizeCommand(ids, options, commandLabel('quantize')));
 }

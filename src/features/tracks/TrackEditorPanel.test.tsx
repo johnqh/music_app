@@ -1,3 +1,4 @@
+import { commandLabel } from '@/features/score-editor/command-labels';
 import { describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -110,7 +111,11 @@ describe('TrackEditorPanel', () => {
     const store = makeStore();
     const score = store.getState().score!;
     act(() =>
-      store.getState().dispatchCommand(changeClefCommand(score.tracks[0].id, 'percussion')),
+      store
+        .getState()
+        .dispatchCommand(
+          changeClefCommand(score.tracks[0].id, 'percussion', commandLabel('changeClef')),
+        ),
     );
     render(<TrackEditorPanel store={store} />);
     const user = userEvent.setup();
@@ -255,10 +260,14 @@ describe('TrackEditorPanel', () => {
 
     act(() =>
       store.getState().dispatchCommand(
-        changeTrackPropsCommand(score.tracks[0].id, {
-          midiProgram: 40,
-          instrumentName: 'Violin',
-        }),
+        changeTrackPropsCommand(
+          score.tracks[0].id,
+          {
+            midiProgram: 40,
+            instrumentName: 'Violin',
+          },
+          commandLabel('changeTrackProps'),
+        ),
       ),
     );
 
