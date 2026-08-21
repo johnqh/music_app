@@ -19,26 +19,23 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Define projects in dependency order with wait times
 # Format: "relative_path:wait_after_in_seconds"
 #
-# Wait times let CI/CD finish publishing to npm before dependent packages
-# fetch the new version. music_api is private (never published) and
-# music_app is the terminal consumer, so neither needs a wait.
+# These numbers are **caps, not sleeps**, as of push_projects.sh v1.2.0.
+# Publishing happens in CI on push, so a just-pushed project is not yet
+# installable; the shared script now polls npm for the exact version it pushed
+# and continues the moment it is served — typically about a second. The number
+# here only raises the poll's ceiling above the default NPM_PUBLISH_POLL_MAX
+# (600s), and is still a plain sleep for projects that publish nothing to npm.
 #
-# 150s, not 60s: publishing happens in CI on push, and 60s has lost the race
-# more than once — music_app then installs the *previous* music_lib and fails
-# typecheck on exports that exist in the source it was just built against. The
-# failure looks like a code error and is not one.
+# Why the poll had to replace the sleep: no fixed number is correct. 60s lost
+# the race twice and 150s lost it once, each time leaving music_app resolving
+# the *previous* music_lib. That fails loudly when the app uses a newly added
+# export — and **silently** when it does not, shipping a release built against
+# the library it was meant to replace. music_app 0.2.50 went out that way.
 #
-# A poll ("wait until npm serves the version we just pushed") would be strictly
-# better than any fixed sleep, but the sleep lives in the shared
-# ../workflows/scripts/push_projects.sh, which building_blocks and sudojo_app
-# also source — so that change belongs there, deliberately, not as a side
-# effect of a music_app run.
-#
-# Note also that `bun add <pkg>@<version>` frequently cannot resolve a
-# just-published version for minutes after npm and curl both show it; `bun
-# update` resolves it where `bun add` and `bun install` do not. The cause is
-# bun's cached packument: `bun pm cache rm` makes `bun add` resolve it
-# immediately, and is the fix when a wait has already been lost.
+# The poll also drops the package-manager's packument cache once the version
+# appears: `bun add <pkg>@<version>` frequently cannot resolve a just-published
+# version for minutes after npm and curl both show it, because bun caches the
+# packument. `bun pm cache rm` is what makes it resolvable.
 PROJECTS=(
     "../music_types:60"
     # After music_types (which it peer-depends on) and before music_api (which
@@ -49,10 +46,8 @@ PROJECTS=(
     "../music_api:0"
     "../music_client:60"
     "../music_io:0"
-    # 150, not 60: this is the wait music_app's install depends on, and 60 has
-    # now lost the race twice — the run publishes music_lib, music_app installs
-    # the *previous* one, and typecheck fails on an export that exists in the
-    # source it was just verified against.
+    # music_app installs from this one, so it is the publish most worth waiting
+    # on. Under the poll the number costs nothing when CI is quick.
     "../music_lib:150"
     "../music_app:0"
 )
