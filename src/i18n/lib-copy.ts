@@ -73,7 +73,6 @@ export function musicXmlWarnings(): MusicXmlWarnings {
     graceNotes: t('musicXmlWarn.graceNotes'),
     lyrics: t('musicXmlWarn.lyrics'),
     tuplets: t('musicXmlWarn.tuplets'),
-    ornaments: t('musicXmlWarn.ornaments'),
     unsupportedNotation: (tag) => t('musicXmlWarn.unsupportedNotation', { tag }),
     unsupportedNoteElement: (tag) => t('musicXmlWarn.unsupportedNoteElement', { tag }),
     unsupportedArticulation: (tag) => t('musicXmlWarn.unsupportedArticulation', { tag }),

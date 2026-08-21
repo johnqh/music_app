@@ -32,6 +32,7 @@
  * drag fires continuously and each commit would otherwise be an undo entry.
  */
 import { cn } from '@sudobility/components';
+import { panReadout } from '@/features/tracks/pan-readout';
 
 const TRACK_BASE_CLASS = 'absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2';
 
@@ -196,18 +197,6 @@ export function VolumeSlider({ label, rowLabel, value, disabled, onChange }: Mix
       <span className={ROW_ACTION_CLASS} aria-hidden />
     </div>
   );
-}
-
-/**
- * How far from centre, and which side.
- *
- * "0.4" tells you neither without knowing the convention, and at the centre
- * there is no side to name at all — hence "C" rather than "L0".
- */
-export function panReadout(value: number): string {
-  const amount = Math.round(Math.abs(value) * 100);
-  if (amount === 0) return 'C';
-  return `${value < 0 ? 'L' : 'R'}${amount}`;
 }
 
 export type PanSliderProps = MixerSliderProps & {

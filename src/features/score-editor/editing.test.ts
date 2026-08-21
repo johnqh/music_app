@@ -23,6 +23,8 @@ import {
   selectedNoteIds,
   selectMeasure,
   selectTrackAction,
+  changeOrnament,
+  toggleFermata,
   toggleTie,
   transposeOctave,
   transposeSemitone,
@@ -311,6 +313,45 @@ describe('per-note property changes', () => {
 
     toggleTie(store, 'tieStart');
     expect((findEvent(store.getState().score!, note.id) as NoteEvent).tieStart).toBe(false);
+  });
+
+  it('toggleFermata puts a pause on the selected note and takes it off again', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+
+    toggleFermata(store);
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).fermata).toBe(true);
+
+    toggleFermata(store);
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).fermata).toBeUndefined();
+  });
+
+  it('changeOrnament sets and clears the selected note ornament', () => {
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+
+    changeOrnament(store, 'trill');
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).ornament).toBe('trill');
+
+    changeOrnament(store, 'mordent');
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).ornament).toBe('mordent');
+
+    changeOrnament(store, undefined);
+    expect((findEvent(store.getState().score!, note.id) as NoteEvent).ornament).toBeUndefined();
+  });
+
+  it('toggleFermata does nothing with an empty selection', () => {
+    // One note is enough, unlike a slur — but zero still has to be a no-op
+    // rather than a command that marks the whole score.
+    const store = makeStore();
+    store.getState().setSelection({ eventIds: [], measureIds: [], trackIds: [] });
+    const before = store.getState().score;
+
+    toggleFermata(store);
+
+    expect(store.getState().score).toBe(before);
   });
 });
 

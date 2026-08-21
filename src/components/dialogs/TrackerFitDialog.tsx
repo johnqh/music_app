@@ -27,7 +27,7 @@ export type TrackerFitDialogProps = {
  * counts pluralise through i18next rather than by appending an "s", which is
  * an English-only rule.
  */
-export function fitReportLines(report: TrackerFitReport, format: string, t: TFunction): string[] {
+function fitReportLines(report: TrackerFitReport, format: string, t: TFunction): string[] {
   const out: string[] = [];
   if (report.clampedNotes > 0) {
     out.push(t('trackerFit.clampedNotes', { count: report.clampedNotes, format }));

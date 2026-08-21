@@ -693,3 +693,43 @@ export function SlurIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * A fermata: the arc with its dot, drawn over a notehead.
+ *
+ * The notehead is what tells it apart from the slur icon above, which is the
+ * same arc without one — a slur spans notes, a fermata sits on one.
+ */
+export function FermataIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M4 12c2.5-6 13.5-6 16 0"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="8.5" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="17.5" r="2.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * An ornament: the trill's "tr" wave, which is the sign a reader recognises
+ * fastest of the four the menu offers.
+ */
+export function OrnamentIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M4 15c1.6-4 3.4-4 5 0s3.4 4 5 0 3.4-4 5 0"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M5 9h5M7.5 9V6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}

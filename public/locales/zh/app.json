@@ -522,6 +522,10 @@
     "noSuchBar_other": "本谱的小节范围是 1 到 {{count}}。",
     "slur": "连句线",
     "slurHint": "为所选音符添加连句线——跨两个或更多音符的乐句记号（S）",
+    "fermata": "延长记号",
+    "fermataHint": "为所选音符添加延长记号——由演奏者自行决定的停顿",
+    "ornament": "装饰音",
+    "ornamentHint": "为所选音符添加装饰音记号",
     "lyricEntry": "歌词输入",
     "syllable": "音节",
     "lyricNoteOf": "第 {{current}} / {{total}} 个音符",
@@ -780,5 +784,12 @@
     "unsupportedMeasureElement": "Unsupported measure element <{{tag}}> was dropped.",
     "noTempo": "No tempo was given; {{defaultBpm}} BPM was used.",
     "tempoClamped": "Tempo {{bpm}} was outside {{min}}-{{max}} and became {{clamped}}."
+  },
+  "ornament": {
+    "none": "无",
+    "trill": "颤音",
+    "mordent": "波音",
+    "inverted-mordent": "逆波音",
+    "turn": "回音"
   }
 }

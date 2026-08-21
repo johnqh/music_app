@@ -56,6 +56,8 @@ export type CommandLabelKey =
   | 'setChordSymbol'
   | 'setLyric'
   | 'toGraceNote'
+  | 'changeOrnament'
+  | 'toggleFermata'
   | 'toggleSlur'
   | 'toggleTie'
   | 'transpose';

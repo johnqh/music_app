@@ -12,7 +12,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { PanSlider, VolumeSlider, panReadout } from '@/features/tracks/mixer-controls';
+import { PanSlider, VolumeSlider } from '@/features/tracks/mixer-controls';
+import { panReadout } from '@/features/tracks/pan-readout';
 
 /** The unfilled bed: the first painted div, which every fill draws over. */
 function grooveOf(container: HTMLElement): HTMLElement {

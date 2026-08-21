@@ -29,6 +29,7 @@ import type {
   Articulation,
   DurationName,
   NoteEvent,
+  Ornament,
   Pitch,
   Score,
   UUID,
@@ -55,6 +56,8 @@ import {
   changeDurationCommand,
   changeVelocityCommand,
   deleteEventsCommand,
+  changeOrnamentCommand,
+  toggleFermataCommand,
   toggleSlurCommand,
   toggleTieCommand,
 } from '@sudobility/music_lib';
@@ -643,6 +646,15 @@ export function changeArticulation(
   );
 }
 
+/** Sets (or clears, with `undefined`) the selected notes' ornament sign. No-op if no notes are selected. */
+export function changeOrnament(store: EditorStoreApi, ornament: Ornament | undefined): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length === 0) return;
+  dispatchTracked(store, changeOrnamentCommand(ids, ornament, commandLabel('changeOrnament')));
+}
+
 /** Sets the selected notes' accidental. No-op if no notes are selected. */
 export function changeAccidental(store: EditorStoreApi, accidental: Accidental): void {
   const state = store.getState();
@@ -669,6 +681,20 @@ export function toggleSlur(store: EditorStoreApi): void {
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length < 2) return;
   dispatchTracked(store, toggleSlurCommand(ids, commandLabel('toggleSlur')));
+}
+
+/**
+ * Puts a fermata on the selection, or takes it off.
+ *
+ * One note is enough, unlike a slur: a fermata belongs to a single note, so
+ * there are no endpoints to pick and nothing to refuse.
+ */
+export function toggleFermata(store: EditorStoreApi): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length === 0) return;
+  dispatchTracked(store, toggleFermataCommand(ids, commandLabel('toggleFermata')));
 }
 
 export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'): void {

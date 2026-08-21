@@ -35,7 +35,13 @@ import {
 } from '@sudobility/components';
 import { findEvent } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
-import type { Accidental, Articulation, DurationName, Pitch } from '@sudobility/music_types';
+import type {
+  Accidental,
+  Articulation,
+  DurationName,
+  Ornament,
+  Pitch,
+} from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import {
@@ -94,6 +100,8 @@ import {
   TieIcon,
   WholeNoteIcon,
   SlurIcon,
+  FermataIcon,
+  OrnamentIcon,
 } from '@/components/icons/notation-icons';
 import {
   addMeasure,
@@ -101,11 +109,13 @@ import {
   deleteSelected,
   changeAccidental,
   changeArticulation,
+  changeOrnament,
   changeDuration,
   insertNoteAtCaret,
   insertRestAtSelection,
   quantizeSelection,
   selectAll,
+  toggleFermata,
   toggleSlur,
   toggleTie,
 } from '@/features/score-editor/editing';
@@ -180,6 +190,22 @@ const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; labelKey: s
   { value: 'accent', labelKey: 'articulation.accent' },
   { value: 'tenuto', labelKey: 'articulation.tenuto' },
   { value: 'marcato', labelKey: 'articulation.marcato' },
+];
+
+/**
+ * The ornament signs, in the order a picker should offer them.
+ *
+ * Shares `NO_ARTICULATION`'s problem and its fix: Radix rejects an empty item
+ * value, so "None" travels under a sentinel.
+ */
+const NO_ORNAMENT = 'none';
+
+const ORNAMENT_OPTIONS: Array<{ value: Ornament | undefined; labelKey: string }> = [
+  { value: undefined, labelKey: 'ornament.none' },
+  { value: 'trill', labelKey: 'ornament.trill' },
+  { value: 'mordent', labelKey: 'ornament.mordent' },
+  { value: 'inverted-mordent', labelKey: 'ornament.inverted-mordent' },
+  { value: 'turn', labelKey: 'ornament.turn' },
 ];
 
 /**
@@ -383,6 +409,10 @@ export function EditorToolbar({
 
   const handleArticulationSelect = (value: string): void => {
     changeArticulation(store, value === NO_ARTICULATION ? undefined : (value as Articulation));
+  };
+
+  const handleOrnamentSelect = (value: string): void => {
+    changeOrnament(store, value === NO_ORNAMENT ? undefined : (value as Ornament));
   };
 
   const handleInsertNote = (): void => {
@@ -605,6 +635,30 @@ export function EditorToolbar({
           </SelectContent>
         </Select>
 
+        {/*
+          The ornament sign. A Select like the articulation beside it and for
+          the same reasons — several mutually exclusive choices, and the
+          trigger applies rather than reflects, so `value` stays empty.
+        */}
+        <Select value="" onValueChange={handleOrnamentSelect}>
+          <Tooltip placement="bottom" content={t('editor.ornamentHint')}>
+            <SelectTrigger
+              aria-label={t('editor.ornament')}
+              disabled={!canEdit || !hasSelection}
+              className={cn(ICON_BUTTON_CLASS, '[&>svg:last-child]:hidden [&_svg]:size-[18px]')}
+            >
+              <OrnamentIcon className={ICON_GLYPH_CLASS} />
+            </SelectTrigger>
+          </Tooltip>
+          <SelectContent>
+            {ORNAMENT_OPTIONS.map((option) => (
+              <SelectItem key={option.labelKey} value={option.value ?? NO_ORNAMENT}>
+                {t(option.labelKey)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <Tooltip placement="bottom" content={t('editor.toggleTie')}>
           <Button
             type="button"
@@ -670,6 +724,24 @@ export function EditorToolbar({
             className={TOGGLE_BUTTON_CLASS}
           >
             <SlurIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        {/*
+          A pause on the selection. One note is enough, unlike the slur beside
+          it — a fermata belongs to a single note — so it only needs something
+          selected.
+        */}
+        <Tooltip placement="bottom" content={t('editor.fermataHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.fermata')}
+            disabled={!canEdit || selection.eventIds.length === 0}
+            onClick={() => toggleFermata(store)}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <FermataIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
 
