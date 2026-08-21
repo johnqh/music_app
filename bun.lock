@@ -18,7 +18,7 @@
         "@sudobility/di_web": "^0.1.221",
         "@sudobility/music_client": "^0.4.23",
         "@sudobility/music_io": "^0.7.26",
-        "@sudobility/music_lib": "^1.7.45",
+        "@sudobility/music_lib": "^1.7.46",
         "@sudobility/music_types": "^0.11.23",
         "@sudobility/seo_lib": "^0.0.35",
         "@sudobility/types": "^1.9.66",
@@ -430,7 +430,7 @@
 
     "@sudobility/music_io": ["@sudobility/music_io@0.7.26", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7" }, "peerDependencies": { "@sudobility/music_types": "^0.11.23", "@tonejs/midi": "^2.0.28", "fast-xml-parser": ">=5.0.0", "js-synthesizer": "^1.13.0", "react-native-audio-api": ">=0.13.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0" }, "optionalPeers": ["fast-xml-parser", "js-synthesizer", "react-native-audio-api", "react-native-fs", "react-native-share"] }, "sha512-qYJMJVesVi3xbgKReE5UKPdcfEj9HLX80zZs2BDQlQ7OQwBgRPkmv2S70F6PQb+UrIWWNXxuwLpMtoEuEaU68w=="],
 
-    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.45", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.22", "@sudobility/music_types": "^0.11.22", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-B5PHj5DQKC3W+oKGf340vSmYct2YF1CUVbCQOA5sO8voACy56z3CAftw5dHyRMqSu6JL/r9oJDLQm/oPzxADwQ=="],
+    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.46", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.23", "@sudobility/music_types": "^0.11.23", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-dTj7yDwrG39PLw9mFDgZAmrcPk5pWgpmqn9EVeiH3Xe8H3krLq1tgInAcq07T88mdV8vQyaezyy9hgpgpHCsCA=="],
 
     "@sudobility/music_types": ["@sudobility/music_types@0.11.23", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.66" } }, "sha512-u3o1dXs/ajDwjXugiONMnyMmYc2VhJCDk7n8BGtJEJu7MJfyI33tFWevP1PUEliNr3HH98GmAsxtrq2nIFynIw=="],
 
