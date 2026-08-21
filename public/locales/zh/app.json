@@ -631,7 +631,9 @@
     "articulation": "演奏法",
     "dynamic": "力度",
     "noDynamic": "无",
-    "dynamicHint": "从该音符起生效，直到该音轨上的下一个力度记号。"
+    "dynamicHint": "从该音符起生效，直到该音轨上的下一个力度记号。",
+    "chordSymbol": "和弦标记",
+    "chordSymbolPlaceholder": "例如 Cmaj7"
   },
   "errors": {
     "audioImport": "音频导入失败",
@@ -684,7 +686,8 @@
     "changeMetadata": "修改乐谱信息",
     "changeDynamic": "修改力度",
     "setLyric": "修改歌词",
-    "toGraceNote": "修改装饰音"
+    "toGraceNote": "修改装饰音",
+    "setChordSymbol": "修改和弦标记"
   },
   "templates": {
     "lead-sheet": {

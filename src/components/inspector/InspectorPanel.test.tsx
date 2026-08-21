@@ -9,6 +9,7 @@ import {
   changeClefCommand,
   changeDynamicCommand,
   changeTrackPropsCommand,
+  setChordSymbolCommand,
   toGraceNoteCommand,
 } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -498,5 +499,62 @@ describe('InspectorPanel: grace notes', () => {
       .getState()
       .score!.tracks[0].measures[0].voices[0].events.find((e) => e.id === second.id) as NoteEvent;
     expect(principal.graceNotes).toBeUndefined();
+  });
+});
+
+describe('InspectorPanel: chord symbols', () => {
+  it('writes what the player typed, whatever dialect it is in', async () => {
+    // A lead sheet's vocabulary is wider than any picker could offer, so the
+    // field is free text and nothing is rewritten.
+    const user = userEvent.setup();
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+
+    const field = screen.getByLabelText('Chord symbol');
+    await user.type(field, 'Bb7#11');
+    await user.tab();
+
+    const updated = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(updated.chordSymbol).toBe('Bb7#11');
+  });
+
+  it('commits on blur, not per keystroke', async () => {
+    // Otherwise "Cmaj7(add13)" is eleven undo entries.
+    const user = userEvent.setup();
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.type(screen.getByLabelText('Chord symbol'), 'Am7');
+    const midway = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(midway.chordSymbol).toBeUndefined();
+
+    await user.tab();
+    const after = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(after.chordSymbol).toBe('Am7');
+  });
+
+  it('clears the symbol when the field is emptied', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      store.getState().dispatchCommand(setChordSymbolCommand(note.id, 'G7', 'Chord'));
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.clear(screen.getByLabelText('Chord symbol'));
+    await user.tab();
+
+    const after = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(after.chordSymbol).toBeUndefined();
   });
 });

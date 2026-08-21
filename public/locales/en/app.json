@@ -631,7 +631,9 @@
     "articulation": "Articulation",
     "dynamic": "Dynamic",
     "noDynamic": "None",
-    "dynamicHint": "Applies from this note until the next marking on the track."
+    "dynamicHint": "Applies from this note until the next marking on the track.",
+    "chordSymbol": "Chord symbol",
+    "chordSymbolPlaceholder": "e.g. Cmaj7"
   },
   "errors": {
     "audioImport": "Audio import failed",
@@ -684,7 +686,8 @@
     "changeMetadata": "Change score details",
     "changeDynamic": "Change dynamic",
     "setLyric": "Change lyric",
-    "toGraceNote": "Change grace notes"
+    "toGraceNote": "Change grace notes",
+    "setChordSymbol": "Change chord symbol"
   },
   "templates": {
     "lead-sheet": {

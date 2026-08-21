@@ -52,6 +52,7 @@ export type CommandLabelKey =
   | 'quantize'
   | 'relocateNotes'
   | 'resizeNotes'
+  | 'setChordSymbol'
   | 'setLyric'
   | 'toGraceNote'
   | 'toggleSlur'

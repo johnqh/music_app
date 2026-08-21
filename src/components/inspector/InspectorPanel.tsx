@@ -122,6 +122,7 @@ import {
   changeDynamicCommand,
   changeKeySignatureCommand,
   clearGraceNotesCommand,
+  setChordSymbolCommand,
   toGraceNoteCommand,
   changeTempoCommand,
   changeTimeSignatureCommand,
@@ -822,6 +823,16 @@ function NoteTab({ store, onReplace }: TabProps) {
       </div>
 
       {/*
+        The chord symbol printed above the stave from this note. A lead sheet
+        is mostly this field, so it sits with the note's own properties rather
+        than behind a mode — and it is a free text box, because a player's
+        vocabulary is wider than any list a picker could offer.
+      */}
+      {notes.length === 1 ? (
+        <ChordSymbolField store={store} note={notes[0]} disabled={isPlayingNow} />
+      ) : null}
+
+      {/*
         An ornament belongs to the note after it, so this is offered for one
         selected note and the command decides which note that is. A note with
         nothing after it cannot become one — an ornament with nothing to
@@ -1202,6 +1213,50 @@ function TrackTab({ store, onReplace }: TabProps) {
         onCancel={() => setPendingDelete(false)}
       />
     </div>
+  );
+}
+
+/**
+ * A note's chord symbol, drafted and committed on blur.
+ *
+ * Committing per keystroke would put an undo entry on the history for every
+ * character of "Cmaj7(add13)", the same reason the track name and the score
+ * title are drafted.
+ */
+function ChordSymbolField({
+  store,
+  note,
+  disabled,
+}: {
+  store: EditorStoreApi;
+  note: NoteEvent;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(note.chordSymbol ?? '');
+
+  useEffect(() => {
+    setDraft(note.chordSymbol ?? '');
+  }, [note.id, note.chordSymbol]);
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.chordSymbol')}</span>
+      <Input
+        value={draft}
+        disabled={disabled}
+        placeholder={t('inspector.chordSymbolPlaceholder')}
+        aria-label={t('inspector.chordSymbol')}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft.trim() === (note.chordSymbol ?? '')) return;
+          store
+            .getState()
+            .dispatchCommand(setChordSymbolCommand(note.id, draft, commandLabel('setChordSymbol')));
+        }}
+        className={TEXT_INPUT_CLASS}
+      />
+    </label>
   );
 }
 
