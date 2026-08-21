@@ -36,6 +36,7 @@ export type CommandLabelKey =
   | 'changePitch'
   | 'changeClef'
   | 'changeKeySignature'
+  | 'changeRepeats'
   | 'changeMetadata'
   | 'changeTempo'
   | 'changeTimeSignature'

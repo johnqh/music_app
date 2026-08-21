@@ -531,7 +531,13 @@
     "enterLyricsHint": "Type words under the notes of the active track (L)",
     "makeGraceNote": "Make grace note of the next",
     "clearGraceNotes_one": "Remove 1 grace note",
-    "clearGraceNotes_other": "Remove {{count}} grace notes"
+    "clearGraceNotes_other": "Remove {{count}} grace notes",
+    "repeats": "Repeats",
+    "repeatStart": "Repeat starts here",
+    "repeatEnd": "Repeat ends here",
+    "ending": "Ending (volta)",
+    "endingPlaceholder": "e.g. 1 or 1, 2",
+    "repeatsPlaybackNote": "Repeats are drawn, exported, and played back. Playback starts from the first time a bar is played."
   },
   "credits": {
     "title": "Credits",
@@ -687,7 +693,8 @@
     "changeDynamic": "Change dynamic",
     "setLyric": "Change lyric",
     "toGraceNote": "Change grace notes",
-    "setChordSymbol": "Change chord symbol"
+    "setChordSymbol": "Change chord symbol",
+    "changeRepeats": "Change repeats"
   },
   "templates": {
     "lead-sheet": {

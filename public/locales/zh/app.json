@@ -531,7 +531,13 @@
     "enterLyricsHint": "在当前音轨的音符下方输入歌词（L）",
     "makeGraceNote": "作为下一音符的装饰音",
     "clearGraceNotes_one": "移除 1 个装饰音",
-    "clearGraceNotes_other": "移除 {{count}} 个装饰音"
+    "clearGraceNotes_other": "移除 {{count}} 个装饰音",
+    "repeats": "反复记号",
+    "repeatStart": "在此开始反复",
+    "repeatEnd": "在此结束反复",
+    "ending": "房子（反复括号）",
+    "endingPlaceholder": "例如 1 或 1, 2",
+    "repeatsPlaybackNote": "反复记号会绘制、导出并在播放时生效。播放从该小节第一次出现处开始。"
   },
   "credits": {
     "title": "点数",
@@ -687,7 +693,8 @@
     "changeDynamic": "修改力度",
     "setLyric": "修改歌词",
     "toGraceNote": "修改装饰音",
-    "setChordSymbol": "修改和弦标记"
+    "setChordSymbol": "修改和弦标记",
+    "changeRepeats": "修改反复记号"
   },
   "templates": {
     "lead-sheet": {

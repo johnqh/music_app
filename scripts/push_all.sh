@@ -36,7 +36,9 @@ BASE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 #
 # Note also that `bun add <pkg>@<version>` frequently cannot resolve a
 # just-published version for minutes after npm and curl both show it; `bun
-# update` resolves it where `bun add` and `bun install` do not.
+# update` resolves it where `bun add` and `bun install` do not. The cause is
+# bun's cached packument: `bun pm cache rm` makes `bun add` resolve it
+# immediately, and is the fix when a wait has already been lost.
 PROJECTS=(
     "../music_types:60"
     # After music_types (which it peer-depends on) and before music_api (which
@@ -47,7 +49,11 @@ PROJECTS=(
     "../music_api:0"
     "../music_client:60"
     "../music_io:0"
-    "../music_lib:60"
+    # 150, not 60: this is the wait music_app's install depends on, and 60 has
+    # now lost the race twice — the run publishes music_lib, music_app installs
+    # the *previous* one, and typecheck fails on an export that exists in the
+    # source it was just verified against.
+    "../music_lib:150"
     "../music_app:0"
 )
 

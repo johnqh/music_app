@@ -121,6 +121,7 @@ import {
 import {
   changeDynamicCommand,
   changeKeySignatureCommand,
+  changeRepeatsCommand,
   clearGraceNotesCommand,
   setChordSymbolCommand,
   toGraceNoteCommand,
@@ -1010,6 +1011,13 @@ function MeasureTab({ store, onReplace }: TabProps) {
         <MeasureTempoField store={store} score={score} measure={measures[0]} />
       ) : null}
 
+      {/*
+        Repeat structure. One bar at a time: a repeat is a boundary, and
+        applying "repeat ends here" to a span of bars would mean a `:|` on
+        every one of them.
+      */}
+      {measures.length === 1 ? <RepeatFields store={store} measure={measures[0]} /> : null}
+
       <ReplaceButton
         store={store}
         scope="measures"
@@ -1212,6 +1220,75 @@ function TrackTab({ store, onReplace }: TabProps) {
         }}
         onCancel={() => setPendingDelete(false)}
       />
+    </div>
+  );
+}
+
+/**
+ * The repeat barlines and volta of one bar.
+ *
+ * Says outright that playback ignores repeats. The alternative is a marking
+ * that draws and exports correctly and then quietly does nothing when you
+ * press play, which is a worse experience than a stated limit — and expanding
+ * repeats in playback would break the identity that a playback tick is a score
+ * tick, which the caret, the following-scroll and the scrubber all rest on.
+ */
+function RepeatFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
+  const { t } = useTranslation();
+  const isPlaying = store((s) => s.state === 'playing');
+  const [endingDraft, setEndingDraft] = useState('');
+
+  useEffect(() => {
+    setEndingDraft((measure.endingNumbers ?? []).join(', '));
+  }, [measure.id, measure.endingNumbers]);
+
+  const patch = (next: Parameters<typeof changeRepeatsCommand>[1]): void => {
+    store
+      .getState()
+      .dispatchCommand(changeRepeatsCommand(measure.id, next, commandLabel('changeRepeats')));
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={FIELD_LABEL_CLASS}>{t('editor.repeats')}</span>
+
+      <div className="flex gap-4">
+        <MixedCheckbox
+          label={t('editor.repeatStart')}
+          checked={measure.repeatStart === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ repeatStart: checked })}
+        />
+        <MixedCheckbox
+          label={t('editor.repeatEnd')}
+          checked={measure.repeatEnd === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ repeatEnd: checked })}
+        />
+      </div>
+
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASS}>{t('editor.ending')}</span>
+        <Input
+          value={endingDraft}
+          disabled={isPlaying}
+          placeholder={t('editor.endingPlaceholder')}
+          aria-label={t('editor.ending')}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setEndingDraft(e.target.value)}
+          onBlur={() => {
+            // "1, 2" is a bar played on both passes; anything unparseable
+            // clears rather than storing a bracket nobody asked for.
+            const numbers = endingDraft
+              .split(',')
+              .map((part) => Number(part.trim()))
+              .filter((n) => Number.isInteger(n) && n > 0);
+            patch({ endingNumbers: numbers });
+          }}
+          className={TEXT_INPUT_CLASS}
+        />
+      </label>
+
+      <span className="text-xs text-theme-text-secondary">{t('editor.repeatsPlaybackNote')}</span>
     </div>
   );
 }
