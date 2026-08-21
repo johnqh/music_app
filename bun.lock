@@ -18,7 +18,7 @@
         "@sudobility/di_web": "^0.1.221",
         "@sudobility/music_client": "^0.4.25",
         "@sudobility/music_io": "^0.7.28",
-        "@sudobility/music_lib": "^1.7.48",
+        "@sudobility/music_lib": "^1.7.49",
         "@sudobility/music_types": "^0.11.25",
         "@sudobility/seo_lib": "^0.0.35",
         "@sudobility/types": "^1.9.66",
@@ -430,7 +430,7 @@
 
     "@sudobility/music_io": ["@sudobility/music_io@0.7.28", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7" }, "peerDependencies": { "@sudobility/music_types": "^0.11.25", "@tonejs/midi": "^2.0.28", "fast-xml-parser": ">=5.0.0", "js-synthesizer": "^1.13.0", "react-native-audio-api": ">=0.13.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0" }, "optionalPeers": ["fast-xml-parser", "js-synthesizer", "react-native-audio-api", "react-native-fs", "react-native-share"] }, "sha512-TZu9mmOyuQ4TBficYMhptu6EgTgSfXwwQXTlDoEznzZsnoKO4WPRvXnldHmJYePpALwPVrgJ3y9ZCSKQWj7sZQ=="],
 
-    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.48", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.25", "@sudobility/music_types": "^0.11.25", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-uWjhZfFFDzQlZt60gagLtPKZtvBF6wfppbrdG/wcS+q8w/Kyrrq7uC2V3zzIdTs6ZEPWqtFhpwKG8vkxk8BQ6g=="],
+    "@sudobility/music_lib": ["@sudobility/music_lib@1.7.49", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "vexflow": "^4.2.5", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.25", "@sudobility/music_types": "^0.11.25", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-vVbTVuB9dgqFJYrRiNHXBOmOYiXfqOfUptO5SxJUL/eWd4VIl4e2gfL7q8i4hfCEm5jXUkoPl1CN+F1C8T+z/Q=="],
 
     "@sudobility/music_types": ["@sudobility/music_types@0.11.25", "", { "dependencies": { "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/types": "^1.9.66" } }, "sha512-xrFwAkadSiHbACPDgitGt1+R1/rqyUkFxrVAxhZyD33mjj/fONCM/Bk5Nlwv/fw2vp/2+ETXB8T0jYuzmub1Lw=="],
 
