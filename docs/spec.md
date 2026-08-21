@@ -1,4 +1,4 @@
-# ScoreSmith — AI-Assisted Sheet Music Composition Application: Full Specification
+# Moosiac — AI-Assisted Sheet Music Composition Application: Full Specification
 
 A production-quality web application that allows users to generate music as standard sheet notation, play it in the browser, manually edit notes, select and regenerate portions of the composition, and import/export MIDI files. A lightweight combination of a notation editor, MIDI sequencer, and AI music-generation tool. Complete, runnable TypeScript application with clean architecture, polished UI, tests, documentation, and realistic sample data.
 

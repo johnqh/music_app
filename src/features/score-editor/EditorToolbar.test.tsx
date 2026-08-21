@@ -562,6 +562,23 @@ describe('selection-only controls say so', () => {
     renderToolbar(store);
     expect(screen.getByLabelText('Insert note')).toBeEnabled();
     expect(screen.getByLabelText('Note duration')).toBeEnabled();
+  });
+
+  it('gates Paste on the clipboard, not on the selection', () => {
+    // Paste needs something copied, which is a different question from
+    // whether anything is selected. It used to stay live either way, so it
+    // was the one control on the bar that could look ready and do nothing.
+    const store = makeStore();
+    renderToolbar(store);
+    expect(screen.getByLabelText('Paste')).toBeDisabled();
+
+    const note = allNotes(store.getState().score!)[0];
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      store.getState().copySelection();
+      store.getState().clearSelection();
+    });
+
     expect(screen.getByLabelText('Paste')).toBeEnabled();
   });
 });

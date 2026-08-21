@@ -102,6 +102,18 @@ function clickNote(score: Score, noteId: string, init: MouseEventInit = {}): voi
   fireEvent.click(interactionSurface(), { ...center(box), ...init });
 }
 
+/**
+ * A point in the measure-number gutter above `index`'s bar — the one gesture
+ * that selects measures.
+ */
+function gutterPoint(score: Score, index: number): { clientX: number; clientY: number } {
+  const result = referenceRender(score);
+  const system = result.plan.systems.find((sys) => sys.measureIndices.includes(index));
+  const box = result.measureIdToBBox.get(score.tracks[0].measures[index].id);
+  if (!system || !box) throw new Error(`no gutter for measure ${index}`);
+  return { clientX: box.x + box.width / 2, clientY: system.gutterTop + 4 };
+}
+
 /** A point inside `measureId`'s stave box that is NOT inside any note bbox (so the click resolves to the measure, not a note). */
 function measureFreePoint(score: Score, measureId: string): { clientX: number; clientY: number } {
   const result = referenceRender(score);
@@ -1451,5 +1463,58 @@ describe('generating a track', () => {
     await user.click(screen.getByRole('button', { name: 'Generate' }));
 
     expect(store.getState().score).toBe(before);
+  });
+});
+
+describe('ScoreEditorView: selecting a span of bars', () => {
+  it('selects one bar on a plain gutter click', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 2));
+
+    expect(store.getState().selection.measureIds).toEqual([score.tracks[0].measures[2].id]);
+  });
+
+  it('extends to a range on shift-click, so a span is two clicks not ten', () => {
+    // Regeneration and Replace Measures both work on a span, and picking one
+    // out a bar at a time was the slowest part of using them.
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 1));
+    fireEvent.click(interactionSurface(), { ...gutterPoint(score, 5), shiftKey: true });
+
+    const expected = score.tracks[0].measures.slice(1, 6).map((m) => m.id);
+    expect(store.getState().selection.measureIds).toEqual(expected);
+  });
+
+  it('extends backwards from the anchor just as well', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 5));
+    fireEvent.click(interactionSurface(), { ...gutterPoint(score, 2), shiftKey: true });
+
+    const expected = score.tracks[0].measures.slice(2, 6).map((m) => m.id);
+    expect(store.getState().selection.measureIds).toEqual(expected);
+  });
+
+  it('grows and shrinks from one anchor rather than walking it', () => {
+    // Extending twice from the same anchor is how every list behaves.
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.click(interactionSurface(), gutterPoint(score, 1));
+    fireEvent.click(interactionSurface(), { ...gutterPoint(score, 5), shiftKey: true });
+    fireEvent.click(interactionSurface(), { ...gutterPoint(score, 3), shiftKey: true });
+
+    expect(store.getState().selection.measureIds).toEqual(
+      score.tracks[0].measures.slice(1, 4).map((m) => m.id),
+    );
   });
 });

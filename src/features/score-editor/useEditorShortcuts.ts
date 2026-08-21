@@ -7,6 +7,13 @@
  * Ctrl/Cmd+Z: undo. Ctrl/Cmd+Shift+Z: redo. Ctrl/Cmd+C: copy. Ctrl/Cmd+X: cut. Ctrl/Cmd+V: paste.
  * ArrowUp/ArrowDown: move pitch up/down (semitone). Shift+Up/Shift+Down: move pitch up/down one octave.
  * ArrowLeft/ArrowRight: move selection backward/forward.
+ * Ctrl/Cmd+A: select every note.
+ *
+ * Note entry, none of it modified so a browser or OS shortcut is never
+ * mistaken for a note:
+ * A-G: write that pitch at the caret, in the octave nearest the note before it.
+ * 1-6: choose the note value. `.`: dot it. R: insert a rest. T: tie. S: slur.
+ * N: note input on/off — while on, a click on a stave writes a note there.
  * ```
  *
  * Attaches one `keydown` listener on `window` for the component's
@@ -23,11 +30,25 @@
 import { useEffect } from 'react';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import {
+  caretToBarEdge,
+  caretToScoreEdge,
   deleteSelected,
+  insertNoteAtCaret,
+  insertRestAtSelection,
   moveSelectionHorizontal,
+  selectAll,
+  stepCaret,
+  toggleSlur,
+  toggleTie,
   transposeOctave,
   transposeSemitone,
 } from '@/features/score-editor/editing';
+import {
+  durationForDigit,
+  isPitchLetter,
+  pitchForLetter,
+} from '@/features/score-editor/note-entry';
+import { withModifier } from '@/features/score-editor/duration-modifiers';
 import { playbackController } from '@sudobility/music_lib';
 import type { ClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 import type { PlaybackController } from '@sudobility/music_lib';
@@ -112,6 +133,82 @@ export function useEditorShortcuts(
         event.preventDefault();
         if (clipboard) clipboard.requestPaste();
         else store.getState().paste();
+        return;
+      }
+
+      if (isModified(event) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        selectAll(store);
+        return;
+      }
+
+      // ---- caret navigation.
+      //
+      // Alt rather than a bare arrow: the arrows already move the selection and
+      // transpose it, and note entry needs the caret moved without disturbing
+      // either. Stepping by the toolbar's current note value is the grid the
+      // writer is already thinking in.
+      if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        stepCaret(store, event.key === 'ArrowLeft' ? 'prev' : 'next');
+        return;
+      }
+
+      if (event.key === 'Home' || event.key === 'End') {
+        event.preventDefault();
+        const edge = event.key === 'Home' ? 'start' : 'end';
+        if (isModified(event)) caretToScoreEdge(store, edge);
+        else caretToBarEdge(store, edge);
+        return;
+      }
+
+      // Everything below is note entry, and none of it takes a modifier — so a
+      // browser or OS shortcut passing through is never mistaken for a note.
+      if (isModified(event) || event.altKey) return;
+
+      // Digits pick the note value, preserving the dot or triplet already on.
+      const digitDuration = durationForDigit(event.key, store.getState().snapGrid);
+      if (digitDuration) {
+        event.preventDefault();
+        store.getState().setSnapGrid(digitDuration);
+        return;
+      }
+
+      // Letters write that pitch at the caret, in the octave nearest the note
+      // before it, and step the caret past what was written.
+      if (isPitchLetter(event.key)) {
+        event.preventDefault();
+        insertNoteAtCaret(store, pitchForLetter(store, event.key), { advanceCaret: true });
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        store.getState().setNoteInput(!store.getState().noteInput);
+        return;
+      }
+
+      if (event.key === '.') {
+        event.preventDefault();
+        store.getState().setSnapGrid(withModifier(store.getState().snapGrid, 'dotted'));
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        insertRestAtSelection(store);
+        return;
+      }
+
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        toggleSlur(store);
+        return;
+      }
+
+      if (event.key.toLowerCase() === 't') {
+        event.preventDefault();
+        toggleTie(store, 'tieStart');
         return;
       }
 

@@ -53,7 +53,7 @@ export function useTopBarConfig(): TopBarConfig {
       variant: 'firebase',
       topBarVariant: 'app',
       logo: {
-        src: '/favicon.svg',
+        src: '/logo-96.png',
         alt: CONSTANTS.APP_NAME,
         appName: CONSTANTS.APP_NAME,
         onClick: () => navigate(`/${lang}`),

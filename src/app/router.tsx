@@ -19,6 +19,7 @@ import {
   useParams,
 } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PaywallDialog } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -139,66 +140,75 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
  */
 export function AppRoutes({ store = useAppStore }: AppRouterProps) {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/en" replace />} />
-      <Route path="/:lang" element={<LanguageValidator />}>
-        <Route element={<ScreenContainerLayout />}>
-          {/* Public. */}
-          <Route index element={<HomePage />} />
-          <Route path="community" element={<CommunityPage />} />
-          <Route path="resources" element={<ResourcesPage />} />
-          <Route path="settings" element={<SettingsPage store={store} />} />
-          <Route path="signin" element={<LoginPage />} />
+    <>
+      {/*
+        Mounted above the routes rather than in a layout, because a job can be
+        refused for want of credits from the dashboard and from inside the
+        editor, and those sit in different branches of the tree. One mount, one
+        `dialogs.paywall` flag, reachable from either.
+      */}
+      <PaywallDialog store={store} />
+      <Routes>
+        <Route path="/" element={<Navigate to="/en" replace />} />
+        <Route path="/:lang" element={<LanguageValidator />}>
+          <Route element={<ScreenContainerLayout />}>
+            {/* Public. */}
+            <Route index element={<HomePage />} />
+            <Route path="community" element={<CommunityPage />} />
+            <Route path="resources" element={<ResourcesPage />} />
+            <Route path="settings" element={<SettingsPage store={store} />} />
+            <Route path="signin" element={<LoginPage />} />
 
-          {/* Needs an account. */}
+            {/* Needs an account. */}
+            <Route
+              path="projects"
+              element={
+                <ProtectedRoute>
+                  <DashboardRoute store={store} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="credits"
+              element={
+                <ProtectedRoute>
+                  <CreditsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="credits/history"
+              element={
+                <ProtectedRoute>
+                  <CreditsHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
+
+          {/* Full-bleed reader for one shared score: deliberately no shell. */}
+          <Route path="p/:publicId" element={<PublishedView />} />
+
           <Route
-            path="projects"
+            path="project/:id"
             element={
               <ProtectedRoute>
-                <DashboardRoute store={store} />
+                <ProjectRoute store={store} />
               </ProtectedRoute>
             }
           />
           <Route
-            path="credits"
+            path="project/:id/print"
             element={
               <ProtectedRoute>
-                <CreditsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="credits/history"
-            element={
-              <ProtectedRoute>
-                <CreditsHistoryPage />
+                <PrintRoute store={store} />
               </ProtectedRoute>
             }
           />
         </Route>
-
-        {/* Full-bleed reader for one shared score: deliberately no shell. */}
-        <Route path="p/:publicId" element={<PublishedView />} />
-
-        <Route
-          path="project/:id"
-          element={
-            <ProtectedRoute>
-              <ProjectRoute store={store} />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="project/:id/print"
-          element={
-            <ProtectedRoute>
-              <PrintRoute store={store} />
-            </ProtectedRoute>
-          }
-        />
-      </Route>
-      <Route path="*" element={<Navigate to="/en" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/en" replace />} />
+      </Routes>
+    </>
   );
 }
 

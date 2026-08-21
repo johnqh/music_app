@@ -54,6 +54,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
+import { useSiteAdmin } from '@/app/AuthContext';
 import type { ChangeEvent } from 'react';
 import {
   Button,
@@ -72,7 +73,7 @@ import {
   DEFAULT_INSTRUMENT_VALUE,
   instrumentChoiceFor,
   instrumentLabelFor,
-} from '@/features/instruments/instrument-catalog';
+} from '@sudobility/music_lib';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { variants } from '@sudobility/design';
 
@@ -248,8 +249,14 @@ export function GenerateScoreDialog({
    *
    * Deliberately not `estimatedCredits > balance`: a job may overdraw once by
    * design, and a stricter rule here would refuse work the API would accept.
+   *
+   * A site administrator is never refused, for the same reason: the server
+   * charges them nothing and checks no balance, so gating them here would
+   * refuse work it would have accepted — and they sit at zero permanently,
+   * because nothing ever grants or spends their credits.
    */
-  const outOfCredits = balance !== null && balance <= 0;
+  const siteAdmin = useSiteAdmin();
+  const outOfCredits = !siteAdmin && balance !== null && balance <= 0;
 
   const canGenerate =
     !submitting &&

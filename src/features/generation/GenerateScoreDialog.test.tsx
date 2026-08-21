@@ -14,8 +14,14 @@ vi.mock('@sudobility/consumables_client', () => ({
   useBalance: () => useBalance() as unknown,
 }));
 
-function open(balance: number) {
+const useSiteAdmin = vi.fn(() => false);
+vi.mock('@/app/AuthContext', () => ({
+  useSiteAdmin: () => useSiteAdmin() as unknown,
+}));
+
+function open(balance: number, siteAdmin = false) {
   useBalance.mockReturnValue({ balance, isLoading: false });
+  useSiteAdmin.mockReturnValue(siteAdmin);
   // Inside a router: the out-of-credits message links to the store, and the
   // dialog is always rendered within the app's router in production.
   return render(
@@ -152,5 +158,26 @@ describe('GenerateScoreDialog instrumentation', () => {
     expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', { name: /^Remove / })[1]);
     expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(1);
+  });
+});
+
+describe('GenerateScoreDialog: site admins', () => {
+  it('lets a site admin generate at a balance of zero', () => {
+    // The server charges them nothing and checks no balance, so gating them
+    // here would refuse work `POST /jobs` would have accepted — and they sit
+    // at zero permanently, because nothing grants or spends their credits.
+    open(0, true);
+    fillPrompt();
+    setMeasures(4);
+
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled();
+  });
+
+  it('still refuses an ordinary user at zero', () => {
+    open(0, false);
+    fillPrompt();
+    setMeasures(4);
+
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
   });
 });

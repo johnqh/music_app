@@ -72,7 +72,7 @@
   },
   "resources": {
     "title": "资源",
-    "intro": "可直接导入 ScoreSmith 的免费音乐库。下载文件后，在项目页面使用「导入」。",
+    "intro": "可直接导入 {{appName}} 的免费音乐库。下载文件后，在项目页面使用「导入」。",
     "modarchiveBody": "数以万计的 tracker 模块文件——MOD、S3M、XM 与 IT——涵盖 demoscene 时期至今。",
     "bitmidiBody": "可搜索的大型 MIDI 文件合集，从古典到游戏与流行改编曲。",
     "musescoreBody": "社区乐谱，其中许多可下载为 MusicXML。",
@@ -284,7 +284,9 @@
     "minDurationShort": "最短音符时值（tick）",
     "pianoSplit": "钢琴谱表分谱",
     "replaceMessage": "导入该 MIDI 文件将替换当前项目的乐谱。此操作可以通过撤销恢复。",
-    "includeTrack": "包含音轨：{{name}}"
+    "includeTrack": "包含音轨：{{name}}",
+    "summaryLine_one": "{{count}} 个音轨，{{seconds}} 秒，{{ppq}} PPQ",
+    "summaryLine_other": "{{count}} 个音轨，{{seconds}} 秒，{{ppq}} PPQ"
   },
   "trackerFit": {
     "title": "导出为 {{format}}",
@@ -363,7 +365,8 @@
     "deleteMessage": "删除「{{name}}」及其所有小节？此操作可以撤销。",
     "instrumentRangeError": "{{instrument}} 无法在不改变音程的情况下覆盖该音轨的音域。",
     "nameOf": "音轨名称：{{name}}",
-    "kitOf": "鼓组：{{name}}"
+    "kitOf": "鼓组：{{name}}",
+    "centerPan": "声像居中"
   },
   "editor": {
     "cutTitle": "剪切这些音符",
@@ -495,7 +498,40 @@
     "deleteMeasure": "删除光标处的小节",
     "measureBeat": "第 {{measure}} 小节，第 {{beat}} 拍",
     "scoreNotation": "乐谱记谱。{{summary}}。",
-    "lastMeasureKept": "乐谱至少需要一个小节，因此保留了这一个。"
+    "lastMeasureKept": "乐谱至少需要一个小节，因此保留了这一个。",
+    "deleteTrack": "删除音轨",
+    "deleteTrackConfirm": "删除“{{name}}”及其所有音乐？只能通过撤销恢复。",
+    "duration": "时值",
+    "customDuration": "自定义（{{ticks}} tick）",
+    "key": "调号",
+    "bar": "小节",
+    "beat": "拍",
+    "tempoHere": "此处速度（BPM）",
+    "tempoInherited": "沿用前面小节的速度。输入数值即可在此设置速度变化。",
+    "tempoStarting": "乐谱的起始速度。",
+    "removeTempoChange": "删除此速度变化",
+    "noteInput": "音符输入",
+    "noteInputHint": "音符输入（N）——开启后，点击五线谱会在该音高写入音符，而不是移动光标",
+    "scoreActions": "乐谱操作",
+    "goToBar": "跳转到小节…",
+    "go": "跳转",
+    "barNumber": "小节号",
+    "barNumberOf_one": "小节号（本谱共 1 小节）",
+    "barNumberOf_other": "小节号（1–{{count}}）",
+    "noSuchBar_one": "本谱只有 1 小节。",
+    "noSuchBar_other": "本谱的小节范围是 1 到 {{count}}。",
+    "slur": "连句线",
+    "slurHint": "为所选音符添加连句线——跨两个或更多音符的乐句记号（S）",
+    "lyricEntry": "歌词输入",
+    "syllable": "音节",
+    "lyricNoteOf": "第 {{current}} / {{total}} 个音符",
+    "lyricKeysHint": "空格＝下一个词 · - ＝下一个音节 · 回车＝完成",
+    "done": "完成",
+    "enterLyrics": "输入歌词",
+    "enterLyricsHint": "在当前音轨的音符下方输入歌词（L）",
+    "makeGraceNote": "作为下一音符的装饰音",
+    "clearGraceNotes_one": "移除 1 个装饰音",
+    "clearGraceNotes_other": "移除 {{count}} 个装饰音"
   },
   "credits": {
     "title": "点数",
@@ -510,7 +546,9 @@
     "errorTitle": "出现问题",
     "loginRequired": "登录后即可查看余额并购买点数。",
     "packageDescription": "一点数可为一件乐器生成一个小节。",
-    "remaining": "剩余 {{count}} 点数。购买更多。"
+    "remaining": "剩余 {{count}} 点数。购买更多。",
+    "outOfCreditsTitle": "积分不足",
+    "outOfCreditsBody": "生成需要消耗积分，您的余额已用完。充值后即可继续，您的工作不会丢失。"
   },
   "overlay": {
     "generatingNotes": "正在生成音符…"
@@ -551,7 +589,17 @@
     "clickChord": "点击一个和弦",
     "selectEveryNote": "选中其中的所有音符",
     "pianoKey": "钢琴键（已选中和弦时）",
-    "addRemoveNote": "添加或移除该音符"
+    "addRemoveNote": "添加或移除该音符",
+    "enterPitch": "在光标处写入该音符，八度取最接近前一个音符的位置",
+    "chooseDuration": "选择时值：全、二分、四分、八分、十六分、三十二分",
+    "toggleDotted": "为当前时值加附点",
+    "insertRest": "插入休止符",
+    "toggleTie": "将所选音符与下一个连音",
+    "noteInput": "开启／关闭音符输入",
+    "stepCaret": "按当前时值移动光标",
+    "barEdge": "光标移至小节首／尾",
+    "scoreEdge": "光标移至乐谱开头／结尾",
+    "toggleSlur": "为所选音符添加连句线"
   },
   "articulation": {
     "none": "无",
@@ -574,7 +622,16 @@
     "notesSelected": "已选中 {{count}} 个音符",
     "tracksSelected": "已选中 {{count}} 条音轨",
     "measureNumber": "第 {{number}} 小节",
-    "measureRange": "第 {{from}}–{{to}} 小节"
+    "measureRange": "第 {{from}}–{{to}} 小节",
+    "score": "乐谱",
+    "scoreTitle": "标题",
+    "composer": "作曲",
+    "scoreTitleHint": "标题用于导出文件名，并写入 MusicXML。标题栏中的项目名称是另一回事。",
+    "selectMeasureHint": "点击五线谱上方的小节号即可选中该小节。",
+    "articulation": "演奏法",
+    "dynamic": "力度",
+    "noDynamic": "无",
+    "dynamicHint": "从该音符起生效，直到该音轨上的下一个力度记号。"
   },
   "errors": {
     "audioImport": "音频导入失败",
@@ -623,7 +680,11 @@
     "relocateNotes": "移动音符",
     "resizeNotes": "调整时值",
     "toggleTie": "连音线",
-    "transpose": "移调"
+    "transpose": "移调",
+    "changeMetadata": "修改乐谱信息",
+    "changeDynamic": "修改力度",
+    "setLyric": "修改歌词",
+    "toGraceNote": "修改装饰音"
   },
   "templates": {
     "lead-sheet": {
@@ -676,12 +737,12 @@
     }
   },
   "selection": {
-    "notes_one": "{{count}} note",
-    "notes_other": "{{count}} notes",
-    "measures_one": "{{count}} measure",
-    "measures_other": "{{count}} measures",
-    "tracks_one": "{{count}} track",
-    "tracks_other": "{{count}} tracks",
+    "notes_one": "已选择 {{count}} 个音符",
+    "notes_other": "已选择 {{count}} 个音符",
+    "measures_one": "已选择 {{count}} 个小节",
+    "measures_other": "已选择 {{count}} 个小节",
+    "tracks_one": "已选择 {{count}} 个音轨",
+    "tracks_other": "已选择 {{count}} 个音轨",
     "none": "Nothing selected",
     "regenerated": "{{summary}} regenerated"
   },

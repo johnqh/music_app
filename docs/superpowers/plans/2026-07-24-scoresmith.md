@@ -1,8 +1,8 @@
-# ScoreSmith Implementation Plan
+# Moosiac Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build ScoreSmith, a browser-based AI-assisted sheet-music composition app (notation editor + MIDI sequencer + mock AI generation) as a complete, tested, runnable TypeScript application.
+**Goal:** Build Moosiac, a browser-based AI-assisted sheet-music composition app (notation editor + MIDI sequencer + mock AI generation) as a complete, tested, runnable TypeScript application.
 
 **Architecture:** A canonical, immutable, tick-based (480 PPQ) score model is the single source of truth. All mutations flow through undoable commands. UI (React + MUI), rendering (VexFlow SVG), playback (Tone.js), file formats (MIDI/MusicXML), persistence (Dexie), and AI generation (provider abstraction with a deterministic seeded mock) are adapters around the pure domain layer.
 
@@ -54,7 +54,7 @@ These names are used across tasks and must match exactly.
 - Vite React-TS app named `scoresmith`. Install runtime deps: `react react-dom @mui/material @mui/icons-material @emotion/react @emotion/styled zustand immer zod vexflow@^4.2.5 tone @tonejs/midi dexie`. Dev deps: `typescript vite @vitejs/plugin-react vitest @vitest/coverage-v8 jsdom @testing-library/react @testing-library/user-event @testing-library/jest-dom @playwright/test eslint typescript-eslint eslint-plugin-react-hooks eslint-plugin-react-refresh prettier eslint-config-prettier fake-indexeddb`.
 - npm scripts exactly: `dev`, `build` (`tsc -b && vite build`), `preview`, `lint` (`eslint .`), `typecheck` (`tsc -b --noEmit` or `tsc --noEmit -p tsconfig.json`), `test` (`vitest run`), `test:watch`, `test:e2e` (`playwright test`), `format`.
 - `tsconfig`: strict, `noUnusedLocals`, `noUnusedParameters`, bundler moduleResolution, path alias `@/* -> src/*` (mirror in vite config + vitest).
-- App.tsx: MUI `ThemeProvider` + `CssBaseline` with light/dark theme in `theme.ts` (respect `prefers-color-scheme`, manual override placeholder), rendering an app bar with title "ScoreSmith" and an empty main area. One RTL smoke test (renders title). Playwright config: webServer runs `npm run dev` on port 5173; one smoke e2e asserting the title renders (chromium only).
+- App.tsx: MUI `ThemeProvider` + `CssBaseline` with light/dark theme in `theme.ts` (respect `prefers-color-scheme`, manual override placeholder), rendering an app bar with title "Moosiac" and an empty main area. One RTL smoke test (renders title). Playwright config: webServer runs `npm run dev` on port 5173; one smoke e2e asserting the title renders (chromium only).
 - Verify all commands pass: `npm run build`, `lint`, `typecheck`, `test`. (`test:e2e` requires `npx playwright install chromium` — document in README later; verify config parses via `npx playwright test --list`.)
 - Commit: `chore: scaffold vite react-ts app with tooling`.
 

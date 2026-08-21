@@ -60,6 +60,7 @@ import {
   EllipsisHorizontalIcon,
   DocumentDuplicateIcon,
   MagnifyingGlassMinusIcon,
+  PencilIcon,
   MagnifyingGlassPlusIcon,
   PlusIcon,
   ScissorsIcon,
@@ -92,6 +93,7 @@ import {
   ThirtySecondNoteIcon,
   TieIcon,
   WholeNoteIcon,
+  SlurIcon,
 } from '@/components/icons/notation-icons';
 import {
   addMeasure,
@@ -104,6 +106,7 @@ import {
   insertRestAtSelection,
   quantizeSelection,
   selectAll,
+  toggleSlur,
   toggleTie,
 } from '@/features/score-editor/editing';
 
@@ -126,6 +129,10 @@ export type EditorToolbarProps = {
    */
   onCut?: () => void;
   onPaste?: () => void;
+  /** Opens the Go to bar prompt. Omitted in isolation tests. */
+  onGoToBar?: () => void;
+  /** Starts lyric entry on the active track. Omitted in isolation tests. */
+  onEnterLyrics?: () => void;
 };
 
 /**
@@ -232,6 +239,8 @@ export function EditorToolbar({
   onToggleInspector,
   onCut,
   onPaste,
+  onGoToBar,
+  onEnterLyrics,
   onGenerateTrack,
 }: EditorToolbarProps) {
   const { t } = useTranslation();
@@ -323,6 +332,13 @@ export function EditorToolbar({
    */
   const selection = store((s) => s.selection);
   const hasSelection = selection.eventIds.length > 0 || selection.measureIds.length > 0;
+  /**
+   * Paste follows the clipboard, the way Copy and Cut follow the selection.
+   * It used to stay live whether or not anything had been copied, so it was the
+   * one control on the bar that could look ready and do nothing.
+   */
+  const hasClipboard = store((s) => s.clipboard !== null);
+  const noteInput = store((s) => s.noteInput);
 
   const [quantizeGrid, setQuantizeGrid] = useState<DurationName>('sixteenth');
   const [articulationOpen, setArticulationOpen] = useState(false);
@@ -357,6 +373,8 @@ export function EditorToolbar({
     if (value === 'select-all') selectAll(store);
     else if (value === 'add-measure') addMeasure(store);
     else if (value === 'delete-measure') deleteMeasureAtCaret(store);
+    else if (value === 'go-to-bar') onGoToBar?.();
+    else if (value === 'enter-lyrics') onEnterLyrics?.();
   };
 
   const handleAccidentalSelect = (value: string): void => {
@@ -632,6 +650,43 @@ export function EditorToolbar({
             <InsertNoteIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
+        {/*
+          Note input: while it is on, a click on a stave writes a note at that
+          pitch instead of moving the caret. Pressed-state on the button and a
+          shortcut of its own, because a mode that changes what a click does
+          must be visible at a glance.
+        */}
+        {/*
+          A phrase mark over the selection. Needs two notes — one note cannot
+          carry a slur — so it disables rather than doing nothing.
+        */}
+        <Tooltip placement="bottom" content={t('editor.slurHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.slur')}
+            disabled={!canEdit || selection.eventIds.length < 2}
+            onClick={() => toggleSlur(store)}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <SlurIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        <Tooltip placement="bottom" content={t('editor.noteInputHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.noteInput')}
+            aria-pressed={noteInput}
+            disabled={!canEdit}
+            onClick={() => store.getState().setNoteInput(!noteInput)}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <PencilIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
         <Tooltip placement="bottom" content={t('editor.insertRestHint')}>
           <Button
             type="button"
@@ -674,7 +729,7 @@ export function EditorToolbar({
               type="button"
               variant="outline"
               aria-label={t('editor.paste')}
-              disabled={!canEdit}
+              disabled={!canEdit || !hasClipboard}
               onClick={onPaste}
               className={ICON_BUTTON_CLASS}
             >
@@ -788,6 +843,8 @@ export function EditorToolbar({
             <SelectItem value="select-all">{t('editor.selectAllNotes')}</SelectItem>
             <SelectItem value="add-measure">{t('editor.addMeasure')}</SelectItem>
             <SelectItem value="delete-measure">{t('editor.deleteMeasure')}</SelectItem>
+            <SelectItem value="go-to-bar">{t('editor.goToBar')}</SelectItem>
+            <SelectItem value="enter-lyrics">{t('editor.enterLyrics')}</SelectItem>
           </SelectContent>
         </Select>
 

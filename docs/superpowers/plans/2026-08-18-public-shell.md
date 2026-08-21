@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** A visitor lands on a page that explains ScoreSmith, can browse the community and resources, and only meets the sign-in screen when they ask for it.
+**Goal:** A visitor lands on a page that explains Moosiac, can browse the community and resources, and only meets the sign-in screen when they ask for it.
 
 **Architecture:** Three of the four pieces already exist and are simply mis-wired — the home page is behind the auth gate, the community routes render outside the app shell (so they have no topbar or footer), and the footer picks the same variant on both branches of a ternary. Only Resources is new. The fix is mostly routing, plus a Resources page and a search box.
 

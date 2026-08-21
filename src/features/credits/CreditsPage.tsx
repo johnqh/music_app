@@ -12,32 +12,11 @@
  * writes — one bar, for one instrument.
  */
 import { useTranslation } from 'react-i18next';
-import {
-  useBalance,
-  useConsumableProducts,
-  usePurchaseCredits,
-} from '@sudobility/consumables_client';
-import { CreditStorePage } from '@sudobility/consumables_pages';
 import { Card, Section, Stack, Text } from '@sudobility/components';
-import { useAuth } from '@/app/AuthContext';
-import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
-
-/** The RevenueCat offering the credit packages live in. */
-const OFFERING_ID = 'credits';
+import { CreditStore } from '@/features/credits/CreditStore';
 
 export function CreditsPage() {
   const { t } = useTranslation();
-  const navigate = useLocalizedNavigate();
-  const { user } = useAuth();
-  const { balance, isLoading: balanceLoading, error: balanceError } = useBalance();
-  const {
-    packages,
-    isLoading: productsLoading,
-    error: productsError,
-  } = useConsumableProducts(OFFERING_ID);
-  const { purchase, isPurchasing, error: purchaseError } = usePurchaseCredits();
-
-  const error = purchaseError ?? balanceError ?? productsError;
 
   return (
     <Section spacing="xl" className="mx-auto max-w-3xl">
@@ -56,36 +35,7 @@ export function CreditsPage() {
           </Stack>
         </Card>
 
-        <CreditStorePage
-          isAuthenticated={user !== null}
-          balance={balance}
-          packages={packages}
-          isLoading={balanceLoading || productsLoading}
-          isPurchasing={isPurchasing}
-          error={error ? error.message : null}
-          onPurchase={async (packageId: string) => {
-            await purchase(packageId, OFFERING_ID);
-          }}
-          onLoginClick={() => navigate('/signin')}
-          labels={{
-            title: t('credits.title'),
-            currentBalanceLabel: t('credits.balance'),
-            creditsUnit: t('credits.unit'),
-            purchaseButton: t('credits.buy'),
-            purchasingButton: t('credits.buying'),
-            // Says *why* there is nothing to buy. An unconfigured store is the
-            // usual cause — `CREDIT_PRODUCTS` on the server, or the RevenueCat
-            // key on the client — and "none available" alone reads as a bug.
-            noProducts: t('credits.noPackages'),
-            errorTitle: t('credits.errorTitle'),
-            loginRequired: t('credits.loginRequired'),
-            loginButton: t('nav.signIn'),
-          }}
-          formatters={{
-            formatCredits: (count: number) => count.toLocaleString(),
-            getPackageDescription: () => t('credits.packageDescription'),
-          }}
-        />
+        <CreditStore />
       </Stack>
     </Section>
   );

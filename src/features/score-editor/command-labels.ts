@@ -32,9 +32,11 @@ export type CommandLabelKey =
   | 'changeAccidental'
   | 'changeArticulation'
   | 'changeDuration'
+  | 'changeDynamic'
   | 'changePitch'
   | 'changeClef'
   | 'changeKeySignature'
+  | 'changeMetadata'
   | 'changeTempo'
   | 'changeTimeSignature'
   | 'changeTrackProps'
@@ -50,6 +52,9 @@ export type CommandLabelKey =
   | 'quantize'
   | 'relocateNotes'
   | 'resizeNotes'
+  | 'setLyric'
+  | 'toGraceNote'
+  | 'toggleSlur'
   | 'toggleTie'
   | 'transpose';
 

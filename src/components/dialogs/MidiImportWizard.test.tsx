@@ -51,7 +51,7 @@ describe('MidiImportWizard', () => {
     await waitFor(() =>
       expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
     );
-    expect(screen.getByText(/track\(s\)/)).toBeInTheDocument();
+    expect(screen.getByText(/\d+ tracks?,/)).toBeInTheDocument();
     // The performance-timing warning (spec §15) is always shown once a file is loaded.
     expect(screen.getByText(/performance timing/i)).toBeInTheDocument();
   });

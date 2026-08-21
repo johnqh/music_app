@@ -85,7 +85,6 @@ import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { TransportBar } from '@/components/transport/TransportBar';
-import { TrackEditorPanel } from '@/features/tracks/TrackEditorPanel';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
@@ -964,7 +963,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             width, so a track's label on the sheet and its controls sit on the
             same column. Both show only the active track. */}
           <div className="flex h-full min-h-0">
-            {!keyboardCollapsed && <TrackEditorPanel store={store} />}
             <div className="min-w-0 flex-1">
               <PianoKeyboardView
                 store={store}

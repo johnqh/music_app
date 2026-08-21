@@ -15,6 +15,21 @@ export type AuthContextValue = {
   token: string | null;
   /** True until the first auth-state resolution arrives. */
   loading: boolean;
+  /**
+   * Whether the server considers this user a site administrator.
+   *
+   * Administrators generate for free — no daily quota, no balance check, no
+   * charge — so this app's own courtesy gates must stand aside for them, or
+   * the Generate button stays disabled at a balance of zero and refuses work
+   * `POST /jobs` would have accepted. They sit at zero permanently, since
+   * nothing ever grants or spends their credits.
+   *
+   * Fetched once per signed-in user rather than polled: it comes from the
+   * deployment's `SITEADMIN_EMAILS` and cannot change underneath a session.
+   * `false` while it is in flight and if the request fails — the closed
+   * default, so a network problem never hands out free service.
+   */
+  siteAdmin: boolean;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
@@ -28,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [siteAdmin, setSiteAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = services.auth.observe((nextUser) => {
@@ -44,9 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error('[credits] could not follow the signed-in user', err);
       });
       if (nextUser) {
-        void services.auth.getToken().then(setToken);
+        // One chain with one catch at the end, so a *synchronous* throw inside
+        // the callback is caught as well as a rejected fetch. Failing to learn
+        // that somebody is an administrator costs them free service; an
+        // unhandled rejection here would break signing in.
+        void services.auth
+          .getToken()
+          .then(async (next) => {
+            setToken(next);
+            if (!next) return;
+            const me = await services.musicClient.getCurrentUser(next);
+            setSiteAdmin(me.siteAdmin);
+          })
+          .catch(() => setSiteAdmin(false));
       } else {
         setToken(null);
+        setSiteAdmin(false);
       }
     });
     return unsubscribe;
@@ -57,12 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       token,
       loading,
+      siteAdmin,
       signInEmail: services.auth.signInEmail,
       signUpEmail: services.auth.signUpEmail,
       signInGoogle: services.auth.signInGoogle,
       signOut: services.auth.signOut,
     }),
-    [user, token, loading, services],
+    [user, token, loading, siteAdmin, services],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -79,4 +109,18 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
+}
+
+/**
+ * Whether the current user is a site administrator, `false` outside a provider.
+ *
+ * Deliberately tolerant where `useAuth` throws. A component that only wants to
+ * know whether to stand a paid gate aside has a sensible answer without auth —
+ * no — and requiring the provider would make every test of every such
+ * component wire one up to learn something it does not care about. The closed
+ * default is the same one the fetch itself uses.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useSiteAdmin(): boolean {
+  return useContext(AuthContext)?.siteAdmin === true;
 }

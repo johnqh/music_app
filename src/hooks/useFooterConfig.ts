@@ -36,7 +36,7 @@ export function useFooterConfig(variant: 'full' | 'compact'): FooterConfig {
 
   return {
     variant: 'full',
-    logo: { src: '/favicon.svg', appName: CONSTANTS.APP_NAME },
+    logo: { src: '/logo-96.png', appName: CONSTANTS.APP_NAME },
     companyName: CONSTANTS.COMPANY_NAME,
     copyrightYear: COPYRIGHT_YEAR,
     rightsText: t('footer.rights'),

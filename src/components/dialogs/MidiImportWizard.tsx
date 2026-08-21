@@ -303,8 +303,11 @@ export function MidiImportWizard({
             </div>
 
             <p className="text-sm font-medium text-theme-text-primary">
-              {summary.tracks.length} track(s), {summary.durationSeconds.toFixed(1)}s, {summary.ppq}{' '}
-              PPQ
+              {t('importMidi.summaryLine', {
+                count: summary.tracks.length,
+                seconds: summary.durationSeconds.toFixed(1),
+                ppq: summary.ppq,
+              })}
             </p>
 
             <div className="overflow-x-auto rounded-md border border-theme-border">

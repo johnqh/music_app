@@ -1,6 +1,6 @@
-# ScoreSmith architecture
+# Moosiac architecture
 
-ScoreSmith is a browser-based, AI-assisted sheet-music composition app, split across **six repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains _how_ the codebase satisfies it.
+Moosiac is a browser-based, AI-assisted sheet-music composition app, split across **six repos** under a shared `@sudobility` scope. This document explains how those repos fit together, the request flows between them, the store-context injection pattern, known limitations, keyboard shortcuts, and troubleshooting. The authoritative product/behavior spec is [`docs/spec.md`](spec.md); this document explains _how_ the codebase satisfies it.
 
 ## Contents
 
@@ -187,7 +187,7 @@ The piano roll (`music_app`'s `src/features/piano-roll`, geometry math from `mus
 
 `music_lib`'s `adapters/tone/tone-engine.ts` (`TonePlaybackEngine`) is the only place Tone.js is touched. The timing model (spec §10):
 
-- `Tone.getTransport().bpm` is set **once**, to a fixed base of 60, and never changed again. ScoreSmith's own `TempoMap` (built from the score's tempo curve, via `domain/time`) is the sole authority for "what real second does score-tick T fall at" (`ticksToSeconds`). That computed second — divided by the current `tempoMultiplier` (the transport's playback-speed control) — is what actually gets handed to Tone's `schedule`/`loopStart`/`loopEnd`/`seek` APIs.
+- `Tone.getTransport().bpm` is set **once**, to a fixed base of 60, and never changed again. Moosiac's own `TempoMap` (built from the score's tempo curve, via `domain/time`) is the sole authority for "what real second does score-tick T fall at" (`ticksToSeconds`). That computed second — divided by the current `tempoMultiplier` (the transport's playback-speed control) — is what actually gets handed to Tone's `schedule`/`loopStart`/`loopEnd`/`seek` APIs.
 - Because of that, changing playback speed requires actually re-scheduling every already-scheduled event (cancel + reschedule + re-seek to the equivalent position) rather than nudging a single Tone "speed" knob — this keeps one single source of truth for "what second is this" instead of reconciling two independent tick/second systems.
 - Every track gets its own `InstrumentHandle` (`adapters/tone/instruments.ts`), picked by a rough GM-program-number → instrument-category mapping; there is no "stop everything now" escape hatch on an instrument handle, so anywhere playback needs to guarantee silence (pause/stop/seek/a live tempo change) disposes and rebuilds every track's instrument rather than trying to track down and release individual still-sounding notes.
 
@@ -275,9 +275,9 @@ Also shown in-app via the app bar's "Keyboard shortcuts" (`?`) button (`Shortcut
 
 ## Troubleshooting
 
-**Playback doesn't start / no sound on first Play.** Browsers require a user gesture before Web Audio can produce sound (autoplay policy). ScoreSmith's `AudioContext` starts on the first real click of the Play button, so playback should always work after a genuine user click; if it doesn't, check the browser console for a suspended-`AudioContext` warning, and make sure nothing (a browser extension, an automated test) is dispatching a synthetic click that the browser doesn't treat as a trusted gesture.
+**Playback doesn't start / no sound on first Play.** Browsers require a user gesture before Web Audio can produce sound (autoplay policy). Moosiac's `AudioContext` starts on the first real click of the Play button, so playback should always work after a genuine user click; if it doesn't, check the browser console for a suspended-`AudioContext` warning, and make sure nothing (a browser extension, an automated test) is dispatching a synthetic click that the browser doesn't treat as a trusted gesture.
 
-**Playback stutters or drifts in a background tab.** Browsers throttle `requestAnimationFrame` and timers in backgrounded tabs to save power; Tone.js scheduling itself is driven by the Web Audio clock (not affected), but UI-side effects that poll on an animation frame (e.g. scroll-into-view during playback) can visibly lag behind actual audio while the tab is backgrounded. This is expected browser behavior, not a ScoreSmith bug — keep the tab focused for smooth visual sync.
+**Playback stutters or drifts in a background tab.** Browsers throttle `requestAnimationFrame` and timers in backgrounded tabs to save power; Tone.js scheduling itself is driven by the Web Audio clock (not affected), but UI-side effects that poll on an animation frame (e.g. scroll-into-view during playback) can visibly lag behind actual audio while the tab is backgrounded. This is expected browser behavior, not a Moosiac bug — keep the tab focused for smooth visual sync.
 
 **`bun run test:e2e` fails immediately with a browser-not-found error.** Playwright needs its own browser binary, separate from any system-installed Chrome:
 

@@ -671,3 +671,25 @@ export function SoloIcon(props: GlyphProps) {
     </Glyph>
   );
 }
+
+/**
+ * A phrase mark: two noteheads under one curve.
+ *
+ * Drawn rather than reused from the tie glyph, which is the same curve joining
+ * two notes *of the same pitch* — the two marks look alike and mean different
+ * things, so the icons show different pitches to say which is which.
+ */
+export function SlurIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M6 15c2.5-5 9.5-5 12 0"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="6" cy="17.5" r="2.2" fill="currentColor" />
+      <circle cx="18" cy="17.5" r="2.2" fill="currentColor" />
+    </svg>
+  );
+}

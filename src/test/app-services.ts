@@ -29,6 +29,24 @@ export function installTestAppServices(
   const io = createMusicIo();
   initializeMusicPlatform({ playback: io.playback });
 
+  /**
+   * `getCurrentUser` is an app-level call (`GET /me`, for site-admin status)
+   * that music_lib's test double knows nothing about. Attached to the existing
+   * fake rather than cloned onto a new object: it is a class instance, and a
+   * spread copy loses every method on its prototype.
+   *
+   * An ordinary user is the right default — the tests that care about
+   * administrators say so explicitly.
+   */
+  const client = context.client as typeof context.client & {
+    getCurrentUser?: () => Promise<{ userId: string; email: string | null; siteAdmin: boolean }>;
+  };
+  client.getCurrentUser ??= async () => ({
+    userId: TEST_USER.uid,
+    email: TEST_USER.email,
+    siteAdmin: false,
+  });
+
   const services: AppServices = {
     io,
     networkClient: {} as NetworkClient,

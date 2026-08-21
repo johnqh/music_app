@@ -24,7 +24,7 @@ function renderTopBar(LinkComponent: unknown) {
   render(
     <MemoryRouter initialEntries={['/en/projects/42']}>
       <AppTopBar
-        logo={{ src: '/favicon.svg', appName: 'ScoreSmith' }}
+        logo={{ src: '/logo-96.png', appName: 'Moosiac' }}
         menuItems={ITEMS}
         LinkComponent={LinkComponent as never}
         hideLanguageSelector

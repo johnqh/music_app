@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Split ScoreSmith into the five-repo Sudobility family (music_types/api/client/lib/app), replace mock AI with OpenAI proxied through music_api, replace IndexedDB with server-side persistence, and rebuild the UI on @sudobility — with the app green at every phase boundary.
+**Goal:** Split Moosiac into the five-repo Sudobility family (music_types/api/client/lib/app), replace mock AI with OpenAI proxied through music_api, replace IndexedDB with server-side persistence, and rebuild the UI on @sudobility — with the app green at every phase boundary.
 
 **Architecture:** Approach B three-phase strangler per the approved spec. Phase 1 extracts types+lib (app unchanged in behavior). Phase 2 adds api+client and swaps persistence/generation under the store. Phase 3 rebuilds the UI per sudobility/docs/APP.md.
 
@@ -157,7 +157,7 @@
 - [ ] Add deps (mirror sudojo_app's versions): `@sudobility/building_blocks`, `components`, `design`, `auth-components`, `auth_lib`, `seo_lib`, `di_web`, `tailwindcss` ^3.4 + config scanning `@sudobility/design` tokens, `react-router-dom` ^7, `i18next` + `react-i18next` + `i18next-http-backend`. Keep MUI installed until Task 13 removes it (both coexist during rebuild).
 - [ ] `src/App.tsx`: `SudobilityAppWithFirebaseAuth` wrapper → routes under `/:lang` (en only, `supportedLanguages=['en']`) → `ScreenContainerLayout` layout route (ScreenContainer + Suspense + Outlet, per APP.md verbatim) → lazy pages: Home, Dashboard, `project/:id` Editor, Settings. Replace the interim Task-10 auth gate with `@sudobility/auth-components` sign-in flow; route guard redirects signed-out users to sign-in.
 - [ ] i18n: single `landing`-style namespace `app`; `public/locales/en/app.json`; externalize strings for the NEW shell pages as you build them (editor internals externalized in Task 13).
-- [ ] Home page: Section-based hero + features (content describing ScoreSmith), full footer. Dashboard page rebuilt on @sudobility components (project grid/list, search/sort via `useProjects`, create/from-template/delete with confirm) using `Section`; Settings page via `useSetPageConfig` master-detail pattern (theme via `@sudobility/components` ThemeProvider — replaces the MUI theme mode; keep dev settings section).
+- [ ] Home page: Section-based hero + features (content describing Moosiac), full footer. Dashboard page rebuilt on @sudobility components (project grid/list, search/sort via `useProjects`, create/from-template/delete with confirm) using `Section`; Settings page via `useSetPageConfig` master-detail pattern (theme via `@sudobility/components` ThemeProvider — replaces the MUI theme mode; keep dev settings section).
 - [ ] SEO: `src/config/seo.ts` + per-route SEO via `@sudobility/seo_lib` (sudojo_app pattern), en only.
 - [ ] Tests: shell/routing tests (signed-out redirect; lang route renders; dashboard lists via stub client). `bun run verify` green. Commit, push.
 

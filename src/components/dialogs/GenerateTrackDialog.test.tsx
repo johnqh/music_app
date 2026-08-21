@@ -16,7 +16,7 @@ import {
   gmInstrumentsByFamily,
 } from '@sudobility/music_lib';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import { instrumentChoiceFor } from '@/features/instruments/instrument-catalog';
+import { instrumentChoiceFor } from '@sudobility/music_lib';
 
 describe('instrumentChoiceFor', () => {
   it('gives every kit the percussion clef and its own program', () => {

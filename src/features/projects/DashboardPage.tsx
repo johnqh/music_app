@@ -27,6 +27,7 @@
  * + hidden file input stays exactly as-is (same reasoning as
  * `MidiImportWizard`'s file picker).
  */
+import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { templateCopy } from '@/i18n/lib-copy';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -242,7 +243,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       setGenerateOpen(false);
       await refresh();
     } catch (err) {
-      reportError(err, { context: t('errors.startGeneration'), store });
+      // A refusal for want of credits opens the store; everything else is a
+      // toast. The dialog closes either way — behind the paywall, an open
+      // Generate form is one more thing in the way of buying.
+      setGenerateOpen(false);
+      reportGenerationError(err, { context: t('errors.startGeneration'), store });
     } finally {
       setCreatingGeneration(false);
     }

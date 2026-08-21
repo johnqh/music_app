@@ -3,11 +3,11 @@
  *
  * A component of its own because `Select` wants its groups as children, and
  * both generation dialogs want exactly the same ones. The catalogue it reads
- * lives beside it in `instrument-catalog.ts`.
+ * lives in music_lib's `instrument-options.ts`.
  */
 import { SelectGroup, SelectItem, SelectLabel } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
-import { FAMILY_GROUPS, KIT_OPTIONS } from '@/features/instruments/instrument-catalog';
+import { FAMILY_GROUPS, KIT_OPTIONS } from '@sudobility/music_lib';
 
 export function InstrumentSelectItems() {
   const { t } = useTranslation();

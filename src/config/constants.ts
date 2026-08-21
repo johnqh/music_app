@@ -10,7 +10,7 @@ import packageJson from '../../package.json';
 /** Application-wide configuration constants. */
 export const CONSTANTS = {
   // Branding
-  APP_NAME: import.meta.env.VITE_APP_NAME || 'ScoreSmith',
+  APP_NAME: import.meta.env.VITE_APP_NAME || 'Moosiac',
   APP_DOMAIN: import.meta.env.VITE_APP_DOMAIN || 'scoresmith.app',
   COMPANY_NAME: import.meta.env.VITE_COMPANY_NAME || 'Sudobility',
   APP_VERSION: packageJson.version,

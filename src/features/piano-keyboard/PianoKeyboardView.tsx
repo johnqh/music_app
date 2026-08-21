@@ -27,6 +27,7 @@ import {
 import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editing';
 import { chordSelection } from '@/features/piano-keyboard/selection-editing';
 import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
+import { getAppServices } from '@/config/initialize';
 import { useSoundingNotes } from '@/features/score-editor/usePlayback';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -412,6 +413,27 @@ export function PianoKeyboardView({
     },
     [store, editableChord],
   );
+
+  /**
+   * A MIDI keyboard plays into exactly the same handlers as the on-screen one.
+   *
+   * Routed through `pressKey`/`releaseKey` rather than writing notes directly,
+   * so everything the on-screen keys already do comes with it: the note
+   * sounds while held, a chord struck together is grouped, the held time
+   * becomes the duration, and the caret advances past what was written. A
+   * second path would have been a second set of those rules to keep in step.
+   *
+   * Subscribing is unconditional and harmless where there is no MIDI: an
+   * unsupported platform returns an unsubscribe that never delivered anything.
+   */
+  useEffect(() => {
+    const midiInput = getAppServices().io.midiInput;
+    if (!midiInput.isSupported()) return;
+    return midiInput.subscribe((event) => {
+      if (event.type === 'on') pressKey(event.note);
+      else releaseKey(event.note);
+    });
+  }, [pressKey, releaseKey]);
 
   const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
   /**

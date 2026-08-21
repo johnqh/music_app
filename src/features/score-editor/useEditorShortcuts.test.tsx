@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
-import { allNotes, findEvent } from '@sudobility/music_lib';
+import { allNotes, findEvent, playbackController } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -22,6 +22,9 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
       // A real bus: playback position and sounding notes live on it now.
       bus: new actual.PlaybackBus(),
       togglePlay: vi.fn(),
+      // Note entry steps the caret past what it wrote, and that goes through
+      // the controller rather than the store.
+      seek: vi.fn(),
     },
   };
 });
@@ -193,5 +196,212 @@ describe('useEditorShortcuts', () => {
 
     const errorToasts = store.getState().toasts.filter((t) => t.severity === 'error');
     expect(errorToasts.length).toBeGreaterThan(0);
+  });
+
+  describe('note entry', () => {
+    function noteCount(store: EditorStoreApi): number {
+      return allNotes(store.getState().score!).length;
+    }
+
+    it('writes a note where the caret is when a pitch letter is typed', async () => {
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+      const before = noteCount(store);
+
+      await user.keyboard('f');
+
+      expect(noteCount(store)).toBe(before + 1);
+    });
+
+    it('advances the caret, so a run of letters lays out a melody', async () => {
+      // Without this a run of taps would overwrite one position instead of
+      // laying out a line.
+      const store = makeStore();
+      act(() => store.getState().setCaretTick(0));
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+      const seek = vi.mocked(playbackController.seek);
+      seek.mockClear();
+
+      await user.keyboard('c');
+
+      expect(seek).toHaveBeenCalledTimes(1);
+      expect(seek.mock.calls[0][0]).toBeGreaterThan(0);
+    });
+
+    it('picks the note value from a digit', async () => {
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+
+      await user.keyboard('1');
+      expect(store.getState().snapGrid).toBe('whole');
+      await user.keyboard('4');
+      expect(store.getState().snapGrid).toBe('eighth');
+    });
+
+    it('dots the current value with a period, the way the toolbar does', async () => {
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+
+      await user.keyboard('3');
+      await user.keyboard('.');
+      expect(store.getState().snapGrid).toBe('dotted-quarter');
+    });
+
+    it('writes at the chosen value: a digit then a letter', async () => {
+      const store = makeStore();
+      act(() => store.getState().setCaretTick(0));
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+
+      await user.keyboard('2'); // half
+      await user.keyboard('e');
+
+      const written = allNotes(store.getState().score!).find((n) => n.pitch.step === 'E');
+      expect(written?.durationTicks).toBe(store.getState().score!.ppq * 2);
+    });
+
+    it('selects everything with the platform shortcut', async () => {
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+
+      await user.keyboard('{Meta>}a{/Meta}');
+      expect(store.getState().selection.eventIds.length).toBeGreaterThan(0);
+    });
+
+    it('never mistakes a browser shortcut for a note', async () => {
+      // Cmd+E, Cmd+F and friends belong to the browser and the OS. Entry keys
+      // take no modifier precisely so they cannot collide.
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+      const before = noteCount(store);
+
+      await user.keyboard('{Meta>}e{/Meta}');
+      await user.keyboard('{Control>}g{/Control}');
+      await user.keyboard('{Alt>}f{/Alt}');
+
+      expect(noteCount(store)).toBe(before);
+    });
+
+    it('stays out of the way while typing in a text field', async () => {
+      const store = makeStore();
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+      const before = noteCount(store);
+
+      await user.click(screen.getByLabelText('text field'));
+      await user.keyboard('cage');
+
+      expect(noteCount(store)).toBe(before);
+      expect(screen.getByLabelText('text field')).toHaveValue('cage');
+    });
+  });
+
+  describe('caret navigation', () => {
+    it('steps the caret by the current note value', async () => {
+      // The companion to typed entry: letters write at the caret, so going
+      // back to fix the note before last must not need the pointer.
+      const store = makeStore();
+      act(() => {
+        store.getState().setCaretTick(0);
+        store.getState().setSnapGrid('quarter');
+      });
+      render(<Harness store={store} />);
+      const seek = vi.mocked(playbackController.seek);
+      seek.mockClear();
+
+      await userEvent.setup().keyboard('{Alt>}{ArrowRight}{/Alt}');
+
+      const ppq = store.getState().score!.ppq;
+      expect(seek).toHaveBeenCalledWith(ppq);
+    });
+
+    it('does not run off the front of the score', async () => {
+      const store = makeStore();
+      act(() => store.getState().setCaretTick(0));
+      render(<Harness store={store} />);
+      const seek = vi.mocked(playbackController.seek);
+      seek.mockClear();
+
+      await userEvent.setup().keyboard('{Alt>}{ArrowLeft}{/Alt}');
+
+      expect(seek).toHaveBeenCalledWith(0);
+    });
+
+    it('jumps to the edges of the bar, and of the score', async () => {
+      const store = makeStore();
+      const measures = store.getState().score!.tracks[0].measures;
+      act(() => store.getState().setCaretTick(measures[1].startTick + 10));
+      render(<Harness store={store} />);
+      const user = userEvent.setup();
+      const seek = vi.mocked(playbackController.seek);
+
+      seek.mockClear();
+      await user.keyboard('{Home}');
+      expect(seek).toHaveBeenCalledWith(measures[1].startTick);
+
+      seek.mockClear();
+      await user.keyboard('{Meta>}{Home}{/Meta}');
+      expect(seek).toHaveBeenCalledWith(0);
+
+      seek.mockClear();
+      await user.keyboard('{Meta>}{End}{/Meta}');
+      const last = measures.at(-1)!;
+      expect(seek).toHaveBeenCalledWith(last.startTick + last.durationTicks - 1);
+    });
+
+    it('leaves the selection alone, unlike the bare arrows', async () => {
+      // Alt is the whole disambiguation: a bare arrow still moves or
+      // transposes the selection.
+      const store = makeStore();
+      const note = allNotes(store.getState().score!)[2];
+      act(() => {
+        store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      });
+      render(<Harness store={store} />);
+
+      await userEvent.setup().keyboard('{Alt>}{ArrowRight}{/Alt}');
+
+      expect(store.getState().selection.eventIds).toEqual([note.id]);
+    });
+  });
+
+  describe('slurs', () => {
+    it('slurs the selected notes with S', async () => {
+      const store = makeStore();
+      const notes = allNotes(store.getState().score!).slice(0, 3);
+      act(() => {
+        store.getState().setSelection({
+          eventIds: notes.map((n) => n.id),
+          measureIds: [],
+          trackIds: [],
+        });
+      });
+      render(<Harness store={store} />);
+
+      await userEvent.setup().keyboard('s');
+
+      const after = allNotes(store.getState().score!);
+      expect(after.find((n) => n.id === notes[0].id)?.slurStart).toBe(true);
+      expect(after.find((n) => n.id === notes[2].id)?.slurStop).toBe(true);
+    });
+
+    it('does nothing with a single note, which cannot carry a phrase mark', async () => {
+      const store = makeStore();
+      const note = allNotes(store.getState().score!)[0];
+      act(() => {
+        store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      });
+      render(<Harness store={store} />);
+
+      await userEvent.setup().keyboard('s');
+
+      expect(allNotes(store.getState().score!).some((n) => n.slurStart)).toBe(false);
+    });
   });
 });

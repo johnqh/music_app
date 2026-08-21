@@ -72,7 +72,7 @@
   },
   "resources": {
     "title": "Resources",
-    "intro": "Free archives of music you can bring straight into ScoreSmith. Download a file, then use Import on the projects page.",
+    "intro": "Free archives of music you can bring straight into {{appName}}. Download a file, then use Import on the projects page.",
     "modarchiveBody": "Tens of thousands of tracker modules — MOD, S3M, XM and IT — from the demoscene era onward.",
     "bitmidiBody": "A large searchable collection of MIDI files, from classical to game and pop arrangements.",
     "musescoreBody": "Community sheet music, much of it downloadable as MusicXML.",
@@ -284,7 +284,9 @@
     "minDurationShort": "Min. note duration (ticks)",
     "pianoSplit": "Piano staff split",
     "replaceMessage": "Importing this MIDI file will replace the current project's score. This can be undone with Undo.",
-    "includeTrack": "Include track: {{name}}"
+    "includeTrack": "Include track: {{name}}",
+    "summaryLine_one": "{{count}} track, {{seconds}}s, {{ppq}} PPQ",
+    "summaryLine_other": "{{count}} tracks, {{seconds}}s, {{ppq}} PPQ"
   },
   "trackerFit": {
     "title": "Export as {{format}}",
@@ -363,7 +365,8 @@
     "deleteMessage": "Delete \"{{name}}\" and all of its measures? This can be undone.",
     "instrumentRangeError": "{{instrument}} cannot cover this track's note span without changing intervals.",
     "nameOf": "Track name: {{name}}",
-    "kitOf": "Drum kit: {{name}}"
+    "kitOf": "Drum kit: {{name}}",
+    "centerPan": "Center pan"
   },
   "editor": {
     "cutTitle": "Cut these notes",
@@ -495,7 +498,40 @@
     "deleteMeasure": "Delete measure at caret",
     "measureBeat": "Measure {{measure}}, beat {{beat}}",
     "scoreNotation": "Score notation. {{summary}}.",
-    "lastMeasureKept": "A score needs at least one measure, so this one was kept."
+    "lastMeasureKept": "A score needs at least one measure, so this one was kept.",
+    "deleteTrack": "Delete track",
+    "deleteTrackConfirm": "Delete \"{{name}}\" and all its music? This cannot be undone except with Undo.",
+    "duration": "Duration",
+    "customDuration": "Custom ({{ticks}} ticks)",
+    "key": "Key",
+    "bar": "Bar",
+    "beat": "Beat",
+    "tempoHere": "Tempo here (BPM)",
+    "tempoInherited": "Carried over from an earlier bar. Typing a value sets a tempo change here.",
+    "tempoStarting": "The score's starting tempo.",
+    "removeTempoChange": "Remove this tempo change",
+    "noteInput": "Note input",
+    "noteInputHint": "Note input (N) — while on, clicking a stave writes a note at that pitch instead of moving the caret",
+    "scoreActions": "Score actions",
+    "goToBar": "Go to bar…",
+    "go": "Go",
+    "barNumber": "Bar number",
+    "barNumberOf_one": "Bar number (1 bar in this score)",
+    "barNumberOf_other": "Bar number (1–{{count}})",
+    "noSuchBar_one": "This score has only 1 bar.",
+    "noSuchBar_other": "This score has bars 1 to {{count}}.",
+    "slur": "Slur",
+    "slurHint": "Slur the selected notes — a phrase mark over two or more notes (S)",
+    "lyricEntry": "Lyric entry",
+    "syllable": "Syllable",
+    "lyricNoteOf": "Note {{current}} of {{total}}",
+    "lyricKeysHint": "Space = next word · - = next syllable · Enter = done",
+    "done": "Done",
+    "enterLyrics": "Enter lyrics",
+    "enterLyricsHint": "Type words under the notes of the active track (L)",
+    "makeGraceNote": "Make grace note of the next",
+    "clearGraceNotes_one": "Remove 1 grace note",
+    "clearGraceNotes_other": "Remove {{count}} grace notes"
   },
   "credits": {
     "title": "Credits",
@@ -510,7 +546,9 @@
     "errorTitle": "Something went wrong",
     "loginRequired": "Sign in to see your balance and buy credits.",
     "packageDescription": "One credit writes one bar for one instrument.",
-    "remaining": "{{count}} credits remaining. Buy more."
+    "remaining": "{{count}} credits remaining. Buy more.",
+    "outOfCreditsTitle": "Out of credits",
+    "outOfCreditsBody": "Generating needs credits, and your balance is empty. Top up to carry on — nothing you were working on has been lost."
   },
   "overlay": {
     "generatingNotes": "Generating notes…"
@@ -551,7 +589,17 @@
     "clickChord": "Click a chord",
     "selectEveryNote": "Select every note in it",
     "pianoKey": "Piano key (chord selected)",
-    "addRemoveNote": "Add or remove that note"
+    "addRemoveNote": "Add or remove that note",
+    "enterPitch": "Write that note at the caret, in the octave nearest the note before it",
+    "chooseDuration": "Choose the note value: whole, half, quarter, eighth, 16th, 32nd",
+    "toggleDotted": "Dot the chosen note value",
+    "insertRest": "Insert a rest",
+    "toggleTie": "Tie the selected note to the next",
+    "noteInput": "Note input on/off",
+    "stepCaret": "Move the caret by one note value",
+    "barEdge": "Caret to the start or end of the bar",
+    "scoreEdge": "Caret to the start or end of the score",
+    "toggleSlur": "Slur the selected notes"
   },
   "articulation": {
     "none": "None",
@@ -574,7 +622,16 @@
     "notesSelected": "{{count}} notes selected",
     "tracksSelected": "{{count}} tracks selected",
     "measureNumber": "Measure {{number}}",
-    "measureRange": "Measures {{from}}–{{to}}"
+    "measureRange": "Measures {{from}}–{{to}}",
+    "score": "Score",
+    "scoreTitle": "Title",
+    "composer": "Composer",
+    "scoreTitleHint": "The title names exported files and appears in MusicXML. The project name in the title bar is separate.",
+    "selectMeasureHint": "Click a measure number above the stave to select its bar.",
+    "articulation": "Articulation",
+    "dynamic": "Dynamic",
+    "noDynamic": "None",
+    "dynamicHint": "Applies from this note until the next marking on the track."
   },
   "errors": {
     "audioImport": "Audio import failed",
@@ -623,7 +680,11 @@
     "relocateNotes": "Move notes",
     "resizeNotes": "Resize notes",
     "toggleTie": "Tie",
-    "transpose": "Transpose"
+    "transpose": "Transpose",
+    "changeMetadata": "Change score details",
+    "changeDynamic": "Change dynamic",
+    "setLyric": "Change lyric",
+    "toGraceNote": "Change grace notes"
   },
   "templates": {
     "lead-sheet": {
@@ -676,12 +737,12 @@
     }
   },
   "selection": {
-    "notes_one": "{{count}} note(s) selected",
-    "notes_other": "{{count}} note(s) selected",
-    "measures_one": "{{count}} measure(s) selected",
-    "measures_other": "{{count}} measure(s) selected",
-    "tracks_one": "{{count}} track(s) selected",
-    "tracks_other": "{{count}} track(s) selected",
+    "notes_one": "{{count}} note selected",
+    "notes_other": "{{count}} notes selected",
+    "measures_one": "{{count}} measure selected",
+    "measures_other": "{{count}} measures selected",
+    "tracks_one": "{{count}} track selected",
+    "tracks_other": "{{count}} tracks selected",
     "none": "No selection",
     "regenerated": "{{summary}}, regenerated"
   },

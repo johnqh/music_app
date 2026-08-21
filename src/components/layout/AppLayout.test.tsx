@@ -122,7 +122,7 @@ describe('AppLayout', () => {
     const note = allNotes(store.getState().score!)[0] as NoteEvent;
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
 
-    await waitFor(() => expect(screen.getByText('1 note(s) selected')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('1 note selected')).toBeInTheDocument());
   });
 
   it('issues popover: shows the current validation issue count and clicking an issue navigates (sets the selection) and closes the popover', async () => {
@@ -225,7 +225,7 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
     });
 
     expect(screen.getByRole('status', { name: 'Status bar' })).toHaveTextContent(
-      '1 note(s) selected, regenerated',
+      '1 note selected, regenerated',
     );
   });
 
@@ -242,36 +242,8 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
       store.getState().setSelection({ eventIds: [second.id], measureIds: [], trackIds: [] });
     });
 
-    expect(screen.getByRole('status', { name: 'Status bar' })).toHaveTextContent(
-      '1 note(s) selected',
-    );
+    expect(screen.getByRole('status', { name: 'Status bar' })).toHaveTextContent('1 note selected');
     expect(screen.getByRole('status', { name: 'Status bar' })).not.toHaveTextContent('regenerated');
-  });
-});
-
-describe('AppLayout: track editor beside the keyboard', () => {
-  function makeScored() {
-    const store = createAppStore({ context: testStoreContext() });
-    store.getState().setScore(twinkleScore());
-    return store;
-  }
-
-  it('has no left track column: the info is in the canvas now', () => {
-    render(<AppLayout store={makeScored()} />);
-    expect(screen.queryByRole('list', { name: 'Track list' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Toggle track panel' })).not.toBeInTheDocument();
-  });
-
-  it('shows the track editor beside the keyboard', () => {
-    render(<AppLayout store={makeScored()} />);
-    expect(screen.getByRole('region', { name: 'Track editor' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
-  });
-
-  it('collapsing the keyboard takes the track editor with it', () => {
-    // They share one subject -- the active track -- so they collapse together.
-    render(<AppLayout store={makeScored()} />);
-    expect(screen.getByRole('region', { name: 'Track editor' })).toBeInTheDocument();
   });
 });
 

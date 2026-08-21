@@ -6,7 +6,7 @@
 
 ## Goal
 
-Replace ScoreSmith's in-browser mock AI generation with real AI (OpenAI) proxied through a backend, by splitting the single `music_app` repo into the five-package Sudobility template family (copying the architecture of `sudojo_types` / `sudojo_api` / `sudojo_client` / `sudojo_lib` / `sudojo_app`), and rebuilding the UI on the `@sudobility` design system per `sudobility/docs/APP.md`.
+Replace Moosiac's in-browser mock AI generation with real AI (OpenAI) proxied through a backend, by splitting the single `music_app` repo into the five-package Sudobility template family (copying the architecture of `sudojo_types` / `sudojo_api` / `sudojo_client` / `sudojo_lib` / `sudojo_app`), and rebuilding the UI on the `@sudobility` design system per `sudobility/docs/APP.md`.
 
 ## Decisions (locked)
 
@@ -45,7 +45,7 @@ Sudojo_types-style single sectioned `src/index.ts`; plain interfaces plus Zod sc
 
 Contents:
 
-- Full Score tree moved from ScoreSmith: `UUID`, `Fraction`, `Pitch`, `TimeSignature`, `KeySignature`, `TempoEvent`, `NoteEvent`, `RestEvent`, `MusicalEvent`, `Voice`, `Measure`, `Track`, `ScoreMetadata`, `Score`, `Clef`, `Articulation`, guards, `ScoreFragment`, `ScoreRange`, `ScoreSelection`.
+- Full Score tree moved from Moosiac: `UUID`, `Fraction`, `Pitch`, `TimeSignature`, `KeySignature`, `TempoEvent`, `NoteEvent`, `RestEvent`, `MusicalEvent`, `Voice`, `Measure`, `Track`, `ScoreMetadata`, `Score`, `Clef`, `Articulation`, guards, `ScoreFragment`, `ScoreRange`, `ScoreSelection`.
 - Zod schemas: `scoreSchema` tree, `parseScore`, plus schemas for every request/response below (the API validates with them; clients parse with them).
 - Generation contracts (verbatim from today): `GenerateScoreRequest`, `RegenerateRegionRequest`, `GenerateScoreResult { score, warnings }`, `RegenerateRegionResult { candidates: [{id,label,fragment}], warnings }`, `RegenerationConstraints`.
 - Project API types: `ProjectRecord { id, name, createdAt, updatedAt, schemaVersion, score, uiPrefs? }`, `ProjectSummary` (list item without score), `ProjectCreateRequest`, `ProjectUpdateRequest`, `ProjectListQuery` (search/sort).

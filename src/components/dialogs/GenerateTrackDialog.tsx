@@ -29,7 +29,7 @@ import {
   DEFAULT_INSTRUMENT_VALUE,
   instrumentChoiceFor,
   type InstrumentChoice,
-} from '@/features/instruments/instrument-catalog';
+} from '@sudobility/music_lib';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 
 export type GenerateTrackDialogProps = {

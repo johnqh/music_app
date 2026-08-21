@@ -4,7 +4,13 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
-import { allNotes } from '@sudobility/music_lib';
+import {
+  allNotes,
+  changeClefCommand,
+  changeDynamicCommand,
+  changeTrackPropsCommand,
+  toGraceNoteCommand,
+} from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
@@ -19,10 +25,22 @@ function makeStore(score: ReturnType<typeof twinkleScore> = twinkleScore()): Edi
 afterEach(async () => {});
 
 describe('InspectorPanel', () => {
-  it('shows a placeholder when nothing is selected', () => {
+  it('opens on the track tab, which always has something to show', () => {
+    // Track is the first tab and the default: there is always an active track,
+    // where the note and measure tabs are an empty-state message until you
+    // select something. It is also the only place tracks are edited now.
     const store = makeStore();
     render(<InspectorPanel store={store} />);
 
+    expect(screen.getByRole('tab', { name: 'Track', selected: true })).toBeInTheDocument();
+  });
+
+  it('still shows the note placeholder once that tab is chosen', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Note' }));
     expect(screen.getByText('Select a note to inspect its properties.')).toBeInTheDocument();
   });
 
@@ -205,5 +223,280 @@ describe('written-pitch display', () => {
     await user.click(screen.getByRole('option', { name: 'E' }));
 
     expect(allNotes(store.getState().score!)[0].pitch.step).toBe('D');
+  });
+});
+
+/**
+ * The track tab absorbed the panel that used to sit beside the keyboard, so
+ * what those tests covered is covered here now: choosing an instrument,
+ * deleting a track, and the two mixer controls.
+ */
+describe('InspectorPanel: the track tab', () => {
+  it('sets the program and the name together when an instrument is chosen', async () => {
+    // The two have to move as one or the label drifts from the sound — which
+    // is why the field is a picker over the catalogue rather than a text box.
+    const user = userEvent.setup();
+    const store = makeStore();
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Instrument' }));
+    await user.click(screen.getByRole('option', { name: 'Violin' }));
+
+    const track = store.getState().score!.tracks[0];
+    expect(track.midiProgram).toBe(40);
+    expect(track.instrumentName).toBe('Violin');
+  });
+
+  it('offers drum kits, not instruments, on a percussion track', async () => {
+    // Program 40 is Violin *and* the Brush kit; a percussion track addresses
+    // the kit table, so the melodic catalogue would name the wrong thing.
+    const user = userEvent.setup();
+    const store = makeStore();
+    const trackId = store.getState().score!.tracks[0].id;
+    act(() => {
+      store.getState().dispatchCommand(changeClefCommand(trackId, 'percussion', 'Change clef'));
+    });
+    render(<InspectorPanel store={store} />);
+
+    // The options are prefixed (`kit:0`), so a bare program number matches
+    // nothing and the control renders empty while still selecting fine — the
+    // reason this asserts what it *shows* and not only what it sets.
+    const trigger = screen.getByRole('button', { name: /^Drum kit: / });
+    expect(trigger).toHaveTextContent('Standard Kit');
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('option', { name: 'Jazz Kit' }));
+
+    const track = store.getState().score!.tracks[0];
+    expect(track.instrumentName).toBe('Jazz Kit');
+  });
+
+  it('deletes the track once the confirmation is accepted', async () => {
+    const user = userEvent.setup();
+    const store = makeStore(twoTrackScore());
+    const [first, second] = store.getState().score!.tracks;
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete track' }));
+    await user.click(screen.getAllByRole('button', { name: 'Delete track' }).at(-1)!);
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks.map((t) => t.id)).toEqual([second.id]);
+    });
+    expect(first).toBeDefined();
+  });
+
+  it('leaves the score alone when the confirmation is dismissed', async () => {
+    const user = userEvent.setup();
+    const store = makeStore(twoTrackScore());
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Delete track' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(store.getState().score!.tracks).toHaveLength(2);
+  });
+
+  it('refuses to delete the last track', () => {
+    // A score with no tracks renders nothing and the editor has no empty
+    // state for it, so the floor is one.
+    const store = makeStore();
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.getByRole('button', { name: 'Delete track' })).toBeDisabled();
+  });
+
+  it('reads pan out as a side and a distance, not a number', () => {
+    const store = makeStore();
+    act(() => {
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(store.getState().score!.tracks[0].id, { pan: -0.4 }, 'Pan'),
+        );
+    });
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.getByText('L40')).toBeInTheDocument();
+  });
+
+  it('commits a rename on blur, not on every keystroke', async () => {
+    // A command per character would put one undo entry on the history per
+    // character, which makes undo useless for anything else you did.
+    const user = userEvent.setup();
+    const store = makeStore();
+    render(<InspectorPanel store={store} />);
+
+    const field = screen.getByLabelText('Track name');
+    await user.clear(field);
+    await user.type(field, 'Lead');
+    expect(store.getState().score!.tracks[0].name).not.toBe('Lead');
+
+    await user.tab();
+    expect(store.getState().score!.tracks[0].name).toBe('Lead');
+  });
+
+  it('says why an instrument the part cannot fit was refused', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    act(() => {
+      const score = store.getState().score!;
+      // A part spanning five octaves fits no narrow instrument, so the change
+      // is refused outright rather than half-applied.
+      store.getState().setScore({
+        ...score,
+        tracks: score.tracks.map((track) => ({
+          ...track,
+          measures: track.measures.map((measure, index) =>
+            index !== 0
+              ? measure
+              : {
+                  ...measure,
+                  voices: measure.voices.map((voice) => ({
+                    ...voice,
+                    events: voice.events.map((event, position) =>
+                      position === 0 && 'pitch' in event
+                        ? { ...event, pitch: { ...event.pitch, octave: 0 } }
+                        : event,
+                    ),
+                  })),
+                },
+          ),
+        })),
+      });
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Instrument' }));
+    await user.click(screen.getByRole('option', { name: 'Piccolo' }));
+
+    await waitFor(() => {
+      expect(store.getState().toasts.at(-1)?.severity).toBe('error');
+    });
+    expect(store.getState().score!.tracks[0].midiProgram).not.toBe(72);
+  });
+
+  it('disables content editing while the transport plays, but not mixing', () => {
+    // Mixing while listening is the point; the edit lock refuses the rest, so
+    // those controls say so rather than looking live and doing nothing.
+    const store = makeStore(twoTrackScore());
+    act(() => {
+      store.setState({ state: 'playing' });
+    });
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.getByLabelText('Track name')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Instrument' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Delete track' })).toBeDisabled();
+    expect(screen.getByLabelText('Track volume')).toBeEnabled();
+    expect(screen.getByLabelText('Track pan')).toBeEnabled();
+  });
+
+  it('centres the pan through the store, not as NaN', async () => {
+    // The reset button lives inside the wrapper that commits on pointer-up.
+    // Reading `.value` off it would give `undefined`, and `Number(undefined)`
+    // is NaN — which would reach the track as its pan.
+    const user = userEvent.setup();
+    const store = makeStore();
+    act(() => {
+      store
+        .getState()
+        .dispatchCommand(
+          changeTrackPropsCommand(store.getState().score!.tracks[0].id, { pan: -0.6 }, 'Pan'),
+        );
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Center pan' }));
+
+    const pan = store.getState().score!.tracks[0].pan;
+    expect(pan).toBe(0);
+    expect(Number.isNaN(pan)).toBe(false);
+  });
+});
+
+describe('InspectorPanel: dynamics', () => {
+  it('marks the selected note, and says the marking runs from here', async () => {
+    // A dynamic is set on the note a level begins at, not on every note in
+    // the passage — the hint is what tells the reader that.
+    const user = userEvent.setup();
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Dynamic' }));
+    await user.click(screen.getByRole('option', { name: 'ff' }));
+
+    const updated = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(updated.dynamic).toBe('ff');
+    expect(screen.getByText(/until the next marking/i)).toBeInTheDocument();
+  });
+
+  it('clears the marking again', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      store.getState().dispatchCommand(changeDynamicCommand([note.id], 'pp', 'Dynamic'));
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('combobox', { name: 'Dynamic' }));
+    await user.click(screen.getByRole('option', { name: 'None' }));
+
+    const updated = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(updated.dynamic).toBeUndefined();
+  });
+});
+
+describe('InspectorPanel: grace notes', () => {
+  it('turns the selected note into an ornament on the next one', async () => {
+    // The bar still adds up afterwards: the note leaves a rest behind, which
+    // is why grace notes hang off their principal instead of being events.
+    const user = userEvent.setup();
+    const store = makeStore();
+    const voice = store.getState().score!.tracks[0].measures[0].voices[0];
+    const before = voice.events.reduce((sum, e) => sum + e.durationTicks, 0);
+    const [first, second] = voice.events.filter((e) => 'pitch' in e) as NoteEvent[];
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: /grace note of the next/i }));
+
+    const after = store.getState().score!.tracks[0].measures[0].voices[0];
+    const principal = after.events.find((e) => e.id === second.id) as NoteEvent;
+    expect(principal.graceNotes).toHaveLength(1);
+    expect(after.events.reduce((sum, e) => sum + e.durationTicks, 0)).toBe(before);
+  });
+
+  it('offers removal only once a note carries one', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const voice = store.getState().score!.tracks[0].measures[0].voices[0];
+    const [first, second] = voice.events.filter((e) => 'pitch' in e) as NoteEvent[];
+    act(() => {
+      store.getState().setSelection({ eventIds: [second.id], measureIds: [], trackIds: [] });
+    });
+    const view = render(<InspectorPanel store={store} />);
+
+    expect(screen.queryByRole('button', { name: /remove .* grace/i })).not.toBeInTheDocument();
+
+    act(() => {
+      store.getState().dispatchCommand(toGraceNoteCommand(first.id, 'Grace'));
+    });
+    view.rerender(<InspectorPanel store={store} />);
+
+    await user.click(screen.getByRole('button', { name: /remove 1 grace note/i }));
+
+    const principal = store
+      .getState()
+      .score!.tracks[0].measures[0].voices[0].events.find((e) => e.id === second.id) as NoteEvent;
+    expect(principal.graceNotes).toBeUndefined();
   });
 });

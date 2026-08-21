@@ -1,8 +1,8 @@
-# ScoreSmith
+# Moosiac
 
-ScoreSmith is a browser-based, AI-assisted sheet-music composition app. It renders real, readable notation (not a MIDI piano-roll pretending to be notation), plays scores back through a real synthesizer, and lets you generate or regenerate music with an AI provider.
+Moosiac is a browser-based, AI-assisted sheet-music composition app. It renders real, readable notation (not a MIDI piano-roll pretending to be notation), plays scores back through a real synthesizer, and lets you generate or regenerate music with an AI provider.
 
-This repo (`music_app`) is the web app: routing, pages, and Tailwind-styled UI. It's one of five repos that make up ScoreSmith — see [Architecture](#architecture) below for how they fit together. The score model, commands, rendering/audio adapters, and Zustand store live in `@sudobility/music_lib`; the backend (OpenAI proxy + project persistence) lives in the sibling `music_api` repo.
+This repo (`music_app`) is the web app: routing, pages, and Tailwind-styled UI. It's one of five repos that make up Moosiac — see [Architecture](#architecture) below for how they fit together. The score model, commands, rendering/audio adapters, and Zustand store live in `@sudobility/music_lib`; the backend (OpenAI proxy + project persistence) lives in the sibling `music_api` repo.
 
 > Screenshots: _add a screenshot of the dashboard and the editor (notation + piano roll) here._
 
@@ -18,7 +18,7 @@ This repo (`music_app`) is the web app: routing, pages, and Tailwind-styled UI. 
 
 ## Dev setup
 
-Requires [Bun](https://bun.sh) and a local PostgreSQL instance. ScoreSmith needs the sibling `music_api` repo running too — projects and AI generation are entirely server-backed, there is no offline/local-only mode.
+Requires [Bun](https://bun.sh) and a local PostgreSQL instance. Moosiac needs the sibling `music_api` repo running too — projects and AI generation are entirely server-backed, there is no offline/local-only mode.
 
 ```bash
 # 1. Install this repo's dependencies
@@ -60,7 +60,7 @@ Sign-in is required app-wide (Firebase Auth) — there is no anonymous/local mod
 
 ## Architecture
 
-ScoreSmith is split across five repos: shared types (`music_types`), a typed network client (`music_client`), the domain/store layer (`music_lib`), the backend (`music_api`), and this web app (`music_app`). See **[docs/architecture.md](docs/architecture.md)** for:
+Moosiac is split across five repos: shared types (`music_types`), a typed network client (`music_client`), the domain/store layer (`music_lib`), the backend (`music_api`), and this web app (`music_app`). See **[docs/architecture.md](docs/architecture.md)** for:
 
 - The repo table and a Mermaid diagram of how they connect
 - Request flows (auth token → `MusicClient` → `music_api` → OpenAI; project CRUD; e2e test mode)

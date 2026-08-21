@@ -12,6 +12,7 @@
  * a moment earlier would be invisible to the job and then overwritten by its
  * result.
  */
+import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GenerationJob, GenerationJobKind } from '@sudobility/music_types';
 import { useAppStore } from '@sudobility/music_lib';
@@ -122,9 +123,13 @@ export function useProjectGeneration(
         // the running-job cadence rather than one idle interval late.
         generatingRef.current = true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
         setGenerating(false);
         generatingRef.current = false;
+        // Out of credits opens the store instead. The inline error stays
+        // empty in that case: the modal is the message, and a red banner
+        // behind it saying the same thing reads as two separate failures.
+        if (reportGenerationError(err, { store })) return;
+        setError(err instanceof Error ? err.message : String(err));
       }
     },
     [projectId, services, store],

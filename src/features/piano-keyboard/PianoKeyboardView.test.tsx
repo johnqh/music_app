@@ -1,6 +1,8 @@
 import { commandLabel } from '@/features/score-editor/command-labels';
-import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+import { getAppServices } from '@/config/initialize';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   createAppStore,
   pitchToMidi,
@@ -68,6 +70,16 @@ function play(store: EditorStoreApi, notes: SoundingNote[]): void {
     playbackController.bus.publishSounding(notes);
   });
 }
+
+// The keyboard resolves live MIDI input from the composition root, so the
+// harness has to be installed -- it also registers the mock platform.
+beforeEach(() => {
+  installTestAppServices();
+});
+
+afterEach(() => {
+  resetTestAppServices();
+});
 
 describe('PianoKeyboardView', () => {
   it('renders all 88 keys for a piano track', () => {
@@ -651,5 +663,69 @@ describe('the keyboard edits a selected chord', () => {
 
     // Entry mode advances the caret past what it wrote; edit mode never does.
     expect(seek.mock.calls.some((call) => call[0] > 0)).toBe(true);
+  });
+});
+
+describe('PianoKeyboardView: MIDI keyboard input', () => {
+  /** Installs a fake MIDI port and hands back its event emitter. */
+  function withMidi(): { emit: (event: unknown) => void } {
+    const ctx = testStoreContext();
+    installTestAppServices(ctx);
+    const io = getAppServices().io as unknown as { midiInput: Record<string, unknown> };
+    let handler: ((event: unknown) => void) | null = null;
+    io.midiInput = {
+      isSupported: () => true,
+      listDevices: async () => [{ id: 'p1', name: 'Fake' }],
+      subscribe: (h: (event: unknown) => void) => {
+        handler = h;
+        return () => {
+          handler = null;
+        };
+      },
+    };
+    return { emit: (event) => handler?.(event) };
+  }
+
+  it('writes a note when a hardware key is played', async () => {
+    // Routed through the same handlers as the on-screen keys, so the held
+    // time becomes the duration and the caret advances — one set of rules.
+    const midi = withMidi();
+    const store = makeStore();
+    act(() => store.getState().setCaretTick(0));
+    render(<PianoKeyboardView store={store} />);
+
+    // The pitch at the caret, not the note count: the editor's default edit
+    // mode is `replace`, so writing over an occupied position swaps the note
+    // rather than adding one.
+    const pitchAtCaret = () => {
+      const note = allNotes(store.getState().score!).find((n) => n.startTick === 0);
+      return note ? pitchToMidi(note.pitch) : null;
+    };
+    expect(pitchAtCaret()).not.toBe(62);
+
+    act(() => midi.emit({ type: 'on', note: 62, velocity: 90 }));
+    await new Promise((r) => setTimeout(r, 120));
+    act(() => midi.emit({ type: 'off', note: 62 }));
+
+    await waitFor(() => {
+      expect(pitchAtCaret()).toBe(62);
+    });
+  });
+
+  it('sounds the note while it is held', () => {
+    const midi = withMidi();
+    const store = makeStore();
+    render(<PianoKeyboardView store={store} />);
+
+    act(() => midi.emit({ type: 'on', note: 60, velocity: 80 }));
+
+    expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalled();
+  });
+
+  it('subscribes to nothing on a platform without MIDI', () => {
+    // The default fake reports unsupported; rendering must not throw, and no
+    // device picker should ever be offered.
+    const store = makeStore();
+    expect(() => render(<PianoKeyboardView store={store} />)).not.toThrow();
   });
 });

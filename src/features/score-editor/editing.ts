@@ -55,6 +55,7 @@ import {
   changeDurationCommand,
   changeVelocityCommand,
   deleteEventsCommand,
+  toggleSlurCommand,
   toggleTieCommand,
 } from '@sudobility/music_lib';
 import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
@@ -434,6 +435,80 @@ export function moveSelectionHorizontal(store: EditorStoreApi, direction: 'prev'
   state.setSelection({ eventIds: [adjacentId], measureIds: [], trackIds: [] });
 }
 
+// ---- caret navigation ----------------------------------------------------------
+
+/**
+ * Steps the caret by one note value.
+ *
+ * The companion to typed note entry: letters write at the caret and step it
+ * forward, so going back to fix the note before last has to be possible
+ * without the pointer. Moves by the toolbar's current duration, which is the
+ * grid the writer is already thinking in.
+ *
+ * Clamped at zero and at the end of the score — running off either end would
+ * put the caret somewhere `resolveInsertTarget` cannot place a note.
+ */
+export function stepCaret(store: EditorStoreApi, direction: 'prev' | 'next'): void {
+  const state = store.getState();
+  if (!state.score) return;
+
+  const step = ticksFor(state.snapGrid, state.score.ppq);
+  const end = scoreDurationTicks(state.score);
+  const next = state.caretTick + (direction === 'next' ? step : -step);
+  playbackController.seek(Math.max(0, Math.min(next, Math.max(0, end - 1))));
+}
+
+/** The tick just past the last measure. */
+function scoreDurationTicks(score: Score): number {
+  let end = 0;
+  for (const track of score.tracks) {
+    const last = track.measures.at(-1);
+    if (last) end = Math.max(end, last.startTick + last.durationTicks);
+  }
+  return end;
+}
+
+/**
+ * Moves the caret to a bar edge.
+ *
+ * `end` lands just inside the bar rather than on the next barline, so
+ * "end of bar" is a position a note can still be written at.
+ */
+export function caretToBarEdge(store: EditorStoreApi, edge: 'start' | 'end'): void {
+  const state = store.getState();
+  if (!state.score) return;
+
+  const measures = state.score.tracks[0]?.measures ?? [];
+  const measure = measures.find(
+    (m) => state.caretTick >= m.startTick && state.caretTick < m.startTick + m.durationTicks,
+  );
+  if (!measure) return;
+  playbackController.seek(
+    edge === 'start' ? measure.startTick : measure.startTick + measure.durationTicks - 1,
+  );
+}
+
+/** Moves the caret to the very start or the very end of the score. */
+export function caretToScoreEdge(store: EditorStoreApi, edge: 'start' | 'end'): void {
+  const state = store.getState();
+  if (!state.score) return;
+  playbackController.seek(edge === 'start' ? 0 : Math.max(0, scoreDurationTicks(state.score) - 1));
+}
+
+/**
+ * Moves the caret to the first beat of `bar`, counted from 1.
+ *
+ * Used by Go to bar, which is how a long score is navigated without scrolling
+ * to find the place by eye.
+ */
+export function caretToBar(store: EditorStoreApi, bar: number): boolean {
+  const state = store.getState();
+  const measure = state.score?.tracks[0]?.measures[Math.round(bar) - 1];
+  if (!measure) return false;
+  playbackController.seek(measure.startTick);
+  return true;
+}
+
 // ---- delete / duplicate --------------------------------------------------------
 
 /** Deletes the currently selected notes (spec §7 "Delete: delete selected notes") and clears the selection. No-op if no notes are selected. */
@@ -581,6 +656,21 @@ export function changeAccidental(store: EditorStoreApi, accidental: Accidental):
 }
 
 /** Toggles `tieStart`/`tieStop` on the selected notes. No-op if no notes are selected. */
+/**
+ * Slurs the selection, or removes the slur it already has.
+ *
+ * Needs two notes or more — a phrase mark over one note means nothing — and
+ * the command decides which of them are the endpoints, so a start can never
+ * be created without its stop.
+ */
+export function toggleSlur(store: EditorStoreApi): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length < 2) return;
+  dispatchTracked(store, toggleSlurCommand(ids, commandLabel('toggleSlur')));
+}
+
 export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'): void {
   const state = store.getState();
   if (!state.score) return;

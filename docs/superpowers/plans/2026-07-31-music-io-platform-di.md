@@ -381,7 +381,7 @@ npm publish && git push
 {
   "name": "@sudobility/music_io",
   "version": "0.1.0",
-  "description": "Platform implementations for ScoreSmith: playback, XML parsing, file export and MIDI codecs, for web and React Native",
+  "description": "Platform implementations for Moosiac: playback, XML parsing, file export and MIDI codecs, for web and React Native",
   "type": "module",
   "exports": {
     ".": {

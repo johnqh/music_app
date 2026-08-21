@@ -130,7 +130,7 @@ class FetchNetworkClient implements NetworkClient {
  * holding the one that was current at construction would start failing an hour
  * into a session.
  */
-class AuthenticatedNetworkClient implements NetworkClient {
+export class AuthenticatedNetworkClient implements NetworkClient {
   constructor(
     private readonly inner: NetworkClient,
     private readonly getToken: () => Promise<string | null>,
@@ -200,6 +200,33 @@ type AuthBackend = {
 
 const isE2e = import.meta.env.VITE_E2E === '1';
 
+/**
+ * Reads a Firebase ID token, waiting for the session to be restored first.
+ *
+ * Extracted and exported so the rule can be tested without a Firebase app:
+ * the whole point is *when* it answers, and that is invisible in a snapshot of
+ * the auth object.
+ *
+ * `currentUser` is `null` between `getAuth()` and the first
+ * `onAuthStateChanged`, even for a signed-in user with a persisted session —
+ * restoring it is asynchronous. Reading it straight away therefore answered
+ * `null` for a user who *was* signed in, and since `AuthenticatedNetworkClient`
+ * omits the header when there is no token, the request went out
+ * unauthenticated and came back 401 "Authorization header required" — no
+ * header at all, rather than a rejected one, which is what the response body
+ * said. Anything that fetches on mount could lose that race; the credits
+ * balance did.
+ *
+ * `authStateReady()` resolves immediately once that has happened, so this
+ * costs nothing after start-up.
+ */
+export function readFirebaseToken(auth: {
+  authStateReady: () => Promise<void>;
+  currentUser: { getIdToken: () => Promise<string> } | null;
+}): Promise<string | null> {
+  return auth.authStateReady().then(() => auth.currentUser?.getIdToken() ?? null);
+}
+
 function firebaseBackend(): AuthBackend {
   const app: FirebaseApp = initializeFirebaseApp({
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -217,7 +244,7 @@ function firebaseBackend(): AuthBackend {
 
   return {
     observe: (cb) => onAuthStateChanged(auth, (user) => cb(toAuthUser(user))),
-    getToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
+    getToken: () => readFirebaseToken(auth),
     signInEmail: async (email, password) => {
       await signInWithEmailAndPassword(auth, email, password);
     },

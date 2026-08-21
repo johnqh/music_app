@@ -10,7 +10,13 @@
  * jsdom too and every interaction path is exercised geometrically in
  * component tests.
  */
+import {
+  STAVE_POSITION_HEIGHT,
+  STAVE_TOP_LINE_OFFSET,
+  pitchAtStavePosition,
+} from '@sudobility/music_lib';
 import type { BBox, LayoutPlan } from '@sudobility/music_lib';
+import type { Pitch, Score } from '@sudobility/music_types';
 
 export type Point = { x: number; y: number };
 
@@ -139,6 +145,41 @@ export function trackIdAtContentPoint(plan: LayoutPlan, point: Point): string | 
       const box = trackLayout.measures.find((m) => m.measureIndex === measureIndex)?.box;
       if (!box) continue;
       if (point.y >= box.y && point.y < box.y + box.height) return trackLayout.track.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * The pitch a point on a stave lands on, or `null` when it is not over one.
+ *
+ * A staff position is a line or the space beside it, so the y distance from the
+ * top line divided by `STAVE_POSITION_HEIGHT` — rounded, since a click near a
+ * line means that line — is how many diatonic steps down from the clef's top
+ * note the reader is pointing at. `STAVE_TOP_LINE_OFFSET` is the same constant
+ * the renderer draws with, so this agrees with what is on screen by
+ * construction rather than by a matched guess.
+ *
+ * Content coordinates, unzoomed, like every other hit test here except the
+ * track gutter.
+ */
+export function pitchAtStavePoint(
+  plan: LayoutPlan,
+  score: Score,
+  point: Point,
+): { pitch: Pitch; trackId: string } | null {
+  for (const trackLayout of plan.trackLayouts) {
+    for (const placement of trackLayout.measures) {
+      const box = placement.box;
+      if (point.x < box.x || point.x >= box.x + box.width) continue;
+      if (point.y < box.y || point.y >= box.y + box.height) continue;
+
+      const track = score.tracks.find((t) => t.id === trackLayout.track.id);
+      if (!track) return null;
+
+      const topLineY = box.y + STAVE_TOP_LINE_OFFSET;
+      const position = Math.round((point.y - topLineY) / STAVE_POSITION_HEIGHT);
+      return { pitch: pitchAtStavePosition(track.clef, position), trackId: track.id };
     }
   }
   return null;

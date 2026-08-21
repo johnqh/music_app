@@ -52,11 +52,20 @@ import {
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import type { InstrumentChoice } from '@/features/instruments/instrument-catalog';
+import type { InstrumentChoice } from '@sudobility/music_lib';
 import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
+import {
+  caretToBar,
+  deleteSelected,
+  insertNoteAtCaret,
+  selectAll,
+} from '@/features/score-editor/editing';
+import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
+import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
+import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { useClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
@@ -69,6 +78,7 @@ import {
   eventIdsAtPoint,
   eventIdsInBox,
   measureIdAtPoint,
+  pitchAtStavePoint,
   measureIndexAtGutterPoint,
 } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
@@ -1031,10 +1041,26 @@ export function ScoreEditorView({
             rangeModifier && event.shiftKey
               ? state.score.tracks
               : state.score.tracks.filter((t) => t.id === activeTrackId);
-          const measureIds = tracks
-            .map((t) => t.measures[gutterIndex]?.id)
-            .filter((id): id is string => id !== undefined);
-          if (measureIds.length > 0) state.selectMeasures(measureIds);
+
+          /*
+            Shift extends from the bar clicked last, so "bars 3 to 12" is two
+            clicks rather than ten. Regeneration and Replace Measures both work
+            on a span, and picking one out was the slowest part of using them.
+
+            The anchor is the *first* bar of the current selection, so
+            extending twice from the same anchor grows and shrinks the range
+            rather than walking it — the behaviour of every list that does
+            this.
+          */
+          const anchorIndex = event.shiftKey && !rangeModifier ? measureAnchorRef.current : null;
+          const from = anchorIndex === null ? gutterIndex : Math.min(anchorIndex, gutterIndex);
+          const to = anchorIndex === null ? gutterIndex : Math.max(anchorIndex, gutterIndex);
+
+          const measureIds = tracks.flatMap((t) => t.measures.slice(from, to + 1).map((m) => m.id));
+          if (measureIds.length > 0) {
+            state.selectMeasures(measureIds);
+            if (anchorIndex === null) measureAnchorRef.current = gutterIndex;
+          }
           return;
         }
       }
@@ -1100,6 +1126,25 @@ export function ScoreEditorView({
         return;
       }
 
+      // ---- note input: a click on a stave writes a note there.
+      //
+      // Only in the mode, because the caret is how everything else is aimed and
+      // the two gestures cannot share a click. Placed by going through the
+      // caret — seek, then insert at it — so target resolution, the edit lock
+      // and the caret advance are the same code the toolbar and the piano
+      // keyboard already use.
+      if (state.noteInput && layoutPlan && displayScore && !rangeModifier) {
+        const hit = pitchAtStavePoint(layoutPlan, state.score, logical);
+        const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
+        if (hit && clickedTick !== null) {
+          state.setActiveTrack(hit.trackId);
+          state.clearSelection();
+          playbackController.seek(clickedTick);
+          insertNoteAtCaret(store, hit.pitch, { advanceCaret: true });
+          return;
+        }
+      }
+
       // ---- plain click anywhere else inside a system: caret + active track.
       // The selection is cleared so the caret becomes the anchor for the next
       // cmd-click range.
@@ -1113,6 +1158,49 @@ export function ScoreEditorView({
     },
     [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
   );
+
+  /**
+   * Where a right-click opened the context menu, in viewport coordinates.
+   * `null` when it is closed.
+   */
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [goToBarOpen, setGoToBarOpen] = useState(false);
+  /**
+   * The bar a shift-extended measure selection grows from.
+   *
+   * A ref rather than state: it is read inside the click handler and changing
+   * it must never re-render, which reading it from state would cause on every
+   * gutter click.
+   */
+  const measureAnchorRef = useRef<number | null>(null);
+  /**
+   * Lyric entry walks the *active track's* notes in tick order, starting at
+   * the one nearest the caret — so "start writing words here" means what it
+   * looks like.
+   */
+  const [lyricStart, setLyricStart] = useState<number | null>(null);
+
+  const lyricNotes = useMemo(() => {
+    if (!score || !activeTrackId) return [];
+    const track = score.tracks.find((t) => t.id === activeTrackId);
+    if (!track) return [];
+    return track.measures
+      .flatMap((m) => m.voices.flatMap((v) => v.events))
+      .filter(isNoteEvent)
+      .sort((a, b) => a.startTick - b.startTick);
+  }, [score, activeTrackId]);
+
+  const beginLyricEntry = useCallback(() => {
+    if (lyricNotes.length === 0) return;
+    const caret = store.getState().caretTick;
+    const at = lyricNotes.findIndex((n) => n.startTick >= caret);
+    setLyricStart(at === -1 ? 0 : at);
+  }, [lyricNotes, store]);
+
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setContextMenu({ x: event.clientX, y: event.clientY });
+  }, []);
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
     const container = containerRef.current;
@@ -1391,8 +1479,42 @@ export function ScoreEditorView({
         onChoose={clipboard.resolvePaste}
         onCancel={clipboard.cancel}
       />
+      {contextMenu ? (
+        <ScoreContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          hasSelection={selection.eventIds.length > 0}
+          hasClipboard={store.getState().clipboard !== null}
+          canEdit={store.getState().state !== 'playing'}
+          onClose={() => setContextMenu(null)}
+          onAction={(action) => {
+            const state = store.getState();
+            if (action === 'copy') state.copySelection();
+            else if (action === 'cut') clipboard.requestCut();
+            else if (action === 'paste') clipboard.requestPaste();
+            else if (action === 'delete') deleteSelected(store);
+            else selectAll(store);
+          }}
+        />
+      ) : null}
+      {lyricStart !== null ? (
+        <LyricEntryBar
+          store={store}
+          notes={lyricNotes}
+          startIndex={lyricStart}
+          onClose={() => setLyricStart(null)}
+        />
+      ) : null}
+      <GoToBarDialog
+        open={goToBarOpen}
+        barCount={score?.tracks[0]?.measures.length ?? 0}
+        onClose={() => setGoToBarOpen(false)}
+        onGo={(bar) => caretToBar(store, bar)}
+      />
       <EditorToolbar
         store={store}
+        onEnterLyrics={beginLyricEntry}
+        onGoToBar={() => setGoToBarOpen(true)}
         onCut={clipboard.requestCut}
         onPaste={clipboard.requestPaste}
         layoutMode={layoutMode}
@@ -1449,6 +1571,7 @@ export function ScoreEditorView({
           })}
           tabIndex={0}
           onClick={handleClick}
+          onContextMenu={handleContextMenu}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
