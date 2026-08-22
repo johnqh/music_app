@@ -44,23 +44,44 @@
  * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
 import { commandLabel } from '@/features/score-editor/command-labels';
+import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
+import {
+  BarlineField,
+  MeasureClefField,
+  MeasureTempoField,
+  NavigationFields,
+  PickupField,
+  RepeatFields,
+} from '@/components/inspector/measure-fields';
+import {
+  CommitSlider,
+  MixedCheckbox,
+  MixedNumberField,
+  MixedSelect,
+  commonValue,
+} from '@/components/inspector/controls';
+import {
+  ACCIDENTALS,
+  ARTICULATIONS,
+  CLEFS,
+  CUSTOM_DURATION,
+  FIELD_HEIGHT_CLASS,
+  FIELD_LABEL_CLASS,
+  MIXED,
+  NO_DYNAMIC,
+  PITCH_STEPS,
+  TEXT_INPUT_CLASS,
+} from '@/components/inspector/shared';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 
-import { PanSlider, VolumeSlider } from '@/features/tracks/mixer-controls';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ChangeEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { ChangeEvent } from 'react';
 import {
   SheetSelector,
   Button,
-  Checkbox,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Tabs,
   TabsContent,
   TabsList,
@@ -68,10 +89,7 @@ import {
 } from '@sudobility/components';
 import type {
   Accidental,
-  BarlineStyle,
   Dynamic,
-  RepeatJump,
-  Articulation,
   Clef,
   KeySignature,
   Measure,
@@ -94,8 +112,6 @@ import {
   transposeKeySignature,
   transposePitch,
   isPercussionTrack,
-  barBeatForTick,
-  tickForBarBeat,
   durationLabel,
   durationNameForTicks,
   keySignatureOptions,
@@ -106,14 +122,13 @@ import {
   kitOptionValue,
   selectSelectedTrack,
 } from '@sudobility/music_lib';
-import type { NavigationPatch, TrackMixPatch } from '@sudobility/music_lib';
+import type { TrackMixPatch } from '@sudobility/music_lib';
 import {
   changeAccidental as dispatchAccidental,
   changeArticulation as dispatchArticulation,
   changeVelocity as dispatchVelocity,
   selectedNoteIds,
   toggleTie as dispatchToggleTie,
-  setFingering,
   toggleGlissando,
   toggleOttava,
 } from '@/features/score-editor/editing';
@@ -126,19 +141,9 @@ import {
 import {
   changeDynamicCommand,
   changeKeySignatureCommand,
-  beatDurationTicks,
-  changeBarlineCommand,
-  changeNavigationCommand,
-  changeMeasureClefCommand,
-  effectiveClef,
-  changeRepeatsCommand,
-  setPickupCommand,
   clearGraceNotesCommand,
-  setChordSymbolCommand,
   toGraceNoteCommand,
-  changeTempoCommand,
   changeTimeSignatureCommand,
-  removeTempoCommand,
 } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -211,362 +216,7 @@ function ReplaceButton({
   );
 }
 
-/** Sentinel distinguishing "every selected object agrees" from "differing values" (spec §20's "mixed"). */
-const MIXED = Symbol('mixed');
-type MixedOr<T> = T | typeof MIXED;
-
-/** `values[0]` if every entry deep-equals it (by `JSON.stringify`, sufficient for this panel's primitive/plain-object fields), `MIXED` if they differ, or `null` for an empty list. */
-function commonValue<T>(values: T[]): MixedOr<T> | null {
-  if (values.length === 0) return null;
-  const first = values[0];
-  const firstKey = JSON.stringify(first);
-  return values.every((v) => JSON.stringify(v) === firstKey) ? first : MIXED;
-}
-
-const PITCH_STEPS: PitchStep[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const ACCIDENTALS: Array<{ value: Accidental; label: string }> = [
-  { value: -2, label: 'bb' },
-  { value: -1, label: 'b' },
-  { value: 0, label: 'natural' },
-  { value: 1, label: '#' },
-  { value: 2, label: 'x' },
-];
-const ARTICULATIONS: Array<{ value: Articulation | 'none'; labelKey: string }> = [
-  { value: 'none', labelKey: 'articulation.none' },
-  { value: 'staccato', labelKey: 'articulation.staccato' },
-  { value: 'accent', labelKey: 'articulation.accent' },
-  { value: 'tenuto', labelKey: 'articulation.tenuto' },
-  { value: 'marcato', labelKey: 'articulation.marcato' },
-];
-const CLEFS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
-const MIXED_VALUE = '__mixed__';
-
-/**
- * Stands for a length no single note value spells — a tie join or an import can
- * leave one. Shown so the picker states what the note actually is instead of
- * relabelling it as the nearest name, and inert when chosen.
- */
-const CUSTOM_DURATION = '__custom__';
-
-/** "No marking here", distinct from a marking that happens to be quiet. */
-const NO_DYNAMIC = '__none__';
-
 type InspectorTab = 'score' | 'note' | 'measure' | 'track';
-
-const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
-
-/**
- * One stated height for every field in the panel.
- *
- * An `Input`, a Radix select trigger and a `SheetSelector` each size
- * themselves from their own content and padding, so a column of them comes out
- * ragged no matter how the padding is tuned — the name box, the instrument
- * picker and the clef select were three different heights. Stating it once is
- * the same rule the toolbars follow with `CONTROL_HEIGHT_CLASS`.
- */
-const FIELD_HEIGHT_CLASS = 'h-9';
-
-/** Radix rejects an empty item value, so "inherit" travels under a sentinel. */
-const INHERIT_CLEF = 'inherit';
-
-/** Same Radix constraint as the clef sentinel: "no pickup" needs a value. */
-const NO_PICKUP = 'none';
-
-/** The ordinary barline is the absence of a style, and Radix needs a value. */
-const SINGLE_BARLINE = 'single';
-
-/** Radix again: "no jump" needs a value of its own. */
-const NO_JUMP = 'none';
-const TEXT_INPUT_CLASS = `${FIELD_HEIGHT_CLASS} w-full px-2 py-1.5 text-sm`;
-const SELECT_CLASS = `${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`;
-
-/** A `Select` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
-function MixedSelect<T extends string>({
-  value,
-  options,
-  ariaLabel,
-  onChange,
-  disabled,
-}: {
-  value: MixedOr<T> | null;
-  options: Array<{ value: T; label: string }>;
-  ariaLabel: string;
-  onChange: (value: T) => void;
-  disabled?: boolean;
-}) {
-  const { t } = useTranslation();
-  const selectValue = value === MIXED ? MIXED_VALUE : (value ?? undefined);
-  return (
-    <Select
-      value={selectValue}
-      disabled={disabled || value === null}
-      onValueChange={(v) => {
-        if (v === MIXED_VALUE) return;
-        onChange(v as T);
-      }}
-    >
-      <SelectTrigger aria-label={ariaLabel} className={SELECT_CLASS}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {value === MIXED && (
-          <SelectItem value={MIXED_VALUE} disabled>
-            {t('inspector.mixed')}
-          </SelectItem>
-        )}
-        {options.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-/** A numeric `<input>` (the library `Input`, `type="number"`) showing an empty value + "Mixed" placeholder when `value` is `MIXED`. Commits on blur/Enter, not on every keystroke, so a partial/invalid draft never dispatches a command.
- *
- * Kept on the library `Input` rather than `NumberInput`: `NumberInput`'s
- * `value`/`onChange` pair is a real `number`, with no representation for
- * "empty, showing a Mixed placeholder" -- exactly the state this field
- * needs whenever a multi-selection's values differ. `Input` is a thin
- * styled `<input>` with full attribute passthrough, so it keeps the same
- * string-draft/blur-commit behavior unchanged. */
-function MixedNumberField({
-  label,
-  value,
-  onCommit,
-  disabled,
-  min,
-  max,
-  step,
-}: {
-  label: string;
-  value: MixedOr<number> | null;
-  onCommit: (value: number) => void;
-  disabled?: boolean;
-  min?: number;
-  max?: number;
-  step?: number;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(value === MIXED || value === null ? '' : String(value));
-
-  useEffect(() => {
-    setDraft(value === MIXED || value === null ? '' : String(value));
-  }, [value]);
-
-  const commit = (): void => {
-    const parsed = Number(draft);
-    if (draft.trim() !== '' && Number.isFinite(parsed)) onCommit(parsed);
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{label}</span>
-      <Input
-        type="number"
-        value={draft}
-        placeholder={value === MIXED ? t('inspector.mixed') : undefined}
-        disabled={disabled || value === null}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-        }}
-        aria-label={label}
-        min={min}
-        max={max}
-        step={step}
-        className={TEXT_INPUT_CLASS}
-      />
-    </label>
-  );
-}
-
-/** A checkbox showing an indeterminate visual state when `indeterminate` is true (the library `Checkbox`'s own `indeterminate` prop, mirroring MUI's `Checkbox indeterminate` for the "Mixed" tri-state fields -- it manages the DOM's `indeterminate` flag via ref internally, so this file no longer has to). */
-function MixedCheckbox({
-  label,
-  checked,
-  indeterminate,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  checked: boolean;
-  /** Only a multi-selection can be part-checked, so this defaults to off. */
-  indeterminate?: boolean;
-  onChange: (checked: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Checkbox
-      label={label}
-      checked={checked}
-      indeterminate={indeterminate}
-      onChange={onChange}
-      disabled={disabled}
-    />
-  );
-}
-
-/** A library `Slider` wrapped with an accessible name (via a visually-hidden
- * label, since `Slider` accepts no `aria-label`) and a commit-on-release
- * handler (since `Slider` exposes only a continuous `onChange`, no
- * `onValueCommitted`-style callback of its own) -- same pattern as
- * `TrackPanel.tsx`'s identical volume/pan sliders. */
-/**
- * A mixer control that reports once, on release.
- *
- * Every commit is an undo entry, so committing per pointer-move would bury the
- * history under a drag. `kind` picks the control rather than a min/max, because
- * volume and pan are different *shapes* — see `mixer-controls.tsx`.
- */
-/**
- * A note's position, as a bar and a beat.
- *
- * Two fields rather than one, because that is how the position is said aloud:
- * "bar 12, beat 3". Beat takes a decimal so an off-beat note can still be
- * stated exactly — a swung eighth is beat 2.5 — and the domain clamps a beat
- * past the end of its bar rather than rejecting it.
- *
- * Drafted and committed on blur, like every other typed field here: committing
- * per keystroke would move the note through every intermediate number.
- */
-function BarBeatField({
-  score,
-  tick,
-  onCommit,
-}: {
-  score: Score;
-  tick: number;
-  onCommit: (tick: number) => void;
-}) {
-  const { t } = useTranslation();
-  const position = barBeatForTick(score, tick);
-  // Pulled out as primitives: the effect below must re-run when the *values*
-  // change, and `position` is a fresh object every render.
-  const bar = position?.bar ?? null;
-  // Two decimals is enough for any grid the editor offers, and trailing zeroes
-  // on a whole beat read as noise.
-  const beat = position ? Math.round(position.beat * 100) / 100 : null;
-
-  const [barDraft, setBarDraft] = useState('');
-  const [beatDraft, setBeatDraft] = useState('');
-
-  useEffect(() => {
-    setBarDraft(bar === null ? '' : String(bar));
-    setBeatDraft(beat === null ? '' : String(beat));
-  }, [bar, beat]);
-
-  if (!position) return null;
-
-  const commit = (bar: string, beat: string): void => {
-    const barNumber = Number(bar);
-    const beatNumber = Number(beat);
-    if (!Number.isFinite(barNumber) || !Number.isFinite(beatNumber)) return;
-    const next = tickForBarBeat(score, barNumber, beatNumber);
-    if (next !== null && next !== tick) onCommit(next);
-  };
-
-  return (
-    <div className="flex gap-2">
-      <label className="flex flex-1 flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.bar')}</span>
-        <Input
-          value={barDraft}
-          inputMode="numeric"
-          aria-label={t('editor.bar')}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setBarDraft(e.target.value)}
-          onBlur={() => commit(barDraft, beatDraft)}
-          className={TEXT_INPUT_CLASS}
-        />
-      </label>
-      <label className="flex flex-1 flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.beat')}</span>
-        <Input
-          value={beatDraft}
-          inputMode="decimal"
-          aria-label={t('editor.beat')}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setBeatDraft(e.target.value)}
-          onBlur={() => commit(barDraft, beatDraft)}
-          className={TEXT_INPUT_CLASS}
-        />
-      </label>
-    </div>
-  );
-}
-
-function CommitSlider({
-  label,
-  rowLabel,
-  value,
-  onCommit,
-  kind,
-  disabled,
-}: {
-  /** The accessible name, which says which track property this is. */
-  label: string;
-  /** The visible text in the row's label column. */
-  rowLabel: string;
-  value: number;
-  onCommit: (value: number) => void;
-  kind: 'volume' | 'pan';
-  disabled?: boolean;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const resetLabel = t('track.centerPan');
-
-  /**
-   * Commits whatever the slider was left at.
-   *
-   * Guarded on the target being the range input itself, because this wrapper
-   * commits on *any* pointer-up inside it and the pan row now carries a reset
-   * button. A `<button>`'s `.value` is `''`, and `Number('')` is `0` — so an
-   * unguarded handler silently commits zero for whatever the row controls.
-   * On the pan row that happens to be what centring wants, which is precisely
-   * why it would go unnoticed; the same button on the volume row would mute
-   * the track. The reset commits through `onReset` instead, which says 0
-   * because it means 0.
-   */
-  const commit = (e: ReactPointerEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>): void => {
-    const target = e.target as HTMLElement;
-    if (!(target instanceof HTMLInputElement) || target.type !== 'range') return;
-    onCommit(Number(target.value));
-  };
-
-  return (
-    <div onPointerUp={commit} onKeyUp={commit}>
-      {kind === 'volume' ? (
-        <VolumeSlider
-          label={label}
-          rowLabel={rowLabel}
-          value={draft}
-          disabled={disabled}
-          onChange={setDraft}
-        />
-      ) : (
-        <PanSlider
-          label={label}
-          rowLabel={rowLabel}
-          value={draft}
-          disabled={disabled}
-          onChange={setDraft}
-          resetLabel={resetLabel}
-          onReset={() => {
-            // Straight to the store rather than through `commit`: the button
-            // is not the range input, and centring is a decision rather than
-            // the end of a drag.
-            setDraft(0);
-            onCommit(0);
-          }}
-        />
-      )}
-    </div>
-  );
-}
 
 type TabProps = {
   store: EditorStoreApi;
@@ -1303,498 +953,6 @@ function TrackTab({ store, onReplace }: TabProps) {
         }}
         onCancel={() => setPendingDelete(false)}
       />
-    </div>
-  );
-}
-
-/**
- * The repeat barlines and volta of one bar.
- *
- * Says outright that playback ignores repeats. The alternative is a marking
- * that draws and exports correctly and then quietly does nothing when you
- * press play, which is a worse experience than a stated limit — and expanding
- * repeats in playback would break the identity that a playback tick is a score
- * tick, which the caret, the following-scroll and the scrubber all rest on.
- */
-/**
- * The clef this bar reads in, and whether the bar itself changes it.
- *
- * Shows the clef **in force** rather than `measure.clef`, so it is never blank
- * and never lies — the same rule `MeasureTempoField` follows for an inherited
- * tempo. "Inherit" is offered as its own option and is what clears a change;
- * picking the clef already in force clears it too, since the command refuses
- * to store a marking that would print nothing.
- *
- * Offered on bar 1 as well, where it edits the **part's** clef: that is where a
- * clef is established rather than changed, and hiding the control there would
- * leave the only way to set a part's clef in the Track tab, a different tab
- * from the one the reader is looking at the bar in.
- */
-/**
- * Whether the score opens with a pickup, and how long it is.
- *
- * Offered only on the first bar, because that is what an anacrusis is — the
- * run-up to bar 1. A short bar anywhere else is an irregular bar, which keeps
- * its number and is a different thing.
- *
- * Measured in beats rather than ticks: "a one-beat pickup" is how a musician
- * describes it, and the tick length follows from the time signature.
- */
-function PickupField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-  const score = store((s) => s.score);
-  if (!score) return null;
-
-  const beatTicks = beatDurationTicks(measure.timeSignature, score.ppq);
-  const fullBeats = Math.max(1, Math.round(measure.durationTicks / beatTicks));
-  const current = measure.pickup
-    ? String(Math.round(measure.durationTicks / beatTicks))
-    : NO_PICKUP;
-
-  const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        setPickupCommand(value === NO_PICKUP ? null : Number(value), commandLabel('setPickup')),
-      );
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.pickup')}</span>
-      <MixedSelect
-        value={current}
-        ariaLabel={t('inspector.pickup')}
-        disabled={isPlaying}
-        options={[
-          { value: NO_PICKUP, label: t('inspector.pickupNone') },
-          // A pickup shorter than the bar; a full-length one is just a bar.
-          ...Array.from({ length: Math.max(1, fullBeats - 1) }, (_, i) => ({
-            value: String(i + 1),
-            label: t('inspector.pickupBeats', { count: i + 1 }),
-          })),
-        ]}
-        onChange={apply}
-      />
-    </label>
-  );
-}
-
-/**
- * The line at the end of this bar.
- *
- * A section break or the end of the piece; anything else is the ordinary
- * single barline, which is why "Single" is the absence of a value rather than
- * a style of its own. The repeat barlines live in `RepeatFields` and are not
- * offered here — they are independent flags, and a bar can both close a repeat
- * and end the piece.
- */
-function BarlineField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-  const score = store((s) => s.score);
-  if (!score) return null;
-
-  const index = score.tracks
-    .find((track) => track.measures.some((m) => m.id === measure.id))
-    ?.measures.findIndex((m) => m.id === measure.id);
-  if (index === undefined || index < 0) return null;
-
-  const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        changeBarlineCommand(
-          index,
-          value === SINGLE_BARLINE ? undefined : (value as BarlineStyle),
-          commandLabel('changeBarline'),
-        ),
-      );
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.barline')}</span>
-      <MixedSelect
-        value={measure.barline ?? SINGLE_BARLINE}
-        ariaLabel={t('inspector.barline')}
-        disabled={isPlaying}
-        options={[
-          { value: SINGLE_BARLINE, label: t('inspector.barlineSingle') },
-          { value: 'double', label: t('inspector.barlineDouble') },
-          { value: 'final', label: t('inspector.barlineFinal') },
-        ]}
-        onChange={apply}
-      />
-    </label>
-  );
-}
-
-/**
- * The navigation marks on this bar: the sign, the coda, `To Coda`, `Fine` and
- * the jump instruction.
- *
- * Checkboxes for the places and a select for the instruction, because that is
- * what they are — a bar either carries the segno or it does not, while the
- * jump is one choice among six. They are independent: a bar can carry the coda
- * sign and a `Fine`, so setting one never clears another.
- */
-function NavigationFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-  const score = store((s) => s.score);
-  if (!score) return null;
-
-  const index = score.tracks
-    .find((track) => track.measures.some((m) => m.id === measure.id))
-    ?.measures.findIndex((m) => m.id === measure.id);
-  if (index === undefined || index < 0) return null;
-
-  const patch = (next: NavigationPatch): void => {
-    store
-      .getState()
-      .dispatchCommand(changeNavigationCommand(index, next, commandLabel('changeNavigation')));
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.navigation')}</span>
-
-      <div className="flex flex-wrap gap-4">
-        <MixedCheckbox
-          label={t('inspector.segno')}
-          checked={measure.segno === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ segno: checked })}
-        />
-        <MixedCheckbox
-          label={t('inspector.coda')}
-          checked={measure.coda === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ coda: checked })}
-        />
-        <MixedCheckbox
-          label={t('inspector.toCoda')}
-          checked={measure.toCoda === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ toCoda: checked })}
-        />
-        <MixedCheckbox
-          label={t('inspector.fine')}
-          checked={measure.fine === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ fine: checked })}
-        />
-      </div>
-
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('inspector.jump')}</span>
-        <MixedSelect
-          value={measure.jump ?? NO_JUMP}
-          ariaLabel={t('inspector.jump')}
-          disabled={isPlaying}
-          options={[
-            { value: NO_JUMP, label: t('inspector.jumpNone') },
-            { value: 'da-capo', label: 'D.C.' },
-            { value: 'da-capo-al-fine', label: 'D.C. al Fine' },
-            { value: 'da-capo-al-coda', label: 'D.C. al Coda' },
-            { value: 'dal-segno', label: 'D.S.' },
-            { value: 'dal-segno-al-fine', label: 'D.S. al Fine' },
-            { value: 'dal-segno-al-coda', label: 'D.S. al Coda' },
-          ]}
-          onChange={(value) =>
-            patch({ jump: value === NO_JUMP ? undefined : (value as RepeatJump) })
-          }
-        />
-      </label>
-    </div>
-  );
-}
-
-function MeasureClefField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-  const score = store((s) => s.score);
-
-  const track = score?.tracks.find((candidate) =>
-    candidate.measures.some((m) => m.id === measure.id),
-  );
-  if (!track) return null;
-
-  const index = track.measures.findIndex((m) => m.id === measure.id);
-  const inForce = effectiveClef(track, index);
-  const isFirst = index === 0;
-
-  const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        changeMeasureClefCommand(
-          track.id,
-          index,
-          value === INHERIT_CLEF ? undefined : (value as Clef),
-          commandLabel('changeMeasureClef'),
-        ),
-      );
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.measureClef')}</span>
-      <MixedSelect
-        value={measure.clef ?? (isFirst ? inForce : INHERIT_CLEF)}
-        ariaLabel={t('inspector.measureClef')}
-        disabled={isPlaying}
-        options={[
-          // Bar 1 establishes the clef, so there is nothing to inherit from.
-          ...(isFirst
-            ? []
-            : [{ value: INHERIT_CLEF, label: t('inspector.clefInherit', { clef: inForce }) }]),
-          ...CLEFS.map((c) => ({ value: c as string, label: c })),
-        ]}
-        onChange={apply}
-      />
-    </label>
-  );
-}
-
-function RepeatFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-  const [endingDraft, setEndingDraft] = useState('');
-
-  useEffect(() => {
-    setEndingDraft((measure.endingNumbers ?? []).join(', '));
-  }, [measure.id, measure.endingNumbers]);
-
-  const patch = (next: Parameters<typeof changeRepeatsCommand>[1]): void => {
-    store
-      .getState()
-      .dispatchCommand(changeRepeatsCommand(measure.id, next, commandLabel('changeRepeats')));
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <span className={FIELD_LABEL_CLASS}>{t('editor.repeats')}</span>
-
-      <div className="flex gap-4">
-        <MixedCheckbox
-          label={t('editor.repeatStart')}
-          checked={measure.repeatStart === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ repeatStart: checked })}
-        />
-        <MixedCheckbox
-          label={t('editor.repeatEnd')}
-          checked={measure.repeatEnd === true}
-          disabled={isPlaying}
-          onChange={(checked) => patch({ repeatEnd: checked })}
-        />
-      </div>
-
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.ending')}</span>
-        <Input
-          value={endingDraft}
-          disabled={isPlaying}
-          placeholder={t('editor.endingPlaceholder')}
-          aria-label={t('editor.ending')}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setEndingDraft(e.target.value)}
-          onBlur={() => {
-            // "1, 2" is a bar played on both passes; anything unparseable
-            // clears rather than storing a bracket nobody asked for.
-            const numbers = endingDraft
-              .split(',')
-              .map((part) => Number(part.trim()))
-              .filter((n) => Number.isInteger(n) && n > 0);
-            patch({ endingNumbers: numbers });
-          }}
-          className={TEXT_INPUT_CLASS}
-        />
-      </label>
-
-      <span className="text-xs text-theme-text-secondary">{t('editor.repeatsPlaybackNote')}</span>
-    </div>
-  );
-}
-
-/**
- * A note's chord symbol, drafted and committed on blur.
- *
- * Committing per keystroke would put an undo entry on the history for every
- * character of "Cmaj7(add13)", the same reason the track name and the score
- * title are drafted.
- */
-/**
- * The finger written beside a note.
- *
- * Free text, not a number picker: piano writing uses 1-5, guitar adds `T` for
- * the thumb, and editions write `1-2` for a substitution. A picker would have
- * to refuse two of those.
- *
- * A draft committed on blur, like the track name, or every keystroke would be
- * its own undo entry.
- */
-function FingeringField({
-  store,
-  note,
-  disabled,
-}: {
-  store: EditorStoreApi;
-  note: NoteEvent;
-  disabled?: boolean;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState('');
-  useEffect(() => {
-    setDraft(note.fingering ?? '');
-  }, [note.id, note.fingering]);
-
-  const commit = (): void => {
-    const next = draft.trim();
-    if (next === (note.fingering ?? '')) return;
-    setFingering(store, next === '' ? undefined : next);
-  };
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.fingering')}</span>
-      <Input
-        value={draft}
-        disabled={disabled}
-        aria-label={t('inspector.fingering')}
-        className={FIELD_HEIGHT_CLASS}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === 'Enter') commit();
-        }}
-      />
-    </label>
-  );
-}
-
-function ChordSymbolField({
-  store,
-  note,
-  disabled,
-}: {
-  store: EditorStoreApi;
-  note: NoteEvent;
-  disabled: boolean;
-}) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState(note.chordSymbol ?? '');
-
-  useEffect(() => {
-    setDraft(note.chordSymbol ?? '');
-  }, [note.id, note.chordSymbol]);
-
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={FIELD_LABEL_CLASS}>{t('inspector.chordSymbol')}</span>
-      <Input
-        value={draft}
-        disabled={disabled}
-        placeholder={t('inspector.chordSymbolPlaceholder')}
-        aria-label={t('inspector.chordSymbol')}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onBlur={() => {
-          if (draft.trim() === (note.chordSymbol ?? '')) return;
-          store
-            .getState()
-            .dispatchCommand(setChordSymbolCommand(note.id, draft, commandLabel('setChordSymbol')));
-        }}
-        className={TEXT_INPUT_CLASS}
-      />
-    </label>
-  );
-}
-
-/**
- * The tempo in force at a measure, and whether this measure sets it.
- *
- * Shows the tempo a player would count here — inherited from an earlier event
- * when this bar sets none — so the field is never blank and never lies. Typing
- * a value writes an event at this bar's tick; Remove is offered only when the
- * event is this bar's own, since the starting tempo is not a change and
- * removing it would leave the score with no tempo at all.
- */
-function MeasureTempoField({
-  store,
-  score,
-  measure,
-}: {
-  store: EditorStoreApi;
-  score: Score;
-  measure: Measure;
-}) {
-  const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
-
-  const ownEvent = score.tempoMap.find((e) => e.tick === measure.startTick);
-  const inForce = [...score.tempoMap]
-    .sort((a, b) => a.tick - b.tick)
-    .filter((e) => e.tick <= measure.startTick)
-    .at(-1);
-  const isFirst = score.tempoMap[0]?.id === ownEvent?.id;
-
-  const [draft, setDraft] = useState('');
-  useEffect(() => {
-    setDraft(String(Math.round(inForce?.bpm ?? 120)));
-  }, [inForce?.bpm, measure.id]);
-
-  const commit = (): void => {
-    const bpm = Math.round(Number(draft));
-    if (!Number.isFinite(bpm) || bpm <= 0) {
-      setDraft(String(Math.round(inForce?.bpm ?? 120)));
-      return;
-    }
-    if (ownEvent && bpm === Math.round(ownEvent.bpm)) return;
-    store
-      .getState()
-      .dispatchCommand(
-        changeTempoCommand(
-          { tempoEventId: ownEvent?.id, tick: measure.startTick, bpm },
-          commandLabel('changeTempo'),
-        ),
-      );
-  };
-
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.tempoHere')}</span>
-        <Input
-          value={draft}
-          inputMode="numeric"
-          disabled={isPlaying}
-          aria-label={t('editor.tempoHere')}
-          onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-          onBlur={commit}
-          className={TEXT_INPUT_CLASS}
-        />
-      </label>
-      {ownEvent && !isFirst ? (
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={isPlaying}
-          onClick={() =>
-            store
-              .getState()
-              .dispatchCommand(removeTempoCommand(ownEvent.id, commandLabel('changeTempo')))
-          }
-          className="self-start px-1 py-0.5 text-xs"
-        >
-          {t('editor.removeTempoChange')}
-        </Button>
-      ) : (
-        <span className="text-xs text-theme-text-secondary">
-          {ownEvent ? t('editor.tempoStarting') : t('editor.tempoInherited')}
-        </span>
-      )}
     </div>
   );
 }

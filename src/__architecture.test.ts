@@ -50,6 +50,9 @@ const ALLOWED_NON_UI = new Set([
   'src/features/piano-keyboard/playing-pitches.ts',
   // Display formatting for a control's readout.
   'src/features/tracks/pan-readout.ts',
+  // The inspector's shared vocabulary: the MIXED sentinel and the class names
+  // that keep a column of controls the same height. Presentation, not logic.
+  'src/components/inspector/shared.ts',
   // Dispatch helpers: they wire UI events to music_lib commands.
   'src/features/score-editor/editing.ts',
   'src/features/score-editor/clipboard-prompts.ts',
