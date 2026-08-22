@@ -68,7 +68,9 @@ import {
 } from '@sudobility/components';
 import type {
   Accidental,
+  BarlineStyle,
   Dynamic,
+  RepeatJump,
   Articulation,
   Clef,
   KeySignature,
@@ -104,13 +106,16 @@ import {
   kitOptionValue,
   selectSelectedTrack,
 } from '@sudobility/music_lib';
-import type { TrackMixPatch } from '@sudobility/music_lib';
+import type { NavigationPatch, TrackMixPatch } from '@sudobility/music_lib';
 import {
   changeAccidental as dispatchAccidental,
   changeArticulation as dispatchArticulation,
   changeVelocity as dispatchVelocity,
   selectedNoteIds,
   toggleTie as dispatchToggleTie,
+  setFingering,
+  toggleGlissando,
+  toggleOttava,
 } from '@/features/score-editor/editing';
 import {
   changePitchCommand,
@@ -122,6 +127,8 @@ import {
   changeDynamicCommand,
   changeKeySignatureCommand,
   beatDurationTicks,
+  changeBarlineCommand,
+  changeNavigationCommand,
   changeMeasureClefCommand,
   effectiveClef,
   changeRepeatsCommand,
@@ -264,6 +271,12 @@ const INHERIT_CLEF = 'inherit';
 
 /** Same Radix constraint as the clef sentinel: "no pickup" needs a value. */
 const NO_PICKUP = 'none';
+
+/** The ordinary barline is the absence of a style, and Radix needs a value. */
+const SINGLE_BARLINE = 'single';
+
+/** Radix again: "no jump" needs a value of its own. */
+const NO_JUMP = 'none';
 const TEXT_INPUT_CLASS = `${FIELD_HEIGHT_CLASS} w-full px-2 py-1.5 text-sm`;
 const SELECT_CLASS = `${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`;
 
@@ -843,6 +856,43 @@ function NoteTab({ store, onReplace }: TabProps) {
         <ChordSymbolField store={store} note={notes[0]} disabled={isPlayingNow} />
       ) : null}
 
+      {/* The finger, per note — in a chord each notehead has its own. */}
+      {notes.length === 1 ? (
+        <FingeringField store={store} note={notes[0]} disabled={isPlayingNow} />
+      ) : null}
+
+      {/*
+        Spans over the selection: an octave bracket and a slide. Both need two
+        notes — a bracket over one note has nothing to span and a slide has
+        nothing to slide to — so both disable rather than failing silently.
+      */}
+      <div className="flex flex-col gap-2">
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.spans')}</span>
+        <div className="flex flex-wrap gap-2">
+          {(['8va', '8vb', '15ma', '15mb'] as const).map((kind) => (
+            <Button
+              key={kind}
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isPlayingNow || notes.length < 2}
+              onClick={() => toggleOttava(store, kind)}
+            >
+              {kind}
+            </Button>
+          ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={isPlayingNow || notes.length < 2}
+            onClick={() => toggleGlissando(store)}
+          >
+            {t('inspector.glissando')}
+          </Button>
+        </div>
+      </div>
+
       {/*
         An ornament belongs to the note after it, so this is offered for one
         selected note and the command decides which note that is. A note with
@@ -1027,6 +1077,14 @@ function MeasureTab({ store, onReplace }: TabProps) {
         same change onto every bar in it.
       */}
       {measures.length === 1 ? <MeasureClefField store={store} measure={measures[0]} /> : null}
+
+      {/* The line this bar ends with. One bar at a time: a barline is a
+          boundary, not a property of a span. */}
+      {measures.length === 1 ? <BarlineField store={store} measure={measures[0]} /> : null}
+
+      {/* Where a player is sent, and where they stop. One bar at a time: each
+          of these marks a single place in the score. */}
+      {measures.length === 1 ? <NavigationFields store={store} measure={measures[0]} /> : null}
 
       {/*
         The pickup, on bar 1 only — an anacrusis is the run-up to bar 1, and a
@@ -1323,6 +1381,137 @@ function PickupField({ store, measure }: { store: EditorStoreApi; measure: Measu
   );
 }
 
+/**
+ * The line at the end of this bar.
+ *
+ * A section break or the end of the piece; anything else is the ordinary
+ * single barline, which is why "Single" is the absence of a value rather than
+ * a style of its own. The repeat barlines live in `RepeatFields` and are not
+ * offered here — they are independent flags, and a bar can both close a repeat
+ * and end the piece.
+ */
+function BarlineField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
+  const { t } = useTranslation();
+  const isPlaying = store((s) => s.state === 'playing');
+  const score = store((s) => s.score);
+  if (!score) return null;
+
+  const index = score.tracks
+    .find((track) => track.measures.some((m) => m.id === measure.id))
+    ?.measures.findIndex((m) => m.id === measure.id);
+  if (index === undefined || index < 0) return null;
+
+  const apply = (value: string): void => {
+    store
+      .getState()
+      .dispatchCommand(
+        changeBarlineCommand(
+          index,
+          value === SINGLE_BARLINE ? undefined : (value as BarlineStyle),
+          commandLabel('changeBarline'),
+        ),
+      );
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.barline')}</span>
+      <MixedSelect
+        value={measure.barline ?? SINGLE_BARLINE}
+        ariaLabel={t('inspector.barline')}
+        disabled={isPlaying}
+        options={[
+          { value: SINGLE_BARLINE, label: t('inspector.barlineSingle') },
+          { value: 'double', label: t('inspector.barlineDouble') },
+          { value: 'final', label: t('inspector.barlineFinal') },
+        ]}
+        onChange={apply}
+      />
+    </label>
+  );
+}
+
+/**
+ * The navigation marks on this bar: the sign, the coda, `To Coda`, `Fine` and
+ * the jump instruction.
+ *
+ * Checkboxes for the places and a select for the instruction, because that is
+ * what they are — a bar either carries the segno or it does not, while the
+ * jump is one choice among six. They are independent: a bar can carry the coda
+ * sign and a `Fine`, so setting one never clears another.
+ */
+function NavigationFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
+  const { t } = useTranslation();
+  const isPlaying = store((s) => s.state === 'playing');
+  const score = store((s) => s.score);
+  if (!score) return null;
+
+  const index = score.tracks
+    .find((track) => track.measures.some((m) => m.id === measure.id))
+    ?.measures.findIndex((m) => m.id === measure.id);
+  if (index === undefined || index < 0) return null;
+
+  const patch = (next: NavigationPatch): void => {
+    store
+      .getState()
+      .dispatchCommand(changeNavigationCommand(index, next, commandLabel('changeNavigation')));
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.navigation')}</span>
+
+      <div className="flex flex-wrap gap-4">
+        <MixedCheckbox
+          label={t('inspector.segno')}
+          checked={measure.segno === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ segno: checked })}
+        />
+        <MixedCheckbox
+          label={t('inspector.coda')}
+          checked={measure.coda === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ coda: checked })}
+        />
+        <MixedCheckbox
+          label={t('inspector.toCoda')}
+          checked={measure.toCoda === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ toCoda: checked })}
+        />
+        <MixedCheckbox
+          label={t('inspector.fine')}
+          checked={measure.fine === true}
+          disabled={isPlaying}
+          onChange={(checked) => patch({ fine: checked })}
+        />
+      </div>
+
+      <label className="flex flex-col gap-1">
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.jump')}</span>
+        <MixedSelect
+          value={measure.jump ?? NO_JUMP}
+          ariaLabel={t('inspector.jump')}
+          disabled={isPlaying}
+          options={[
+            { value: NO_JUMP, label: t('inspector.jumpNone') },
+            { value: 'da-capo', label: 'D.C.' },
+            { value: 'da-capo-al-fine', label: 'D.C. al Fine' },
+            { value: 'da-capo-al-coda', label: 'D.C. al Coda' },
+            { value: 'dal-segno', label: 'D.S.' },
+            { value: 'dal-segno-al-fine', label: 'D.S. al Fine' },
+            { value: 'dal-segno-al-coda', label: 'D.S. al Coda' },
+          ]}
+          onChange={(value) =>
+            patch({ jump: value === NO_JUMP ? undefined : (value as RepeatJump) })
+          }
+        />
+      </label>
+    </div>
+  );
+}
+
 function MeasureClefField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
   const isPlaying = store((s) => s.state === 'playing');
@@ -1437,6 +1626,55 @@ function RepeatFields({ store, measure }: { store: EditorStoreApi; measure: Meas
  * character of "Cmaj7(add13)", the same reason the track name and the score
  * title are drafted.
  */
+/**
+ * The finger written beside a note.
+ *
+ * Free text, not a number picker: piano writing uses 1-5, guitar adds `T` for
+ * the thumb, and editions write `1-2` for a substitution. A picker would have
+ * to refuse two of those.
+ *
+ * A draft committed on blur, like the track name, or every keystroke would be
+ * its own undo entry.
+ */
+function FingeringField({
+  store,
+  note,
+  disabled,
+}: {
+  store: EditorStoreApi;
+  note: NoteEvent;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState('');
+  useEffect(() => {
+    setDraft(note.fingering ?? '');
+  }, [note.id, note.fingering]);
+
+  const commit = (): void => {
+    const next = draft.trim();
+    if (next === (note.fingering ?? '')) return;
+    setFingering(store, next === '' ? undefined : next);
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.fingering')}</span>
+      <Input
+        value={draft}
+        disabled={disabled}
+        aria-label={t('inspector.fingering')}
+        className={FIELD_HEIGHT_CLASS}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Enter') commit();
+        }}
+      />
+    </label>
+  );
+}
+
 function ChordSymbolField({
   store,
   note,

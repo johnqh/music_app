@@ -6,6 +6,7 @@ import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent, playbackController } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
+import { isNoteEvent } from '@sudobility/music_types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import type { PlaybackToggle } from '@/features/score-editor/useEditorShortcuts';
@@ -403,5 +404,75 @@ describe('useEditorShortcuts', () => {
 
       expect(allNotes(store.getState().score!).some((n) => n.slurStart)).toBe(false);
     });
+  });
+});
+
+describe('marks on Shift', () => {
+  /** Selects the first `n` notes and mounts the shortcut harness. */
+  async function selected(store: EditorStoreApi, n: number) {
+    const notes = allNotes(store.getState().score!).filter(isNoteEvent).slice(0, n) as NoteEvent[];
+    act(() => {
+      store
+        .getState()
+        .setSelection({ eventIds: notes.map((x) => x.id), measureIds: [], trackIds: [] });
+    });
+    render(<Harness store={store} />);
+    return { user: userEvent.setup(), notes };
+  }
+
+  const noteById = (store: EditorStoreApi, id: string) =>
+    findEvent(store.getState().score!, id) as NoteEvent;
+
+  it('Shift+F puts a fermata on the selection', async () => {
+    const store = makeStore();
+    const { user, notes } = await selected(store, 2);
+
+    await user.keyboard('{Shift>}F{/Shift}');
+
+    expect(noteById(store, notes[0].id).fermata).toBe(true);
+  });
+
+  it('Shift+G slides, and does NOT write a G note', async () => {
+    // The reason these are handled above the entry block: `Shift+G` arrives as
+    // "G", which letter entry would otherwise happily write as a note.
+    const store = makeStore();
+    const before = allNotes(store.getState().score!).length;
+    const { user, notes } = await selected(store, 2);
+
+    await user.keyboard('{Shift>}G{/Shift}');
+
+    expect(allNotes(store.getState().score!).length).toBe(before);
+    expect(noteById(store, notes[0].id).glissandoStart).toBe(true);
+  });
+
+  it('the wedge keys write the wedge they look like', async () => {
+    const store = makeStore();
+    const { user, notes } = await selected(store, 3);
+
+    await user.keyboard('{Shift>}<{/Shift}');
+    expect(noteById(store, notes[0].id).hairpinStart).toBe('crescendo');
+
+    await user.keyboard('{Shift>}>{/Shift}');
+    expect(noteById(store, notes[0].id).hairpinStart).toBe('diminuendo');
+  });
+
+  it('Shift+O brackets the selection an octave up', async () => {
+    const store = makeStore();
+    const { user, notes } = await selected(store, 2);
+
+    await user.keyboard('{Shift>}O{/Shift}');
+
+    expect(noteById(store, notes[0].id).ottavaStart).toBe('8va');
+  });
+
+  it('a bare letter still writes a note', async () => {
+    // The shortcuts must not have swallowed note entry.
+    const store = makeStore();
+    render(<Harness store={store} />);
+    const before = allNotes(store.getState().score!).length;
+
+    await userEvent.setup().keyboard('g');
+
+    expect(allNotes(store.getState().score!).length).toBeGreaterThan(before);
   });
 });

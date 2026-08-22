@@ -49,6 +49,7 @@ import {
   selectionSummaryLabel,
   shiftDiatonic,
   ticksFor,
+  ottavaScore,
   writtenScore,
 } from '@sudobility/music_lib';
 import { prefersReducedMotion, resolveColorScheme } from '@/app/theme';
@@ -663,8 +664,21 @@ export function ScoreEditorView({
     // `writtenScore` returns its input object in concert mode and for a score
     // with nothing transposing, so `computeLayout`'s identity cache below is
     // untouched unless the lens is actually doing something.
-    if (!dragged || pitchDisplay !== 'written') return dragged;
-    return writtenScore(dragged);
+    /*
+      Octave brackets are a *display* instruction — the model stores sounding
+      pitch, and an `8va` says the notes were written an octave lower to keep
+      them on the stave. So the lens moves them there, and it applies in every
+      mode: unlike an instrument's transposition, a bracket is part of the
+      notation itself rather than a way of reading it.
+
+      Before `writtenScore`, so a transposing instrument's bracket moves with
+      the staff rather than against it. Both return their input unchanged when
+      they have nothing to do, so the layout cache is untouched by a score with
+      neither.
+    */
+    const bracketed = dragged ? ottavaScore(dragged) : dragged;
+    if (!bracketed || pitchDisplay !== 'written') return bracketed;
+    return writtenScore(bracketed);
   }, [score, pitchDragSteps, pitchDisplay]);
 
   /**

@@ -9,6 +9,8 @@ import {
   changeClefCommand,
   changeDynamicCommand,
   barNumberAt,
+  changeBarlineCommand,
+  repeatPlayOrder,
   changeMeasureClefCommand,
   setPickupCommand,
   changeTrackPropsCommand,
@@ -696,5 +698,136 @@ describe('the pickup field', () => {
     });
     const measures = store.getState().score!.tracks[0].measures;
     expect(measures[0].durationTicks).toBe(measures[1].durationTicks);
+  });
+});
+
+describe('the barline field', () => {
+  async function openMeasure(store: EditorStoreApi, index: number) {
+    const user = userEvent.setup();
+    const measure = store.getState().score!.tracks[0].measures[index];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    return user;
+  }
+
+  it('reads Single on an ordinary bar', async () => {
+    const store = makeStore();
+    await openMeasure(store, 0);
+    expect(screen.getByLabelText('Barline')).toHaveTextContent('Single');
+  });
+
+  it('writes a final barline onto the selected bar only', async () => {
+    const store = makeStore();
+    const user = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Barline'));
+    await user.click(await screen.findByRole('option', { name: 'Final' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].barline).toBe('final');
+    });
+    expect(store.getState().score!.tracks[0].measures[0].barline).toBeUndefined();
+  });
+
+  it('applies across every track, since the parts must agree', async () => {
+    const store = makeStore(twoTrackScore());
+    const user = await openMeasure(store, 0);
+
+    await user.click(screen.getByLabelText('Barline'));
+    await user.click(await screen.findByRole('option', { name: 'Double' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].barline).toBe('double');
+    });
+    expect(store.getState().score!.tracks[1].measures[0].barline).toBe('double');
+  });
+
+  it('restores the ordinary barline when set back to Single', async () => {
+    const store = makeStore();
+    act(() => {
+      store.getState().dispatchCommand(changeBarlineCommand(0, 'final', 'Barline'));
+    });
+    const user = await openMeasure(store, 0);
+
+    await user.click(screen.getByLabelText('Barline'));
+    await user.click(await screen.findByRole('option', { name: 'Single' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].barline).toBeUndefined();
+    });
+  });
+});
+
+describe('the navigation fields', () => {
+  async function openMeasure(store: EditorStoreApi, index: number) {
+    const user = userEvent.setup();
+    const measure = store.getState().score!.tracks[0].measures[index];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    return user;
+  }
+
+  it('marks the segno on the selected bar', async () => {
+    const store = makeStore();
+    const user = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Segno'));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].segno).toBe(true);
+    });
+    expect(store.getState().score!.tracks[0].measures[0].segno).toBeUndefined();
+  });
+
+  it('keeps the marks independent — setting one does not clear another', async () => {
+    // A bar can carry the coda sign and a Fine at once.
+    const store = makeStore();
+    const user = await openMeasure(store, 1);
+
+    // Fine first, then Coda: setting the *second* mark is what could clear
+    // the first, so this order is the one that actually tests independence.
+    await user.click(screen.getByLabelText('Fine'));
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].fine).toBe(true);
+    });
+
+    await user.click(screen.getByLabelText('Coda'));
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].coda).toBe(true);
+    });
+    expect(store.getState().score!.tracks[0].measures[1].fine).toBe(true);
+  });
+
+  it('sets a jump and changes the performed order', async () => {
+    const store = makeStore();
+    const user = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Jump'));
+    await user.click(await screen.findByRole('option', { name: 'D.C.' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].jump).toBe('da-capo');
+    });
+    // The point of the mark: the piece is now performed differently.
+    const order = repeatPlayOrder(store.getState().score!).map((p) => p.measureIndex);
+    expect(order.length).toBeGreaterThan(store.getState().score!.tracks[0].measures.length);
+  });
+
+  it('applies across every track, so the parts navigate alike', async () => {
+    const store = makeStore(twoTrackScore());
+    const user = await openMeasure(store, 0);
+
+    await user.click(screen.getByLabelText('Segno'));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].segno).toBe(true);
+    });
+    expect(store.getState().score!.tracks[1].measures[0].segno).toBe(true);
   });
 });

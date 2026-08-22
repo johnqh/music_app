@@ -46,8 +46,21 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    // RTL + userEvent typing across a real store is slow under full-suite load
-    testTimeout: 15000,
+    /*
+      RTL + userEvent typing across a real store is slow under full-suite load.
+
+      15s was not enough for the three generation-polling specs — `router`,
+      `DashboardPage` and `ScoreEditorView` — which drive a job through several
+      poll intervals with fake timers *and* real user typing. They passed in
+      isolation and failed intermittently in a full run, which is the worst
+      shape of flake: a green suite that is not actually a green suite.
+
+      Raised rather than the specs being sped up because the time is real work
+      (a whole editor mounts and a job is polled to completion), not a hang —
+      and a test that is slow is cheaper to keep than one that is quietly
+      unreliable.
+    */
+    testTimeout: 30000,
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: true,

@@ -42,6 +42,11 @@ import {
   toggleTie,
   transposeOctave,
   transposeSemitone,
+  toggleArpeggiate,
+  toggleFermata,
+  toggleGlissando,
+  toggleHairpin,
+  toggleOttava,
 } from '@/features/score-editor/editing';
 import {
   durationForDigit,
@@ -160,6 +165,35 @@ export function useEditorShortcuts(
         if (isModified(event)) caretToScoreEdge(store, edge);
         else caretToBarEdge(store, edge);
         return;
+      }
+
+      /*
+        Marks on the selection, on Shift.
+
+        Shift is the only modifier left: the bare letters are note entry (A-G),
+        the digits are note values, and `isModified` reserves Cmd/Ctrl for the
+        browser. It also has to be handled *here*, above the entry block —
+        `Shift+G` arrives as `"G"`, which `pitchForLetter` would otherwise
+        happily write as a note.
+
+        `<` and `>` for the hairpins are the wedge symbols themselves, which is
+        the one pair of these nobody has to memorise.
+      */
+      if (event.shiftKey && !isModified(event) && !event.altKey) {
+        const shifted: Record<string, () => void> = {
+          F: () => toggleFermata(store),
+          A: () => toggleArpeggiate(store),
+          G: () => toggleGlissando(store),
+          O: () => toggleOttava(store, '8va'),
+          '<': () => toggleHairpin(store, 'crescendo'),
+          '>': () => toggleHairpin(store, 'diminuendo'),
+        };
+        const action = shifted[event.key];
+        if (action) {
+          event.preventDefault();
+          action();
+          return;
+        }
       }
 
       // Everything below is note entry, and none of it takes a modifier — so a

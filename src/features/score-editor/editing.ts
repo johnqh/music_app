@@ -30,6 +30,7 @@ import type {
   DurationName,
   Hairpin,
   NoteEvent,
+  Ottava,
   Ornament,
   Pitch,
   Score,
@@ -58,7 +59,10 @@ import {
   changeVelocityCommand,
   deleteEventsCommand,
   changeOrnamentCommand,
+  setFingeringCommand,
   toggleArpeggiateCommand,
+  toggleGlissandoCommand,
+  toggleOttavaCommand,
   toggleFermataCommand,
   toggleHairpinCommand,
   toggleSlurCommand,
@@ -721,6 +725,33 @@ export function toggleArpeggiate(store: EditorStoreApi): void {
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
   dispatchTracked(store, toggleArpeggiateCommand(ids, commandLabel('toggleArpeggiate')));
+}
+
+/** Brackets the selection at an octave, or removes the bracket. Two notes minimum. */
+export function toggleOttava(store: EditorStoreApi, ottava: Ottava): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length < 2) return;
+  dispatchTracked(store, toggleOttavaCommand(ids, ottava, commandLabel('toggleOttava')));
+}
+
+/** Slides between the selected notes, or removes the slide. Two notes minimum. */
+export function toggleGlissando(store: EditorStoreApi): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length < 2) return;
+  dispatchTracked(store, toggleGlissandoCommand(ids, commandLabel('toggleGlissando')));
+}
+
+/** Sets or clears the finger written on the selected notes. */
+export function setFingering(store: EditorStoreApi, fingering: string | undefined): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length === 0) return;
+  dispatchTracked(store, setFingeringCommand(ids, fingering, commandLabel('setFingering')));
 }
 
 export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'): void {
