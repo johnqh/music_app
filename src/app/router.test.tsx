@@ -150,12 +150,28 @@ describe('AppRouter', () => {
       </AuthProvider>,
     );
 
-    await waitFor(() => expect(window.location.pathname).toBe('/en/projects'));
-    await waitFor(() =>
-      // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
-      // here made these tests pass in CI and fail on any machine with a .env
-      // that rebrands the app.
-      expect(screen.getByRole('heading', { name: CONSTANTS.APP_NAME })).toBeInTheDocument(),
-    );
+    /*
+      An explicit budget, on this test only.
+
+      `waitFor` gives up after **1000ms**, independent of vitest's
+      `testTimeout` — so raising that to 30s bought this nothing, and it failed
+      only in a full parallel run while passing every time in isolation. That
+      reads as flakiness and is really an assertion that gave up after a
+      second, waiting for a whole route change: the editor mounts, its load of
+      a nonexistent project rejects, the router navigates, and a data-fetching
+      dashboard mounts in its place.
+
+      Deliberately *not* raised globally with `configure({ asyncUtilTimeout })`.
+      That was tried and made things worse: with every wait in the suite
+      retrying for ten seconds, a failing assertion stayed alive long enough to
+      surface inside the following test, turning a clear failure into a
+      confusing one. A longer wait belongs on the test that needs it.
+    */
+    const ROUTE_CHANGE = { timeout: 10_000 };
+    await waitFor(() => expect(window.location.pathname).toBe('/en/projects'), ROUTE_CHANGE);
+    // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
+    // here made these tests pass in CI and fail on any machine with a .env
+    // that rebrands the app.
+    await screen.findByRole('heading', { name: CONSTANTS.APP_NAME }, ROUTE_CHANGE);
   });
 });

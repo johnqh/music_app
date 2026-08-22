@@ -47,18 +47,31 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     /*
-      RTL + userEvent typing across a real store is slow under full-suite load.
+      Worker startup, not test speed, is what made this suite unreliable.
 
-      15s was not enough for the three generation-polling specs — `router`,
-      `DashboardPage` and `ScoreEditorView` — which drive a job through several
-      poll intervals with fake timers *and* real user typing. They passed in
-      isolation and failed intermittently in a full run, which is the worst
-      shape of flake: a green suite that is not actually a green suite.
+      Vitest's `forks` pool sizes itself from the core count, and each worker
+      here is a jsdom document plus a whole editor. On an 8-core machine that
+      is enough concurrent heavyweight processes that some never finish
+      starting, and the run dies with
 
-      Raised rather than the specs being sped up because the time is real work
-      (a whole editor mounts and a job is polled to completion), not a hang —
-      and a test that is slow is cheaper to keep than one that is quietly
-      unreliable.
+          [vitest-pool]: Failed to start forks worker for <file>
+          Caused by: Timeout waiting for worker to respond
+
+      — which surfaces as an arbitrary test "failing" and passing on a rerun.
+      It cost a release: `push_all` stopped on music_app with `Tests failed`
+      while every file passed in isolation.
+
+      Capped at half the cores so a build or a second suite running alongside
+      still has room. It costs some wall-clock and buys a suite whose green is
+      worth believing.
+    */
+    pool: 'forks',
+    maxWorkers: 4,
+    /*
+      Generous, but not the fix for the above: the generation specs drive a job
+      through several poll intervals with real user typing, and a whole editor
+      mounts to do it. A slow test is cheaper to keep than a quietly unreliable
+      one, and 30s still fails a genuine hang as a hang.
     */
     testTimeout: 30000,
     globals: true,
