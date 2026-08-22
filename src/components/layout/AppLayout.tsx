@@ -48,7 +48,7 @@
  * documented, checked reason rather than an assumed one.
  */
 import { selectionSummaryCopy } from '@/i18n/lib-copy';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
@@ -59,13 +59,15 @@ import {
   Cog6ToothIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/solid';
-import {
-  ICON_CONTROL_CLASS,
-  ICON_GLYPH_CLASS,
-  SunMoonIcon,
-  TEXT_CONTROL_CLASS,
-} from '@/components/icons/notation-icons';
+import { ICON_GLYPH_CLASS, SunMoonIcon } from '@/components/icons/notation-icons';
 import { variants } from '@sudobility/design';
+import {
+  ICON_BUTTON_CLASS,
+  MENU_CLASS,
+  MENU_ITEM_CLASS,
+  TEXT_BUTTON_CLASS,
+  useMenu,
+} from '@/components/layout/app-bar-menu';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
 import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
@@ -139,44 +141,6 @@ const SAVE_STATE_CLASS: Record<string, string> = {
 // ghost's neutral-background skin (text-muted-foreground/hover:bg-muted)
 // isn't designed for an inverted (text-on-primary) toolbar and would lose
 // contrast there.
-const ICON_BUTTON_CLASS = cn(
-  ICON_CONTROL_CLASS,
-  'rounded-md text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40',
-);
-
-const TEXT_BUTTON_CLASS = cn(
-  TEXT_CONTROL_CLASS,
-  'rounded-md px-3 font-medium text-inherit hover:bg-white/10',
-);
-
-const MENU_CLASS = cn(
-  variants.card.default.base(),
-  'absolute top-full z-10 mt-1 min-w-[160px] rounded-md py-1 text-left shadow-lg',
-);
-
-// No longer prefixed with `variants.button.ghost.default()`: every menu-item
-// button below is now the library `Button` with `variant="ghost"`, which
-// already supplies those base classes -- this is just the popover-specific
-// layout override.
-const MENU_ITEM_CLASS =
-  'block w-full justify-start rounded-none whitespace-nowrap px-3 py-1.5 text-left';
-
-/** Open/close + outside-pointerdown-close state for one `role="menu"` popover, factored out since this file owns four of them (Import/Export/Theme/Settings) -- same behavior as `EditorToolbar`'s single articulation menu, just reusable. */
-function useMenu<T extends HTMLElement>() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<T | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
-
-  return { open, setOpen, ref };
-}
 
 /**
  * The status bar's measure/beat readout, isolated as its own subscriber.

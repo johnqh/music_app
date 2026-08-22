@@ -26,14 +26,6 @@ import { PanSlider, VolumeSlider } from '@/features/tracks/mixer-controls';
 import { FIELD_LABEL_CLASS, MIXED, MIXED_VALUE, SELECT_CLASS, TEXT_INPUT_CLASS } from './shared';
 import type { MixedOr } from './shared';
 
-/** `values[0]` if every entry deep-equals it (by `JSON.stringify`, sufficient for this panel's primitive/plain-object fields), `MIXED` if they differ, or `null` for an empty list. */
-export function commonValue<T>(values: T[]): MixedOr<T> | null {
-  if (values.length === 0) return null;
-  const first = values[0];
-  const firstKey = JSON.stringify(first);
-  return values.every((v) => JSON.stringify(v) === firstKey) ? first : MIXED;
-}
-
 /** A `Select` that renders a synthetic disabled "Mixed" option when `value` is `MIXED`, otherwise the given options. Selecting a real option always calls `onChange` with that option's own value (never `MIXED`). */
 export function MixedSelect<T extends string>({
   value,

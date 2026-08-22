@@ -42,6 +42,9 @@ PROJECTS=(
     # depends on it). It needs its own wait for the same reason music_types
     # does: music_api resolves it from npm, so the publish has to land first.
     "../music_codecs:60"
+    # The canvas renderer. After music_types (its only peer) and before
+    # music_lib, which re-exports it.
+    "../music_drawing:60"
     "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"

@@ -58,7 +58,6 @@ import {
   MixedCheckbox,
   MixedNumberField,
   MixedSelect,
-  commonValue,
 } from '@/components/inspector/controls';
 import {
   ACCIDENTALS,
@@ -71,6 +70,7 @@ import {
   NO_DYNAMIC,
   PITCH_STEPS,
   TEXT_INPUT_CLASS,
+  commonValue,
 } from '@/components/inspector/shared';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 

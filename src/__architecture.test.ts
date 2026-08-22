@@ -53,6 +53,9 @@ const ALLOWED_NON_UI = new Set([
   // The inspector's shared vocabulary: the MIXED sentinel and the class names
   // that keep a column of controls the same height. Presentation, not logic.
   'src/components/inspector/shared.ts',
+  // The app bar's menu hook and button classes — a React hook and class
+  // strings, so UI by definition.
+  'src/components/layout/app-bar-menu.ts',
   // Dispatch helpers: they wire UI events to music_lib commands.
   'src/features/score-editor/editing.ts',
   'src/features/score-editor/clipboard-prompts.ts',

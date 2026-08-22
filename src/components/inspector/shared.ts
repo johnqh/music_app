@@ -79,3 +79,11 @@ export const NO_JUMP = 'none';
 export const TEXT_INPUT_CLASS = `${FIELD_HEIGHT_CLASS} w-full px-2 py-1.5 text-sm`;
 
 export const SELECT_CLASS = `${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`;
+
+/** `values[0]` if every entry deep-equals it (by `JSON.stringify`, sufficient for this panel's primitive/plain-object fields), `MIXED` if they differ, or `null` for an empty list. */
+export function commonValue<T>(values: T[]): MixedOr<T> | null {
+  if (values.length === 0) return null;
+  const first = values[0];
+  const firstKey = JSON.stringify(first);
+  return values.every((v) => JSON.stringify(v) === firstKey) ? first : MIXED;
+}
