@@ -15,14 +15,9 @@
  * through React. Both have measurements behind them in the project's notes.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import {
-  TRACK_INFO_WIDTH,
-  TempoMap,
-  boxForMeasureIndex,
-  caretPositionForTick,
-  fermataTempoMap,
-} from '@sudobility/music_lib';
+import { TRACK_INFO_WIDTH, boxForMeasureIndex, caretPositionForTick } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
+import { getMusicPosition } from '@sudobility/music_lib';
 import { prefersReducedMotion } from '@/app/theme';
 import type { LayoutPlan, Score } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
@@ -81,24 +76,24 @@ export function PlaybackCaret({
   // same reason it always was: reading it higher up re-renders the notation.
   const positionTick = usePlaybackPosition();
   const playbackState = store((s) => s.state);
-  const tempoMultiplier = store((s) => s.tempoMultiplier);
   const elementRef = useRef<HTMLDivElement | null>(null);
+  /*
+    The one playhead. A module singleton, so this is stable for the component's
+    life and safe in a dependency array; `useMemo` only keeps a test that
+    resets the registry between cases from holding a dead instance.
+  */
+  const musicPosition = useMemo(() => getMusicPosition(), []);
 
   /*
-    The tempo map *with fermatas written into it*, which is the same one
-    `playbackPlan` hands the engine.
+    The fermata-aware tempo map is **not** derived here any more.
 
-    A pause is expressed as a local slowing rather than as longer notes, so a
-    caret dead-reckoning through the plain `score.tempoMap` would glide
-    straight past the hold at full speed and snap back on the next position
-    report — the exact stall-and-jump this interpolation exists to avoid.
-    Derived from the same pure function rather than plumbed through the bus, so
-    the two cannot disagree: same score in, same map out.
+    The caret used to project through it itself, which meant this component
+    had to know that a pause is expressed as a local slowing rather than as
+    longer notes. That knowledge now sits with the playhead in music_lib,
+    which is fed the rate the engine is actually running at — from
+    `playbackPlan`'s own tempo conversion, so there is nothing left here to
+    disagree with it.
   */
-  const tempoMap = useMemo(
-    () => (score ? new TempoMap(fermataTempoMap(score), score.ppq) : null),
-    [score],
-  );
 
   /**
    * Writes the caret's geometry straight to the DOM, bypassing React.
@@ -143,48 +138,40 @@ export function PlaybackCaret({
     [plan, score, zoom, scrollBoxRef],
   );
 
-  /**
-   * The last position the engine reported, and when it arrived — the anchor
-   * the animation loop dead-reckons from.
-   */
-  const anchorRef = useRef<{ tick: number; at: number }>({ tick: positionTick, at: 0 });
   useLayoutEffect(() => {
-    anchorRef.current = { tick: positionTick, at: performance.now() };
     // While playing, the loop below owns the caret; re-applying here would
     // snap it back to the last 30Hz sample between frames.
-    if (playbackState !== 'playing') applyGeometry(positionTick);
-  }, [positionTick, playbackState, applyGeometry]);
+    if (playbackState !== 'playing') applyGeometry(musicPosition.tick);
+  }, [positionTick, playbackState, applyGeometry, musicPosition]);
 
   /**
-   * Interpolates the caret between engine reports.
+   * Repaints the caret every frame from the shared position.
    *
-   * The engine samples position at 30Hz through `Transport.scheduleRepeat`,
-   * and those callbacks fire from Tone's lookahead scheduling loop rather
-   * than a wall clock — so they arrive in clumps, not evenly every 33ms.
-   * Driving the caret straight off them made it lurch. This projects the
-   * position forward from the most recent anchor using elapsed real time and
-   * the score's own tempo map, repainting every animation frame, so motion is
-   * smooth and even however unevenly the anchors land. Each new anchor
-   * silently corrects any drift.
+   * The smoothing itself is **not** here any more. The engine samples position
+   * at 30Hz through Tone's lookahead scheduling loop, so its reports arrive in
+   * clumps rather than evenly every 33ms, and something has to project between
+   * them or the caret lurches. That projection now lives in music_lib's
+   * `IMusicPosition` implementation, which is fed by the playback bus at the
+   * moment the engine reports — so the elapsed time it measures is time since
+   * the *audio clock*, not time since a React effect happened to run.
    *
-   * `tempoMultiplier` converts real elapsed time to score time: the engine
-   * divides logical seconds by it, so one real second is `multiplier` logical
-   * seconds.
+   * That distinction is the bug this fixes. Interpolating here anchored on
+   * receipt time, which folds in however long the event loop took to deliver
+   * the report; the note highlighting and the piano keyboard read the engine's
+   * sounding set directly and carry no such delay. Under load the caret
+   * drifted ahead of the notes it was supposed to be pointing at. There is now
+   * one playhead and every reader of it gets the same number.
    */
   useEffect(() => {
-    if (playbackState !== 'playing' || !tempoMap) return;
+    if (playbackState !== 'playing') return;
     let frame = 0;
     const step = (): void => {
-      const { tick, at } = anchorRef.current;
-      const elapsedSeconds = (performance.now() - at) / 1000;
-      applyGeometry(
-        tempoMap.secondsToTicks(tempoMap.ticksToSeconds(tick) + elapsedSeconds * tempoMultiplier),
-      );
+      applyGeometry(musicPosition.tick);
       frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [playbackState, tempoMap, tempoMultiplier, applyGeometry]);
+  }, [playbackState, applyGeometry, musicPosition]);
 
   /**
    * Re-evaluate the caret when the reader scrolls while paused.
@@ -202,7 +189,7 @@ export function PlaybackCaret({
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
-        applyGeometry(anchorRef.current.tick);
+        applyGeometry(musicPosition.tick);
       });
     };
     box.addEventListener('scroll', onScroll, { passive: true });
@@ -210,6 +197,10 @@ export function PlaybackCaret({
       box.removeEventListener('scroll', onScroll);
       if (frame !== null) cancelAnimationFrame(frame);
     };
+    // `musicPosition.tick` is read inside the scroll handler, not captured:
+    // it is a live getter on a singleton, and listing it would re-attach the
+    // listener on every position change to no purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applyGeometry, playbackState, scrollBoxRef]);
 
   // Scroll the active playback measure into view (spec §7 item 13).
