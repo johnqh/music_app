@@ -782,3 +782,50 @@ export function ArpeggioIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * A broken beam: two beamed pairs with a gap between them, which is what
+ * "break the beam here" produces on the page.
+ */
+export function BeamBreakIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      {/* Two stems, their beam, then a gap, then two more. */}
+      <path
+        d="M4 18V7M9 18V7M15 18V7M20 18V7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path d="M4 7h5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M15 7h5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+      {/* The break itself, marked where the beam stops. */}
+      <path
+        d="M12 4v5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeDasharray="1.5 1.8"
+      />
+    </svg>
+  );
+}
+
+/** An unbeamed pair: two notes drawn with flags instead of a beam. */
+export function BeamNoneIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path d="M7 19V6M17 19V6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      {/* A flag on each stem, which is what an unbeamed eighth draws. */}
+      <path
+        d="M7 6c3 1 4 3 3 5M17 6c3 1 4 3 3 5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="5" cy="19" r="1.9" fill="currentColor" />
+      <circle cx="15" cy="19" r="1.9" fill="currentColor" />
+    </svg>
+  );
+}

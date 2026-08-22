@@ -10,17 +10,23 @@ import {
   pointInBBox,
   pitchAtStavePoint,
   trackIdAtContentPoint,
+  soundingPitchForDrawn,
 } from '@/features/score-editor/hit-test';
 import {
   STAVE_POSITION_HEIGHT,
   STAVE_TOP_LINE_OFFSET,
   changeMeasureClefCommand,
   computeLayout,
+  isNoteEvent,
   testRenderTheme,
+  toggleOttavaCommand,
   twinkleScore,
   twoTrackScore,
+  pitchToMidi,
+  trackWrittenTransposition,
 } from '@sudobility/music_lib';
 import type { BBox, LayoutPlan } from '@sudobility/music_lib';
+import type { Pitch } from '@sudobility/music_types';
 
 const box: BBox = { x: 10, y: 10, width: 20, height: 10 };
 
@@ -297,5 +303,79 @@ describe('pitchAtStavePoint with a clef change', () => {
     expect(inTreble?.pitch).toBeTruthy();
     expect(inBass?.pitch).toBeTruthy();
     expect(inBass!.pitch).not.toEqual(inTreble!.pitch);
+  });
+});
+
+describe('soundingPitchForDrawn — inverting the display lenses', () => {
+  it('is a no-op in concert mode with no bracket', () => {
+    // Almost every call. The stored pitch must be exactly what was clicked.
+    const score = twinkleScore();
+    const drawn: Pitch = { step: 'C', accidental: 0, octave: 4 };
+    expect(soundingPitchForDrawn(score, score.tracks[0].id, 0, drawn, 'concert')).toEqual(drawn);
+  });
+
+  it('adds the octave back inside an 8va, in concert mode too', () => {
+    // The bracket is part of the notation, not a way of reading it, so
+    // `ottavaScore` applies in every mode — and so must its inverse.
+    const score = twinkleScore();
+    const trackId = score.tracks[0].id;
+    // Two notes, not one: `toggleOttavaCommand` refuses a bracket that has
+    // nowhere to reach, exactly as the slur and hairpin commands do.
+    const line = score.tracks[0].measures[0].voices[0].events.filter(isNoteEvent);
+    const first = line[0];
+    const marked = toggleOttavaCommand([first.id, line[1].id], '8va', 'Ottava').execute(score);
+
+    const drawn: Pitch = { step: 'C', accidental: 0, octave: 4 };
+    const stored = soundingPitchForDrawn(marked, trackId, first.startTick, drawn, 'concert');
+    // 8va: the notes were written an octave low, so what sounds is an octave up.
+    expect(stored.octave).toBe(5);
+    expect(stored.step).toBe('C');
+  });
+
+  it('undoes a transposing instrument in written mode', () => {
+    // A B-flat clarinet reads a whole tone above what it sounds, so a click on
+    // the line drawn as E stores D.
+    const base = twinkleScore();
+    const score = {
+      ...base,
+      tracks: base.tracks.map((t) => ({ ...t, midiProgram: 71 })),
+    };
+    const drawn: Pitch = { step: 'E', accidental: 0, octave: 5 };
+    const stored = soundingPitchForDrawn(score, score.tracks[0].id, 0, drawn, 'written');
+    expect(stored).not.toEqual(drawn);
+    expect(stored.step).toBe('D');
+    expect(stored.octave).toBe(5);
+  });
+
+  it('leaves a transposing instrument alone in concert mode', () => {
+    // The lens was not applied, so neither is its inverse — getting this
+    // backwards would break the common case to fix the rare one.
+    const base = twinkleScore();
+    const score = {
+      ...base,
+      tracks: base.tracks.map((t) => ({ ...t, midiProgram: 71 })),
+    };
+    const drawn: Pitch = { step: 'E', accidental: 0, octave: 5 };
+    expect(soundingPitchForDrawn(score, score.tracks[0].id, 0, drawn, 'concert')).toEqual(drawn);
+  });
+
+  it('round-trips: a note stored from a click draws back where it was clicked', () => {
+    // The property that makes this correct rather than merely different — the
+    // whole point is that the reader gets the note they aimed at.
+    const base = twinkleScore();
+    const score = {
+      ...base,
+      tracks: base.tracks.map((t) => ({ ...t, midiProgram: 71 })),
+    };
+    const track = score.tracks[0];
+    const semitones = trackWrittenTransposition(track);
+    expect(semitones).not.toBe(0);
+    for (const step of ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const) {
+      const drawn: Pitch = { step, accidental: 0, octave: 5 };
+      const stored = soundingPitchForDrawn(score, track.id, 0, drawn, 'written');
+      // Compared as pitch, not as spelling: written-to-sounding preserves the
+      // sound exactly and respells freely, which is measured and deliberate.
+      expect(pitchToMidi(stored) + semitones).toBe(pitchToMidi(drawn));
+    }
   });
 });

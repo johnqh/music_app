@@ -73,6 +73,7 @@ import {
   measureIdAtPoint,
   pitchAtStavePoint,
   measureIndexAtGutterPoint,
+  soundingPitchForDrawn,
 } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
@@ -865,7 +866,16 @@ export function ScoreEditorView({
           state.setActiveTrack(hit.trackId);
           state.clearSelection();
           playbackController.seek(clickedTick);
-          insertNoteAtCaret(store, hit.pitch, { advanceCaret: true });
+          // `hit.pitch` is what is *drawn* there, and the drawing has been
+          // through the display lenses. Storing it raw wrote a note an octave
+          // out inside an `8va`, and a transposition out on a written-pitch
+          // part — silently, since the note then drew exactly where it was
+          // clicked and only sounded wrong.
+          insertNoteAtCaret(
+            store,
+            soundingPitchForDrawn(state.score, hit.trackId, clickedTick, hit.pitch, pitchDisplay),
+            { advanceCaret: true },
+          );
           return;
         }
       }
@@ -881,7 +891,7 @@ export function ScoreEditorView({
       state.clearSelection();
       seekToEventPoint(event);
     },
-    [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId],
+    [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId, pitchDisplay],
   );
 
   /**

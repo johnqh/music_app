@@ -58,6 +58,7 @@ export type CommandLabelKey =
   | 'setPickup'
   | 'setLyric'
   | 'toGraceNote'
+  | 'changeBeam'
   | 'changeBarline'
   | 'changeMeasureClef'
   | 'changeNavigation'

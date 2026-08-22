@@ -547,7 +547,11 @@
     "repeatEnd": "在此结束反复",
     "ending": "房子（反复括号）",
     "endingPlaceholder": "例如 1 或 1, 2",
-    "repeatsPlaybackNote": "反复记号会绘制、导出并在播放时生效。播放从该小节第一次出现处开始。"
+    "repeatsPlaybackNote": "反复记号会绘制、导出并在播放时生效。播放从该小节第一次出现处开始。",
+    "beamBreak": "断开符杠",
+    "beamBreakHint": "在所选音符处开始新的符杠组",
+    "beamNone": "不用符杠",
+    "beamNoneHint": "所选音符改用符尾而非符杠"
   },
   "credits": {
     "title": "点数",
@@ -725,7 +729,8 @@
     "toGraceNote": "修改装饰音",
     "setPickup": "设置弱起小节",
     "setChordSymbol": "修改和弦标记",
-    "changeRepeats": "修改反复记号"
+    "changeRepeats": "修改反复记号",
+    "changeBeam": "更改符杠"
   },
   "templates": {
     "lead-sheet": {

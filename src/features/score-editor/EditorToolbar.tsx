@@ -102,6 +102,8 @@ import {
   SlurIcon,
   FermataIcon,
   ArpeggioIcon,
+  BeamBreakIcon,
+  BeamNoneIcon,
   CrescendoIcon,
   DiminuendoIcon,
   OrnamentIcon,
@@ -118,6 +120,7 @@ import {
   insertRestAtSelection,
   quantizeSelection,
   selectAll,
+  changeBeam,
   toggleArpeggiate,
   toggleFermata,
   toggleHairpin,
@@ -776,6 +779,39 @@ export function EditorToolbar({
             className={TOGGLE_BUTTON_CLASS}
           >
             <ArpeggioIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        {/*
+          Beaming overrides. One note is enough for either: a break is a
+          property of the note it sits on rather than a span, and so is taking
+          a note out of beaming altogether. Both are toggles — applying the
+          mode already in force clears it, so "break here" and "undo the
+          break" cannot produce two scores that draw identically.
+        */}
+        <Tooltip placement="bottom" content={t('editor.beamBreakHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.beamBreak')}
+            disabled={!canEdit || selection.eventIds.length === 0}
+            onClick={() => changeBeam(store, 'break')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <BeamBreakIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        <Tooltip placement="bottom" content={t('editor.beamNoneHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.beamNone')}
+            disabled={!canEdit || selection.eventIds.length === 0}
+            onClick={() => changeBeam(store, 'none')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <BeamNoneIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
 

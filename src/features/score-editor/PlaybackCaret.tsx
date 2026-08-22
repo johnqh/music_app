@@ -217,56 +217,28 @@ export function PlaybackCaret({
       lastScrolledScoreRef.current = score;
       lastScrolledMeasureRef.current = null;
     }
-    // TEMPORARY DIAGNOSTIC — remove once the follow-scroll bug is pinned down.
-    // Records why each decision was taken, so a session that will not follow
-    // playback can say which guard it is stopping at.
-    const bail = (why: string, extra?: Record<string, unknown>) => {
-      if (!import.meta.env.DEV) return;
-      const log = ((window as unknown as Record<string, unknown>).__followScroll ??=
-        []) as unknown[];
-      if (log.length < 400) log.push({ why, positionTick, ...extra });
-    };
-
     if (playbackState !== 'playing') {
       lastScrolledMeasureRef.current = null;
-      bail('not playing', { playbackState });
       return;
     }
 
     const scrollBox = scrollBoxRef.current;
     if (!scrollBox || !score || !plan) {
-      bail('missing', { box: !!scrollBox, score: !!score, plan: !!plan });
       return;
     }
     const measureId = currentMeasureId(score, positionTick);
     if (!measureId) {
-      bail('no measureId');
       return;
     }
     if (measureId === lastScrolledMeasureRef.current) return;
-    bail('measure', {
-      measureId,
-      scrollTop: scrollBox.scrollTop,
-      clientHeight: scrollBox.clientHeight,
-      scrollHeight: scrollBox.scrollHeight,
-      planTracks: plan.trackLayouts.length,
-      planSystems: plan.systems.length,
-      scoreTracks: score.tracks.length,
-      track0Measures: score.tracks[0]?.measures.length,
-      layoutMode,
-      zoom,
-    });
-
     // Read off the memoized plan rather than the drawn window's bbox map, so
     // this still finds a measure lying outside the currently-drawn window.
     const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
     if (measureIndex === -1) {
-      bail('measureIndex -1');
       return;
     }
     const bbox = boxForMeasureIndex(plan, 0, measureIndex);
     if (!bbox) {
-      bail('no bbox', { measureIndex });
       return;
     }
 
@@ -290,7 +262,6 @@ export function PlaybackCaret({
     // once per measure, and re-running it on every 30Hz position report would
     // put work back on the thread Tone.js schedules on.
     lastScrolledMeasureRef.current = measureId;
-    bail('target', { measureIndex, target });
     if (!target) return;
 
     if (typeof scrollBox.scrollTo === 'function') {

@@ -30,6 +30,7 @@ import type {
   DurationName,
   Hairpin,
   NoteEvent,
+  BeamOverride,
   Ottava,
   Ornament,
   Pitch,
@@ -60,6 +61,7 @@ import {
   deleteEventsCommand,
   changeOrnamentCommand,
   setFingeringCommand,
+  changeBeamCommand,
   toggleArpeggiateCommand,
   toggleGlissandoCommand,
   toggleOttavaCommand,
@@ -725,6 +727,21 @@ export function toggleArpeggiate(store: EditorStoreApi): void {
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
   dispatchTracked(store, toggleArpeggiateCommand(ids, commandLabel('toggleArpeggiate')));
+}
+
+/**
+ * Sets a beaming override on the selection, or clears it.
+ *
+ * One note is enough, unlike the slur and the bracket: a break is a property
+ * of the note it sits on rather than a span, so "break the beam before this
+ * note" is a complete instruction on its own.
+ */
+export function changeBeam(store: EditorStoreApi, mode: BeamOverride): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length === 0) return;
+  dispatchTracked(store, changeBeamCommand(ids, mode, commandLabel('changeBeam')));
 }
 
 /** Brackets the selection at an octave, or removes the bracket. Two notes minimum. */

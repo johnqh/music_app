@@ -547,7 +547,11 @@
     "repeatEnd": "Repeat ends here",
     "ending": "Ending (volta)",
     "endingPlaceholder": "e.g. 1 or 1, 2",
-    "repeatsPlaybackNote": "Repeats are drawn, exported, and played back. Playback starts from the first time a bar is played."
+    "repeatsPlaybackNote": "Repeats are drawn, exported, and played back. Playback starts from the first time a bar is played.",
+    "beamBreak": "Break beam",
+    "beamBreakHint": "Start a new beam group at the selected note",
+    "beamNone": "No beam",
+    "beamNoneHint": "Draw the selected notes with flags instead of a beam"
   },
   "credits": {
     "title": "Credits",
@@ -725,7 +729,8 @@
     "toGraceNote": "Change grace notes",
     "setPickup": "Set the pickup bar",
     "setChordSymbol": "Change chord symbol",
-    "changeRepeats": "Change repeats"
+    "changeRepeats": "Change repeats",
+    "changeBeam": "Change beaming"
   },
   "templates": {
     "lead-sheet": {
