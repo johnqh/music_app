@@ -105,7 +105,7 @@ import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
-import { snapshotTree } from '@/features/snapshots/snapshot-tree';
+import { snapshotTree } from '@sudobility/music_lib';
 import type { SnapshotSummary } from '@sudobility/music_types';
 
 export type AppLayoutProps = {

@@ -13,7 +13,7 @@ import {
   tickForPoint,
 } from '@sudobility/music_lib';
 import { allNotes, findEvent, shiftDiatonic, writtenScore } from '@sudobility/music_lib';
-import { scoreWithPitch } from '@/features/score-editor/pitch-drag';
+import { scoreWithPitch } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import type { BBox, RenderTheme } from '@sudobility/music_lib';
 import { CanvasScoreRenderer, createMock2DContext } from '@sudobility/music_lib';

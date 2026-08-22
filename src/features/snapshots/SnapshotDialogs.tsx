@@ -8,8 +8,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormModal } from '@sudobility/components';
-import { LIVE_NODE_ID } from '@/features/snapshots/snapshot-tree';
-import type { TreeNode } from '@/features/snapshots/snapshot-tree';
+import { LIVE_NODE_ID } from '@sudobility/music_lib';
+import type { TreeNode } from '@sudobility/music_lib';
 
 export type CreateSnapshotDialogProps = {
   open: boolean;

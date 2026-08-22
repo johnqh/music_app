@@ -48,12 +48,8 @@ import {
   toggleHairpin,
   toggleOttava,
 } from '@/features/score-editor/editing';
-import {
-  durationForDigit,
-  isPitchLetter,
-  pitchForLetter,
-} from '@/features/score-editor/note-entry';
-import { withModifier } from '@/features/score-editor/duration-modifiers';
+import { durationForDigit, isPitchLetter, pitchForLetter } from '@sudobility/music_lib';
+import { withModifier } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { ClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 import type { PlaybackController } from '@sudobility/music_lib';

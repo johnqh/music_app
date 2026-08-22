@@ -39,6 +39,21 @@ The Moosiac web app: routing, pages, and UI only. One of six repos in the Moosia
 - `e2e/` — Playwright specs + `helpers.ts` + `global-setup.ts` (truncates the `music_test` DB)
 - `docs/` — `architecture.md` (six-repo architecture, request flows, store-context pattern), `parity-checklist.md` (feature → test mapping), `spec.md` (product spec)
 
+## Package boundaries
+
+Each package has one job, and `src/__architecture.test.ts` enforces it rather than trusting the rule to be remembered:
+
+- **`music_types`** — the model, its Zod schemas, and the pure primitives both sides need (pitch and tick math, the score factory, quantization, ties, voice allocation).
+- **`music_codecs`** — encoding and decoding _note_ file formats: MIDI, MOD/tracker, MusicXML. Free of `music_lib`, `music_io`, `vexflow` and `tone` by its own guard test, because `music_api` (backend) and the frontend both decode MIDI and neither may depend on the other.
+- **`music_client`** — the typed network client for `music_api`.
+- **`music_io`** — platform capabilities: playback, and _audio_ file formats (mp3/wav).
+- **`music_lib`** — business logic: commands, the store, rendering adapters, local storage.
+- **`music_app`** — UI, and only UI.
+
+Nine modules had already drifted into music_app — `note-entry`, `lyric-syllables`, `duration-modifiers`, `duration-selection`, `range-select`, `pitch-drag`, `snapshot-tree`, `selection-editing`, `tap-to-note` — none of which touched React, the DOM or layout geometry. They now live in music_lib. The guard has an explicit `ALLOWED_NON_UI` list so an exemption is a decision somebody makes on purpose, and it checks deep imports against each package's **declared `exports` map** rather than a pattern — music_io legitimately publishes `/web`, `/rn`, `/mocks` and two `/rn/*` tables, and a hand-written allow-list of those would go stale the moment it adds one.
+
+**Geometry stays in the app.** `hit-test`, `track-gutter`, `autoscroll`, `playback-scroll`, `note-colors` and `keyboard-geometry` read a `LayoutPlan` from music_lib but exist to answer questions about a pointer or a scroll position, which is UI work.
+
 ## Gotchas
 
 - **No MUI/Emotion anywhere** (T13) — dark mode is a Tailwind `dark` class on `<html>`, toggled by `applyDocumentTheme()` from an effect in `App.tsx` that also listens for OS `prefers-color-scheme` changes when `themeMode === 'system'`. `ScoreEditorView`'s VexFlow render-theme colors are still literal hex strings (`LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`) — VexFlow draws straight to the canvas context, not CSS, so this is deliberate, not a leftover.

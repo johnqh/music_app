@@ -25,7 +25,7 @@ import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent } from '@sudobility/music_types';
 import { commandLabel } from '@/features/score-editor/command-labels';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { syllabicFor } from '@/features/score-editor/lyric-syllables';
+import { syllabicFor } from '@sudobility/music_lib';
 
 export type LyricEntryBarProps = {
   store: EditorStoreApi;

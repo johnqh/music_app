@@ -53,9 +53,9 @@ import {
 } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { durationParts, withBase, withModifier } from '@/features/score-editor/duration-modifiers';
-import { durationDisplay } from '@/features/score-editor/duration-selection';
-import type { BaseDuration } from '@/features/score-editor/duration-modifiers';
+import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
+import { durationDisplay } from '@sudobility/music_lib';
+import type { BaseDuration } from '@sudobility/music_lib';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 import { dispatchTracked } from '@/features/score-editor/editing';
 import type { ReactElement } from 'react';

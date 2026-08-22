@@ -10,7 +10,7 @@ import {
 } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
-import { syllabicFor } from '@/features/score-editor/lyric-syllables';
+import { syllabicFor } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 
 function makeStore(): EditorStoreApi {

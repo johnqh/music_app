@@ -86,10 +86,10 @@ import {
 import type { Point } from '@/features/score-editor/hit-test';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
-import { noteIdsInTickRange } from '@/features/score-editor/range-select';
+import { noteIdsInTickRange } from '@sudobility/music_lib';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
-import { scoreWithPitch, stepsForDrag } from '@/features/score-editor/pitch-drag';
+import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 
 export type ScoreEditorViewProps = {

@@ -25,8 +25,8 @@ import {
   selectSelectedNotes,
 } from '@sudobility/music_lib';
 import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editing';
-import { chordSelection } from '@/features/piano-keyboard/selection-editing';
-import { durationForTap } from '@/features/piano-keyboard/tap-to-note';
+import { chordSelection } from '@sudobility/music_lib';
+import { durationForTap } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { useSoundingNotes } from '@/features/score-editor/usePlayback';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
