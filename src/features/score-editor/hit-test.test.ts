@@ -8,9 +8,18 @@ import {
   eventIdsInBox,
   measureIdAtPoint,
   pointInBBox,
+  pitchAtStavePoint,
   trackIdAtContentPoint,
 } from '@/features/score-editor/hit-test';
-import { computeLayout, testRenderTheme, twoTrackScore } from '@sudobility/music_lib';
+import {
+  STAVE_POSITION_HEIGHT,
+  STAVE_TOP_LINE_OFFSET,
+  changeMeasureClefCommand,
+  computeLayout,
+  testRenderTheme,
+  twinkleScore,
+  twoTrackScore,
+} from '@sudobility/music_lib';
 import type { BBox, LayoutPlan } from '@sudobility/music_lib';
 
 const box: BBox = { x: 10, y: 10, width: 20, height: 10 };
@@ -250,5 +259,43 @@ describe('trackIdAtContentPoint', () => {
     expect(trackIdAtContentPoint(plan, { x: box.x + box.width - 5, y: box.y + 5 })).toBe(
       plan.trackLayouts[1].track.id,
     );
+  });
+});
+
+describe('pitchAtStavePoint with a clef change', () => {
+  it('reads the bar in the clef actually in force, not the track clef', () => {
+    // The failure this prevents is silent and looks like a rounding error: the
+    // renderer draws the changed bar in bass, the hit test resolves it in
+    // treble, and a click places a note a sixth from the line under the
+    // pointer. Both sides go through `effectiveClef` so they cannot diverge.
+    const score = twinkleScore();
+    const trackId = score.tracks[0].id;
+    const changed = changeMeasureClefCommand(trackId, 1, 'bass', 'Clef').execute(score);
+
+    const plan = computeLayout(changed, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 1200,
+      theme: testRenderTheme(),
+    });
+    const trackLayout = plan.trackLayouts[0];
+    const first = trackLayout.measures.find((m) => m.measureIndex === 0);
+    const changedBar = trackLayout.measures.find((m) => m.measureIndex === 1);
+    expect(first).toBeTruthy();
+    expect(changedBar).toBeTruthy();
+
+    // The same staff position in each bar, so the clef is the only difference.
+    const at = (m: NonNullable<typeof first>) =>
+      pitchAtStavePoint(plan, changed, {
+        x: m.box.x + m.box.width / 2,
+        y: m.box.y + STAVE_TOP_LINE_OFFSET + STAVE_POSITION_HEIGHT * 2,
+      });
+
+    const inTreble = at(first!);
+    const inBass = at(changedBar!);
+
+    expect(inTreble?.pitch).toBeTruthy();
+    expect(inBass?.pitch).toBeTruthy();
+    expect(inBass!.pitch).not.toEqual(inTreble!.pitch);
   });
 });

@@ -14,6 +14,7 @@ import {
   STAVE_POSITION_HEIGHT,
   STAVE_TOP_LINE_OFFSET,
   pitchAtStavePosition,
+  effectiveClef,
 } from '@sudobility/music_lib';
 import type { BBox, LayoutPlan } from '@sudobility/music_lib';
 import type { Pitch, Score } from '@sudobility/music_types';
@@ -179,7 +180,16 @@ export function pitchAtStavePoint(
 
       const topLineY = box.y + STAVE_TOP_LINE_OFFSET;
       const position = Math.round((point.y - topLineY) / STAVE_POSITION_HEIGHT);
-      return { pitch: pitchAtStavePosition(track.clef, position), trackId: track.id };
+      /*
+        The clef *in force at this bar*, not `track.clef`: a part that changes
+        clef mid-piece reads in a different one from here on, and using the
+        track's would place a clicked note a sixth away from the line under the
+        pointer. The renderer resolves the stave's clef through the same
+        function, which is what keeps the two in agreement by construction
+        rather than by a matched guess.
+      */
+      const clef = effectiveClef(track, placement.measureIndex);
+      return { pitch: pitchAtStavePosition(clef, position), trackId: track.id };
     }
   }
   return null;

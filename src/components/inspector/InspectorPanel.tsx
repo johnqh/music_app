@@ -121,7 +121,11 @@ import {
 import {
   changeDynamicCommand,
   changeKeySignatureCommand,
+  beatDurationTicks,
+  changeMeasureClefCommand,
+  effectiveClef,
   changeRepeatsCommand,
+  setPickupCommand,
   clearGraceNotesCommand,
   setChordSymbolCommand,
   toGraceNoteCommand,
@@ -254,6 +258,12 @@ const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
  * the same rule the toolbars follow with `CONTROL_HEIGHT_CLASS`.
  */
 const FIELD_HEIGHT_CLASS = 'h-9';
+
+/** Radix rejects an empty item value, so "inherit" travels under a sentinel. */
+const INHERIT_CLEF = 'inherit';
+
+/** Same Radix constraint as the clef sentinel: "no pickup" needs a value. */
+const NO_PICKUP = 'none';
 const TEXT_INPUT_CLASS = `${FIELD_HEIGHT_CLASS} w-full px-2 py-1.5 text-sm`;
 const SELECT_CLASS = `${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`;
 
@@ -1012,6 +1022,21 @@ function MeasureTab({ store, onReplace }: TabProps) {
       ) : null}
 
       {/*
+        The clef this bar reads in. One bar at a time: a clef change is a
+        boundary like a repeat, and applying it across a span would write the
+        same change onto every bar in it.
+      */}
+      {measures.length === 1 ? <MeasureClefField store={store} measure={measures[0]} /> : null}
+
+      {/*
+        The pickup, on bar 1 only — an anacrusis is the run-up to bar 1, and a
+        short bar elsewhere is an irregular bar that keeps its number.
+      */}
+      {measures.length === 1 && measures[0].index === 0 ? (
+        <PickupField store={store} measure={measures[0]} />
+      ) : null}
+
+      {/*
         Repeat structure. One bar at a time: a repeat is a boundary, and
         applying "repeat ends here" to a span of bars would mean a `:|` on
         every one of them.
@@ -1233,6 +1258,118 @@ function TrackTab({ store, onReplace }: TabProps) {
  * repeats in playback would break the identity that a playback tick is a score
  * tick, which the caret, the following-scroll and the scrubber all rest on.
  */
+/**
+ * The clef this bar reads in, and whether the bar itself changes it.
+ *
+ * Shows the clef **in force** rather than `measure.clef`, so it is never blank
+ * and never lies — the same rule `MeasureTempoField` follows for an inherited
+ * tempo. "Inherit" is offered as its own option and is what clears a change;
+ * picking the clef already in force clears it too, since the command refuses
+ * to store a marking that would print nothing.
+ *
+ * Offered on bar 1 as well, where it edits the **part's** clef: that is where a
+ * clef is established rather than changed, and hiding the control there would
+ * leave the only way to set a part's clef in the Track tab, a different tab
+ * from the one the reader is looking at the bar in.
+ */
+/**
+ * Whether the score opens with a pickup, and how long it is.
+ *
+ * Offered only on the first bar, because that is what an anacrusis is — the
+ * run-up to bar 1. A short bar anywhere else is an irregular bar, which keeps
+ * its number and is a different thing.
+ *
+ * Measured in beats rather than ticks: "a one-beat pickup" is how a musician
+ * describes it, and the tick length follows from the time signature.
+ */
+function PickupField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
+  const { t } = useTranslation();
+  const isPlaying = store((s) => s.state === 'playing');
+  const score = store((s) => s.score);
+  if (!score) return null;
+
+  const beatTicks = beatDurationTicks(measure.timeSignature, score.ppq);
+  const fullBeats = Math.max(1, Math.round(measure.durationTicks / beatTicks));
+  const current = measure.pickup
+    ? String(Math.round(measure.durationTicks / beatTicks))
+    : NO_PICKUP;
+
+  const apply = (value: string): void => {
+    store
+      .getState()
+      .dispatchCommand(
+        setPickupCommand(value === NO_PICKUP ? null : Number(value), commandLabel('setPickup')),
+      );
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.pickup')}</span>
+      <MixedSelect
+        value={current}
+        ariaLabel={t('inspector.pickup')}
+        disabled={isPlaying}
+        options={[
+          { value: NO_PICKUP, label: t('inspector.pickupNone') },
+          // A pickup shorter than the bar; a full-length one is just a bar.
+          ...Array.from({ length: Math.max(1, fullBeats - 1) }, (_, i) => ({
+            value: String(i + 1),
+            label: t('inspector.pickupBeats', { count: i + 1 }),
+          })),
+        ]}
+        onChange={apply}
+      />
+    </label>
+  );
+}
+
+function MeasureClefField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
+  const { t } = useTranslation();
+  const isPlaying = store((s) => s.state === 'playing');
+  const score = store((s) => s.score);
+
+  const track = score?.tracks.find((candidate) =>
+    candidate.measures.some((m) => m.id === measure.id),
+  );
+  if (!track) return null;
+
+  const index = track.measures.findIndex((m) => m.id === measure.id);
+  const inForce = effectiveClef(track, index);
+  const isFirst = index === 0;
+
+  const apply = (value: string): void => {
+    store
+      .getState()
+      .dispatchCommand(
+        changeMeasureClefCommand(
+          track.id,
+          index,
+          value === INHERIT_CLEF ? undefined : (value as Clef),
+          commandLabel('changeMeasureClef'),
+        ),
+      );
+  };
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL_CLASS}>{t('inspector.measureClef')}</span>
+      <MixedSelect
+        value={measure.clef ?? (isFirst ? inForce : INHERIT_CLEF)}
+        ariaLabel={t('inspector.measureClef')}
+        disabled={isPlaying}
+        options={[
+          // Bar 1 establishes the clef, so there is nothing to inherit from.
+          ...(isFirst
+            ? []
+            : [{ value: INHERIT_CLEF, label: t('inspector.clefInherit', { clef: inForce }) }]),
+          ...CLEFS.map((c) => ({ value: c as string, label: c })),
+        ]}
+        onChange={apply}
+      />
+    </label>
+  );
+}
+
 function RepeatFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
   const isPlaying = store((s) => s.state === 'playing');

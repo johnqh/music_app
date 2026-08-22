@@ -8,6 +8,9 @@ import {
   allNotes,
   changeClefCommand,
   changeDynamicCommand,
+  barNumberAt,
+  changeMeasureClefCommand,
+  setPickupCommand,
   changeTrackPropsCommand,
   setChordSymbolCommand,
   toGraceNoteCommand,
@@ -556,5 +559,142 @@ describe('InspectorPanel: chord symbols', () => {
 
     const after = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
     expect(after.chordSymbol).toBeUndefined();
+  });
+});
+
+describe('the measure clef field', () => {
+  /** Selects `index` on the first track and opens the Measure tab. */
+  async function openMeasure(store: EditorStoreApi, index: number) {
+    const user = userEvent.setup();
+    const measure = store.getState().score!.tracks[0].measures[index];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    return { user, measure };
+  }
+
+  it('shows the clef in force rather than a blank, on a bar that sets none', async () => {
+    // The same rule the tempo field follows: never blank, never a lie.
+    const store = makeStore();
+    await openMeasure(store, 1);
+
+    expect(screen.getByLabelText('Clef from here')).toHaveTextContent(/Inherit \(treble\)/);
+  });
+
+  it('writes a clef change onto the selected bar', async () => {
+    const store = makeStore();
+    const { user } = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Clef from here'));
+    await user.click(await screen.findByRole('option', { name: 'bass' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].clef).toBe('bass');
+    });
+    // And only that bar — the change is a boundary, not a property of a span.
+    expect(store.getState().score!.tracks[0].measures[2].clef).toBeUndefined();
+  });
+
+  it('offers Inherit to clear a change, and clearing restores the previous clef', async () => {
+    const store = makeStore();
+    const trackId = store.getState().score!.tracks[0].id;
+    act(() => {
+      store.getState().dispatchCommand(changeMeasureClefCommand(trackId, 1, 'bass', 'Clef'));
+    });
+    const { user } = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Clef from here'));
+    await user.click(await screen.findByRole('option', { name: /Inherit/ }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].clef).toBeUndefined();
+    });
+  });
+
+  it('edits the part clef on bar 1, where a clef is established rather than changed', async () => {
+    // Bar 1 offers no Inherit: there is nothing before it to inherit from.
+    const store = makeStore();
+    const { user } = await openMeasure(store, 0);
+
+    expect(screen.queryByRole('option', { name: /Inherit/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Clef from here'));
+    await user.click(await screen.findByRole('option', { name: 'bass' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].clef).toBe('bass');
+    });
+    expect(store.getState().score!.tracks[0].measures[0].clef).toBeUndefined();
+  });
+});
+
+describe('the pickup field', () => {
+  async function openFirstMeasure(store: EditorStoreApi) {
+    const user = userEvent.setup();
+    const measure = store.getState().score!.tracks[0].measures[0];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    return user;
+  }
+
+  it('reads None on a score that opens with a full bar', async () => {
+    const store = makeStore();
+    await openFirstMeasure(store);
+    expect(screen.getByLabelText('Pickup bar')).toHaveTextContent('None');
+  });
+
+  it('shortens the first bar and stops it being counted as bar 1', async () => {
+    const store = makeStore();
+    const user = await openFirstMeasure(store);
+
+    await user.click(screen.getByLabelText('Pickup bar'));
+    await user.click(await screen.findByRole('option', { name: '1 beat' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].pickup).toBe(true);
+    });
+    const measures = store.getState().score!.tracks[0].measures;
+    expect(measures[0].durationTicks).toBeLessThan(measures[1].durationTicks);
+    // The visible consequence: the next bar is bar 1.
+    expect(barNumberAt(measures, 0)).toBeNull();
+    expect(barNumberAt(measures, 1)).toBe(1);
+  });
+
+  it('applies to every track, since the measure grid is shared', async () => {
+    const store = makeStore(twoTrackScore());
+    const user = await openFirstMeasure(store);
+
+    await user.click(screen.getByLabelText('Pickup bar'));
+    await user.click(await screen.findByRole('option', { name: '1 beat' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].pickup).toBe(true);
+    });
+    expect(store.getState().score!.tracks[1].measures[0].pickup).toBe(true);
+    expect(store.getState().score!.tracks[1].measures[0].durationTicks).toBe(
+      store.getState().score!.tracks[0].measures[0].durationTicks,
+    );
+  });
+
+  it('restores a full bar when set back to None', async () => {
+    const store = makeStore();
+    act(() => {
+      store.getState().dispatchCommand(setPickupCommand(1, 'Pickup'));
+    });
+    const user = await openFirstMeasure(store);
+
+    await user.click(screen.getByLabelText('Pickup bar'));
+    await user.click(await screen.findByRole('option', { name: 'None' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[0].pickup).toBeUndefined();
+    });
+    const measures = store.getState().score!.tracks[0].measures;
+    expect(measures[0].durationTicks).toBe(measures[1].durationTicks);
   });
 });

@@ -638,6 +638,12 @@
     "composer": "作曲",
     "scoreTitleHint": "标题用于导出文件名，并写入 MusicXML。标题栏中的项目名称是另一回事。",
     "selectMeasureHint": "点击五线谱上方的小节号即可选中该小节。",
+    "measureClef": "从此处的谱号",
+    "clefInherit": "继承（{{clef}}）",
+    "pickup": "弱起小节",
+    "pickupNone": "无",
+    "pickupBeats": "{{count}} 拍",
+    "pickupBeats_other": "{{count}} 拍",
     "articulation": "演奏法",
     "dynamic": "力度",
     "noDynamic": "无",
@@ -697,57 +703,58 @@
     "changeDynamic": "修改力度",
     "setLyric": "修改歌词",
     "toGraceNote": "修改装饰音",
+    "setPickup": "设置弱起小节",
     "setChordSymbol": "修改和弦标记",
     "changeRepeats": "修改反复记号"
   },
   "templates": {
     "lead-sheet": {
-      "name": "Lead sheet",
-      "description": "A single melody line with chord symbols."
+      "name": "主旋律谱",
+      "description": "单行高音谱表，16 小节 4/4 拍。空白起点。"
     },
     "piano-grand-staff": {
-      "name": "Piano",
-      "description": "Treble and bass staves, braced together."
+      "name": "钢琴（大谱表）",
+      "description": "高音谱表在上、低音谱表在下，16 小节——一件乐器两只手。"
     },
     "string-quartet": {
-      "name": "String quartet",
-      "description": "Two violins, viola and cello."
+      "name": "弦乐四重奏",
+      "description": "第一、第二小提琴，中提琴用中音谱号，大提琴用低音谱号。16 小节。"
     },
     "jazz-combo": {
-      "name": "Jazz combo",
-      "description": "Horns, piano, bass and drums."
+      "name": "爵士小组",
+      "description": "小号、钢琴、低音提琴和爵士鼓。32 小节，降 B 大调。"
     },
     "rock-band": {
-      "name": "Rock band",
-      "description": "Guitars, bass, keys and drums."
+      "name": "摇滚乐队",
+      "description": "两把吉他、贝斯和摇滚鼓组。32 小节，速度 120。"
     },
     "satb-choir": {
-      "name": "SATB choir",
-      "description": "Soprano, alto, tenor and bass."
+      "name": "四声部合唱",
+      "description": "女高音、女中音、男高音和男低音。16 小节。"
     },
     "drum-kit": {
-      "name": "Drum kit",
-      "description": "A single percussion staff."
+      "name": "架子鼓",
+      "description": "单行打击乐谱表，16 小节——键盘会标出每件鼓的名称。"
     },
     "waltz": {
-      "name": "Waltz",
-      "description": "Three-four time, ready to fill in."
+      "name": "圆舞曲（3/4）",
+      "description": "三拍子钢琴，24 小节——换一种拍子开始。"
     },
     "jig": {
-      "name": "Jig",
-      "description": "Six-eight time, ready to fill in."
+      "name": "吉格舞曲（6/8）",
+      "description": "复合拍子的单行旋律，16 小节。"
     },
     "gentle-piano-melody": {
-      "name": "Gentle piano melody",
-      "description": "A short piano piece to start from."
+      "name": "轻柔钢琴旋律",
+      "description": "已写好的 8 小节 C 大调钢琴旋律，可在此基础上继续。"
     },
     "pop-arrangement": {
-      "name": "Pop arrangement",
-      "description": "A two-track pop sketch."
+      "name": "流行编曲",
+      "description": "高音／低音双音轨编曲骨架，已含音符。"
     },
     "orchestral-passage": {
-      "name": "Orchestral passage",
-      "description": "A short passage for orchestra."
+      "name": "管弦乐片段",
+      "description": "用于配器的柱式和弦。"
     }
   },
   "selection": {
@@ -757,33 +764,28 @@
     "measures_other": "已选择 {{count}} 个小节",
     "tracks_one": "已选择 {{count}} 个音轨",
     "tracks_other": "已选择 {{count}} 个音轨",
-    "none": "Nothing selected",
-    "regenerated": "{{summary}} regenerated"
+    "none": "未选择任何内容",
+    "regenerated": "已重新生成 {{summary}}"
   },
   "musicXmlWarn": {
-    "unsupportedClef": "Unsupported clef {{sign}} on line {{line}}; treble was used instead.",
-    "unsupportedKeyMode": "Unsupported key mode \"{{mode}}\"; major was used instead.",
-    "unsupportedTime": "Unsupported time signature in measure {{measureNumber}}.",
-    "complexTimeSignature": "A composite time signature was simplified.",
-    "clefChangeDropped": "Clef change to {{clef}} in measure {{measureNumber}} was dropped.",
-    "unsupportedPitchStep": "Unsupported pitch step \"{{step}}\".",
-    "alterRounded": "Alteration {{alter}} was rounded to {{clamped}}.",
-    "graceNotes": "Grace notes were dropped.",
-    "lyrics": "Lyrics were dropped.",
-    "tuplets": "Tuplets were simplified.",
-    "ornaments": "Ornaments were dropped.",
-    "unsupportedNotation": "Unsupported notation <{{tag}}> was dropped.",
-    "unsupportedNoteElement": "Unsupported note element <{{tag}}> was dropped.",
-    "unsupportedArticulation": "Unsupported articulation <{{tag}}> was dropped.",
-    "multipleArticulations": "Only the first articulation on a note was kept.",
-    "unpitched": "Unpitched notes were placed on a percussion staff.",
-    "noPitchOrRest": "A note with neither pitch nor rest was skipped.",
-    "noDuration": "A note with no duration was skipped.",
-    "nonPositiveDuration": "A note with a non-positive duration was skipped.",
-    "noteTrimmed": "A note was trimmed to fit its measure.",
-    "unsupportedMeasureElement": "Unsupported measure element <{{tag}}> was dropped.",
-    "noTempo": "No tempo was given; {{defaultBpm}} BPM was used.",
-    "tempoClamped": "Tempo {{bpm}} was outside {{min}}-{{max}} and became {{clamped}}."
+    "unsupportedClef": "不支持的谱号 {{sign}}（第 {{line}} 线），已改用高音谱号。",
+    "unsupportedKeyMode": "不支持的调式“{{mode}}”，已改用大调。",
+    "unsupportedTime": "第 {{measureNumber}} 小节的拍号不受支持，已保留原有拍号。",
+    "complexTimeSignature": "复合拍号已被简化。",
+    "unsupportedPitchStep": "不支持的音名“{{step}}”。",
+    "alterRounded": "变音记号 {{alter}} 已取整为 {{clamped}}。",
+    "unsupportedNotation": "不支持的记号 <{{tag}}> 已被忽略。",
+    "unsupportedNoteElement": "不支持的音符元素 <{{tag}}> 已被忽略。",
+    "unsupportedArticulation": "不支持的演奏法记号 <{{tag}}> 已被忽略。",
+    "multipleArticulations": "一个音符上只保留了第一个演奏法记号。",
+    "unpitched": "无音高的音符已放置在打击乐谱表上。",
+    "noPitchOrRest": "既无音高也非休止符的音符已被跳过。",
+    "noDuration": "没有时值的音符已被跳过。",
+    "nonPositiveDuration": "时值不为正数的音符已被跳过。",
+    "noteTrimmed": "有音符被裁短以适应所在小节。",
+    "unsupportedMeasureElement": "不支持的小节元素 <{{tag}}> 已被忽略。",
+    "tempoClamped": "速度 {{bpm}} 超出 {{min}}-{{max}} 范围，已调整为 {{clamped}}。",
+    "noTempo": "未指定速度，已使用 {{defaultBpm}} BPM。"
   },
   "ornament": {
     "none": "无",

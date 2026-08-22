@@ -66,13 +66,8 @@ export function musicXmlWarnings(): MusicXmlWarnings {
     unsupportedKeyMode: (mode) => t('musicXmlWarn.unsupportedKeyMode', { mode }),
     unsupportedTime: (measureNumber) => t('musicXmlWarn.unsupportedTime', { measureNumber }),
     complexTimeSignature: t('musicXmlWarn.complexTimeSignature'),
-    clefChangeDropped: (clef, measureNumber) =>
-      t('musicXmlWarn.clefChangeDropped', { clef, measureNumber }),
     unsupportedPitchStep: (step) => t('musicXmlWarn.unsupportedPitchStep', { step }),
     alterRounded: (alter, clamped) => t('musicXmlWarn.alterRounded', { alter, clamped }),
-    graceNotes: t('musicXmlWarn.graceNotes'),
-    lyrics: t('musicXmlWarn.lyrics'),
-    tuplets: t('musicXmlWarn.tuplets'),
     unsupportedNotation: (tag) => t('musicXmlWarn.unsupportedNotation', { tag }),
     unsupportedNoteElement: (tag) => t('musicXmlWarn.unsupportedNoteElement', { tag }),
     unsupportedArticulation: (tag) => t('musicXmlWarn.unsupportedArticulation', { tag }),

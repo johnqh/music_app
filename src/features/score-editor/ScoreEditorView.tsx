@@ -30,6 +30,7 @@ import {
   playbackController,
   selectActiveTrackId,
   selectVisibleTrackIds,
+  fermataTempoMap,
 } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
 import {
@@ -164,7 +165,21 @@ function PlaybackCaret({
   const tempoMultiplier = store((s) => s.tempoMultiplier);
   const elementRef = useRef<HTMLDivElement | null>(null);
 
-  const tempoMap = useMemo(() => (score ? new TempoMap(score.tempoMap, score.ppq) : null), [score]);
+  /*
+    The tempo map *with fermatas written into it*, which is the same one
+    `playbackPlan` hands the engine.
+
+    A pause is expressed as a local slowing rather than as longer notes, so a
+    caret dead-reckoning through the plain `score.tempoMap` would glide
+    straight past the hold at full speed and snap back on the next position
+    report — the exact stall-and-jump this interpolation exists to avoid.
+    Derived from the same pure function rather than plumbed through the bus, so
+    the two cannot disagree: same score in, same map out.
+  */
+  const tempoMap = useMemo(
+    () => (score ? new TempoMap(fermataTempoMap(score), score.ppq) : null),
+    [score],
+  );
 
   /**
    * Writes the caret's geometry straight to the DOM, bypassing React.
