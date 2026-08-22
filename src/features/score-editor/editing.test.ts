@@ -24,7 +24,9 @@ import {
   selectMeasure,
   selectTrackAction,
   changeOrnament,
+  toggleArpeggiate,
   toggleFermata,
+  toggleHairpin,
   toggleTie,
   transposeOctave,
   transposeSemitone,
@@ -352,6 +354,8 @@ describe('per-note property changes', () => {
     toggleFermata(store);
 
     expect(store.getState().score).toBe(before);
+    // And no undo entry: a refused command still dispatches without the guard.
+    expect(store.getState().canUndo).toBe(false);
   });
 });
 
@@ -492,5 +496,81 @@ describe('the playback edit lock, at the entry points', () => {
 
     expect(insertChordAtCaret(store, [{ step: 'C', accidental: 0, octave: 5 }])).toBe(false);
     expect(store.getState().score).toBe(before);
+  });
+});
+
+describe('hairpins and arpeggios', () => {
+  it('toggleHairpin marks the ends of the selection and nothing between', () => {
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!).filter(isNoteEvent).slice(0, 4);
+    store
+      .getState()
+      .setSelection({ eventIds: notes.map((n) => n.id), measureIds: [], trackIds: [] });
+
+    toggleHairpin(store, 'crescendo');
+
+    const after = allNotes(store.getState().score!).filter(isNoteEvent);
+    expect((after.find((n) => n.id === notes[0].id) as NoteEvent).hairpinStart).toBe('crescendo');
+    expect((after.find((n) => n.id === notes[3].id) as NoteEvent).hairpinStop).toBe(true);
+    expect((after.find((n) => n.id === notes[1].id) as NoteEvent).hairpinStart).toBeUndefined();
+  });
+
+  it('toggleHairpin needs two notes, and refuses without spending an undo step', () => {
+    // Asserting on `canUndo`, not just on the score: the command refuses a
+    // one-note span too, so an unguarded action still *dispatches* — and a
+    // dispatched command that changes nothing leaves an undo entry that does
+    // nothing when pressed. Measured: canUndo goes true.
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0];
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    const before = store.getState().score;
+
+    toggleHairpin(store, 'crescendo');
+
+    expect(store.getState().score).toBe(before);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('the other direction flips an existing hairpin rather than clearing it', () => {
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!).filter(isNoteEvent).slice(0, 3);
+    const ids = notes.map((n) => n.id);
+    store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
+
+    toggleHairpin(store, 'crescendo');
+    toggleHairpin(store, 'diminuendo');
+
+    const after = allNotes(store.getState().score!).filter(isNoteEvent);
+    expect((after.find((n) => n.id === ids[0]) as NoteEvent).hairpinStart).toBe('diminuendo');
+  });
+
+  it('the same direction twice removes it', () => {
+    const store = makeStore();
+    const ids = allNotes(store.getState().score!)
+      .filter(isNoteEvent)
+      .slice(0, 3)
+      .map((n) => n.id);
+    store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
+
+    toggleHairpin(store, 'crescendo');
+    toggleHairpin(store, 'crescendo');
+
+    const after = allNotes(store.getState().score!).filter(isNoteEvent);
+    expect((after.find((n) => n.id === ids[0]) as NoteEvent).hairpinStart).toBeUndefined();
+  });
+
+  it('toggleArpeggiate marks and unmarks the selection', () => {
+    const store = makeStore();
+    const ids = allNotes(store.getState().score!)
+      .filter(isNoteEvent)
+      .slice(0, 2)
+      .map((n) => n.id);
+    store.getState().setSelection({ eventIds: ids, measureIds: [], trackIds: [] });
+
+    toggleArpeggiate(store);
+    expect((findEvent(store.getState().score!, ids[0]) as NoteEvent).arpeggiate).toBe(true);
+
+    toggleArpeggiate(store);
+    expect((findEvent(store.getState().score!, ids[0]) as NoteEvent).arpeggiate).toBeUndefined();
   });
 });

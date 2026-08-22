@@ -59,7 +59,9 @@ export type CommandLabelKey =
   | 'toGraceNote'
   | 'changeMeasureClef'
   | 'changeOrnament'
+  | 'toggleArpeggiate'
   | 'toggleFermata'
+  | 'toggleHairpin'
   | 'toggleSlur'
   | 'toggleTie'
   | 'transpose';

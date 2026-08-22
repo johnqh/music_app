@@ -101,6 +101,9 @@ import {
   WholeNoteIcon,
   SlurIcon,
   FermataIcon,
+  ArpeggioIcon,
+  CrescendoIcon,
+  DiminuendoIcon,
   OrnamentIcon,
 } from '@/components/icons/notation-icons';
 import {
@@ -115,7 +118,9 @@ import {
   insertRestAtSelection,
   quantizeSelection,
   selectAll,
+  toggleArpeggiate,
   toggleFermata,
+  toggleHairpin,
   toggleSlur,
   toggleTie,
 } from '@/features/score-editor/editing';
@@ -724,6 +729,53 @@ export function EditorToolbar({
             className={TOGGLE_BUTTON_CLASS}
           >
             <SlurIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        {/*
+          The hairpins. Two buttons rather than a menu: crescendo and
+          diminuendo are the two things anybody reaches for, and a wedge is
+          faster to recognise as a shape than to read as a word. Two notes
+          minimum, like the slur — a wedge over one note has nowhere to open.
+        */}
+        <Tooltip placement="bottom" content={t('editor.crescendoHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.crescendo')}
+            disabled={!canEdit || selection.eventIds.length < 2}
+            onClick={() => toggleHairpin(store, 'crescendo')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <CrescendoIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        <Tooltip placement="bottom" content={t('editor.diminuendoHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.diminuendo')}
+            disabled={!canEdit || selection.eventIds.length < 2}
+            onClick={() => toggleHairpin(store, 'diminuendo')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <DiminuendoIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+
+        {/* Rolling a chord. One note is enough to select; a lone note simply
+            draws nothing. */}
+        <Tooltip placement="bottom" content={t('editor.arpeggiateHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('editor.arpeggiate')}
+            disabled={!canEdit || selection.eventIds.length === 0}
+            onClick={() => toggleArpeggiate(store)}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <ArpeggioIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
 

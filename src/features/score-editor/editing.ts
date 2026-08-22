@@ -28,6 +28,7 @@ import type {
   Accidental,
   Articulation,
   DurationName,
+  Hairpin,
   NoteEvent,
   Ornament,
   Pitch,
@@ -57,7 +58,9 @@ import {
   changeVelocityCommand,
   deleteEventsCommand,
   changeOrnamentCommand,
+  toggleArpeggiateCommand,
   toggleFermataCommand,
+  toggleHairpinCommand,
   toggleSlurCommand,
   toggleTieCommand,
 } from '@sudobility/music_lib';
@@ -695,6 +698,29 @@ export function toggleFermata(store: EditorStoreApi): void {
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
   dispatchTracked(store, toggleFermataCommand(ids, commandLabel('toggleFermata')));
+}
+
+/**
+ * Writes a hairpin across the selection, or removes the one it has.
+ *
+ * Two notes minimum, like a slur and for the same reason: a wedge over one
+ * note has nowhere to open to.
+ */
+export function toggleHairpin(store: EditorStoreApi, hairpin: Hairpin): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length < 2) return;
+  dispatchTracked(store, toggleHairpinCommand(ids, hairpin, commandLabel('toggleHairpin')));
+}
+
+/** Rolls the selected chords, or stops rolling them. */
+export function toggleArpeggiate(store: EditorStoreApi): void {
+  const state = store.getState();
+  if (!state.score) return;
+  const ids = selectedNoteIds(state.score, state.selection);
+  if (ids.length === 0) return;
+  dispatchTracked(store, toggleArpeggiateCommand(ids, commandLabel('toggleArpeggiate')));
 }
 
 export function toggleTie(store: EditorStoreApi, which: 'tieStart' | 'tieStop'): void {

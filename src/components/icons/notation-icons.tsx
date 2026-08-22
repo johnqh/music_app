@@ -733,3 +733,52 @@ export function OrnamentIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+/** A crescendo wedge: opening left to right, the way it is written. */
+export function CrescendoIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M4 12L20 6M4 12l16 6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A diminuendo wedge: the same mark closing instead of opening. */
+export function DiminuendoIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M20 12L4 6M20 12L4 18"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * An arpeggio: the wavy vertical line drawn beside a rolled chord, with the
+ * noteheads it rolls through.
+ */
+export function ArpeggioIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M7 20c-2-2 2-4 0-6s2-4 0-6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="15" cy="7" r="2.1" fill="currentColor" />
+      <circle cx="15" cy="13" r="2.1" fill="currentColor" />
+      <circle cx="15" cy="19" r="2.1" fill="currentColor" />
+    </svg>
+  );
+}
