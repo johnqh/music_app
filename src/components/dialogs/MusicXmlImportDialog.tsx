@@ -23,7 +23,6 @@ import { FileImportModal } from '@/components/dialogs/FileImportModal';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
-import { MusicXmlService } from '@sudobility/music_lib';
 import type { MusicXmlImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -35,8 +34,13 @@ export type MusicXmlImportDialogProps = {
   onClose: () => void;
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
-  /** Defaults to a fresh `MusicXmlService`; tests inject a fake. */
-  musicXmlService?: Pick<MusicXmlService, 'import'>;
+  /**
+   * Defaults to `io.openMusicXml`; tests inject a fake.
+   *
+   * The dialog no longer builds a service around `io.xmlParser` — music_io owns
+   * that pairing now, so `xmlParser` has left the app's field of view.
+   */
+  musicXmlService?: { import(text: string): Promise<MusicXmlImportResult> };
   /** Called after a successful import that created a brand-new project (no project was open), with the new project's id. */
   onImportedNewProject?: (projectId: string) => void;
   /** Always takes the "create a new project" path, even if `store` still has a `projectId` set from a previously-open project (see `MidiImportWizard`'s identical prop for why). Defaults to `false`. */
@@ -52,8 +56,9 @@ export function MusicXmlImportDialog({
   forceNewProject = false,
 }: MusicXmlImportDialogProps) {
   const { t } = useTranslation();
-  const service =
-    musicXmlService ?? new MusicXmlService(getAppServices().io.xmlParser, musicXmlWarnings());
+  const service = musicXmlService ?? {
+    import: (text: string) => getAppServices().io.openMusicXml(text, musicXmlWarnings()),
+  };
 
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<MusicXmlImportResult | null>(null);

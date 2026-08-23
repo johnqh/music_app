@@ -51,8 +51,6 @@ import type { ProjectSummary } from '@sudobility/music_types';
 import { parseScore } from '@sudobility/music_types';
 import {
   createEmptyScore,
-  trackerToScore,
-  decodeTracker,
   playbackController,
   projectTemplates,
   reportError,
@@ -359,8 +357,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     setModBusy(true);
     try {
       const bytes = await file.arrayBuffer();
-      const mod = decodeTracker(bytes);
-      const score = trackerToScore(mod);
+      const { module: mod, score } = getAppServices().io.openTracker(bytes);
       await store.getState().newProject({ name: mod.title || file.name, score });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
@@ -645,7 +642,22 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
                 ? t('dashboard.emptyNoProjects')
                 : t('dashboard.emptyNoMatch', { query: search.trim() })
             }
-            buttonLabel={search.trim() === '' ? t('dashboard.newProject') : t('common.clearSearch')}
+            /**
+             * Its own label, not `dashboard.newProject`: the toolbar already
+             * has a button by that name, and on an empty dashboard both are on
+             * screen at once. Two controls sharing one accessible name are
+             * ambiguous read aloud and a strict-mode failure to address in a
+             * test — the same reason a dialog with a Cancel button has to
+             * rename its close control.
+             *
+             * "Start", not "Create": Playwright matches an accessible name by
+             * **substring** unless told otherwise, so a label beginning "Create"
+             * is also matched by the name dialog's own `Create` button. A
+             * distinct verb is what actually separates them.
+             */
+            buttonLabel={
+              search.trim() === '' ? t('dashboard.createFirstProject') : t('common.clearSearch')
+            }
             onPress={() =>
               search.trim() === '' ? setCreatingName('Untitled Project') : setSearch('')
             }

@@ -14,6 +14,7 @@ import {
   readScoreSummary,
   waitForNotation,
 } from './helpers';
+import type { AppStore } from '@sudobility/music_lib';
 
 /**
  * Presses one key and releases it.
@@ -48,15 +49,21 @@ async function tapKey(page: import('@playwright/test').Page, midi: number, heldM
   );
 }
 
-/** Puts the caret at `tick` so a mode's effect lands somewhere predictable. */
+/**
+ * Puts the caret at `tick` so a mode's effect lands somewhere predictable.
+ *
+ * Typed against music_lib's real `AppStore` rather than a hand-written
+ * shape. It used to declare `{ setPositionTick: (n: number) => void }` inline,
+ * which is a claim about the store that TypeScript happily believed — so when
+ * the action was renamed to `setCaretTick` (music_lib 1.7.30, "extract
+ * high-freq events to bus") this kept compiling and failed at runtime with
+ * "setPositionTick is not a function". Importing the real type means the next
+ * rename breaks `bun run typecheck` instead of three e2e specs.
+ */
 async function seekTo(page: import('@playwright/test').Page, tick: number) {
   await page.evaluate((t) => {
-    const store = (
-      window as unknown as {
-        __SCORESMITH_STORE__: { getState: () => { setPositionTick: (n: number) => void } };
-      }
-    ).__SCORESMITH_STORE__;
-    store.getState().setPositionTick(t);
+    const store = (window as unknown as { __SCORESMITH_STORE__: AppStore }).__SCORESMITH_STORE__;
+    store.getState().setCaretTick(t);
   }, tick);
 }
 

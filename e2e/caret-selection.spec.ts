@@ -33,13 +33,13 @@ test.describe('caret-anchored selection', () => {
 
     // A note click selects exactly that note and shows the caret.
     await clickNoteGroup(page, groups[0]);
-    await expect(status).toContainText('1 note(s) selected');
+    await expect(status).toContainText('1 note selected');
     await expect(page.getByTestId('playback-caret')).toBeVisible();
 
     // Cmd-click extends from the caret to the clicked note.
     await clickNoteGroup(page, groups[3], { meta: true });
-    await expect(status).not.toContainText('1 note(s) selected');
-    await expect(status).toContainText('note(s) selected');
+    await expect(status).not.toContainText('1 note selected');
+    await expect(status).toContainText('notes selected');
 
     // Play deselects and runs from the caret.
     await page.getByRole('button', { name: 'Play' }).click();

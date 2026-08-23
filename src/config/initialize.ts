@@ -24,6 +24,7 @@ import {
 } from 'firebase/auth';
 import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
 import { ConsumablesApiClient, initializeConsumables } from '@sudobility/consumables_client';
+import type { ConsumablesAdapter } from '@sudobility/consumables_client';
 import {
   configureConsumablesWebAdapter,
   createConsumablesWebAdapter,
@@ -33,12 +34,12 @@ import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
 import {
   initializeAppStore,
-  initializeMusicPlatform,
   setErrorLogging,
   type PrefsStorage,
   type StoreContext,
 } from '@sudobility/music_lib';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
+import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';
 import { CONSTANTS } from '@/config/constants';
 
 // Activate the design-system theme (Swiss). configureTheme() registers the
@@ -259,6 +260,26 @@ function firebaseBackend(): AuthBackend {
 }
 
 /**
+ * Purchasing, in a build that has no RevenueCat key.
+ *
+ * Offers nothing and refuses to buy, rather than reporting a configuration gap
+ * as a runtime error on every page load. The store page and the paywall both
+ * render their empty state from an empty package list, which is the truth: with
+ * no key there is nothing to sell.
+ *
+ * `purchase` throws instead of resolving, because a silent no-op there would
+ * look to the caller like a completed purchase.
+ */
+function unconfiguredPurchasing(): ConsumablesAdapter {
+  return {
+    getOfferings: async () => ({ all: {} }),
+    purchase: async () => {
+      throw new Error('Purchasing is not configured in this build.');
+    },
+  };
+}
+
+/**
  * e2e auth shim (VITE_E2E=1, dev server only): "signed in" as a fixed test
  * user whose bearer token is music_api's TEST_AUTH_BYPASS_TOKEN. Lets
  * Playwright drive the full authenticated flow without Firebase.
@@ -312,6 +333,19 @@ export type AppServices = {
 
 let services: AppServices | null = null;
 
+/**
+ * Where the soundfont engine's assets are served from.
+ *
+ * Exported because audio *export* needs the same three URLs: it renders through
+ * the same soundfont as playback, so the file is a recording of what was heard.
+ * Two sets of URLs would be two fonts the first time one was updated.
+ */
+export const SOUNDFONT_ASSETS = {
+  fluidsynthModuleUrl: '/audio/libfluidsynth-2.4.6-with-libsndfile.js',
+  workletModuleUrl: '/audio/js-synthesizer.worklet.min.js',
+  fontUrl: '/audio/FluidR3Mono_GM.sf3',
+};
+
 export function initializeApp(): AppServices {
   if (services) return services;
 
@@ -323,20 +357,16 @@ export function initializeApp(): AppServices {
   // a React Native app would leave it at.
   setErrorLogging(import.meta.env.DEV);
 
-  // The platform comes first: music_lib resolves its playback engine from the
-  // registry on first use, and nothing else here may touch playback before it
+  // The player comes first: music_lib's playback adapter resolves it from its
+  // singleton on first use, and nothing else here may touch playback before it
   // is registered.
+  //
   // Served from public/audio rather than resolved from node_modules: the
   // worklet modules must be reachable as URLs, because addModule takes one,
   // and the soundfont is a 23MB asset the bundler should not touch.
-  const io = createMusicIo({
-    soundfont: {
-      fluidsynthModuleUrl: '/audio/libfluidsynth-2.4.6-with-libsndfile.js',
-      workletModuleUrl: '/audio/js-synthesizer.worklet.min.js',
-      fontUrl: '/audio/FluidR3Mono_GM.sf3',
-    },
-  });
-  initializeMusicPlatform({ playback: io.playback });
+  initializeMusicPlayer(createMusicPlayer({ soundfont: SOUNDFONT_ASSETS }));
+
+  const io = createMusicIo();
 
   const baseUrl = CONSTANTS.API_URL;
   const networkClient = new FetchNetworkClient();
@@ -355,14 +385,26 @@ export function initializeApp(): AppServices {
    *
    * The sandbox key in every non-production build, so a developer or an e2e run
    * cannot reach a live payment.
+   *
+   * **With no key at all, purchasing is stubbed rather than half-wired.** The
+   * RevenueCat adapter throws "RevenueCat not configured" from `getOfferings`,
+   * and its own `catch` turns that into a `console.error` on every page load —
+   * a *handled* failure reported as a broken one. Any environment without a
+   * key hits it: a fresh clone, and every e2e run, whose console-error sweep
+   * then fails specs that have nothing to do with payment.
+   *
+   * Consumables is still initialized, because that is what serves the
+   * **balance** — which comes from `music_api`, not RevenueCat, and which the
+   * credit badge and the Credits page both read. Only the purchasing half is
+   * stubbed. This is the stubs-system pattern `src/stubs/` uses: an empty-state
+   * implementation, never partially wired.
    */
-  configureConsumablesWebAdapter(
-    import.meta.env.PROD
-      ? import.meta.env.VITE_REVENUECAT_API_KEY
-      : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX,
-  );
+  const revenueCatKey = import.meta.env.PROD
+    ? import.meta.env.VITE_REVENUECAT_API_KEY
+    : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX;
+  if (revenueCatKey) configureConsumablesWebAdapter(revenueCatKey);
   initializeConsumables({
-    adapter: createConsumablesWebAdapter(),
+    adapter: revenueCatKey ? createConsumablesWebAdapter() : unconfiguredPurchasing(),
     apiClient: new ConsumablesApiClient({
       baseUrl,
       networkClient: new AuthenticatedNetworkClient(networkClient, () => auth.getToken()),

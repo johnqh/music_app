@@ -95,7 +95,7 @@ test.describe('spec §39 acceptance scenario', () => {
     const groups = await getNoteGroups(page);
     expect(groups.length).toBeGreaterThan(0);
     await clickNoteGroup(page, groups[0]);
-    await expect(page.getByText('1 note(s) selected')).toBeVisible();
+    await expect(page.getByText('1 note selected')).toBeVisible();
 
     // Library sweep 1: the native <select> becomes @sudobility/components'
     // Radix-backed Select -- its trigger is a <button role="combobox">, not

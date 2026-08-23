@@ -20,8 +20,12 @@ test.describe('instrument selection', () => {
     await generateWholeScore(page, { prompt: 'Create a calm piano study', measures: 4 });
     await waitForNotation(page);
 
-    // The picker is labelled per track; the score has one.
-    const picker = page.getByLabel(/^Instrument: /).first();
+    // Track editing lives in the inspector's Track tab. There used to be a
+    // second editor in a panel beside the keyboard, labelled per track
+    // ("Instrument: <track>") inside a "Track editor" region; both are gone,
+    // and this spec targeted them long after they were deleted.
+    await page.getByRole('tab', { name: 'Track' }).click();
+    const picker = page.getByLabel('Instrument', { exact: true });
     await expect(picker).toBeVisible();
     await picker.click();
 
@@ -51,7 +55,9 @@ test.describe('track gutter and editor', () => {
     // a track outright.
     await page.getByRole('combobox', { name: 'Add Track' }).click();
     await page.getByRole('option', { name: 'Blank Track' }).click();
-    const editor = page.getByRole('region', { name: 'Track editor' });
+    // Same move as above: the one track editor is the inspector's Track tab.
+    await page.getByRole('tab', { name: 'Track' }).click();
+    const editor = page.getByRole('tabpanel');
     await expect(editor).toBeVisible();
 
     // The gutter is drawn in the canvas, so target it by geometry: the second
@@ -75,7 +81,10 @@ test.describe('track gutter and editor', () => {
     await page.mouse.click(point.x, point.y);
 
     // The editor follows the active track.
-    await expect(editor.getByLabel(/^Track name: /)).toHaveValue('New track');
+    // Labelled "Track name", not "Track name: <name>" — the per-track suffix
+    // belonged to the deleted panel, where several tracks were on screen at
+    // once and each field needed its own name. One track is shown here.
+    await expect(editor.getByLabel('Track name', { exact: true })).toHaveValue('New track');
 
     expect(getErrors()).toEqual([]);
   });

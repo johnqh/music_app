@@ -33,7 +33,15 @@ export default defineConfig({
   optimizeDeps: {
     // esbuild's dep pre-bundler does not handle `new Worker(new URL(...))`,
     // which music_lib uses for MIDI import and quantize.
-    exclude: ['@sudobility/music_lib', '@sudobility/music_io'],
+    exclude: [
+      '@sudobility/music_lib',
+      '@sudobility/music_io',
+      // music_player for the same reason and one of its own: its web entry
+      // lazily `import('js-synthesizer')`, and the pre-bundler resolves that
+      // eagerly into a chunk whose worklet asset URLs no longer point where the
+      // app serves them.
+      '@sudobility/music_player',
+    ],
     // No `dexie`: it went with the IndexedDB persistence the server-backed
     // store replaced, and naming an uninstalled package here makes Vite log a
     // resolve failure on every dev start.

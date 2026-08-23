@@ -167,6 +167,7 @@
     "newProjectName": "New project name",
     "create": "Create",
     "newProject": "New Project",
+    "createFirstProject": "Start your first project",
     "generateScore": "Generate Score",
     "generateScoreHint": "Generate a whole score with AI",
     "importMidi": "Import MIDI",

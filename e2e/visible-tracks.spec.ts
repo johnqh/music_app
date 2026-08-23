@@ -29,7 +29,11 @@ test.describe('visible tracks', () => {
     // a track outright.
     await page.getByRole('combobox', { name: 'Add Track' }).click();
     await page.getByRole('option', { name: 'Blank Track' }).click();
-    await expect(page.getByRole('region', { name: 'Track editor' })).toBeVisible();
+    // The track editor is the inspector's Track tab; the "Track editor" region
+    // belonged to the panel beside the keyboard, which was deleted when the two
+    // editors were merged into one. Its locale key `track.editor` is still in
+    // both files but referenced nowhere in src/.
+    await expect(page.getByRole('tab', { name: 'Track' })).toBeVisible();
 
     const control = page.getByLabel('Visible tracks');
     await expect(control).toBeVisible();

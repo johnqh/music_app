@@ -33,7 +33,7 @@ test.describe('snapshots', () => {
     // rather than merely a note count.
     const groups = await getNoteGroups(page);
     await clickNoteGroup(page, groups[0]);
-    await expect(page.getByText('1 note(s) selected')).toBeVisible();
+    await expect(page.getByText('1 note selected')).toBeVisible();
 
     // Track the edited note by **id**, not by position: opening a snapshot
     // replaces the whole score, and nothing guarantees the summary lists notes

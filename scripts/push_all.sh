@@ -42,6 +42,12 @@ PROJECTS=(
     # depends on it). It needs its own wait for the same reason music_types
     # does: music_api resolves it from npm, so the publish has to land first.
     "../music_codecs:60"
+    # Playback: the transport, the two synth engines and offline rendering.
+    # After music_types (its only required peer) and before music_lib, which
+    # binds the store to it, and music_io, whose audio export renders through
+    # it. Its own wait for the same reason music_codecs has one: the packages
+    # after it resolve it from npm, so the publish has to land first.
+    "../music_player:60"
     # The canvas renderer. After music_types (its only peer) and before
     # music_lib, which re-exports it.
     "../music_drawing:60"

@@ -40,6 +40,7 @@
  * `<button>`, not a `<label>`, so it can't drive a hidden native file
  * input's picker the way a real `<label>` wrapping it does.
  */
+import { getAppServices } from '@/config/initialize';
 import { commandLabel } from '@/features/score-editor/command-labels';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +61,6 @@ import type { Clef, DurationName, NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { importScoreCommand } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
-import { analyzeMidi, importMidi } from '@sudobility/music_lib';
 import type { MidiImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
@@ -143,8 +143,8 @@ export function MidiImportWizard({
   const service = useMemo<MidiImportApi>(
     () =>
       midiService ?? {
-        analyze: async (buffer) => analyzeMidi(buffer),
-        import: async (buffer, options) => importMidi(buffer, options),
+        analyze: async (buffer) => getAppServices().io.analyzeMidi(buffer),
+        import: async (buffer, options) => getAppServices().io.openMidi(buffer, options),
       },
     [midiService],
   );

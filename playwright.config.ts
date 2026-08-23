@@ -37,6 +37,14 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   /**
+   * INITIAL_FREE_CREDITS is raised for the same reason AI_DAILY_LIMIT is: the
+   * e2e auth shim is a *fixed identity*, so all 51 specs share one account and
+   * one grant, where the 100-credit default is sized for a real new user. The
+   * suite spends more than that — measured: the account finished a run at -4 —
+   * and the specs unlucky enough to run late then found Generate disabled and
+   * timed out waiting for it. That was invisible for as long as most specs
+   * failed early for other reasons and never reached a generation at all.
+   *
    * AI_TEST_DELAY_MS gives region-replacement jobs a wide window, so the
    * states the job model exists for — the locked editor, the projects-list
    * badge, cancelling mid-flight — are observable rather than raced. It
@@ -49,7 +57,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'DATABASE_URL=postgres://localhost:5432/music_test PORT=8023 AI_TEST_MODE=1 AI_TEST_DELAY_MS=8000 TEST_AUTH_BYPASS_TOKEN=e2e-token AI_DAILY_LIMIT=10000 bun --cwd ../music_api src/index.ts',
+        'DATABASE_URL=postgres://localhost:5432/music_test PORT=8023 AI_TEST_MODE=1 AI_TEST_DELAY_MS=8000 TEST_AUTH_BYPASS_TOKEN=e2e-token AI_DAILY_LIMIT=10000 INITIAL_FREE_CREDITS=1000000 bun --cwd ../music_api src/index.ts',
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

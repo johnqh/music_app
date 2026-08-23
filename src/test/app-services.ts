@@ -5,13 +5,10 @@
  * against in-memory backends. Returns the context so tests can build a
  * matching store (`createAppStore({ context })`).
  */
-import {
-  initializeMusicPlatform,
-  resetMusicPlatform,
-  testStoreContext,
-  type TestStoreContext,
-} from '@sudobility/music_lib';
+import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
 import { createMusicIo } from '@sudobility/music_io/mocks';
+import { initializeMusicPlayer, resetMusicPlayer } from '@sudobility/music_player/core';
+import { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import type { NetworkClient } from '@sudobility/types';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
 
@@ -24,10 +21,10 @@ const TEST_USER: AuthUser = {
 export function installTestAppServices(
   context: TestStoreContext = testStoreContext(),
 ): TestStoreContext {
-  // Register the platform before anything can reach playback: music_lib
-  // resolves its engine from the registry on first use and throws otherwise.
+  // Register the player before anything can reach playback: music_lib's
+  // adapter resolves it from its singleton on first use and throws otherwise.
+  initializeMusicPlayer(new MockMusicPlayer());
   const io = createMusicIo();
-  initializeMusicPlatform({ playback: io.playback });
 
   /**
    * `getCurrentUser` is an app-level call (`GET /me`, for site-admin status)
@@ -72,6 +69,6 @@ export function installTestAppServices(
 export function resetTestAppServices(): void {
   setAppServices(null);
   // Clear the platform too, or a suite that registered one leaks it into the
-  // next, hiding a missing initializeMusicPlatform in whatever runs after it.
-  resetMusicPlatform();
+  // next, hiding a missing initializeMusicPlayer in whatever runs after it.
+  resetMusicPlayer();
 }

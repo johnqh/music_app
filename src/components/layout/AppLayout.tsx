@@ -68,13 +68,14 @@ import {
   TEXT_BUTTON_CLASS,
   useMenu,
 } from '@/components/layout/app-bar-menu';
-import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
-import { scoreToTracker, isCleanFit, encodeTracker } from '@sudobility/music_lib';
+import { safeFilename as midiSafeFilename } from '@sudobility/music_lib';
+import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
-import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
+import { musicXmlSafeFilename } from '@sudobility/music_lib';
 import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
-import { renderEvents } from '@sudobility/music_lib';
+import { renderEvents, renderSamples } from '@sudobility/music_player';
+import { SOUNDFONT_ASSETS } from '@/config/initialize';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
@@ -406,20 +407,24 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * Render the score offline and save it.
    *
    * `renderEvents` decides what sounds (mute, solo, timing, per-track level and
-   * pan); `audioRenderer` builds the same channel graph playback uses and
-   * schedules into it, so the file matches what you just heard.
+   * pan); `renderSamples` drives the same soundfont playback uses, so the file
+   * matches what you just heard.
+   *
+   * The app orchestrates the two halves on purpose: music_player makes the
+   * sound and hands back PCM, music_io encodes and writes it. Neither platform
+   * package depends on the other, which is why music_io never holds a reference
+   * to a running synth.
    */
   const handleExportAudio = (format: 'wav' | 'mp3'): void => {
     withExportScope(async (target) => {
       try {
-        const { audioCodec, audioRenderer, fileExporter } = getAppServices().io;
         const plan = renderEvents(target);
-        const audio = await audioRenderer.render(plan);
-        const bytes = format === 'wav' ? audioCodec.encodeWav(audio) : audioCodec.encodeMp3(audio);
-        await fileExporter.save(
+        const audio = await renderSamples(SOUNDFONT_ASSETS)(plan);
+        await getAppServices().io.saveAudio(
+          audio.samples,
+          audio.sampleRate,
+          format,
           `${midiSafeFilename(target.metadata.title)}.${format}`,
-          new Uint8Array(bytes),
-          format === 'wav' ? 'audio/wav' : 'audio/mpeg',
         );
       } catch (err) {
         reportError(err, { context: `${format.toUpperCase()} export failed`, store });
@@ -439,11 +444,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       try {
         const { module, report } = scoreToTracker(target, { format });
         const write = async (): Promise<void> => {
-          const bytes = encodeTracker(module);
-          await getAppServices().io.fileExporter.save(
+          await getAppServices().io.saveTracker(
+            module,
             `${midiSafeFilename(target.metadata.title)}.${format}`,
-            new Uint8Array(bytes),
-            'application/octet-stream',
           );
         };
         // A clean fit must not cost a click.
@@ -462,11 +465,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const handleExportMidi = (): void => {
     withExportScope(async (target) => {
       try {
-        const bytes = exportMidi(target);
-        await getAppServices().io.fileExporter.save(
+        await getAppServices().io.saveMidi(
+          target,
           `${midiSafeFilename(target.metadata.title)}.mid`,
-          bytes,
-          'audio/midi',
         );
       } catch (err) {
         reportError(err, { context: t('errors.midiExport'), store });
@@ -478,11 +479,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const handleExportMusicXml = (): void => {
     withExportScope(async (target) => {
       try {
-        const xml = exportMusicXml(target);
-        await getAppServices().io.fileExporter.save(
+        await getAppServices().io.saveMusicXml(
+          target,
           `${musicXmlSafeFilename(target.metadata.title)}.musicxml`,
-          xml,
-          'application/vnd.recordare.musicxml+xml',
         );
       } catch (err) {
         reportError(err, { context: t('errors.musicXmlExport'), store });

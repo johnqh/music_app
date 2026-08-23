@@ -167,6 +167,7 @@
     "newProjectName": "新项目名称",
     "create": "创建",
     "newProject": "新建项目",
+    "createFirstProject": "开始第一个项目",
     "generateScore": "生成乐谱",
     "generateScoreHint": "用 AI 生成整首乐谱",
     "importMidi": "导入 MIDI",

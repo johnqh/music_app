@@ -37,7 +37,7 @@ test.describe('note selection, editing, and undo/redo', () => {
     expect(groups.length).toBeGreaterThan(0);
     await clickNoteGroup(page, groups[0]);
 
-    await expect(page.getByText('1 note(s) selected')).toBeVisible();
+    await expect(page.getByText('1 note selected')).toBeVisible();
 
     const before = await readScoreSummary(page);
     expect(before).not.toBeNull();

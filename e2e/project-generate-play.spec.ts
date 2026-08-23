@@ -38,7 +38,14 @@ test.describe('project creation, generation, and playback', () => {
     // Play (spec §39 items 6-7): transport toggles and the store's
     // playback state actually advances (Tone.js audio itself can't be
     // observed in headless Chromium -- see helpers.ts's module doc).
-    await expect(page.getByRole('button', { name: 'Play' })).toBeEnabled();
+    // A load-sized budget, not the default 5s. Until the 23MB soundfont is up,
+    // this control is named "Preparing instruments" and is disabled — the
+    // honest reporting that `SynthLoadIndicator` exists to make affordable —
+    // so there is no button named "Play" to find yet. `startPlayback` already
+    // waits this way; this assertion predates that and kept the default.
+    await expect(page.getByRole('button', { name: 'Play' })).toBeEnabled({
+      timeout: 60_000,
+    });
     await startPlayback(page);
 
     await expect

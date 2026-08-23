@@ -52,10 +52,10 @@ import { durationForDigit, isPitchLetter, pitchForLetter } from '@sudobility/mus
 import { withModifier } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { ClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
-import type { PlaybackController } from '@sudobility/music_lib';
+import type { PlaybackAdapter } from '@sudobility/music_lib';
 
-/** The slice of `PlaybackController` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
-export type PlaybackToggle = Pick<PlaybackController, 'togglePlay'>;
+/** The slice of `PlaybackAdapter` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
+export type PlaybackToggle = Pick<PlaybackAdapter, 'togglePlay'>;
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
