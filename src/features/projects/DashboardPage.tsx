@@ -52,6 +52,7 @@ import { parseScore } from '@sudobility/music_types';
 import {
   createEmptyScore,
   trackerToScore,
+  decodeTracker,
   playbackController,
   projectTemplates,
   reportError,
@@ -358,7 +359,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     setModBusy(true);
     try {
       const bytes = await file.arrayBuffer();
-      const mod = getAppServices().io.modCodec.decode(bytes);
+      const mod = decodeTracker(bytes);
       const score = trackerToScore(mod);
       await store.getState().newProject({ name: mod.title || file.name, score });
       const id = store.getState().projectId;

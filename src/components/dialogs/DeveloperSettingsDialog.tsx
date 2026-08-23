@@ -101,7 +101,7 @@ export function DeveloperSettingsDialog({
     setBenchmarkRunning(true);
     setTimeout(() => {
       try {
-        const report = runBenchmark(getAppServices().io.midiCodec, benchmarkSizes);
+        const report = runBenchmark(benchmarkSizes);
         setBenchmarkReport(report);
         console.table(toBenchmarkTable(report));
       } finally {

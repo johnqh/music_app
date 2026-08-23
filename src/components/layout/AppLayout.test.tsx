@@ -1,6 +1,6 @@
 import { commandLabel } from '@/features/score-editor/command-labels';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext, decodeMidi, decodeTracker } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
@@ -260,7 +260,7 @@ describe('AppLayout export scope', () => {
   function exportedTrackCount(): number {
     const last = savedFiles().at(-1)!;
     const bytes = last.data as Uint8Array;
-    return getAppServices().io.midiCodec.decode(bytes.buffer as ArrayBuffer).tracks.length;
+    return decodeMidi(bytes.buffer as ArrayBuffer).tracks.length;
   }
 
   async function openExportMenu(user: ReturnType<typeof userEvent.setup>): Promise<void> {
@@ -283,7 +283,7 @@ describe('AppLayout export scope', () => {
     const saved = savedFiles().at(-1)!;
     expect(saved.name).toMatch(/\.xm$/);
     const bytes = saved.data as Uint8Array;
-    const back = getAppServices().io.modCodec.decode(bytes.buffer as ArrayBuffer);
+    const back = decodeTracker(bytes.buffer as ArrayBuffer);
     expect(back.format).toBe('xm');
     expect(back.instruments).toHaveLength(3);
   });

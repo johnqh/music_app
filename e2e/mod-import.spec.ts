@@ -1,12 +1,14 @@
 /**
  * Importing an Amiga tracker module.
  *
- * The module is built with `music_io`'s own `buildMod` — the same builder its
- * reader is tested against — rather than a copy here, so this cannot pass
- * against bytes the real reader would reject.
+ * The module is built with `music_codecs`' own `buildMod` — the same builder
+ * its reader is tested against — rather than a copy here, so this cannot pass
+ * against bytes the real reader would reject. It comes from the `/fixtures`
+ * entry, which exists for exactly this: a test-facing export that keeps the
+ * builders out of the surface an app imports.
  */
 import { expect, test } from '@playwright/test';
-import { buildMod } from '@sudobility/music_io/mocks';
+import { buildMod } from '@sudobility/music_codecs/fixtures';
 import { collectPageErrors, gotoDashboard, readScoreSummary, waitForNotation } from './helpers';
 
 /** C-3, D-3, E-3 and G-3 as ProTracker periods, one per row on channel 0. */

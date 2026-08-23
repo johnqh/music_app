@@ -66,7 +66,6 @@ import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
-import { getAppServices } from '@/config/initialize';
 
 /** The parse half of the wizard, injectable so tests can force a failure. */
 export type MidiImportApi = {
@@ -144,9 +143,8 @@ export function MidiImportWizard({
   const service = useMemo<MidiImportApi>(
     () =>
       midiService ?? {
-        analyze: async (buffer) => analyzeMidi(buffer, getAppServices().io.midiCodec),
-        import: async (buffer, options) =>
-          importMidi(buffer, options, getAppServices().io.midiCodec),
+        analyze: async (buffer) => analyzeMidi(buffer),
+        import: async (buffer, options) => importMidi(buffer, options),
       },
     [midiService],
   );

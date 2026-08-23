@@ -19,9 +19,10 @@ import {
   trackerToScore,
   threeTrackScore,
   pitchToMidi,
+  decodeTracker,
+  encodeTracker,
 } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
-import { getAppServices } from '@/config/initialize';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function midiNotes(score: Score): number[] {
@@ -49,8 +50,10 @@ describe('XM export round trip', () => {
     report: ReturnType<typeof scoreToTracker>['report'];
   } => {
     const { module, report } = scoreToTracker(original, { format: 'xm' });
-    const codec = getAppServices().io.modCodec;
-    return { returned: trackerToScore(codec.decode(codec.encode(module))), report };
+    return {
+      returned: trackerToScore(decodeTracker(encodeTracker(module))),
+      report,
+    };
   };
 
   it('loses nothing on the way out', () => {

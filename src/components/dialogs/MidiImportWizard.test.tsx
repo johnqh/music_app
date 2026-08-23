@@ -9,11 +9,7 @@ import { analyzeMidi } from '@sudobility/music_lib';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { createMusicIo } from '@sudobility/music_io/mocks';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
-
-// The real codec, via the mocks entry, so these fixtures are genuine MIDI bytes.
-const codec = createMusicIo().midiCodec;
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });
@@ -31,7 +27,7 @@ afterEach(() => {
 
 /** A real Standard MIDI File, round-tripped from a fixture score via the Task 7 exporter -- the same pattern `analyze.test.ts` uses. */
 function fixtureMidiFile(name = 'fixture.mid'): File {
-  const bytes = exportMidi(chordScore(), codec);
+  const bytes = exportMidi(chordScore());
   return new File([bytes.buffer as ArrayBuffer], name, { type: 'audio/midi' });
 }
 
@@ -150,7 +146,7 @@ describe('MidiImportWizard', () => {
   it('a failed import (commit step) shows an error toast, not a silent failure', async () => {
     const store = makeStore();
     const failingService = {
-      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer, codec)),
+      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer)),
       import: vi.fn().mockRejectedValue(new Error('corrupt track data')),
     };
     render(

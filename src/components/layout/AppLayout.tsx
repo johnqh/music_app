@@ -69,7 +69,7 @@ import {
   useMenu,
 } from '@/components/layout/app-bar-menu';
 import { exportMidi, safeFilename as midiSafeFilename } from '@sudobility/music_lib';
-import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
+import { scoreToTracker, isCleanFit, encodeTracker } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
 import { exportMusicXml, safeFilename as musicXmlSafeFilename } from '@sudobility/music_lib';
@@ -439,7 +439,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       try {
         const { module, report } = scoreToTracker(target, { format });
         const write = async (): Promise<void> => {
-          const bytes = getAppServices().io.modCodec.encode(module);
+          const bytes = encodeTracker(module);
           await getAppServices().io.fileExporter.save(
             `${midiSafeFilename(target.metadata.title)}.${format}`,
             new Uint8Array(bytes),
@@ -462,7 +462,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const handleExportMidi = (): void => {
     withExportScope(async (target) => {
       try {
-        const bytes = exportMidi(target, getAppServices().io.midiCodec);
+        const bytes = exportMidi(target);
         await getAppServices().io.fileExporter.save(
           `${midiSafeFilename(target.metadata.title)}.mid`,
           bytes,
