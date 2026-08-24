@@ -16,6 +16,13 @@ async function openPrintView(page: import('@playwright/test').Page, name: string
 
   await page.getByLabel('Print…').click();
   await expect(page.getByRole('button', { name: 'Print' })).toBeVisible();
+  // The Print button is in the toolbar, which renders before the engraved
+  // pages do — so waiting on it is not waiting for the score. Three tests
+  // counted systems the moment this returned and got 0 on the larger scores,
+  // where the first layout takes longest. The helper's contract is "the print
+  // view is showing the score", so the wait belongs here rather than in each
+  // caller.
+  await expect(page.locator('[data-testid^="print-system-"]').first()).toBeVisible();
 }
 
 test.describe('printing', () => {
@@ -51,9 +58,11 @@ test.describe('printing', () => {
     await openPrintView(page, 'Print Part', 8);
 
     const scoreSystems = await page.locator('[data-testid^="print-system-"]').count();
+    expect(scoreSystems).toBeGreaterThan(0);
 
     await page.getByLabel('What to print').click();
     await page.getByRole('option').nth(1).click();
+    await expect(page.locator('[data-testid^="print-system-"]').first()).toBeVisible();
 
     const partSystems = await page.locator('[data-testid^="print-system-"]').count();
     expect(partSystems).toBeLessThanOrEqual(scoreSystems);

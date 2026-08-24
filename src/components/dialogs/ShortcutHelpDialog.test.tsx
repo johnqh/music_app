@@ -18,6 +18,18 @@ describe('ShortcutHelpDialog', () => {
     expect(screen.getByText('Ctrl/Cmd+Shift+Z')).toBeInTheDocument();
   });
 
+  it('stacks alternative keys one per line', async () => {
+    // Printed across, `Ctrl/Cmd+Home / Ctrl/Cmd+End` sets the key column's
+    // width for all twenty-four rows and squeezes every description beside it.
+    render(<ShortcutHelpDialog open onClose={vi.fn()} />);
+
+    const row = screen.getByText('Ctrl/Cmd+Home').closest('tr')!;
+    expect(within(row).getByText('Ctrl/Cmd+End')).toBeInTheDocument();
+    // The separator is gone, which is what proves they are on separate lines
+    // rather than in one run of text.
+    expect(within(row).queryByText(/Ctrl\/Cmd\+Home \/ Ctrl\/Cmd\+End/)).toBeNull();
+  });
+
   it('close button calls onClose', async () => {
     const onClose = vi.fn();
     render(<ShortcutHelpDialog open onClose={onClose} />);

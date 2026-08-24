@@ -19,6 +19,11 @@ export type ShortcutHelpDialogProps = {
  * translated: `Ctrl`, `Shift` and `ArrowUp` are the names the keyboard and the
  * browser use, and a reader hunting for a key does not want it renamed. The two
  * entries that describe a gesture rather than a key carry `keysKey` instead.
+ *
+ * A ` / ` separates alternatives, and the table stacks them one per line rather
+ * than printing them across: `Ctrl/Cmd+Home / Ctrl/Cmd+End` on one line sets the
+ * key column's width for all twenty-four rows, which squeezed every description
+ * beside it into two and three lines.
  */
 const SHORTCUTS: Array<{ keys?: string; keysKey?: string; actionKey: string }> = [
   { keys: 'Space', actionKey: 'shortcuts.playPause' },
@@ -54,7 +59,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
       open={open}
       title={t('editor.keyboardShortcuts')}
       onClose={onClose}
-      size="small"
+      size="large"
       closeAriaLabel={t('common.close')}
       actions={[]}
     >
@@ -64,11 +69,15 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
             <tr key={s.keys ?? s.keysKey} className="border-b border-theme-border last:border-b-0">
               <th
                 scope="row"
-                className="whitespace-nowrap py-1.5 pr-4 text-left font-mono font-normal text-theme-text-primary"
+                // `w-px` with `whitespace-nowrap`: the column takes exactly the
+                // width of its widest *line* and the description gets the rest.
+                className="w-px whitespace-nowrap py-1.5 pr-6 text-left align-top font-mono font-normal text-foreground"
               >
-                {s.keys ?? t(s.keysKey!)}
+                {(s.keys ?? t(s.keysKey!)).split(' / ').map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
               </th>
-              <td className="py-1.5 text-theme-text-secondary">{t(s.actionKey)}</td>
+              <td className="py-1.5 align-top text-theme-text-secondary">{t(s.actionKey)}</td>
             </tr>
           ))}
         </tbody>
