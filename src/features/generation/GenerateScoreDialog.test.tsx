@@ -47,6 +47,10 @@ function setMeasures(n: number) {
   fireEvent.change(screen.getByLabelText(/measures/i), { target: { value: String(n) } });
 }
 
+function setTempo(value: string) {
+  fireEvent.change(screen.getByLabelText(/tempo/i), { target: { value } });
+}
+
 /**
  * Everything Generate needs apart from credits.
  *
@@ -112,6 +116,23 @@ describe('GenerateScoreDialog cost', () => {
     selectInstruments(4);
 
     expect(screen.getByRole('button', { name: /generate/i })).toBeEnabled();
+  });
+
+  it('disables Generate for a fractional measure count', () => {
+    open(1000);
+    fillPrompt();
+    setMeasures(1.5);
+
+    expect(screen.getByRole('button', { name: /generate/i })).toBeDisabled();
+  });
+
+  it('disables Generate for a non-positive tempo', () => {
+    open(1000);
+    fillPrompt();
+    setMeasures(4);
+    setTempo('0');
+
+    expect(screen.getByRole('button', { name: /generate/i })).toBeDisabled();
   });
 });
 

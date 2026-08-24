@@ -25,20 +25,12 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import type { ReplaceScope, ReplacementRegion } from '@sudobility/music_lib';
+import type { ReplaceScope, ReplaceSubmission, ReplacementRegion } from '@sudobility/music_lib';
 
-export type ReplaceSubmission = {
-  instruction: string;
-  style?: string;
-  mood?: string;
-  complexity?: 'simple' | 'moderate' | 'complex';
-  constraints: {
-    preserveBoundaryNotes: boolean;
-    preserveHarmony: boolean;
-    preserveRhythm: boolean;
-    preserveMelody: boolean;
-  };
-};
+// `ReplaceSubmission` now lives in music_lib beside `prepareReplacement`,
+// which turns it into a request: the shape of what is asked for is part of
+// asking, not part of the dialog that collects it.
+export type { ReplaceSubmission } from '@sudobility/music_lib';
 
 export type ReplaceMusicDialogProps = {
   open: boolean;

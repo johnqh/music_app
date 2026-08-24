@@ -15,7 +15,13 @@
  * through React. Both have measurements behind them in the project's notes.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { TRACK_INFO_WIDTH, boxForMeasureIndex, caretPositionForTick } from '@sudobility/music_lib';
+import {
+  TRACK_INFO_WIDTH,
+  boxForMeasureIndex,
+  caretPositionForTick,
+  measureAtTick,
+  measureIndexOf,
+} from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { getMusicPosition } from '@sudobility/music_lib';
 import { prefersReducedMotion } from '@/app/theme';
@@ -28,13 +34,9 @@ import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
 const SCROLL_MARGIN = 40;
 
 function currentMeasureId(score: Score, positionTick: number): string | null {
+  // Track 0 by convention: every track shares the measure grid.
   const track = score.tracks[0];
-  if (!track || track.measures.length === 0) return null;
-  const measure =
-    track.measures.find(
-      (m) => positionTick >= m.startTick && positionTick < m.startTick + m.durationTicks,
-    ) ?? track.measures[track.measures.length - 1];
-  return measure.id;
+  return track ? (measureAtTick(score, track.id, positionTick)?.id ?? null) : null;
 }
 
 type PlaybackCaretProps = {
@@ -299,8 +301,8 @@ export function PlaybackCaret({
     if (measureId === lastScrolledMeasureRef.current) return;
     // Read off the memoized plan rather than the drawn window's bbox map, so
     // this still finds a measure lying outside the currently-drawn window.
-    const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
-    if (measureIndex === -1) {
+    const measureIndex = measureIndexOf(score, measureId);
+    if (measureIndex === null) {
       traceScroll('skip: measure not in track 0', { measureId });
       return;
     }

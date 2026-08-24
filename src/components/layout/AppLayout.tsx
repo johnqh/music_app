@@ -75,7 +75,13 @@ import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
 import { musicXmlSafeFilename } from '@sudobility/music_lib';
-import { allNotes, scoreWithTracks, selectVisibleTrackIds } from '@sudobility/music_lib';
+import {
+  selectRegeneratedInRange,
+  prepareReplacement,
+  exportScopeNeedsPrompt,
+  exportTargetScore,
+  hiddenTrackCount,
+} from '@sudobility/music_lib';
 import { renderEvents, renderSamples } from '@sudobility/music_player';
 import { SOUNDFONT_ASSETS } from '@/config/initialize';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
@@ -95,13 +101,7 @@ import { TransportBar } from '@/components/transport/TransportBar';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
-import {
-  prepareRegenerationRequestForRange,
-  replacementRegion,
-  selectActiveTrackId,
-} from '@sudobility/music_lib';
-import type { ReplaceScope } from '@sudobility/music_lib';
-import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
+import type { ReplaceScope, ReplaceSubmission } from '@sudobility/music_lib';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import { CreditBadge } from '@/features/credits/CreditBadge';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
@@ -217,18 +217,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       // candidate-accept workflow used to do this; a job applies server-side,
       // so the notes are found by the region that was asked for.
       const range = lastReplacedRangeRef.current;
-      const next = store.getState().score;
-      if (!range || !next) return;
+      if (!range) return;
       lastReplacedRangeRef.current = null;
-      const written = allNotes(next)
-        .filter(
-          (n) =>
-            range.trackIds.includes(n.trackId) &&
-            n.startTick < range.endTick &&
-            n.startTick + n.durationTicks > range.startTick,
-        )
-        .map((n) => n.id);
-      if (written.length > 0) store.getState().selectRegenerated(written);
+      selectRegeneratedInRange(store, range);
     },
   });
 
@@ -249,34 +240,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
   const startReplacement = useCallback(
     async (scope: ReplaceScope, submission: ReplaceSubmission): Promise<void> => {
-      const state = store.getState();
-      const current = state.score;
-      if (!current) return;
-
-      const region = replacementRegion(current, state.selection, selectActiveTrackId(state), scope);
-      if (!region) return;
-
-      const request = prepareRegenerationRequestForRange(
-        current,
-        region.range,
-        submission.instruction,
-        {
-          measureAligned: region.measureAligned,
-          ...(submission.style ? { style: submission.style } : {}),
-          ...(submission.mood ? { mood: submission.mood } : {}),
-          ...(submission.complexity ? { complexity: submission.complexity } : {}),
-          constraints: submission.constraints,
-        },
-      );
-
-      const kind =
-        scope === 'notes'
-          ? 'replace-notes'
-          : scope === 'measures'
-            ? 'replace-measures'
-            : 'replace-track';
-      lastReplacedRangeRef.current = region.range;
-      await generation.start(kind, request);
+      const prepared = prepareReplacement(store, scope, submission);
+      if (!prepared) return;
+      lastReplacedRangeRef.current = prepared.range;
+      await generation.start(prepared.kind, prepared.request);
     },
     [generation, store],
   );
@@ -399,8 +366,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
-  const visibleTrackIds = store(selectVisibleTrackIds);
-  const hiddenCount = (score?.tracks.length ?? 0) - visibleTrackIds.length;
+  const hiddenCount = hiddenTrackCount(store);
   /**
    * The export waiting on the user's answer, or null when nothing is pending.
    *
@@ -421,7 +387,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    */
   const withExportScope = (write: (target: Score) => Promise<void>): void => {
     if (!score) return;
-    if (hiddenCount <= 0) {
+    if (!exportScopeNeedsPrompt(store)) {
       void write(score);
       return;
     }
@@ -429,7 +395,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     // call a function passed to setState as an updater rather than store it.
     setPendingExport(() => (scope: ExportScope) => {
       setPendingExport(null);
-      void write(scope === 'all' ? score : scoreWithTracks(score, visibleTrackIds));
+      const target = exportTargetScore(store, scope);
+      if (target) void write(target);
     });
   };
 

@@ -48,9 +48,9 @@ import {
 import { EmptyState } from '@sudobility/building_blocks';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
+import { emptyScoreForRequest } from '@sudobility/music_lib';
 import { parseScore } from '@sudobility/music_types';
 import {
-  createEmptyScore,
   playbackController,
   projectTemplates,
   reportError,
@@ -98,28 +98,6 @@ const GENERATION_POLL_MS = 3000;
 
 function resetOpenedProjectTransport(): void {
   playbackController.stop();
-}
-
-/**
- * The placeholder a Generate Score project holds until its job fills it in.
- *
- * Created up front rather than on completion so the project appears in this
- * list with its badge from the first second, instead of materialising minutes
- * later out of nowhere. Matches the requested shape so the editor can open it
- * meaningfully even mid-generation.
- */
-function emptyScoreFor(request: GenerateScoreRequest) {
-  return createEmptyScore({
-    title: request.title?.trim() || 'Untitled',
-    measures: request.durationMeasures,
-    tracks: request.tracks.map((t) => ({
-      name: t.name,
-      instrumentName: t.instrumentName,
-      clef: t.clef,
-    })),
-    ...(request.timeSignature ? { timeSignature: request.timeSignature } : {}),
-    ...(request.keySignature ? { keySignature: request.keySignature } : {}),
-  });
 }
 
 /**
@@ -223,7 +201,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         // Not the prompt: prompts routinely begin "Create a ...", which makes
         // a project list full of near-identical names that also collide with
         // the page's own Create button.
-        { name: request.title?.trim() || 'Generated score', score: emptyScoreFor(request) },
+        { name: request.title?.trim() || 'Generated score', score: emptyScoreForRequest(request) },
         token,
       );
       try {

@@ -57,8 +57,7 @@ import type { MidiSummary } from '@sudobility/music_lib';
 import { defaultMidiImportOptions } from '@sudobility/music_lib';
 import type { MidiImportOptions } from '@sudobility/music_lib';
 import type { Clef, DurationName, NoteEvent } from '@sudobility/music_types';
-import { isNoteEvent } from '@sudobility/music_types';
-import { importScore } from '@sudobility/music_lib';
+import { allNotes, importScore } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import type { MidiImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -200,9 +199,7 @@ export function MidiImportWizard({
     setError(null);
     try {
       const result = await service.import(fileBuffer, options);
-      const notes = result.score.tracks.flatMap((t) =>
-        t.measures.flatMap((m) => m.voices.flatMap((v) => v.events.filter(isNoteEvent))),
-      );
+      const notes = allNotes(result.score);
       setPreview({
         noteCount: notes.length,
         text: firstNotesPreview(notes),

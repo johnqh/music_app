@@ -18,6 +18,7 @@ import {
   usablePageHeight,
   withRehearsalMarks,
 } from '@sudobility/music_lib';
+import { findTrack } from '@sudobility/music_lib';
 import type { PaperOrientation, PaperSize } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { PRINT_WIDTH, printRenderOptions, printSystems } from '@/features/print/print-layout';
@@ -101,7 +102,7 @@ export function PrintView({ store, onBack }: PrintViewProps) {
   );
 
   const scopeLabel = isSingleTrack
-    ? (score?.tracks.find((t) => t.id === scope)?.name ?? 'Whole score')
+    ? ((score ? findTrack(score, scope)?.name : null) ?? 'Whole score')
     : 'Whole score';
 
   return (

@@ -56,14 +56,11 @@ const ALLOWED_NON_UI = new Set([
   // The app bar's menu hook and button classes — a React hook and class
   // strings, so UI by definition.
   'src/components/layout/app-bar-menu.ts',
-  // Dispatch helpers: they wire UI events to music_lib commands.
-  //
-  // `editing.ts` is no longer among them — it was 834 lines of editing logic
-  // sitting in the UI package under this exemption, and it now lives in
-  // music_lib where a second app can reach it. The rest are on the same path.
-  'src/features/score-editor/clipboard-prompts.ts',
-  'src/features/score-editor/tracker-export.ts',
-  'src/features/score-editor/chord-entry.ts',
+  // The "dispatch helpers" exemption is gone, and so are the four modules that
+  // sat under it. `editing.ts` was 834 lines of editing logic in the UI
+  // package; `clipboard-prompts.ts` was pure score rules about when cut and
+  // paste need to ask. Both now live where a second app can reach them, and
+  // nothing has been added back.
   'src/context/pageConfigContextDef.ts',
   // Maps an API refusal onto the dialog that answers it — UI wiring, and it
   // imports the dialog it opens.
@@ -179,6 +176,39 @@ describe('music_app invokes editing rather than performing it', () => {
       'These dispatch a command from the UI package. An edit belongs in ' +
         "music_lib's editing module, called from here as a single function, " +
         'so a React Native app obeys the same rules rather than repeating them.',
+    ).toEqual([]);
+  });
+
+  it('never imports score command factories into UI code', () => {
+    const offenders: string[] = [];
+    const commandImport =
+      /import\s+(?:type\s+)?\{(?<names>[^}]+)\}\s+from\s+'@sudobility\/(?:music_lib|music_types)'/gs;
+
+    for (const file of sources()) {
+      const source = readFileSync(file, 'utf8');
+      for (const match of source.matchAll(commandImport)) {
+        const names = match
+          .groups!.names.split(',')
+          .map((part) =>
+            part
+              .trim()
+              .split(/\s+as\s+/)[0]
+              ?.trim(),
+          )
+          .filter((name): name is string => Boolean(name));
+
+        for (const name of names) {
+          if (name === 'dispatchTracked' || /Command$/.test(name)) {
+            offenders.push(`${file}: ${name}`);
+          }
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      'These import command factories into the UI package. Add a facade in ' +
+        'music_lib instead, then call that from React/RN.',
     ).toEqual([]);
   });
 });

@@ -150,7 +150,39 @@
     "tempo": "Tempo",
     "key": "Key",
     "mode": "Mode",
-    "timeSignature": "Time signature"
+    "timeSignature": "Time signature",
+    "tempoInvalid": "Tempo must be a number above zero, or left blank.",
+    "preset": {
+      "gentlePiano": "Create a gentle eight-measure piano melody in C major",
+      "cinematic": "Create a cinematic sixteen-measure theme in D minor",
+      "pop": "Create an upbeat pop arrangement with piano, bass, drums, and strings",
+      "beginner": "Create a simple beginner melody using quarter and half notes",
+      "jazz": "Create a jazz-inspired progression with a walking bass",
+      "battle": "Create an energetic video-game battle theme",
+      "ambient": "Create a calm ambient piano piece",
+      "waltz": "Create a playful waltz in 3/4 time"
+    },
+    "styleName": {
+      "waltz": "Waltz",
+      "jazz": "Jazz",
+      "pop": "Pop",
+      "cinematic": "Cinematic",
+      "ambient": "Ambient",
+      "battle": "Battle"
+    },
+    "moodName": {
+      "gentle": "Gentle",
+      "dark": "Dark",
+      "upbeat": "Upbeat",
+      "dramatic": "Dramatic",
+      "calm": "Calm",
+      "energetic": "Energetic"
+    },
+    "complexityName": {
+      "simple": "Simple",
+      "moderate": "Moderate",
+      "complex": "Complex"
+    }
   },
   "dashboard": {
     "openProject": "Open project: {{name}}",

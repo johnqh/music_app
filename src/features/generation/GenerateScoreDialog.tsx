@@ -70,15 +70,26 @@ import {
   cn,
 } from '@sudobility/components';
 import {
+  DEFAULT_GENERATE_SCORE_MEASURES,
   DEFAULT_INSTRUMENT_VALUE,
-  instrumentChoiceFor,
+  GENERATE_SCORE_COMPLEXITY_OPTIONS,
+  GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
+  GENERATE_SCORE_MOOD_OPTIONS,
+  GENERATE_SCORE_STYLE_OPTIONS,
+  GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
+  buildGenerateScoreRequest,
+  canBuildGenerateScoreRequest,
+  estimateGenerateScoreCredits,
+  firstMelodyInstrumentEntryId,
+  type InstrumentValueEntry,
+  generateScoreTrackForInstrumentValue,
   instrumentLabelFor,
+  type GenerateScoreComplexity,
+  type GenerateScoreRequest,
+  type KeySignature,
 } from '@sudobility/music_lib';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { variants } from '@sudobility/design';
-
-import type { KeySignature, TimeSignature } from '@sudobility/music_types';
-import type { GenerateScoreRequest, GenerateScoreRequestTrack } from '@sudobility/music_types';
 
 export type GenerateScoreDialogProps = {
   open: boolean;
@@ -89,72 +100,35 @@ export type GenerateScoreDialogProps = {
   submitting?: boolean;
 };
 
-/** Spec §32, verbatim. */
-const PRESET_PROMPTS: string[] = [
-  'Create a gentle eight-measure piano melody in C major',
-  'Create a cinematic sixteen-measure theme in D minor',
-  'Create an upbeat pop arrangement with piano, bass, drums, and strings',
-  'Create a simple beginner melody using quarter and half notes',
-  'Create a jazz-inspired progression with a walking bass',
-  'Create an energetic video-game battle theme',
-  'Create a calm ambient piano piece',
-  'Create a playful waltz in 3/4 time',
-];
+/**
+ * One chosen instrument. `id` survives reordering and repeats of the same
+ * value. The shape is `InstrumentValueEntry` from music_lib, which
+ * `firstMelodyInstrumentEntryId` reads — aliased rather than redeclared, since
+ * two identical declarations are how the two come apart.
+ */
+type EnsembleEntry = InstrumentValueEntry;
 
-/** The keyword values `services/generation/prompt-parse.ts`'s `STYLES`/`MOODS` actually branch on — an explicit `style`/`mood` request field only changes generation behavior when it matches one of these. */
-const STYLE_OPTIONS = ['waltz', 'jazz', 'pop', 'cinematic', 'ambient', 'battle'];
-const MOOD_OPTIONS = ['gentle', 'dark', 'upbeat', 'dramatic', 'calm', 'energetic'];
-const COMPLEXITY_OPTIONS: NonNullable<GenerateScoreRequest['complexity']>[] = [
-  'simple',
-  'moderate',
-  'complex',
-];
-
-/** One chosen instrument. `id` survives reordering and repeats of the same value. */
-type EnsembleEntry = { id: number; value: string };
-
-/** fifths -7..7, labeled by their major-key tonic (spec §21 "key"; the separate Mode select supplies major/minor). */
-const KEY_FIFTHS_OPTIONS: Array<{ fifths: number; label: string }> = [
-  { fifths: -7, label: 'Cb' },
-  { fifths: -6, label: 'Gb' },
-  { fifths: -5, label: 'Db' },
-  { fifths: -4, label: 'Ab' },
-  { fifths: -3, label: 'Eb' },
-  { fifths: -2, label: 'Bb' },
-  { fifths: -1, label: 'F' },
-  { fifths: 0, label: 'C' },
-  { fifths: 1, label: 'G' },
-  { fifths: 2, label: 'D' },
-  { fifths: 3, label: 'A' },
-  { fifths: 4, label: 'E' },
-  { fifths: 5, label: 'B' },
-  { fifths: 6, label: 'F#' },
-  { fifths: 7, label: 'C#' },
-];
-
-const TIME_SIGNATURE_OPTIONS: Record<string, TimeSignature> = {
-  '4/4': { numerator: 4, denominator: 4 },
-  '3/4': { numerator: 3, denominator: 4 },
-  '2/4': { numerator: 2, denominator: 4 },
-  '6/8': { numerator: 6, denominator: 8 },
-  '5/4': { numerator: 5, denominator: 4 },
-  '7/8': { numerator: 7, denominator: 8 },
-};
-
-const DEFAULT_MEASURES = 8;
+/**
+ * The preset prompts, by key.
+ *
+ * Copy, so the host owns it: the text a reader picks is also the text sent to
+ * the model, and a Chinese reader should be prompting in Chinese rather than
+ * choosing between eight English sentences. music_lib keeps only the style and
+ * mood *values*, which the prompt parser matches against.
+ */
+const PRESET_KEYS = [
+  'gentlePiano',
+  'cinematic',
+  'pop',
+  'beginner',
+  'jazz',
+  'battle',
+  'ambient',
+  'waltz',
+] as const;
 
 /** Sentinel for Style/Mood's "no selection" option: Radix `Select.Item` rejects an empty-string `value` (it's reserved to mean "cleared"). */
 const NONE_VALUE = '__none__';
-
-function toRequestTrack(value: string): GenerateScoreRequestTrack {
-  const choice = instrumentChoiceFor(value);
-  return {
-    name: choice.instrumentName,
-    instrumentName: choice.instrumentName,
-    midiProgram: choice.midiProgram,
-    clef: choice.clef,
-  };
-}
 
 const SELECT_TRIGGER_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
 
@@ -166,12 +140,15 @@ function LabeledInput({
   onChange,
   min,
   className,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   min?: number;
   className?: string;
+  /** Shown under the field when what was typed is refused. */
+  hint?: string;
 }) {
   return (
     <label className={`flex flex-1 flex-col gap-1 ${className ?? ''}`}>
@@ -184,6 +161,7 @@ function LabeledInput({
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         className={TEXT_INPUT_CLASS}
       />
+      {hint ? <span className="text-xs text-amber-700 dark:text-amber-400">{hint}</span> : null}
     </label>
   );
 }
@@ -199,8 +177,7 @@ export function GenerateScoreDialog({
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
-  const [complexity, setComplexity] =
-    useState<NonNullable<GenerateScoreRequest['complexity']>>('moderate');
+  const [complexity, setComplexity] = useState<GenerateScoreComplexity>('moderate');
   // An ordered list, not a set: `classifyTrackRole` gives the melody to the
   // first treble-clef track, so which instrument comes first is a musical
   // decision and has to be visible and controllable. Ids allow the same
@@ -210,7 +187,7 @@ export function GenerateScoreDialog({
   ]);
   const [nextEntryId, setNextEntryId] = useState(1);
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
-  const [measures, setMeasures] = useState(String(DEFAULT_MEASURES));
+  const [measures, setMeasures] = useState(String(DEFAULT_GENERATE_SCORE_MEASURES));
   const [tempo, setTempo] = useState('');
   const [keyFifths, setKeyFifths] = useState(0);
   const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
@@ -228,7 +205,8 @@ export function GenerateScoreDialog({
   }, [presetOpen]);
 
   const durationMeasures = Number(measures);
-  const tracks = ensemble.map((entry) => toRequestTrack(entry.value));
+  const instrumentValues = ensemble.map((entry) => entry.value);
+  const tracks = instrumentValues.map(generateScoreTrackForInstrumentValue);
 
   const { balance } = useBalance();
   /**
@@ -241,9 +219,7 @@ export function GenerateScoreDialog({
    * generation returns the requested length and is otherwise smaller — so this
    * is never exceeded. Hence "about", and never a re-quote afterwards.
    */
-  const estimatedCredits = Number.isFinite(durationMeasures)
-    ? Math.max(0, durationMeasures) * tracks.length
-    : 0;
+  const estimatedCredits = estimateGenerateScoreCredits(durationMeasures, tracks.length);
   /**
    * Refused only at zero or below, matching `POST /jobs`.
    *
@@ -257,14 +233,23 @@ export function GenerateScoreDialog({
    */
   const siteAdmin = useSiteAdmin();
   const outOfCredits = !siteAdmin && balance !== null && balance <= 0;
+  const generationDraft = {
+    title,
+    prompt,
+    durationMeasures,
+    instrumentValues,
+    complexity,
+    timeSignature: GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset],
+    keySignature: { fifths: keyFifths, mode: keyMode },
+    style,
+    mood,
+    tempoText: tempo,
+  };
 
-  const canGenerate =
-    !submitting &&
-    !outOfCredits &&
-    prompt.trim() !== '' &&
-    tracks.length > 0 &&
-    Number.isFinite(durationMeasures) &&
-    durationMeasures > 0;
+  const canGenerate = !submitting && !outOfCredits && canBuildGenerateScoreRequest(generationDraft);
+  // Blank is fine — no tempo is sent. Anything else that is not a positive
+  // number is what stops Generate, so say so rather than just greying it out.
+  const tempoRefused = tempo.trim() !== '' && !(Number(tempo) > 0);
 
   const addInstrument = (): void => {
     setEnsemble((prev) => [...prev, { id: nextEntryId, value: picker }]);
@@ -279,9 +264,7 @@ export function GenerateScoreDialog({
   };
 
   /** The first non-percussion track, which is the one the melody lands on. */
-  const melodyEntryId = ensemble.find(
-    (entry) => instrumentChoiceFor(entry.value).clef !== 'percussion',
-  )?.id;
+  const melodyEntryId = firstMelodyInstrumentEntryId(ensemble);
 
   const handlePresetSelect = (text: string): void => {
     setPrompt(text);
@@ -290,18 +273,8 @@ export function GenerateScoreDialog({
 
   const handleGenerate = (): void => {
     if (!canGenerate) return;
-    const request: GenerateScoreRequest = {
-      prompt,
-      ...(title.trim() !== '' && { title: title.trim() }),
-      durationMeasures,
-      tracks,
-      complexity,
-      timeSignature: TIME_SIGNATURE_OPTIONS[timeSigPreset],
-      keySignature: { fifths: keyFifths, mode: keyMode },
-      ...(style && { style }),
-      ...(mood && { mood }),
-      ...(tempo.trim() !== '' && Number.isFinite(Number(tempo)) && { tempo: Number(tempo) }),
-    };
+    const request = buildGenerateScoreRequest(generationDraft);
+    if (!request) return;
     onSubmit(request);
   };
 
@@ -384,7 +357,7 @@ export function GenerateScoreDialog({
                   'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
                 )}
               >
-                {PRESET_PROMPTS.map((text) => (
+                {PRESET_KEYS.map((key) => t(`generateScore.preset.${key}`)).map((text) => (
                   <Button
                     key={text}
                     type="button"
@@ -414,9 +387,9 @@ export function GenerateScoreDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
-              {STYLE_OPTIONS.map((s) => (
+              {GENERATE_SCORE_STYLE_OPTIONS.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {s}
+                  {t(`generateScore.styleName.${s}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -433,18 +406,16 @@ export function GenerateScoreDialog({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
-              {MOOD_OPTIONS.map((m) => (
+              {GENERATE_SCORE_MOOD_OPTIONS.map((m) => (
                 <SelectItem key={m} value={m}>
-                  {m}
+                  {t(`generateScore.moodName.${m}`)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select
             value={complexity}
-            onValueChange={(v) =>
-              setComplexity(v as NonNullable<GenerateScoreRequest['complexity']>)
-            }
+            onValueChange={(v) => setComplexity(v as GenerateScoreComplexity)}
           >
             <SelectTrigger
               aria-label={t('generateScore.complexity')}
@@ -453,9 +424,9 @@ export function GenerateScoreDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {COMPLEXITY_OPTIONS.map((c) => (
+              {GENERATE_SCORE_COMPLEXITY_OPTIONS.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {c}
+                  {t(`generateScore.complexityName.${c}`)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -527,6 +498,10 @@ export function GenerateScoreDialog({
             value={tempo}
             onChange={setTempo}
             min={1}
+            // Left blank the tempo is simply not sent; typed wrong it blocks
+            // Generate, and a disabled button with no reason is the trap this
+            // dialog's siblings document.
+            {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
           />
         </div>
 
@@ -539,7 +514,7 @@ export function GenerateScoreDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {KEY_FIFTHS_OPTIONS.map((opt) => (
+              {GENERATE_SCORE_KEY_FIFTHS_OPTIONS.map((opt) => (
                 <SelectItem key={opt.fifths} value={String(opt.fifths)}>
                   {opt.label}
                 </SelectItem>
@@ -566,7 +541,7 @@ export function GenerateScoreDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.keys(TIME_SIGNATURE_OPTIONS).map((key) => (
+              {Object.keys(GENERATE_SCORE_TIME_SIGNATURE_OPTIONS).map((key) => (
                 <SelectItem key={key} value={key}>
                   {key}
                 </SelectItem>

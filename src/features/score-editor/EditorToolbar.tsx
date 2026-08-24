@@ -21,7 +21,6 @@
  * change, not just a skin -- only the trigger/item buttons inside it move
  * to the library `Button`.
  */
-import { commandLabel } from '@/features/score-editor/command-labels';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -33,30 +32,16 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
-import { findEvent } from '@sudobility/music_lib';
-import { isNoteEvent } from '@sudobility/music_types';
-import type {
-  Accidental,
-  Articulation,
-  DurationName,
-  Ornament,
-  Pitch,
-} from '@sudobility/music_types';
+import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import {
-  addTrackCommand,
-  createId,
-  selectActiveTrackId,
-  selectSelectedNotes,
-} from '@sudobility/music_lib';
+import { selectSelectedNotes } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
 import { durationDisplay } from '@sudobility/music_lib';
 import type { BaseDuration } from '@sudobility/music_lib';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
-import { dispatchTracked } from '@sudobility/music_lib';
 import type { ReactElement } from 'react';
 import {
   ChevronDoubleLeftIcon,
@@ -108,6 +93,7 @@ import {
   OrnamentIcon,
 } from '@/components/icons/notation-icons';
 import {
+  addBlankTrack,
   addMeasure,
   deleteMeasureAtCaret,
   deleteSelected,
@@ -115,8 +101,10 @@ import {
   changeArticulation,
   changeOrnament,
   chooseDuration,
+  selectSelectedTrack,
   chooseEditMode,
   canStackOnActiveTrack,
+  defaultInsertPitch,
   insertNoteAtCaret,
   insertRestAtSelection,
   quantizeSelection,
@@ -239,18 +227,6 @@ function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 }
 
-/** The pitch a freshly-inserted note should use: the first selected note's own pitch, else middle C. */
-function defaultInsertPitch(store: EditorStoreApi): Pitch {
-  const { score, selection } = store.getState();
-  if (score) {
-    for (const id of selection.eventIds) {
-      const event = findEvent(score, id);
-      if (event && isNoteEvent(event)) return event.pitch;
-    }
-  }
-  return { step: 'C', accidental: 0, octave: 4 };
-}
-
 /** A drawn notation glyph: sized by the caller, coloured by `currentColor`. */
 type NotationIcon = (props: { className?: string }) => ReactElement;
 
@@ -298,8 +274,7 @@ export function EditorToolbar({
   const editMode = store((s) => s.editMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
-  const activeTrackId = store(selectActiveTrackId);
-  const activeTrack = score?.tracks.find((t) => t.id === activeTrackId) ?? null;
+  const activeTrack = store(selectSelectedTrack);
   // Asked through the track, because a drum track's program is a kit: Brush
   // sits at 40, the Violin address, which is how the toolbar came to refuse a
   // three-piece drum hit. The rule lives in music_lib; this only draws it.
@@ -474,13 +449,7 @@ export function EditorToolbar({
             value=""
             onValueChange={(value) => {
               if (value === 'blank') {
-                const id = createId();
-                dispatchTracked(
-                  store,
-                  addTrackCommand({ id, name: 'New track' }, commandLabel('addTrack')),
-                );
-                // Active immediately: you added it to work on it.
-                store.getState().setActiveTrack(id);
+                addBlankTrack(store);
               } else if (value === 'generate') {
                 onGenerateTrack?.();
               }

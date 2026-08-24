@@ -150,7 +150,39 @@
     "tempo": "速度",
     "key": "调号",
     "mode": "调式",
-    "timeSignature": "拍号"
+    "timeSignature": "拍号",
+    "tempoInvalid": "速度必须是大于零的数字，或留空。",
+    "preset": {
+      "gentlePiano": "创作一段温柔的八小节C大调钢琴旋律",
+      "cinematic": "创作一段富有电影感的十六小节D小调主题",
+      "pop": "创作一首欢快的流行编曲，包含钢琴、贝斯、鼓和弦乐",
+      "beginner": "创作一段适合初学者的简单旋律，只用四分音符和二分音符",
+      "jazz": "创作一段爵士风格的和弦进行，配上行走贝斯",
+      "battle": "创作一段充满活力的电子游戏战斗主题",
+      "ambient": "创作一首宁静的氛围钢琴曲",
+      "waltz": "创作一首活泼的3/4拍圆舞曲"
+    },
+    "styleName": {
+      "waltz": "圆舞曲",
+      "jazz": "爵士",
+      "pop": "流行",
+      "cinematic": "电影感",
+      "ambient": "氛围",
+      "battle": "战斗"
+    },
+    "moodName": {
+      "gentle": "温柔",
+      "dark": "黑暗",
+      "upbeat": "欢快",
+      "dramatic": "戏剧性",
+      "calm": "宁静",
+      "energetic": "充满活力"
+    },
+    "complexityName": {
+      "simple": "简单",
+      "moderate": "中等",
+      "complex": "复杂"
+    }
   },
   "dashboard": {
     "openProject": "打开项目：{{name}}",

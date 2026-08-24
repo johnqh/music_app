@@ -6,9 +6,8 @@
  * without rendering anything.
  */
 import { tickForPoint } from '@sudobility/music_lib';
-import type { EditMode, LayoutPlan } from '@sudobility/music_lib';
+import type { LayoutPlan } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
-import type { CollisionMode } from '@sudobility/music_lib';
 import { trackIdAtContentPoint } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
 
@@ -17,18 +16,6 @@ export type NoteDrag = { anchorId: string; anchorTick: number };
 
 /** Where a drop would put the selection. */
 export type DropTarget = { trackId: string; deltaTicks: number };
-
-/**
- * The collision rule a drop uses, from the toolbar's edit mode.
- *
- * A drop is a write, so it obeys the mode already set rather than inventing a
- * rule or asking. `insert` ripples, which is what `insert` means everywhere
- * else in the editor.
- */
-export function collisionForEditMode(mode: EditMode): CollisionMode {
-  if (mode === 'insert') return 'ripple';
-  return mode;
-}
 
 /** Rounds `tick` to the nearest multiple of `snapTicks`. */
 function snap(tick: number, snapTicks: number): number {

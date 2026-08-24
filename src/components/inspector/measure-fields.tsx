@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@sudobility/components';
 import {
   beatDurationTicks,
-  changeRepeatsCommand,
   effectiveClef,
   removeTempoAt,
   setBarline,
@@ -28,8 +27,10 @@ import {
   setPickup,
   setRepeats,
   setTempoAt,
+  measureIndexOf,
+  trackOfMeasure,
 } from '@sudobility/music_lib';
-import type { NavigationPatch } from '@sudobility/music_lib';
+import type { NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
 import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
@@ -128,10 +129,8 @@ export function BarlineField({ store, measure }: { store: EditorStoreApi; measur
   const score = store((s) => s.score);
   if (!score) return null;
 
-  const index = score.tracks
-    .find((track) => track.measures.some((m) => m.id === measure.id))
-    ?.measures.findIndex((m) => m.id === measure.id);
-  if (index === undefined || index < 0) return null;
+  const index = measureIndexOf(score, measure.id);
+  if (index === null) return null;
 
   const apply = (value: string): void => {
     setBarline(store, index, value === SINGLE_BARLINE ? undefined : (value as BarlineStyle));
@@ -170,10 +169,8 @@ export function NavigationFields({ store, measure }: { store: EditorStoreApi; me
   const score = store((s) => s.score);
   if (!score) return null;
 
-  const index = score.tracks
-    .find((track) => track.measures.some((m) => m.id === measure.id))
-    ?.measures.findIndex((m) => m.id === measure.id);
-  if (index === undefined || index < 0) return null;
+  const index = measureIndexOf(score, measure.id);
+  if (index === null) return null;
 
   const patch = (next: NavigationPatch): void => {
     setNavigation(store, index, next);
@@ -239,12 +236,10 @@ export function MeasureClefField({ store, measure }: { store: EditorStoreApi; me
   const isPlaying = store((s) => s.state === 'playing');
   const score = store((s) => s.score);
 
-  const track = score?.tracks.find((candidate) =>
-    candidate.measures.some((m) => m.id === measure.id),
-  );
+  const track = score ? trackOfMeasure(score, measure.id) : null;
   if (!track) return null;
 
-  const index = track.measures.findIndex((m) => m.id === measure.id);
+  const index = score ? (measureIndexOf(score, measure.id) ?? 0) : 0;
   const inForce = effectiveClef(track, index);
   const isFirst = index === 0;
 
@@ -281,7 +276,7 @@ export function RepeatFields({ store, measure }: { store: EditorStoreApi; measur
     setEndingDraft((measure.endingNumbers ?? []).join(', '));
   }, [measure.id, measure.endingNumbers]);
 
-  const patch = (next: Parameters<typeof changeRepeatsCommand>[1]): void => {
+  const patch = (next: RepeatPatch): void => {
     setRepeats(store, measure.id, next);
   };
 

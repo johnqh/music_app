@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { soundingPitchForDrawn } from '@sudobility/music_lib';
 import {
   bboxesIntersect,
   measureIndexAtGutterPoint,
@@ -10,7 +11,6 @@ import {
   pointInBBox,
   pitchAtStavePoint,
   trackIdAtContentPoint,
-  soundingPitchForDrawn,
 } from '@/features/score-editor/hit-test';
 import {
   STAVE_POSITION_HEIGHT,

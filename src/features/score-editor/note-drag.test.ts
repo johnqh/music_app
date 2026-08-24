@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { collisionForEditMode } from '@sudobility/music_lib';
 import { computeLayout, testRenderTheme, twoTrackScore } from '@sudobility/music_lib';
-import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
+import { resolveDrop } from '@/features/score-editor/note-drag';
 
 const score = twoTrackScore();
 const plan = () =>

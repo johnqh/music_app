@@ -8,9 +8,8 @@
  * exactly like `EditorToolbar`'s duration/accidental/articulation controls
  * already do for notes.
  *
- * Every mutating field dispatches a `ScoreCommand` (via `editing.ts`'s
- * selection-aware helpers where one already exists, or `store.
- * dispatchCommand` directly otherwise) — never an ad hoc store field.
+ * Every mutating field calls a `music_lib` editing facade — never an ad hoc
+ * store write, and never a command factory imported into React.
  *
  * Scope note: a note's *track* isn't editable here (no cross-track "move
  * note" command exists in `domain/commands/note-commands.ts`; only
@@ -92,12 +91,10 @@ import type {
   Dynamic,
   Clef,
   KeySignature,
-  Measure,
   NoteEvent,
   Pitch,
   PitchStep,
   DurationName,
-  Score,
   TimeSignature,
 } from '@sudobility/music_types';
 import { DYNAMICS, isNoteEvent } from '@sudobility/music_types';
@@ -107,9 +104,6 @@ import {
   findTrack,
   replacementRegion,
   selectActiveTrackId,
-  trackWrittenTransposition,
-  transposeKeySignature,
-  transposePitch,
   isPercussionTrack,
   durationLabel,
   durationNameForTicks,
@@ -138,14 +132,14 @@ import {
   clearGraceNotes,
   setTimeSignature,
   setKeySignature,
+  voiceNumberOf,
+  displayedPitchForNote,
 } from '@sudobility/music_lib';
-import {} from '@sudobility/music_lib';
-import {} from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import type { ReplaceScope } from '@sudobility/music_lib';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
-import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
+import type { ReplaceSubmission } from '@sudobility/music_lib';
 
 export type InspectorPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -219,16 +213,6 @@ type TabProps = {
   onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
 };
 
-/** The measure holding `note`, found by its track and tick, for the key signature. */
-function measureOfNote(score: Score, note: NoteEvent): Measure | null {
-  const track = findTrack(score, note.trackId);
-  return (
-    track?.measures.find(
-      (m) => note.startTick >= m.startTick && note.startTick < m.startTick + m.durationTicks,
-    ) ?? null
-  );
-}
-
 function NoteTab({ store, onReplace }: TabProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
@@ -248,20 +232,7 @@ function NoteTab({ store, onReplace }: TabProps) {
     return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectNote')}</p>;
   }
 
-  /**
-   * The pitch as the reader sees it: sounding in concert mode, and the
-   * player's own written pitch otherwise. Zero shift for a non-transposing
-   * instrument, so the common path returns the stored object untouched.
-   */
-  const shown = (note: NoteEvent): Pitch => {
-    // Track-aware: a drum track's program is a kit, and kits 24 and 25 sit at
-    // guitar programs, which transpose by an octave.
-    const track = findTrack(score, note.trackId);
-    const semitones = pitchDisplay === 'written' && track ? trackWrittenTransposition(track) : 0;
-    if (semitones === 0) return note.pitch;
-    const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
-    return transposePitch(note.pitch, semitones, transposeKeySignature(key, semitones));
-  };
+  const shown = (note: NoteEvent): Pitch => displayedPitchForNote(score, note, pitchDisplay);
 
   const step = commonValue(notes.map((n) => shown(n).step));
   const accidentalStr = commonValue(notes.map((n) => String(shown(n).accidental)));
@@ -421,15 +392,10 @@ function NoteTab({ store, onReplace }: TabProps) {
       <MixedNumberField
         label={t('editor.voice')}
         value={commonValue(
-          notes.map((n) => {
-            const measure = score.tracks
-              .flatMap((t) => t.measures)
-              .find((m) => m.voices.some((v) => v.id === n.voiceId));
-            // Counted from 1, matching the toolbar's own Voice 1 / Voice 2
-            // buttons. The same note used to read as "Voice 1" on the bar and
-            // "0" here.
-            return (measure ? measure.voices.findIndex((v) => v.id === n.voiceId) : 0) + 1;
-          }),
+          // Counted from 1, matching the toolbar's own Voice 1 / Voice 2
+          // buttons. The same note used to read as "Voice 1" on the bar and
+          // "0" here.
+          notes.map((n) => voiceNumberOf(score, n)),
         )}
         min={1}
         onCommit={(v) => setVoice(store, noteIds, Math.round(v) - 1)}

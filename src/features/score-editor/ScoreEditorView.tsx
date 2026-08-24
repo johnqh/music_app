@@ -45,7 +45,7 @@ import {
 import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import type { InstrumentChoice } from '@sudobility/music_lib';
-import { collisionForEditMode, resolveDrop } from '@/features/score-editor/note-drag';
+import { resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
 import { useAppStore } from '@sudobility/music_lib';
 import {
@@ -58,6 +58,12 @@ import {
   writeNoteAtPoint,
   relocateNotes,
   commitPitchDrag,
+  soundingPitchForDrawn,
+  collisionForEditMode,
+  trackNotesInOrder,
+  noteIndexAtOrAfter,
+  trackOfMeasure,
+  barCount,
 } from '@sudobility/music_lib';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
@@ -76,7 +82,6 @@ import {
   measureIdAtPoint,
   pitchAtStavePoint,
   measureIndexAtGutterPoint,
-  soundingPitchForDrawn,
 } from '@/features/score-editor/hit-test';
 import type { Point } from '@/features/score-editor/hit-test';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
@@ -710,27 +715,6 @@ export function ScoreEditorView({
     };
   }, []);
 
-  /**
-   * Click-to-seek: moves the playback position (and so the caret and the
-   * transport's position scrubber, both driven by the same store
-   * `positionTick` the engine reports back through `seek`) to the tick
-   * under a canvas click. Clicking left of a system's first measure (the
-   * clef/key area) clamps to that system's start; clicks in the dead space
-   * between systems are ignored (`tickForPoint` returns null).
-   */
-  const seekToEventPoint = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const container = containerRef.current;
-      if (!container || !layoutPlan || !displayScore) return;
-      const rect = container.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / zoom;
-      const y = (event.clientY - rect.top) / zoom;
-      const tick = tickForPoint(layoutPlan, displayScore, x, y);
-      if (tick !== null) playbackController.seek(tick);
-    },
-    [layoutPlan, displayScore, zoom],
-  );
-
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (suppressNextClickRef.current) {
@@ -888,16 +872,14 @@ export function ScoreEditorView({
       // One call: the caret goes here, the track under the pointer becomes
       // active, and the selection clears so the caret anchors the next range.
       const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
-      const owner = measureId
-        ? (state.score.tracks.find((t) => t.measures.some((m) => m.id === measureId)) ?? null)
-        : null;
+      const owner = measureId ? trackOfMeasure(state.score, measureId) : null;
       const tick =
         layoutPlan && displayScore
           ? tickForPoint(layoutPlan, displayScore, logical.x, logical.y)
           : null;
       if (tick !== null) placeCaret(store, { tick, trackId: owner?.id ?? null });
     },
-    [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId, pitchDisplay],
+    [store, layoutPlan, displayScore, zoom, pitchDisplay],
   );
 
   /**
@@ -921,22 +903,15 @@ export function ScoreEditorView({
    */
   const [lyricStart, setLyricStart] = useState<number | null>(null);
 
-  const lyricNotes = useMemo(() => {
-    if (!score || !activeTrackId) return [];
-    const track = score.tracks.find((t) => t.id === activeTrackId);
-    if (!track) return [];
-    return track.measures
-      .flatMap((m) => m.voices.flatMap((v) => v.events))
-      .filter(isNoteEvent)
-      .sort((a, b) => a.startTick - b.startTick);
-  }, [score, activeTrackId]);
+  const lyricNotes = useMemo(
+    () => (score && activeTrackId ? trackNotesInOrder(score, activeTrackId) : []),
+    [score, activeTrackId],
+  );
 
   const beginLyricEntry = useCallback(() => {
     if (lyricNotes.length === 0) return;
-    const caret = caretTick();
-    const at = lyricNotes.findIndex((n) => n.startTick >= caret);
-    setLyricStart(at === -1 ? 0 : at);
-  }, [lyricNotes, store]);
+    setLyricStart(noteIndexAtOrAfter(lyricNotes, caretTick()));
+  }, [lyricNotes]);
 
   const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1234,7 +1209,7 @@ export function ScoreEditorView({
       ) : null}
       <GoToBarDialog
         open={goToBarOpen}
-        barCount={score?.tracks[0]?.measures.length ?? 0}
+        barCount={barCount(score)}
         onClose={() => setGoToBarOpen(false)}
         onGo={(bar) => caretToBar(store, bar)}
       />

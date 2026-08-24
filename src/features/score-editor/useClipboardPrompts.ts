@@ -7,18 +7,11 @@
  * toolbar button and a future drag all share one rule.
  *
  * The rule, following the export dialog's precedent: **ask only when the
- * answers differ**. `clipboard-prompts.ts` owns that test.
+ * answers differ**. music_lib owns that test; this hook only opens dialogs.
  */
 import { useCallback, useState } from 'react';
-import { isNoteEvent } from '@sudobility/music_types';
-import type { NoteEvent } from '@sudobility/music_types';
-import { findEvent, selectActiveTrackId } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import {
-  clipboardSpan,
-  cutNeedsPrompt,
-  pasteNeedsPrompt,
-} from '@/features/score-editor/clipboard-prompts';
+import { cutWouldPrompt, pasteWouldPrompt } from '@sudobility/music_lib';
 
 export type CutChoice = 'silence' | 'close';
 export type PasteChoice = 'replace' | 'insert';
@@ -42,29 +35,13 @@ export function useClipboardPrompts(store: EditorStoreApi): ClipboardPrompts {
   const [pendingPaste, setPendingPaste] = useState(false);
 
   const requestCut = useCallback(() => {
-    const state = store.getState();
-    if (!state.score) return;
-
-    const notes = state.selection.eventIds
-      .map((id) => findEvent(state.score!, id))
-      .filter((event): event is NoteEvent => event !== null && isNoteEvent(event));
-    if (notes.length === 0) return;
-
-    if (cutNeedsPrompt(state.score, notes)) setPendingCut(true);
-    else state.cutSelection();
+    if (cutWouldPrompt(store)) setPendingCut(true);
+    else store.getState().cutSelection();
   }, [store]);
 
   const requestPaste = useCallback(() => {
-    const state = store.getState();
-    const clipboard = state.clipboard;
-    if (!state.score || !clipboard || clipboard.events.length === 0) return;
-
-    const trackId = selectActiveTrackId(state);
-    const anchorTick = clipboard.anchorTick;
-    const span = clipboardSpan(clipboard.events);
-
-    if (trackId && pasteNeedsPrompt(state.score, trackId, anchorTick, span)) setPendingPaste(true);
-    else state.paste();
+    if (pasteWouldPrompt(store)) setPendingPaste(true);
+    else store.getState().paste();
   }, [store]);
 
   const resolveCut = useCallback(
