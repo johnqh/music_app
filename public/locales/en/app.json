@@ -101,7 +101,8 @@
     "delete": "Delete",
     "loading": "Loading…",
     "confirm": "Confirm",
-    "close": "Close"
+    "close": "Close",
+    "save": "Save"
   },
   "community": {
     "title": "Community",
@@ -251,7 +252,14 @@
     "openWarning": "Your current work will be replaced by the snapshot you open. Nothing else is lost — every snapshot stays where it is.",
     "createHint": "Pins the project as it is now. A snapshot never changes once saved.",
     "publisherHint": "Shown on Community. Never your email address.",
-    "currentWork": "Current work"
+    "currentWork": "Current work",
+    "publicName": "Public name",
+    "publicNameHint": "The title shown on Community. Defaults to the project and snapshot names.",
+    "publicNameFor": "Public name for {{name}}",
+    "copyrightWarning": "Only publish music you created. Publishing puts it on a public page anyone can open.",
+    "copyrightConfirm": "I hold the full copyright to this work and everything it quotes.",
+    "managePublishedTitle": "Published snapshots",
+    "nonePublished": "Nothing from this project is published yet."
   },
   "importMidi": {
     "fileKind": "MIDI file",
@@ -471,7 +479,14 @@
     "nothingToRedo": "Nothing to redo",
     "untitledProject": "Untitled project",
     "noIssues": "No issues.",
-    "projectMenuLabel": "Project",
+    "fixIssues": "Fix all",
+    "fixIssuesTitle": "Fix every issue that has an unambiguous repair",
+    "fixedIssues_one": "Fixed {{count}} issue.",
+    "fixedIssues_other": "Fixed {{count}} issues.",
+    "fixedIssuesPartial_one": "Fixed {{count}} issue; {{remaining}} still need attention.",
+    "fixedIssuesPartial_other": "Fixed {{count}} issues; {{remaining}} still need attention.",
+    "fixedNothing": "Nothing here can be fixed automatically.",
+    "snapshotMenuLabel": "Snapshot",
     "createSnapshot": "Create snapshot…",
     "openSnapshot": "Open snapshot…",
     "export": "Export",
@@ -552,7 +567,8 @@
     "beamBreak": "Break beam",
     "beamBreakHint": "Start a new beam group at the selected note",
     "beamNone": "No beam",
-    "beamNoneHint": "Draw the selected notes with flags instead of a beam"
+    "beamNoneHint": "Draw the selected notes with flags instead of a beam",
+    "managePublished": "Published snapshots…"
   },
   "credits": {
     "title": "Credits",

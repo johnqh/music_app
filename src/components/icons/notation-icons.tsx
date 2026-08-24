@@ -56,11 +56,38 @@ export const ICON_GLYPH_CLASS = 'size-[18px] shrink-0';
  */
 export const CONTROL_HEIGHT_CLASS = 'h-8 min-h-8';
 
+/**
+ * The ink of every control in an action bar, buttons and selects alike.
+ *
+ * The library's `ghost` variant draws its text in `text-gray-700` — a muted
+ * grey meant for controls of minimal emphasis. Beside a select trigger, whose
+ * chosen value reads in the ordinary near-black text colour, that made an
+ * action button look like the disabled twin of the control next to it: Triplet
+ * read as unavailable while Note length, doing the same job one gap along,
+ * read as live.
+ *
+ * Nothing was actually communicated by the grey, either. A disabled control is
+ * already marked by `disabled:opacity-50`, which the variant applies on top of
+ * whatever colour this sets — so stating the ordinary text colour here both
+ * fixes the false signal and leaves the true one intact.
+ *
+ * `text-foreground` rather than this app's `text-theme-text-primary`, and the
+ * difference matters: the theme token resolves to `var(--color-text-primary)`,
+ * which the design package never emits — so it is an undefined variable that
+ * merely inherits whatever colour it lands in. `--foreground` is a real token,
+ * and it is the one the select trigger beside these buttons already uses, so
+ * this matches the control it has to agree with instead of approximating it.
+ *
+ * Stated with the height, and for the same reason: it is a property of the bar
+ * rather than of any one control in it, and both toolbars need it.
+ */
+export const CONTROL_INK_CLASS = 'text-foreground';
+
 /** An icon-only control: square at the shared height, with the glyph centred. */
-export const ICON_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} w-8 shrink-0 inline-flex items-center justify-center p-0 text-sm leading-none`;
+export const ICON_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} ${CONTROL_INK_CLASS} w-8 shrink-0 inline-flex items-center justify-center p-0 text-sm leading-none`;
 
 /** A control carrying text (or text + glyph) at the shared height. */
-export const TEXT_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} inline-flex items-center gap-1 px-2 py-0 text-sm leading-none`;
+export const TEXT_CONTROL_CLASS = `${CONTROL_HEIGHT_CLASS} ${CONTROL_INK_CLASS} inline-flex items-center gap-1 px-2 py-0 text-sm leading-none`;
 
 type GlyphProps = SVGProps<SVGSVGElement>;
 

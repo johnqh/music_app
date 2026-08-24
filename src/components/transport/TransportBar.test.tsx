@@ -240,6 +240,23 @@ describe('TransportBar: timeline scrubber', () => {
     expect(playbackController.seek).toHaveBeenCalledWith(960);
   });
 
+  /*
+    Seeking is a round trip — the engine reseeks its queue, silences what was
+    sounding, and reports back — and the bar used to paint only what came home,
+    so the filled part trailed the thumb while dragging. Here nothing reports
+    back at all (the controller is a stub), which is the sharpest version of
+    the same question: the control must still show where it was dragged to.
+  */
+  it('paints where the drag put it without waiting for the transport', () => {
+    const store = makeStore();
+    renderBar(store);
+
+    const scrubber = screen.getByLabelText('Playback position') as HTMLInputElement;
+    fireEvent.change(scrubber, { target: { value: '960' } });
+
+    expect(scrubber.value).toBe('960');
+  });
+
   it('is disabled with no score loaded', () => {
     const store = makeStore(false);
     renderBar(store);

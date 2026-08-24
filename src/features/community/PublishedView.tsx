@@ -68,7 +68,7 @@ export function PublishedView() {
   return (
     <div className="min-h-screen bg-white text-black">
       <div className="flex flex-wrap items-center gap-3 border-b border-neutral-300 px-4 py-3">
-        <span className="font-medium">{snapshot?.name ?? t('common.loading')}</span>
+        <span className="font-medium">{snapshot?.publicName ?? t('common.loading')}</span>
         {snapshot && (
           <span className="text-sm text-neutral-600">
             {t('community.sharedBy', { name: snapshot.publisherName })}

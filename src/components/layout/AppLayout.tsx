@@ -31,9 +31,9 @@
  * panel/Toggle inspector panel and the status bar's Validation issues
  * button (also off the colored bar) become the library `Button` too.
  *
- * The app bar's own buttons (Back to dashboard, Save/Undo/Redo, the four
- * menu *triggers*, Keyboard shortcuts) stay hand-rolled on `ICON_BUTTON_
- * CLASS`/`TEXT_BUTTON_CLASS`, per this file's pre-existing doc comment
+ * The app bar's own buttons (Back to dashboard, Save/Undo/Redo, Print, the
+ * four menu *triggers*, Keyboard shortcuts) stay hand-rolled on
+ * `ICON_BUTTON_CLASS`, per this file's pre-existing doc comment
  * below -- verified, not just assumed, for this sweep: `Button`'s `ghost`
  * variant's own `dark:text-gray-300`/`dark:hover:bg-gray-800` compile to a
  * `.dark <class>` selector, which is *more specific* than a plain
@@ -59,13 +59,15 @@ import {
   Cog6ToothIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/solid';
+// Line art, deliberately: a solid camera or printer is a heavy blob at 18px,
+// where the arrows and the gear read as line work even in the solid set.
+import { CameraIcon, DocumentArrowDownIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { ICON_GLYPH_CLASS, SunMoonIcon } from '@/components/icons/notation-icons';
 import { variants } from '@sudobility/design';
 import {
   ICON_BUTTON_CLASS,
   MENU_CLASS,
   MENU_ITEM_CLASS,
-  TEXT_BUTTON_CLASS,
   useMenu,
 } from '@/components/layout/app-bar-menu';
 import { safeFilename as midiSafeFilename } from '@sudobility/music_lib';
@@ -82,6 +84,7 @@ import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { repairAllIssues } from '@/features/score-editor/editing';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
@@ -108,6 +111,7 @@ import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
+import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
 import { snapshotTree } from '@sudobility/music_lib';
 import type { SnapshotSummary } from '@sudobility/music_types';
 
@@ -183,6 +187,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const score = store((s) => s.score);
   const validationIssues = store((s) => s.validationIssues);
+  // Transport state only — it changes on a transition, not per position
+  // report, so unlike `positionTick` it is safe to read at this level.
+  const playbackState = store((s) => s.state);
   const projectId = store((s) => s.projectId);
 
   /**
@@ -283,6 +290,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const [parentSnapshotId, setParentSnapshotId] = useState<string | null>(null);
   const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
   const [openSnapshotOpen, setOpenSnapshotOpen] = useState(false);
+  const [managePublishedOpen, setManagePublishedOpen] = useState(false);
   const [publisherName, setPublisherName] = useState<string | undefined>(undefined);
 
   const refreshSnapshots = useCallback(async () => {
@@ -305,7 +313,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   }, [store]);
 
   const createSnapshot = useCallback(
-    async (name: string, publisher?: string) => {
+    async (name: string, publisher?: string, publicName?: string) => {
       const projectId = store.getState().projectId;
       if (!projectId) return;
       const { musicClient, auth } = getAppServices();
@@ -325,8 +333,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       const snapshot = await musicClient.createSnapshot(projectId, name, token);
       setCreateSnapshotOpen(false);
 
-      if (publisher) {
-        const published = await musicClient.publishSnapshot(snapshot.id, publisher, token);
+      if (publisher && publicName) {
+        const published = await musicClient.publishSnapshot(
+          snapshot.id,
+          { publisherName: publisher, publicName },
+          token,
+        );
         const url = `${window.location.origin}/en/p/${published.publicId ?? ''}`;
         store.getState().pushToast({ message: `Published: ${url}`, severity: 'success' });
       }
@@ -334,6 +346,28 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       await refreshSnapshots();
     },
     [store, refreshSnapshots],
+  );
+
+  /**
+   * Renaming a publication is a re-publish: the server keeps the first
+   * `publicId`, so every link already shared keeps working. The publisher name
+   * travels unchanged — this dialog edits the title, not the attribution.
+   */
+  const renamePublished = useCallback(
+    async (snapshotId: string, publicName: string) => {
+      const { musicClient, auth } = getAppServices();
+      const token = await auth.getToken();
+      if (!token) return;
+      const existing = snapshots.find((s) => s.id === snapshotId);
+      if (!existing?.publisherName) return;
+      await musicClient.publishSnapshot(
+        snapshotId,
+        { publisherName: existing.publisherName, publicName },
+        token,
+      );
+      await refreshSnapshots();
+    },
+    [snapshots, refreshSnapshots],
   );
 
   const openSnapshot = useCallback(
@@ -395,6 +429,31 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   };
 
   const errorIssues = validationIssues.filter((i) => i.severity === 'error');
+
+  /**
+   * Clears every issue that has an unambiguous repair, in one undoable step.
+   *
+   * The toast reports what actually left the list rather than what was
+   * attempted: several rules (how many notes sound at once, most obviously)
+   * have no repair that isn't a guess about the music, and saying "fixed
+   * everything" over a list that still has entries in it would be a lie the
+   * reader can see.
+   */
+  const handleFixIssues = (): void => {
+    const { fixed, remaining } = repairAllIssues(store, t('editor.fixIssues'));
+    if (fixed === 0) {
+      store.getState().pushToast({ message: t('editor.fixedNothing'), severity: 'info' });
+      return;
+    }
+    store.getState().pushToast({
+      message:
+        remaining > 0
+          ? t('editor.fixedIssuesPartial', { count: fixed, remaining })
+          : t('editor.fixedIssues', { count: fixed }),
+      severity: 'success',
+    });
+    if (remaining === 0) issuesMenu.setOpen(false);
+  };
 
   const commitTitle = (): void => {
     if (titleDraft !== null && titleDraft.trim() !== '' && titleDraft !== projectName) {
@@ -628,19 +687,21 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           </Tooltip>
 
           <div ref={projectMenu.ref} className="relative">
-            <button
-              type="button"
-              aria-label={t('editor.projectMenu')}
-              aria-haspopup="menu"
-              aria-expanded={projectMenu.open}
-              onClick={() => {
-                projectMenu.setOpen((v) => !v);
-                void refreshSnapshots();
-              }}
-              className={TEXT_BUTTON_CLASS}
-            >
-              {t('editor.projectMenuLabel')}
-            </button>
+            <Tooltip placement="bottom" content={t('editor.snapshotMenuLabel')}>
+              <button
+                type="button"
+                aria-label={t('editor.projectMenu')}
+                aria-haspopup="menu"
+                aria-expanded={projectMenu.open}
+                onClick={() => {
+                  projectMenu.setOpen((v) => !v);
+                  void refreshSnapshots();
+                }}
+                className={ICON_BUTTON_CLASS}
+              >
+                <CameraIcon className={ICON_GLYPH_CLASS} />
+              </button>
+            </Tooltip>
             {projectMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
                 <Button
@@ -669,36 +730,50 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 >
                   {t('editor.openSnapshot')}
                 </Button>
-              </div>
-            )}
-          </div>
-
-          <div ref={exportMenu.ref} className="relative">
-            <button
-              type="button"
-              aria-label={t('editor.exportMenu')}
-              aria-haspopup="menu"
-              aria-expanded={exportMenu.open}
-              onClick={() => exportMenu.setOpen((v) => !v)}
-              className={TEXT_BUTTON_CLASS}
-            >
-              {t('editor.export')}
-            </button>
-            {exportMenu.open && (
-              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
                 <Button
                   type="button"
                   variant="ghost"
                   role="menuitem"
                   onClick={() => {
-                    exportMenu.setOpen(false);
-                    onNavigate?.(`/project/${store.getState().projectId ?? ''}/print`);
+                    projectMenu.setOpen(false);
+                    setManagePublishedOpen(true);
                   }}
                   disabled={!score}
                   className={MENU_ITEM_CLASS}
                 >
-                  {t('editor.print')}
+                  {t('editor.managePublished')}
                 </Button>
+              </div>
+            )}
+          </div>
+
+          <Tooltip placement="bottom" content={t('editor.print')}>
+            <button
+              type="button"
+              aria-label={t('editor.print')}
+              disabled={!score}
+              onClick={() => onNavigate?.(`/project/${store.getState().projectId ?? ''}/print`)}
+              className={ICON_BUTTON_CLASS}
+            >
+              <PrinterIcon className={ICON_GLYPH_CLASS} />
+            </button>
+          </Tooltip>
+
+          <div ref={exportMenu.ref} className="relative">
+            <Tooltip placement="bottom" content={t('editor.export')}>
+              <button
+                type="button"
+                aria-label={t('editor.exportMenu')}
+                aria-haspopup="menu"
+                aria-expanded={exportMenu.open}
+                onClick={() => exportMenu.setOpen((v) => !v)}
+                className={ICON_BUTTON_CLASS}
+              >
+                <DocumentArrowDownIcon className={ICON_GLYPH_CLASS} />
+              </button>
+            </Tooltip>
+            {exportMenu.open && (
+              <div role="menu" className={`left-0 ${MENU_CLASS}`}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1009,6 +1084,27 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   </div>
                 ))}
               </div>
+              {/*
+                Pinned under the list rather than above it: the reader scrolls
+                the issues, decides, and the action is where their eye ends up.
+                Disabled while playing because the repair is a content edit and
+                `dispatchCommand` would refuse it anyway — better to show that
+                than to offer a button that silently does nothing.
+              */}
+              {validationIssues.length > 0 && (
+                <div className="sticky bottom-0 mt-1 border-t border-theme-border-primary bg-theme-surface-primary p-1">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full justify-center px-2 py-1 text-xs"
+                    title={t('editor.fixIssuesTitle')}
+                    disabled={playbackState === 'playing'}
+                    onClick={handleFixIssues}
+                  >
+                    {t('editor.fixIssues')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1023,9 +1119,17 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <CreateSnapshotDialog
         open={createSnapshotOpen}
         snapshotCount={snapshots.length}
+        projectName={projectName}
         {...(publisherName ? { defaultPublisherName: publisherName } : {})}
-        onCreate={(name, publisher) => void createSnapshot(name, publisher)}
+        onCreate={(name, publisher, publicName) => void createSnapshot(name, publisher, publicName)}
         onClose={() => setCreateSnapshotOpen(false)}
+      />
+
+      <ManagePublishedDialog
+        open={managePublishedOpen}
+        snapshots={snapshots}
+        onRename={(id, publicName) => void renamePublished(id, publicName)}
+        onClose={() => setManagePublishedOpen(false)}
       />
 
       <OpenSnapshotDialog

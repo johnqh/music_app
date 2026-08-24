@@ -48,7 +48,7 @@ export function CommunityPage() {
     if (!needle) return items ?? [];
     return (items ?? []).filter(
       (item) =>
-        item.name.toLowerCase().includes(needle) ||
+        item.publicName.toLowerCase().includes(needle) ||
         item.publisherName.toLowerCase().includes(needle),
     );
   }, [items, query]);
@@ -104,7 +104,7 @@ export function CommunityPage() {
           <LocalizedLink key={item.publicId} to={`/p/${item.publicId}`}>
             <Card variant="bordered" padding="sm" className="hover:bg-theme-hover-bg">
               <div className="flex items-baseline justify-between gap-3">
-                <Text weight="medium">{item.name}</Text>
+                <Text weight="medium">{item.publicName}</Text>
                 <Text size="sm" color="muted">
                   {t('community.sharedBy', { name: item.publisherName })} ·{' '}
                   {new Date(item.createdAt).toLocaleDateString()}

@@ -171,6 +171,70 @@ describe('AppLayout', () => {
     );
   });
 
+  /*
+    The Fix button is the issue list's own escape hatch, so what it must do is
+    empty that list — not merely run without throwing. The fixture is a genuine
+    duplicate note, which is the case this shipped for: a generated drum part
+    that struck the same pitch twice at one tick.
+  */
+  it('"Fix all" clears the issues it can and empties the list', async () => {
+    const score = twinkleScore();
+    const track = score.tracks[0];
+    const measure = track.measures[0];
+    const voice = measure.voices[0];
+    const original = voice.events[0];
+    const duplicated: Score = {
+      ...score,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            {
+              ...measure,
+              voices: [
+                { ...voice, events: [...voice.events, { ...original, id: `${original.id}-copy` }] },
+              ],
+            },
+            ...track.measures.slice(1),
+          ],
+        },
+        ...score.tracks.slice(1),
+      ],
+    };
+    const store = await makeStoreWithProject(score);
+    store.getState().setScore(duplicated, { resetHistory: false });
+    expect(store.getState().validationIssues.length).toBeGreaterThan(0);
+
+    render(<AppLayout store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Validation issues' }));
+    await user.click(await screen.findByRole('button', { name: 'Fix all' }));
+
+    await waitFor(() => expect(store.getState().validationIssues).toEqual([]));
+    expect(allNotes(store.getState().score as Score).filter((n) => n.id.endsWith('-copy'))).toEqual(
+      [],
+    );
+  });
+
+  it('prints from its own title-bar button, not from inside the Export menu', async () => {
+    // Print writes no file, so it is not an export. It is the one title-bar
+    // action that leaves the editor, and burying it under Export made it read
+    // as a seventh file format.
+    const store = await makeStoreWithProject();
+    const onNavigate = vi.fn();
+    render(<AppLayout store={store} onNavigate={onNavigate} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByLabelText('Export menu'));
+    expect(screen.queryByRole('menuitem', { name: 'Print…' })).toBeNull();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByLabelText('Print…'));
+
+    expect(onNavigate).toHaveBeenCalledWith(`/project/${store.getState().projectId ?? ''}/print`);
+  });
+
   it('"Back to dashboard" calls onNavigate("/projects")', async () => {
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();

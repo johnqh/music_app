@@ -13,16 +13,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import { ICON_CONTROL_CLASS, TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
+import { ICON_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
 export const ICON_BUTTON_CLASS = cn(
   ICON_CONTROL_CLASS,
   'rounded-md text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40',
-);
-
-export const TEXT_BUTTON_CLASS = cn(
-  TEXT_CONTROL_CLASS,
-  'rounded-md px-3 font-medium text-inherit hover:bg-white/10',
 );
 
 export const MENU_CLASS = cn(

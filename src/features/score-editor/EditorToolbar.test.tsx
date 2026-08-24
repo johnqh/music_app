@@ -656,3 +656,31 @@ describe('tracks group', () => {
     expect(screen.getByRole('combobox', { name: 'Add Track' })).toBeDisabled();
   });
 });
+
+describe('EditorToolbar: action buttons read as live, not disabled', () => {
+  /*
+    The library's `ghost` variant draws text in a muted grey. Beside a select
+    trigger showing its value in ordinary near-black, that made Triplet look
+    like the unavailable twin of Note duration one gap along — while the thing
+    that actually marks a control unavailable, `disabled:opacity-50`, was doing
+    its job unaffected.
+
+    Asserted as "the same ink as the selector" rather than against a colour
+    name, because that is the requirement: whatever the bar's text colour is,
+    an action button and a selector must agree on it.
+  */
+  it('gives an action button the same ink as a selector beside it', () => {
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twinkleScore(), { resetHistory: true });
+    renderToolbar(store);
+
+    const inkOf = (element: HTMLElement): string[] =>
+      element.className.split(/\s+/).filter((name) => /^text-(?!sm$|xs$|base$|lg$)/.test(name));
+
+    const action = screen.getByLabelText('Triplet');
+    const selector = screen.getByLabelText('Note duration');
+
+    expect(inkOf(action)).not.toEqual([]);
+    expect(inkOf(action)).toEqual(inkOf(selector));
+  });
+});

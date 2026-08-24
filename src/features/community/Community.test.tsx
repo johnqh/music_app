@@ -13,6 +13,7 @@ const score = twinkleScore();
 const published = {
   publicId: 'pub_x',
   name: 'Version 1',
+  publicName: 'My Song Version 1',
   publisherName: 'Jane',
   score,
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -46,7 +47,10 @@ describe('CommunityPage', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Version 1')).toBeVisible();
+    // The public title, not the owner's version label: "Version 1" means
+    // nothing to a stranger.
+    expect(await screen.findByText('My Song Version 1')).toBeVisible();
+    expect(screen.queryByText('Version 1')).toBeNull();
     expect(screen.getByText(/by Jane/)).toBeVisible();
   });
 });
@@ -71,7 +75,7 @@ describe('PublishedView', () => {
     // The rule the page exists to keep, asserted by the absence of every
     // affordance rather than by a read-only flag somebody could flip.
     renderPublished();
-    await screen.findByText('Version 1');
+    await screen.findByText('My Song Version 1');
     for (const name of [/print/i, /export/i, /save/i, /undo/i, /delete/i, /import/i]) {
       expect(screen.queryByRole('button', { name })).toBeNull();
     }
@@ -85,7 +89,7 @@ describe('PublishedView', () => {
   it('shows a Share button carrying the URL', async () => {
     const user = userEvent.setup();
     renderPublished();
-    await screen.findByText('Version 1');
+    await screen.findByText('My Song Version 1');
     await user.click(screen.getByRole('button', { name: /share/i }));
     expect(
       screen.getByText(new RegExp(window.location.href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))),

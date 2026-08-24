@@ -33,9 +33,10 @@
  * there's no draft/commit split to preserve and no benefit to wrapping it.
  */
 import { commandLabel } from '@/features/score-editor/command-labels';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
+import { LevelSlider } from '@/components/controls/level-slider';
 import {
   Button,
   Input,
@@ -44,7 +45,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Slider,
   Spinner,
   Tooltip,
   cn,
@@ -240,26 +240,57 @@ function PositionScrubber({
 }: {
   maxTick: number;
   disabled: boolean;
-  onScrub: (event: ChangeEvent<HTMLInputElement>) => void;
+  onScrub: (tick: number) => void;
 }) {
   const { t } = useTranslation();
   // From the bus, not the store: the engine reports position on every seek and
   // stop as well as while playing, so this is always current — and it is the
   // subscription that keeps a 30Hz value out of every other component.
   const positionTick = usePlaybackPosition();
+  const reported = Math.min(positionTick, maxTick);
+  /*
+    Painted from a local draft, not from the reported position.
+
+    Seeking is a round trip — the engine reseeks its queue, silences what was
+    sounding and reports back — and the fill only moved when that came home, so
+    the coloured part of the bar trailed the thumb by a visible moment while
+    dragging. The `CommitSlider` in the inspector has always drawn from a draft
+    for the same reason, which is why its volume row feels immediate.
+
+    The draft follows the reported position whenever that changes, so playback
+    still moves this and letting go leaves it wherever the transport actually
+    is. Unlike the inspector's, the change is passed through on every event
+    rather than on release: scrubbing is meant to be heard as you do it, and
+    seeking is not an undo entry.
+  */
+  const [draft, setDraft] = useState(reported);
+  useEffect(() => setDraft(reported), [reported]);
   return (
-    // `wrapperClassName` keeps the scrubber full-width: Tooltip's wrapper is
-    // inline-block, which would otherwise collapse it to its intrinsic size.
+    /*
+      The app's own slider, not the library one — and the same control the
+      master volume beside it uses.
+
+      Two different controls cannot be made to line up by tuning padding, which
+      is what the previous attempt here did: a bare `<input type="range">` and
+      the library slider have different intrinsic heights and different
+      vertical alignment, so the two sat on visibly different rows however the
+      wrapper was nudged. Sharing one control makes the alignment structural.
+
+      `wrapperClassName` keeps it full-width: Tooltip's wrapper is inline-block,
+      which would otherwise collapse it to its intrinsic size.
+    */
     <Tooltip content={t('transport.scrub')} wrapperClassName="w-full">
-      <input
-        type="range"
-        aria-label={t('transport.position')}
+      <LevelSlider
+        label={t('transport.position')}
+        value={draft}
         min={0}
         max={maxTick}
-        value={Math.min(positionTick, maxTick)}
+        step={1}
         disabled={disabled}
-        onChange={onScrub}
-        className="w-full"
+        onChange={(tick: number) => {
+          setDraft(tick);
+          onScrub(tick);
+        }}
       />
     </Tooltip>
   );
@@ -354,12 +385,21 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     playbackController.setTempoMultiplier(Number(value));
   };
 
+  /*
+    Drawn from a draft for the same reason the scrubber is: the fill used to
+    wait for the value to come back through the controller and the store, so it
+    lagged the thumb. The volume itself is still set on every event — a master
+    fader that only took effect on release would be useless.
+  */
+  const [volumeDraft, setVolumeDraft] = useState(masterVolume);
+  useEffect(() => setVolumeDraft(masterVolume), [masterVolume]);
   const handleVolumeChange = (value: number): void => {
+    setVolumeDraft(value);
     playbackController.setMasterVolume(value);
   };
 
-  const handleScrub = (event: ChangeEvent<HTMLInputElement>): void => {
-    playbackController.seek(Number(event.target.value));
+  const handleScrub = (tick: number): void => {
+    playbackController.seek(tick);
   };
 
   return (
@@ -495,7 +535,15 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
           >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          {/*
+            Opens *upward*. The transport bar sits at the bottom of the window,
+            so a menu dropping below the trigger is clipped by the viewport with
+            no way to reach the items — the same trap the title-bar tooltips
+            have at the top, where `placement="bottom"` is required for the
+            mirror-image reason. `position="popper"` is what makes `side`
+            apply at all: Radix's default `item-aligned` positioning ignores it.
+          */}
+          <SelectContent position="popper" side="top" sideOffset={4} className="relative">
             {SPEED_OPTIONS.map((speed) => (
               <SelectItem key={speed} value={String(speed)}>
                 {speed}x
@@ -506,14 +554,24 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </Tooltip>
 
       <div className="flex w-[120px] items-center gap-2">
-        <span className="text-sm text-theme-text-primary">Vol</span>
-        <label className="flex-1">
-          <span className="sr-only">{t('transport.masterVolume')}</span>
-          <Slider value={masterVolume} onChange={handleVolumeChange} min={0} max={1} step={0.01} />
-        </label>
+        <span className="text-sm text-foreground">Vol</span>
+        <LevelSlider
+          label={t('transport.masterVolume')}
+          value={volumeDraft}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={handleVolumeChange}
+        />
       </div>
 
-      <div className="min-w-[120px] flex-1">
+      {/*
+        `flex items-center` to match the volume block beside it. Without it the
+        scrubber's `<input type="range">` sits on the text baseline — Tooltip's
+        wrapper is inline-block — while the library `Slider` next to it is
+        centred, so the two read as being on different rows.
+      */}
+      <div className="flex min-w-[120px] flex-1 items-center">
         <PositionScrubber maxTick={maxTick} disabled={!hasScore} onScrub={handleScrub} />
       </div>
 

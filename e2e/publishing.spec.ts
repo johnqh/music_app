@@ -12,6 +12,10 @@ test.describe('publishing', () => {
     await page.getByRole('menuitem', { name: 'Create snapshot…' }).click();
     await page.getByRole('checkbox', { name: 'Publish' }).check();
     await page.getByLabel('Publisher name').fill('Jane');
+    // The suggested public title is the project and snapshot names; take it as
+    // offered, so the assertion below also pins the default.
+    await expect(page.getByLabel('Public name')).toHaveValue('Publish Test Version 1');
+    await page.getByLabel(/full copyright/i).check();
     await page.getByRole('button', { name: 'Create snapshot' }).click();
     // The overlay intercepts clicks until it is gone — this cost the snapshots
     // e2e two debugging rounds.
@@ -29,6 +33,8 @@ test.describe('publishing', () => {
     await visitor.goto(url);
 
     await expect(visitor.getByText('Jane')).toBeVisible();
+    // The public page is titled by the public name, not by "Version 1".
+    await expect(visitor.getByText('Publish Test Version 1')).toBeVisible();
     await expect(visitor.getByRole('button', { name: /play/i })).toBeVisible();
     await expect(visitor.getByRole('button', { name: /share/i })).toBeVisible();
 

@@ -15,15 +15,18 @@ export type CreateSnapshotDialogProps = {
   open: boolean;
   /** How many snapshots the project already has, for the default name. */
   snapshotCount: number;
+  /** Half of the suggested public title; the snapshot name is the other half. */
+  projectName: string;
   /** The name this user last published under, pre-filled when publishing. */
   defaultPublisherName?: string;
-  onCreate: (name: string, publisherName?: string) => void;
+  onCreate: (name: string, publisherName?: string, publicName?: string) => void;
   onClose: () => void;
 };
 
 export function CreateSnapshotDialog({
   open,
   snapshotCount,
+  projectName,
   defaultPublisherName,
   onCreate,
   onClose,
@@ -35,6 +38,12 @@ export function CreateSnapshotDialog({
   const [name, setName] = useState(suggested);
   const [publish, setPublish] = useState(false);
   const [publisherName, setPublisherName] = useState(defaultPublisherName ?? '');
+  // Linked until touched: the suggestion follows the snapshot name while it is
+  // still a suggestion, and stops the moment somebody writes their own title.
+  // Storing the *override* rather than the value is what makes that one state
+  // instead of a value plus a flag that can disagree with it.
+  const [publicNameOverride, setPublicNameOverride] = useState<string | null>(null);
+  const [copyrightConfirmed, setCopyrightConfirmed] = useState(false);
 
   // Re-suggest whenever the dialog reopens; the count has usually moved.
   useEffect(() => {
@@ -42,10 +51,14 @@ export function CreateSnapshotDialog({
       setName(suggested);
       setPublish(false);
       setPublisherName(defaultPublisherName ?? '');
+      setPublicNameOverride(null);
+      setCopyrightConfirmed(false);
     }
   }, [open, suggested, defaultPublisherName]);
 
   const trimmed = name.trim();
+  const suggestedPublicName = [projectName.trim(), trimmed].filter((part) => part).join(' ');
+  const publicName = publicNameOverride ?? suggestedPublicName;
 
   return (
     <FormModal
@@ -63,10 +76,15 @@ export function CreateSnapshotDialog({
           onClick: () => {
             if (trimmed.length === 0) return;
             const publisher = publisherName.trim();
+            const title = publicName.trim();
             // Publishing without a name would put an unattributable row on a
             // public page, so it is guarded exactly like a blank title.
             if (publish && publisher.length === 0) return;
-            onCreate(trimmed, publish ? publisher : undefined);
+            if (publish && title.length === 0) return;
+            // The promise is the point of asking: publishing is what puts the
+            // work in front of people who cannot check who wrote it.
+            if (publish && !copyrightConfirmed) return;
+            onCreate(trimmed, publish ? publisher : undefined, publish ? title : undefined);
           },
         },
       ]}
@@ -93,16 +111,45 @@ export function CreateSnapshotDialog({
         </label>
 
         {publish && (
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="text-theme-text-secondary">{t('snapshot.publisherName')}</span>
-            <input
-              aria-label={t('snapshot.publisherName')}
-              value={publisherName}
-              onChange={(e) => setPublisherName(e.target.value)}
-              className="rounded border border-theme-border bg-theme-surface px-2 py-1"
-            />
-            <span className="text-xs text-theme-text-secondary">{t('snapshot.publisherHint')}</span>
-          </label>
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-theme-text-secondary">{t('snapshot.publicName')}</span>
+              <input
+                aria-label={t('snapshot.publicName')}
+                value={publicName}
+                onChange={(e) => setPublicNameOverride(e.target.value)}
+                className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+              />
+              <span className="text-xs text-theme-text-secondary">
+                {t('snapshot.publicNameHint')}
+              </span>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-theme-text-secondary">{t('snapshot.publisherName')}</span>
+              <input
+                aria-label={t('snapshot.publisherName')}
+                value={publisherName}
+                onChange={(e) => setPublisherName(e.target.value)}
+                className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+              />
+              <span className="text-xs text-theme-text-secondary">
+                {t('snapshot.publisherHint')}
+              </span>
+            </label>
+
+            <p className="text-sm text-amber-700 dark:text-amber-400">
+              {t('snapshot.copyrightWarning')}
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                aria-label={t('snapshot.copyrightConfirm')}
+                checked={copyrightConfirmed}
+                onChange={(e) => setCopyrightConfirmed(e.target.checked)}
+              />
+              <span className="text-theme-text-secondary">{t('snapshot.copyrightConfirm')}</span>
+            </label>
+          </>
         )}
       </div>
     </FormModal>

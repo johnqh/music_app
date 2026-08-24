@@ -101,7 +101,8 @@
     "delete": "删除",
     "loading": "加载中…",
     "confirm": "确认",
-    "close": "关闭"
+    "close": "关闭",
+    "save": "保存"
   },
   "community": {
     "title": "社区",
@@ -251,7 +252,14 @@
     "openWarning": "打开快照会替换你当前的工作内容。其他内容不会丢失——每个快照都保留在原处。",
     "createHint": "将项目固定为当前状态。快照一经保存便不会改变。",
     "publisherHint": "将显示在社区中，绝不会显示你的邮箱地址。",
-    "currentWork": "当前工作"
+    "currentWork": "当前工作",
+    "publicName": "公开名称",
+    "publicNameHint": "在社区中显示的标题。默认为项目名称加快照名称。",
+    "publicNameFor": "{{name}} 的公开名称",
+    "copyrightWarning": "只发布你自己创作的音乐。发布后，任何人都可以打开该公开页面。",
+    "copyrightConfirm": "我拥有本作品及其引用内容的全部版权。",
+    "managePublishedTitle": "已发布的快照",
+    "nonePublished": "此项目尚未发布任何内容。"
   },
   "importMidi": {
     "fileKind": "MIDI 文件",
@@ -471,7 +479,14 @@
     "nothingToRedo": "没有可重做的操作",
     "untitledProject": "未命名项目",
     "noIssues": "没有问题。",
-    "projectMenuLabel": "项目",
+    "fixIssues": "全部修复",
+    "fixIssuesTitle": "修复所有有明确修复方式的问题",
+    "fixedIssues_one": "已修复 {{count}} 个问题。",
+    "fixedIssues_other": "已修复 {{count}} 个问题。",
+    "fixedIssuesPartial_one": "已修复 {{count}} 个问题；还有 {{remaining}} 个需要处理。",
+    "fixedIssuesPartial_other": "已修复 {{count}} 个问题；还有 {{remaining}} 个需要处理。",
+    "fixedNothing": "这些问题无法自动修复。",
+    "snapshotMenuLabel": "快照",
     "createSnapshot": "创建快照…",
     "openSnapshot": "打开快照…",
     "export": "导出",
@@ -552,7 +567,8 @@
     "beamBreak": "断开符杠",
     "beamBreakHint": "在所选音符处开始新的符杠组",
     "beamNone": "不用符杠",
-    "beamNoneHint": "所选音符改用符尾而非符杠"
+    "beamNoneHint": "所选音符改用符尾而非符杠",
+    "managePublished": "已发布的快照…"
   },
   "credits": {
     "title": "点数",

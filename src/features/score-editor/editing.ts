@@ -71,6 +71,7 @@ import {
   toggleTieCommand,
 } from '@sudobility/music_lib';
 import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
+import { repairScoreCommand } from '@sudobility/music_lib';
 import { pasteEventsCommand, quantizeCommand, transposeCommand } from '@sudobility/music_lib';
 import type { QuantizeOptions } from '@sudobility/music_lib';
 
@@ -808,4 +809,26 @@ export async function quantizeSelection(
   const ids = selectedNoteIds(state.score, state.selection);
   if (ids.length === 0) return;
   dispatchTracked(store, quantizeCommand(ids, options, commandLabel('quantize')));
+}
+
+/**
+ * Repairs every validation issue that has an unambiguous fix, and reports what
+ * it managed.
+ *
+ * Counted from the store's own `validationIssues` before and after rather than
+ * from anything the command claims, for the same reason `repairScore` measures
+ * itself: the reader is looking at that list, so the number in the toast has
+ * to be the number that left it.
+ *
+ * Goes through `dispatchTracked` like every other edit — so it is undoable in
+ * one step, and refused outright while the transport is playing.
+ */
+export function repairAllIssues(
+  store: EditorStoreApi,
+  label: string,
+): { fixed: number; remaining: number } {
+  const before = store.getState().validationIssues.length;
+  dispatchTracked(store, repairScoreCommand(label));
+  const remaining = store.getState().validationIssues.length;
+  return { fixed: Math.max(0, before - remaining), remaining };
 }

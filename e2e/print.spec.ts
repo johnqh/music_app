@@ -14,8 +14,7 @@ async function openPrintView(page: import('@playwright/test').Page, name: string
   await generateWholeScore(page, { prompt: 'Create a calm piano study', measures });
   await waitForNotation(page);
 
-  await page.getByLabel('Export menu').click();
-  await page.getByRole('menuitem', { name: 'Print…' }).click();
+  await page.getByLabel('Print…').click();
   await expect(page.getByRole('button', { name: 'Print' })).toBeVisible();
 }
 

@@ -33,11 +33,14 @@
  */
 import { cn } from '@sudobility/components';
 import { panReadout } from '@/features/tracks/pan-readout';
-
-const TRACK_BASE_CLASS = 'absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2';
-
-/** Volume: a rounded groove, the ordinary shape for a level. */
-const TRACK_CLASS = `${TRACK_BASE_CLASS} rounded-full`;
+/*
+  The shell, the groove and the level are shared with the transport bar now.
+  They were defined here because this is where the shared `Slider` was first
+  found wanting; keeping them here meant the transport bar went on using the
+  library control and its near-invisible `bg-muted` groove. One definition,
+  so the two cannot look different again.
+*/
+import { LevelSlider, SliderShell, TRACK_BASE_CLASS } from '@/components/controls/level-slider';
 
 /**
  * Pan: square-cornered, and a different ground from volume's.
@@ -49,19 +52,6 @@ const TRACK_CLASS = `${TRACK_BASE_CLASS} rounded-full`;
  */
 const PAN_TRACK_CLASS = TRACK_BASE_CLASS;
 const PAN_GROOVE_CLASS = 'bg-muted-foreground/45';
-
-/**
- * The unfilled groove — the part that says how much further the control goes.
- *
- * `bg-border`, deliberately, and not this app's usual `bg-theme-border`: that
- * class compiles to `background-color: var(--color-border)`, and the token the
- * design system actually injects at runtime is `--border`. The variable does
- * not exist, so the rule resolves to nothing and the groove painted
- * *transparent* — which left volume with no right-hand side and pan with
- * nothing but a thumb. `bg-border` is `hsl(var(--border))`: a real 80%/20%
- * grey, measured at `rgb(204,204,204)` against this panel in the light theme.
- */
-const GROOVE_CLASS = 'bg-border';
 
 /**
  * The pan knob: a tall, narrow rectangle rather than a dot.
@@ -86,19 +76,6 @@ const PAN_THUMB_CLASS = [
   '[&::-moz-range-thumb]:border-0',
 ].join(' ');
 
-const THUMB_CLASS = [
-  '[&::-webkit-slider-thumb]:appearance-none',
-  '[&::-webkit-slider-thumb]:size-3',
-  '[&::-webkit-slider-thumb]:rounded-full',
-  '[&::-webkit-slider-thumb]:bg-primary',
-  '[&::-webkit-slider-thumb]:border',
-  '[&::-webkit-slider-thumb]:border-background',
-  '[&::-moz-range-thumb]:size-3',
-  '[&::-moz-range-thumb]:rounded-full',
-  '[&::-moz-range-thumb]:bg-primary',
-  '[&::-moz-range-thumb]:border-0',
-].join(' ');
-
 /** The row shape both controls use, stated once so the two cannot drift. */
 const ROW_CLASS = 'flex items-center gap-2';
 const ROW_LABEL_CLASS = 'w-12 shrink-0 text-xs text-muted-foreground';
@@ -112,52 +89,6 @@ const ROW_READOUT_CLASS = 'w-9 shrink-0 text-right text-[10px] tabular-nums text
  * above it, which is the misalignment this row shape exists to prevent.
  */
 const ROW_ACTION_CLASS = 'w-5 shrink-0';
-
-type SliderShellProps = {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  disabled?: boolean;
-  onChange: (value: number) => void;
-  thumbClass?: string;
-  children: React.ReactNode;
-};
-
-/** The input and its painted bed; each control supplies its own painting. */
-function SliderShell({
-  label,
-  value,
-  min,
-  max,
-  step,
-  disabled,
-  onChange,
-  thumbClass = THUMB_CLASS,
-  children,
-}: SliderShellProps) {
-  return (
-    <div className="relative h-4 flex-1">
-      {children}
-      <input
-        type="range"
-        aria-label={label}
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={cn(
-          'relative block h-4 w-full cursor-pointer appearance-none bg-transparent',
-          disabled && 'cursor-not-allowed opacity-50',
-          thumbClass,
-        )}
-      />
-    </div>
-  );
-}
 
 export type MixerSliderProps = {
   /** The accessible name — what property of what this controls. */
@@ -177,22 +108,7 @@ export function VolumeSlider({ label, rowLabel, value, disabled, onChange }: Mix
   return (
     <div className={ROW_CLASS}>
       <span className={ROW_LABEL_CLASS}>{rowLabel}</span>
-      <SliderShell
-        label={label}
-        value={clamped}
-        min={0}
-        max={1}
-        step={0.01}
-        disabled={disabled}
-        onChange={onChange}
-      >
-        <div className={cn(TRACK_CLASS, GROOVE_CLASS)} aria-hidden />
-        <div
-          className={cn(TRACK_CLASS, 'right-auto bg-primary')}
-          style={{ width: `${percent}%` }}
-          aria-hidden
-        />
-      </SliderShell>
+      <LevelSlider label={label} value={clamped} onChange={onChange} disabled={disabled} />
       <span className={ROW_READOUT_CLASS}>{percent}%</span>
       <span className={ROW_ACTION_CLASS} aria-hidden />
     </div>

@@ -212,22 +212,88 @@ export function PlaybackCaret({
   // silently no-op forever and the active measure would never re-enter view.
   const lastScrolledMeasureRef = useRef<string | null>(null);
   const lastScrolledScoreRef = useRef<Score | null>(null);
+  const lastPlaybackStateRef = useRef(playbackState);
+  /*
+    Dev-only tracing for following playback.
+
+    Position reports arrive ~30Hz, so an unconditional log would bury the one
+    line that matters and put console work on the thread the scheduler runs on.
+    Every line is therefore keyed by what it is *about* — the stage and the
+    measure — and repeats of the same key are dropped: a decision taken once
+    per measure logs once per measure, and a silent early return logs the first
+    time it happens rather than thirty times a second.
+
+    The early returns are logged at all because that is where following
+    playback fails silently: each one leaves the sheet stationary and says
+    nothing, which is indistinguishable from "no move was needed".
+  */
+  const lastTraceRef = useRef<string>('');
+  const traceScroll = useCallback(
+    (stage: string, detail: Record<string, unknown> = {}): void => {
+      if (!import.meta.env.DEV) return;
+      const key = `${stage}|${String(detail.measureIndex ?? detail.measureId ?? '')}|${playbackState}`;
+      if (key === lastTraceRef.current) return;
+      lastTraceRef.current = key;
+      const box = scrollBoxRef.current;
+      console.log(
+        `[playback-scroll] ${stage}`,
+        'position:',
+        { tick: positionTick, state: playbackState, ...detail },
+        'scroll:',
+        box
+          ? {
+              top: Math.round(box.scrollTop),
+              left: Math.round(box.scrollLeft),
+              viewportH: box.clientHeight,
+              viewportW: box.clientWidth,
+            }
+          : 'no scroll box',
+      );
+    },
+    [positionTick, playbackState, scrollBoxRef],
+  );
   useEffect(() => {
     if (score !== lastScrolledScoreRef.current) {
       lastScrolledScoreRef.current = score;
       lastScrolledMeasureRef.current = null;
     }
-    if (playbackState !== 'playing') {
+    /*
+      Following the playhead is not only a playback behaviour.
+
+      Dragging the scrubber moves the playhead exactly as playing does, and
+      dragging it somewhere off screen and being left looking at the old page
+      is the same failure as the sheet not following the music. So the rule is
+      simply: when the playhead moves somewhere the reader cannot see, go
+      there.
+
+      The one exception is the transport *changing state*, which is not a
+      navigation. Stopping homes the playhead to the beginning, and taking the
+      page to bar 1 because playback ended would throw away the place of
+      anybody who stopped in order to work on the bar they were listening to.
+      Pausing is the same: it moves nothing and must move nothing. Starting is
+      deliberately not excluded — a play is a request to be shown the music
+      about to sound.
+    */
+    const transportChanged = lastPlaybackStateRef.current !== playbackState;
+    lastPlaybackStateRef.current = playbackState;
+    if (playbackState !== 'playing' && transportChanged) {
       lastScrolledMeasureRef.current = null;
+      traceScroll('idle (transport changed)');
       return;
     }
 
     const scrollBox = scrollBoxRef.current;
     if (!scrollBox || !score || !plan) {
+      traceScroll('skip: no scroll box, score or plan', {
+        hasScrollBox: Boolean(scrollBox),
+        hasScore: Boolean(score),
+        hasPlan: Boolean(plan),
+      });
       return;
     }
     const measureId = currentMeasureId(score, positionTick);
     if (!measureId) {
+      traceScroll('skip: tick is in no measure');
       return;
     }
     if (measureId === lastScrolledMeasureRef.current) return;
@@ -235,10 +301,12 @@ export function PlaybackCaret({
     // this still finds a measure lying outside the currently-drawn window.
     const measureIndex = score.tracks[0]?.measures.findIndex((m) => m.id === measureId) ?? -1;
     if (measureIndex === -1) {
+      traceScroll('skip: measure not in track 0', { measureId });
       return;
     }
     const bbox = boxForMeasureIndex(plan, 0, measureIndex);
     if (!bbox) {
+      traceScroll('skip: measure has no box in plan', { measureIndex });
       return;
     }
 
@@ -262,16 +330,48 @@ export function PlaybackCaret({
     // once per measure, and re-running it on every 30Hz position report would
     // put work back on the thread Tone.js schedules on.
     lastScrolledMeasureRef.current = measureId;
-    if (!target) return;
+    if (!target) {
+      traceScroll('no move needed', { measureIndex, layoutMode });
+      return;
+    }
+    traceScroll('scrolling', {
+      measureIndex,
+      layoutMode,
+      targetTop: Math.round(target.top),
+      targetLeft: Math.round(target.left),
+    });
 
     if (typeof scrollBox.scrollTo === 'function') {
+      /*
+        Animate a wrap; jump a relocation.
+
+        Smooth scrolling is right for the ordinary case — one system to the
+        next, a short hop the reader can follow with their eye. It is wrong
+        for a move longer than the viewport, and the way it fails is the
+        reported "playback stops following after the score reaches the end":
+        stopping leaves the sheet at the last system, so the replay's first
+        target is the whole score away. The animation eases over that
+        distance, the next measure arrives before it lands and issues a fresh
+        `scrollTo` that restarts it from wherever it had reached, and the
+        target itself has moved on a system by then. Measured in the test
+        beside this: the sheet covered a few dozen pixels per measure against
+        a four-thousand-pixel deficit, so it never arrived and the music
+        finished first.
+
+        A move further than one viewport is not a wrap the reader is
+        following, it is the page going somewhere else — which is what a jump
+        is for, and what "play from here" already does.
+      */
+      const relocating =
+        Math.abs(target.top - scrollBox.scrollTop) > scrollBox.clientHeight ||
+        Math.abs(target.left - scrollBox.scrollLeft) > scrollBox.clientWidth;
       scrollBox.scrollTo({
         left: target.left,
         top: target.top,
-        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+        behavior: prefersReducedMotion() || relocating ? 'auto' : 'smooth',
       });
     }
-  }, [score, positionTick, playbackState, plan, zoom, layoutMode, scrollBoxRef]);
+  }, [score, positionTick, playbackState, plan, zoom, layoutMode, scrollBoxRef, traceScroll]);
 
   if (!plan || !score) return null;
   return (

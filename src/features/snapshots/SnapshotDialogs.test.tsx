@@ -7,25 +7,50 @@ import { snapshotTree } from '@sudobility/music_lib';
 describe('CreateSnapshotDialog', () => {
   it('defaults the name to the next global version number', () => {
     // Global, not per-branch: "Version 4" off "Version 2" beats "Version 2.1.1".
-    render(<CreateSnapshotDialog open snapshotCount={3} onCreate={vi.fn()} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={3}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
     expect(screen.getByLabelText('Snapshot name')).toHaveValue('Version 4');
   });
 
   it('lets the name be replaced', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
     await user.clear(screen.getByLabelText('Snapshot name'));
     await user.type(screen.getByLabelText('Snapshot name'), 'Before the coda');
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
-    // Second argument is the publisher name: undefined unless publishing.
-    expect(onCreate).toHaveBeenCalledWith('Before the coda', undefined);
+    // Second and third are the publisher and the public title: both undefined
+    // unless publishing.
+    expect(onCreate).toHaveBeenCalledWith('Before the coda', undefined, undefined);
   });
 
   it('refuses an empty name', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
     await user.clear(screen.getByLabelText('Snapshot name'));
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
     expect(onCreate).not.toHaveBeenCalled();
@@ -129,13 +154,29 @@ describe('OpenSnapshotDialog', () => {
 
 describe('CreateSnapshotDialog publishing', () => {
   it('offers a Publish checkbox, off by default', () => {
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={vi.fn()} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
     expect(screen.getByRole('checkbox', { name: /publish/i })).not.toBeChecked();
   });
 
   it('asks for a publisher name only when publishing', async () => {
     const user = userEvent.setup();
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={vi.fn()} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
     expect(screen.queryByLabelText('Publisher name')).toBeNull();
     await user.click(screen.getByRole('checkbox', { name: /publish/i }));
     expect(screen.getByLabelText('Publisher name')).toBeVisible();
@@ -147,6 +188,7 @@ describe('CreateSnapshotDialog publishing', () => {
     render(
       <CreateSnapshotDialog
         open
+        projectName="My Song"
         snapshotCount={0}
         defaultPublisherName="Jane"
         onCreate={onCreate}
@@ -154,15 +196,24 @@ describe('CreateSnapshotDialog publishing', () => {
       />,
     );
     await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.click(screen.getByLabelText(/full copyright/i));
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
-    expect(onCreate).toHaveBeenCalledWith('Version 1', 'Jane');
+    expect(onCreate).toHaveBeenCalledWith('Version 1', 'Jane', 'My Song Version 1');
   });
 
   it('will not publish without a publisher name', async () => {
     // An unattributable row on a public page.
     const user = userEvent.setup();
     const onCreate = vi.fn();
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole('checkbox', { name: /publish/i }));
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
     expect(onCreate).not.toHaveBeenCalled();
@@ -171,8 +222,125 @@ describe('CreateSnapshotDialog publishing', () => {
   it('still creates an unpublished snapshot with no publisher name', async () => {
     const user = userEvent.setup();
     const onCreate = vi.fn();
-    render(<CreateSnapshotDialog open snapshotCount={0} onCreate={onCreate} onClose={vi.fn()} />);
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
-    expect(onCreate).toHaveBeenCalledWith('Version 1', undefined);
+    expect(onCreate).toHaveBeenCalledWith('Version 1', undefined, undefined);
+  });
+
+  it('suggests the project and snapshot names as the public title', async () => {
+    // "Version 1" tells a stranger nothing; the project name is the half that
+    // says what the music is.
+    const user = userEvent.setup();
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    expect(screen.getByLabelText('Public name')).toHaveValue('My Song Version 1');
+  });
+
+  it('follows the snapshot name until the public name is edited', async () => {
+    const user = userEvent.setup();
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        onCreate={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+
+    await user.clear(screen.getByLabelText('Snapshot name'));
+    await user.type(screen.getByLabelText('Snapshot name'), 'Final');
+    expect(screen.getByLabelText('Public name')).toHaveValue('My Song Final');
+
+    // Once it is somebody's own title, editing the version label must not
+    // overwrite it.
+    await user.clear(screen.getByLabelText('Public name'));
+    await user.type(screen.getByLabelText('Public name'), 'Nocturne');
+    await user.type(screen.getByLabelText('Snapshot name'), ' cut');
+    expect(screen.getByLabelText('Public name')).toHaveValue('Nocturne');
+  });
+
+  it('reports the edited public title, not the suggestion', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        defaultPublisherName="Jane"
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.clear(screen.getByLabelText('Public name'));
+    await user.type(screen.getByLabelText('Public name'), 'Nocturne in C');
+    await user.click(screen.getByLabelText(/full copyright/i));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).toHaveBeenCalledWith('Version 1', 'Jane', 'Nocturne in C');
+  });
+
+  it('asks about copyright only when publishing, and will not publish unconfirmed', async () => {
+    // A private snapshot puts nothing in front of anybody, so the promise
+    // would be asking about something that is not happening.
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        defaultPublisherName="Jane"
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/full copyright/i)).toBeNull();
+
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText(/full copyright/i));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).toHaveBeenCalledWith('Version 1', 'Jane', 'My Song Version 1');
+  });
+
+  it('will not publish with a blank public title', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(
+      <CreateSnapshotDialog
+        open
+        projectName="My Song"
+        snapshotCount={0}
+        defaultPublisherName="Jane"
+        onCreate={onCreate}
+        onClose={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /publish/i }));
+    await user.click(screen.getByLabelText(/full copyright/i));
+    await user.clear(screen.getByLabelText('Public name'));
+    await user.click(screen.getByRole('button', { name: 'Create snapshot' }));
+    expect(onCreate).not.toHaveBeenCalled();
   });
 });
