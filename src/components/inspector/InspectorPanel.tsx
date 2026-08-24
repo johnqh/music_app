@@ -107,7 +107,6 @@ import {
   findTrack,
   replacementRegion,
   selectActiveTrackId,
-  soundingPitchForTrack,
   trackWrittenTransposition,
   transposeKeySignature,
   transposePitch,
@@ -115,7 +114,6 @@ import {
   durationLabel,
   durationNameForTicks,
   keySignatureOptions,
-  ticksFor,
   DURATION_NAMES,
   INSTRUMENT_OPTIONS,
   KIT_OPTIONS,
@@ -131,22 +129,20 @@ import {
   toggleTie as dispatchToggleTie,
   toggleGlissando,
   toggleOttava,
-} from '@/features/score-editor/editing';
-import {
-  changePitchCommand,
-  changeVoiceCommand,
-  moveNotesCommand,
-  resizeNotesCommand,
+  setNotePitch,
+  moveNoteToTick,
+  setDynamic,
+  resizeNotes,
+  setVoice,
+  toGraceNote,
+  clearGraceNotes,
+  setTimeSignature,
+  setKeySignature,
 } from '@sudobility/music_lib';
-import {
-  changeDynamicCommand,
-  changeKeySignatureCommand,
-  clearGraceNotesCommand,
-  toGraceNoteCommand,
-  changeTimeSignatureCommand,
-} from '@sudobility/music_lib';
+import {} from '@sudobility/music_lib';
+import {} from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import type { ReplaceScope } from '@sudobility/music_lib';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
 import type { ReplaceSubmission } from '@/features/generation/ReplaceMusicDialog';
@@ -287,13 +283,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       // convert once. Never a round trip: the stored pitch is replaced
       // outright, not fed back through the lens.
       const edited = { ...shown(note), ...patch };
-      const track = findTrack(score, note.trackId);
-      const key = measureOfNote(score, note)?.keySignature ?? { fifths: 0, mode: 'major' };
-      const next =
-        pitchDisplay === 'written' && track ? soundingPitchForTrack(edited, track, key) : edited;
-      store
-        .getState()
-        .dispatchCommand(changePitchCommand([note.id], next, commandLabel('changePitch')));
+      setNotePitch(store, note.id, edited, pitchDisplay);
     }
   };
 
@@ -358,15 +348,7 @@ function NoteTab({ store, onReplace }: TabProps) {
           ]}
           onChange={(value) => {
             if (value === CUSTOM_DURATION) return;
-            store
-              .getState()
-              .dispatchCommand(
-                resizeNotesCommand(
-                  noteIds,
-                  ticksFor(value as DurationName, score.ppq),
-                  commandLabel('resizeNotes'),
-                ),
-              );
+            resizeNotes(store, noteIds, value as DurationName);
           }}
         />
       </label>
@@ -381,17 +363,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         <BarBeatField
           score={score}
           tick={startTick}
-          onCommit={(tick) =>
-            store
-              .getState()
-              .dispatchCommand(
-                moveNotesCommand(
-                  [notes[0].id],
-                  { deltaTicks: tick - notes[0].startTick, deltaSemitones: 0 },
-                  commandLabel('moveNotes'),
-                ),
-              )
-          }
+          onCommit={(tick) => moveNoteToTick(store, notes[0].id, tick)}
         />
       ) : null}
 
@@ -428,15 +400,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             ...DYNAMICS.map((d) => ({ value: d, label: d })),
           ]}
           onChange={(value) =>
-            store
-              .getState()
-              .dispatchCommand(
-                changeDynamicCommand(
-                  noteIds,
-                  value === NO_DYNAMIC ? undefined : (value as Dynamic),
-                  commandLabel('changeDynamic'),
-                ),
-              )
+            setDynamic(store, noteIds, value === NO_DYNAMIC ? undefined : (value as Dynamic))
           }
         />
         <span className="text-xs text-theme-text-secondary">{t('inspector.dynamicHint')}</span>
@@ -468,17 +432,7 @@ function NoteTab({ store, onReplace }: TabProps) {
           }),
         )}
         min={1}
-        onCommit={(v) =>
-          store
-            .getState()
-            .dispatchCommand(
-              changeVoiceCommand(
-                noteIds,
-                Math.max(0, Math.round(v) - 1),
-                commandLabel('changeVoice'),
-              ),
-            )
-        }
+        onCommit={(v) => setVoice(store, noteIds, Math.round(v) - 1)}
       />
 
       <div className="flex gap-4">
@@ -556,11 +510,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             type="button"
             variant="outline"
             disabled={isPlayingNow}
-            onClick={() =>
-              store
-                .getState()
-                .dispatchCommand(toGraceNoteCommand(notes[0].id, commandLabel('toGraceNote')))
-            }
+            onClick={() => toGraceNote(store, notes[0].id)}
             className="w-full px-3 py-1.5 text-sm"
           >
             {t('editor.makeGraceNote')}
@@ -570,13 +520,7 @@ function NoteTab({ store, onReplace }: TabProps) {
               type="button"
               variant="ghost"
               disabled={isPlayingNow}
-              onClick={() =>
-                store
-                  .getState()
-                  .dispatchCommand(
-                    clearGraceNotesCommand([notes[0].id], commandLabel('toGraceNote')),
-                  )
-              }
+              onClick={() => clearGraceNotes(store, [notes[0].id])}
               className="w-full px-3 py-1 text-xs"
             >
               {t('editor.clearGraceNotes', { count: notes[0].graceNotes.length })}
@@ -620,20 +564,10 @@ function MeasureTab({ store, onReplace }: TabProps) {
   const indices = measures.map((m) => m.index + 1);
 
   const applyTimeSignature = (timeSignature: TimeSignature): void => {
-    for (const id of selection.measureIds)
-      store
-        .getState()
-        .dispatchCommand(
-          changeTimeSignatureCommand(id, timeSignature, commandLabel('changeTimeSignature')),
-        );
+    setTimeSignature(store, selection.measureIds, timeSignature);
   };
   const applyKeySignature = (keySignature: KeySignature): void => {
-    for (const id of selection.measureIds)
-      store
-        .getState()
-        .dispatchCommand(
-          changeKeySignatureCommand(id, keySignature, commandLabel('changeKeySignature')),
-        );
+    setKeySignature(store, selection.measureIds, keySignature);
   };
 
   return (

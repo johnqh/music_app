@@ -7,7 +7,7 @@ import { twinkleScore } from '@sudobility/music_lib';
 import { exportMusicXml } from '@sudobility/music_lib';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {

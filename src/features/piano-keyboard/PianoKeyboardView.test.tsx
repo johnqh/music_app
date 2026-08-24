@@ -1,4 +1,9 @@
 import { commandLabel } from '@/features/score-editor/command-labels';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  resetMusicPosition,
+} from '@sudobility/music_types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices } from '@/config/initialize';
@@ -33,7 +38,7 @@ vi.mock('@sudobility/music_lib', async () => {
   };
 });
 import type { Score, SoundingNote } from '@sudobility/music_types';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { addNoteCommand, createEmptyScore } from '@sudobility/music_lib';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
@@ -418,6 +423,10 @@ describe('playing the keyboard writes notes', () => {
     const quarter = allNotes(store.getState().score!).find((n) => n.startTick === 0)!;
     const long = quarter.durationTicks;
 
+    // A second, independent scenario — and the caret is a shared position now,
+    // so it has to be put back or the second tap writes a bar later than the
+    // first and this compares two different places in the score.
+    resetMusicPosition();
     const store2 = makeStore();
     const { container: c2 } = render(<PianoKeyboardView store={store2} />);
     tap(c2, 60, 125); // a sixteenth
@@ -433,9 +442,8 @@ describe('playing the keyboard writes notes', () => {
 
     tap(container, 60, 500);
 
-    expect(vi.mocked(playbackController.seek)).toHaveBeenCalledWith(
-      store.getState().score!.ppq, // one quarter past the start
-    );
+    // One quarter past the start.
+    expect(getMusicPosition().reportedTick).toBe(store.getState().score!.ppq);
   });
 
   it('draws a held key pressed, like a sounding one', () => {
@@ -512,13 +520,12 @@ describe('playing several keys at once writes a chord', () => {
   });
 
   it('still writes a run of separate taps as a melody', () => {
-    // Asserted through caret advances rather than start ticks: seek is mocked
-    // in this file, so the caret never actually moves and all three notes land
-    // on tick 0 regardless. Three advances is a melody; a chord advances once.
+    // Asserted on the notes themselves now. This used to count caret advances
+    // instead, because seeking was mocked here and every note landed on tick 0
+    // regardless — the caret is the shared position now, so it really moves and
+    // the notes really spread out.
     const store = emptyPianoStore();
     const { container } = render(<PianoKeyboardView store={store} />);
-    const seek = vi.mocked(playbackController.seek);
-    seek.mockClear();
 
     let now = 1_000;
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
@@ -530,18 +537,21 @@ describe('playing several keys at once writes a chord', () => {
     }
     clock.mockRestore();
 
-    expect(seek).toHaveBeenCalledTimes(3);
+    const ticks = allNotes(store.getState().score!).map((n) => n.startTick);
+    expect(new Set(ticks).size).toBe(3);
   });
 
   it('advances the caret once for a chord, however many keys were held', () => {
     const store = emptyPianoStore();
     const { container } = render(<PianoKeyboardView store={store} />);
-    const seek = vi.mocked(playbackController.seek);
-    seek.mockClear();
-
     playChord(container, [60, 64, 67], 500);
 
-    expect(seek).toHaveBeenCalledTimes(1);
+    // One position for the whole chord: three notes on one tick, and the caret
+    // one note-length past it rather than three.
+    const notes = allNotes(store.getState().score!);
+    expect(notes).toHaveLength(3);
+    expect(new Set(notes.map((n) => n.startTick)).size).toBe(1);
+    expect(getMusicPosition().reportedTick).toBe(notes[0].durationTicks);
   });
 
   it('refuses the chord on a monophonic instrument and writes nothing', () => {
@@ -655,14 +665,13 @@ describe('the keyboard edits a selected chord', () => {
     store.getState().setSelection({ eventIds: all, measureIds: [], trackIds: [] });
 
     const { container } = render(<PianoKeyboardView store={store} />);
-    const seek = vi.mocked(playbackController.seek);
-    seek.mockClear();
+    resetMusicPosition();
 
     fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
     fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
 
     // Entry mode advances the caret past what it wrote; edit mode never does.
-    expect(seek.mock.calls.some((call) => call[0] > 0)).toBe(true);
+    expect(getMusicPosition().reportedTick).toBeGreaterThan(0);
   });
 });
 
@@ -691,7 +700,7 @@ describe('PianoKeyboardView: MIDI keyboard input', () => {
     // time becomes the duration and the caret advances — one set of rules.
     const midi = withMidi();
     const store = makeStore();
-    act(() => store.getState().setCaretTick(0));
+    act(() => getMusicPositionSource().moveTo(0));
     render(<PianoKeyboardView store={store} />);
 
     // The pitch at the caret, not the note count: the editor's default edit

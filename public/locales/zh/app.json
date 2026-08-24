@@ -568,7 +568,8 @@
     "beamBreakHint": "在所选音符处开始新的符杠组",
     "beamNone": "不用符杠",
     "beamNoneHint": "所选音符改用符尾而非符杠",
-    "managePublished": "已发布的快照…"
+    "managePublished": "已发布的快照…",
+    "validationProblem": "此编辑产生了一个校验问题：{{detail}}"
   },
   "credits": {
     "title": "点数",

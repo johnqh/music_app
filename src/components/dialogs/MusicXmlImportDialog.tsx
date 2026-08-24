@@ -15,17 +15,16 @@
  * plumbing for no behavioral benefit.
  */
 import { musicXmlWarnings } from '@/i18n/lib-copy';
-import { commandLabel } from '@/features/score-editor/command-labels';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoBox, Stack, Text } from '@sudobility/components';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
-import { importScoreCommand } from '@sudobility/music_lib';
+import { importScore } from '@sudobility/music_lib';
 import { allNotes } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import type { MusicXmlImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { getAppServices } from '@/config/initialize';
 
@@ -97,9 +96,7 @@ export function MusicXmlImportDialog({
     if (!result) return;
     const hasProject = !forceNewProject && store.getState().projectId !== null;
     if (hasProject) {
-      store
-        .getState()
-        .dispatchCommand(importScoreCommand(result.score, commandLabel('importScore')));
+      importScore(store, result.score);
       handleClose();
       return;
     }

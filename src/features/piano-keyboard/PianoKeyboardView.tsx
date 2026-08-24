@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from '@sudobility/components';
 import {
   findTrack,
-  midiToPitch,
   playbackController,
   selectActiveTrackId,
   trackInstrumentLabel,
@@ -24,13 +23,13 @@ import {
   pitchToMidi,
   selectSelectedNotes,
 } from '@sudobility/music_lib';
-import { deleteEvents, insertChordAtCaret } from '@/features/score-editor/editing';
-import { chordSelection } from '@sudobility/music_lib';
-import { durationForTap } from '@sudobility/music_lib';
+// `chordSelection` for what the keys should *look* like; `playKeyGroup` for
+// what pressing them does. Only the first is this component's business.
+import { chordSelection, playKeyGroup } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { useSoundingNotes } from '@/features/score-editor/usePlayback';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
 import type { KeyNaming, PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
@@ -378,40 +377,15 @@ export function PianoKeyboardView({
       chordRef.current = null;
       if (!group || group.midis.length === 0) return;
 
-      const score = store.getState().score;
-      if (!score) return;
-      const bpm = score.tempoMap[0]?.bpm ?? 120;
-      // Wrapped, not point-free: `map` would pass the index into
-      // `midiToPitch`'s key-signature parameter.
-      const pitches = group.midis.map((midi) => midiToPitch(midi));
-
-      // With one chord selected the keyboard edits it rather than entering
-      // notes: a lit key removes its note, an unlit one joins the chord. The
-      // two jobs are exclusive — doing both would add a note and also move on.
-      if (editableChord) {
-        // The chord's own tick, not wherever the caret happens to be, or an
-        // added note lands somewhere the player never pointed at.
-        playbackController.seek(editableChord.startTick);
-        for (const midi of group.midis) {
-          const existing = editableChord.notes.find((note) => pitchToMidi(note.pitch) === midi);
-          if (existing) deleteEvents(store, [existing.id]);
-          else
-            insertChordAtCaret(store, [midiToPitch(midi)], { advanceCaret: false, mode: 'stack' });
-        }
-        return;
-      }
-
-      // Written as long as the group was held, snapped to a duration the
-      // toolbar could also have produced. One length for the whole chord, from
-      // the first key down to the last key up: measuring each key separately
-      // would give notes that differ by milliseconds, and same-start notes with
-      // differing durations delete each other rather than stacking.
-      insertChordAtCaret(store, pitches, {
-        duration: durationForTap(performance.now() - group.firstPressAt, bpm),
-        advanceCaret: true,
+      // One call, because it is one user action. Which of the two things it
+      // means — writing a chord at the caret, or toggling the pitches of a
+      // selected one — is a rule about editing, and lives with the editing.
+      playKeyGroup(store, {
+        midis: group.midis,
+        heldMs: performance.now() - group.firstPressAt,
       });
     },
-    [store, editableChord],
+    [store],
   );
 
   /**

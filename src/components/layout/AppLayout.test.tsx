@@ -44,7 +44,7 @@ vi.mock('@/features/generation/useGenerationJob', async (importOriginal) => ({
 
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices } from '@/config/initialize';
 

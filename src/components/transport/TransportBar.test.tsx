@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -145,7 +146,7 @@ describe('TransportBar: position display', () => {
   it('shows measure.beat for the current position', () => {
     const store = makeStore();
     const score = store.getState().score!;
-    store.getState().setCaretTick(score.tracks[0].measures[1].startTick);
+    getMusicPositionSource().moveTo(score.tracks[0].measures[1].startTick);
     renderBar(store);
 
     expect(screen.getByLabelText('Current measure and beat')).toHaveTextContent('2.1');

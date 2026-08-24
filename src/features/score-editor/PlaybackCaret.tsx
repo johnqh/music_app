@@ -21,7 +21,7 @@ import { getMusicPosition } from '@sudobility/music_lib';
 import { prefersReducedMotion } from '@/app/theme';
 import type { LayoutPlan, Score } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
 
 /** How much clear space to keep between the caret and the edge it is nearing. */

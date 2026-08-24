@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
-import { allNotes, findEvent, playbackController } from '@sudobility/music_lib';
+import { allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import type { PlaybackToggle } from '@/features/score-editor/useEditorShortcuts';
 
 // useEditorShortcuts defaults its `controller` param to the app-wide
@@ -219,16 +220,12 @@ describe('useEditorShortcuts', () => {
       // Without this a run of taps would overwrite one position instead of
       // laying out a line.
       const store = makeStore();
-      act(() => store.getState().setCaretTick(0));
+      act(() => getMusicPositionSource().moveTo(0));
       render(<Harness store={store} />);
       const user = userEvent.setup();
-      const seek = vi.mocked(playbackController.seek);
-      seek.mockClear();
-
       await user.keyboard('c');
 
-      expect(seek).toHaveBeenCalledTimes(1);
-      expect(seek.mock.calls[0][0]).toBeGreaterThan(0);
+      expect(getMusicPosition().reportedTick).toBeGreaterThan(0);
     });
 
     it('picks the note value from a digit', async () => {
@@ -254,7 +251,7 @@ describe('useEditorShortcuts', () => {
 
     it('writes at the chosen value: a digit then a letter', async () => {
       const store = makeStore();
-      act(() => store.getState().setCaretTick(0));
+      act(() => getMusicPositionSource().moveTo(0));
       render(<Harness store={store} />);
       const user = userEvent.setup();
 
@@ -309,51 +306,40 @@ describe('useEditorShortcuts', () => {
       // back to fix the note before last must not need the pointer.
       const store = makeStore();
       act(() => {
-        store.getState().setCaretTick(0);
+        getMusicPositionSource().moveTo(0);
         store.getState().setSnapGrid('quarter');
       });
       render(<Harness store={store} />);
-      const seek = vi.mocked(playbackController.seek);
-      seek.mockClear();
-
       await userEvent.setup().keyboard('{Alt>}{ArrowRight}{/Alt}');
 
       const ppq = store.getState().score!.ppq;
-      expect(seek).toHaveBeenCalledWith(ppq);
+      expect(getMusicPosition().reportedTick).toBe(ppq);
     });
 
     it('does not run off the front of the score', async () => {
       const store = makeStore();
-      act(() => store.getState().setCaretTick(0));
+      act(() => getMusicPositionSource().moveTo(0));
       render(<Harness store={store} />);
-      const seek = vi.mocked(playbackController.seek);
-      seek.mockClear();
-
       await userEvent.setup().keyboard('{Alt>}{ArrowLeft}{/Alt}');
 
-      expect(seek).toHaveBeenCalledWith(0);
+      expect(getMusicPosition().reportedTick).toBe(0);
     });
 
     it('jumps to the edges of the bar, and of the score', async () => {
       const store = makeStore();
       const measures = store.getState().score!.tracks[0].measures;
-      act(() => store.getState().setCaretTick(measures[1].startTick + 10));
+      act(() => getMusicPositionSource().moveTo(measures[1].startTick + 10));
       render(<Harness store={store} />);
       const user = userEvent.setup();
-      const seek = vi.mocked(playbackController.seek);
-
-      seek.mockClear();
       await user.keyboard('{Home}');
-      expect(seek).toHaveBeenCalledWith(measures[1].startTick);
+      expect(getMusicPosition().reportedTick).toBe(measures[1].startTick);
 
-      seek.mockClear();
       await user.keyboard('{Meta>}{Home}{/Meta}');
-      expect(seek).toHaveBeenCalledWith(0);
+      expect(getMusicPosition().reportedTick).toBe(0);
 
-      seek.mockClear();
       await user.keyboard('{Meta>}{End}{/Meta}');
       const last = measures.at(-1)!;
-      expect(seek).toHaveBeenCalledWith(last.startTick + last.durationTicks - 1);
+      expect(getMusicPosition().reportedTick).toBe(last.startTick + last.durationTicks - 1);
     });
 
     it('leaves the selection alone, unlike the bare arrows', async () => {

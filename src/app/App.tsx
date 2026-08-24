@@ -21,7 +21,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { loadPrefs, savePrefs, useAppStore } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 type ErrorBoundaryProps = { children: ReactNode };
 type ErrorBoundaryState = { error: Error | null };

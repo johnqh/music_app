@@ -41,7 +41,6 @@
  * input's picker the way a real `<label>` wrapping it does.
  */
 import { getAppServices } from '@/config/initialize';
-import { commandLabel } from '@/features/score-editor/command-labels';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -59,11 +58,11 @@ import { defaultMidiImportOptions } from '@sudobility/music_lib';
 import type { MidiImportOptions } from '@sudobility/music_lib';
 import type { Clef, DurationName, NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
-import { importScoreCommand } from '@sudobility/music_lib';
+import { importScore } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import type { MidiImportResult } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 
@@ -224,9 +223,7 @@ export function MidiImportWizard({
       const result = await service.import(fileBuffer, options);
       const hasProject = !forceNewProject && store.getState().projectId !== null;
       if (hasProject) {
-        store
-          .getState()
-          .dispatchCommand(importScoreCommand(result.score, commandLabel('importScore')));
+        importScore(store, result.score);
         handleClose();
       } else {
         await store

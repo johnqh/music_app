@@ -56,7 +56,7 @@ import {
   reportError,
   useAppStore,
 } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import type { GenerateScoreRequest } from '@sudobility/music_types';
 import { GenerateScoreDialog } from '@/features/generation/GenerateScoreDialog';

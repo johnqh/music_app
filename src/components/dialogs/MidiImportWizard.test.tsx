@@ -8,7 +8,7 @@ import { exportMidi } from '@sudobility/music_lib';
 import { analyzeMidi } from '@sudobility/music_lib';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {

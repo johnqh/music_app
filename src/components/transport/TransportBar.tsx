@@ -32,7 +32,6 @@
  * tick" control (every intermediate tick genuinely re-seeks playback), so
  * there's no draft/commit split to preserve and no benefit to wrapping it.
  */
-import { commandLabel } from '@/features/score-editor/command-labels';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
@@ -49,11 +48,10 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
-import { changeTempoCommand } from '@sudobility/music_lib';
 import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
-import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
+import { measureBeatAt, setOpeningTempo } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import type { MeasureBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -220,7 +218,12 @@ function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScor
 
 function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
   const { t } = useTranslation();
-  const measureBeat = store(selectCurrentMeasureBeat);
+  // Its own position subscriber, like every other readout that follows the
+  // music: the position is not in the store, so reading it here is what keeps
+  // a value changing thirty times a second from waking the whole tree.
+  const positionTick = usePlaybackPosition();
+  const score = store((s) => s.score);
+  const measureBeat = measureBeatAt(score, positionTick);
   return (
     <Tooltip content={t('transport.measureBeat')}>
       <span
@@ -357,17 +360,7 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
     // Whole numbers only. The field is a number input, so a stepper or a paste
     // can put "104.5" in it, and a tempo the transport rounds for display but
     // stores unrounded reads back differently the next time it is opened.
-    const bpm = Math.round(Number(tempoDraft));
-    if (!score || !Number.isFinite(bpm) || bpm <= 0) return;
-    const firstEvent = score.tempoMap[0];
-    store
-      .getState()
-      .dispatchCommand(
-        changeTempoCommand(
-          { tempoEventId: firstEvent?.id, tick: firstEvent?.tick ?? 0, bpm },
-          commandLabel('changeTempo'),
-        ),
-      );
+    setOpeningTempo(store, Math.round(Number(tempoDraft)));
   };
 
   const handleTempoKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {

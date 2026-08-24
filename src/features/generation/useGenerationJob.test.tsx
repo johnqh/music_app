@@ -4,7 +4,7 @@ import { createAppStore, testStoreContext, twinkleScore } from '@sudobility/musi
 import type { GenerationJob, GenerationJobStatus } from '@sudobility/music_types';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import type { UseProjectGenerationOptions } from '@/features/generation/useGenerationJob';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 function job(status: GenerationJobStatus, error: string | null = null): GenerationJob {
   return {

@@ -57,7 +57,10 @@ const ALLOWED_NON_UI = new Set([
   // strings, so UI by definition.
   'src/components/layout/app-bar-menu.ts',
   // Dispatch helpers: they wire UI events to music_lib commands.
-  'src/features/score-editor/editing.ts',
+  //
+  // `editing.ts` is no longer among them — it was 834 lines of editing logic
+  // sitting in the UI package under this exemption, and it now lives in
+  // music_lib where a second app can reach it. The rest are on the same path.
   'src/features/score-editor/clipboard-prompts.ts',
   'src/features/score-editor/tracker-export.ts',
   'src/features/score-editor/chord-entry.ts',
@@ -133,6 +136,49 @@ describe('music_app holds UI only', () => {
     expect(
       offenders,
       'These import a path the package does not declare in its exports map.',
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Editing lives in music_lib, and the UI only invokes it.
+ *
+ * The rule that makes a second app possible: a user action calls one function,
+ * and the decisions behind it — which command, what target, what happens when
+ * the selection is a chord rather than a note — belong where both apps can
+ * reach them. `editing.ts` used to sit in this package under an exemption in
+ * the list above, 834 lines of it, and the components around it had grown
+ * loops and branches of their own: a chord-edit loop in the piano keyboard, a
+ * four-call sequence behind a click on the stave, a per-measure dispatch loop
+ * in the inspector.
+ *
+ * Dispatching a command is the visible edge of all of that, so it is what this
+ * guards. A component that needs something the facade cannot express should
+ * gain a function in music_lib rather than an exception here.
+ */
+describe('music_app invokes editing rather than performing it', () => {
+  const sources = () =>
+    globSync('src/**/*.{ts,tsx}', { cwd: process.cwd() }).filter(
+      (f) => !f.endsWith('.test.ts') && !f.endsWith('.test.tsx'),
+    );
+
+  it('finds sources to check', () => {
+    // Guards the glob: an empty list would make the assertion below vacuous.
+    expect(sources().length).toBeGreaterThan(20);
+  });
+
+  it('never dispatches a score command itself', () => {
+    const offenders = sources().filter((file) =>
+      // `.dispatchCommand(` — the call, not the word in a comment explaining
+      // why something does not use it.
+      /\.dispatchCommand\(/.test(readFileSync(file, 'utf8')),
+    );
+
+    expect(
+      offenders,
+      'These dispatch a command from the UI package. An edit belongs in ' +
+        "music_lib's editing module, called from here as a single function, " +
+        'so a React Native app obeys the same rules rather than repeating them.',
     ).toEqual([]);
   });
 });

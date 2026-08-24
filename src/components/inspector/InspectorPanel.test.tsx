@@ -20,7 +20,7 @@ import {
 import type { NoteEvent } from '@sudobility/music_types';
 import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 function makeStore(score: ReturnType<typeof twinkleScore> = twinkleScore()): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });

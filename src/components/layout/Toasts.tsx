@@ -22,7 +22,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 export type ToastsProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */

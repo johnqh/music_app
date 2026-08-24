@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getMusicPosition, resetMusicPosition } from '@sudobility/music_types';
 
 vi.mock('@sudobility/music_lib', async () => {
   const actual =
@@ -21,11 +22,10 @@ import {
   testStoreContext,
   createEmptyScore,
   allNotes,
-  playbackController,
 } from '@sudobility/music_lib';
 import type { Pitch } from '@sudobility/music_types';
-import { insertChordAtCaret } from '@/features/score-editor/editing';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { insertChordAtCaret } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 const pitch = (step: string, octave = 4): Pitch =>
@@ -105,23 +105,20 @@ describe('insertChordAtCaret', () => {
   it('advances the caret once for the whole chord, not once per note', () => {
     const store = makeStore(0);
     store.getState().setSnapGrid('quarter');
-    const seek = vi.mocked(playbackController.seek);
-    seek.mockClear();
+    resetMusicPosition();
 
     insertChordAtCaret(store, TRIAD, { advanceCaret: true });
 
-    // Once, past one note's worth — three notes sharing a span move the caret
-    // as far as one note does, not three times as far.
-    expect(seek).toHaveBeenCalledTimes(1);
-    expect(seek).toHaveBeenCalledWith(store.getState().score!.ppq);
+    // Past one note's worth — three notes sharing a span move the caret as far
+    // as one note does, not three times as far.
+    expect(getMusicPosition().reportedTick).toBe(store.getState().score!.ppq);
   });
 
   it('does not move the caret when the chord was refused', () => {
     const store = makeStore(56); // Trumpet
-    const seek = vi.mocked(playbackController.seek);
-    seek.mockClear();
+    resetMusicPosition();
     insertChordAtCaret(store, TRIAD, { advanceCaret: true });
-    expect(seek).not.toHaveBeenCalled();
+    expect(getMusicPosition().reportedTick).toBe(0);
   });
 
   it('is a no-op for an empty pitch list', () => {

@@ -14,7 +14,6 @@ import {
   readScoreSummary,
   waitForNotation,
 } from './helpers';
-import type { AppStore } from '@sudobility/music_lib';
 
 /**
  * Presses one key and releases it.
@@ -62,8 +61,9 @@ async function tapKey(page: import('@playwright/test').Page, midi: number, heldM
  */
 async function seekTo(page: import('@playwright/test').Page, tick: number) {
   await page.evaluate((t) => {
-    const store = (window as unknown as { __SCORESMITH_STORE__: AppStore }).__SCORESMITH_STORE__;
-    store.getState().setCaretTick(t);
+    // Through the editor's dev handle, because the caret is the shared
+    // position now rather than a field on the store.
+    (window as unknown as { __scoresmith: { seek: (tick: number) => void } }).__scoresmith.seek(t);
   }, tick);
 }
 

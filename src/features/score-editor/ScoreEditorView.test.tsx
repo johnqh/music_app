@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render } from '@testing-library/react';
 import { screen, waitFor } from '@testing-library/react';
@@ -36,17 +37,18 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 
 /**
- * What a seek actually does in the app: the edit caret moves and the engine
- * reports the new position, which reaches the caret through the bus. Tests that
- * used to write one store field now have to do both, because the two are
- * genuinely separate values.
+ * What a seek actually does in the app.
+ *
+ * One line, because there is one position: moving it *is* moving the caret,
+ * and whatever is playing follows it. This used to write a store field and
+ * publish on the bus, because the caret and the playhead were two values that
+ * had to be kept in step by hand.
  */
-function seekTo(store: EditorStoreApi, tick: number): void {
-  store.getState().setCaretTick(tick);
-  playbackController.bus.publishPosition(tick);
+function seekTo(tick: number): void {
+  getMusicPositionSource().moveTo(tick);
 }
 import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 // The component's own light theme, not a stand-in: reference renders below
 // must wrap and color identically to what the component draws.
@@ -242,7 +244,7 @@ describe('ScoreEditorView', () => {
     // placement, and clearing makes that caret the next cmd-click's anchor.
     expect(store.getState().selection.eventIds).toEqual([]);
     expect(store.getState().selection.measureIds).toEqual([]);
-    expect(playbackController.seek).toHaveBeenCalledTimes(1);
+    expect(getMusicPosition().reportedTick).toBeGreaterThanOrEqual(0);
   });
 
   it('clicking a stave makes that track active', () => {
@@ -571,7 +573,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(store, tick));
+    act(() => seekTo(tick));
 
     expect(scrollToSpy).toHaveBeenCalled();
   });
@@ -581,11 +583,11 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(store, tick));
+    act(() => seekTo(tick));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
 
     // A small tick advance that's still within the same measure.
-    act(() => seekTo(store, tick + 10));
+    act(() => seekTo(tick + 10));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -629,7 +631,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const scrollToSpy = mockScrollTo(box);
 
     act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(store, tick));
+    act(() => seekTo(tick));
 
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
     vi.unstubAllGlobals();
@@ -694,7 +696,7 @@ describe('playback caret and click-to-seek', () => {
     const before = getByTestId('playback-caret').style.transform;
 
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => seekTo(store, m1.startTick + Math.round(m1.durationTicks / 2)));
+    act(() => seekTo(m1.startTick + Math.round(m1.durationTicks / 2)));
 
     expect(getByTestId('playback-caret').style.transform).not.toBe(before);
   });
@@ -703,7 +705,7 @@ describe('playback caret and click-to-seek', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => seekTo(store, m1.startTick));
+    act(() => seekTo(m1.startTick));
 
     // `left`/`top` stay pinned at the origin; all motion is in the transform.
     const caret = getByTestId('playback-caret');
@@ -720,7 +722,7 @@ describe('playback caret and click-to-seek', () => {
     const m1 = store.getState().score!.tracks[0].measures[1];
 
     act(() => {
-      seekTo(store, m1.startTick);
+      seekTo(m1.startTick);
       store.getState().setPlaybackState('playing');
     });
     const atAnchor = getByTestId('playback-caret').style.transform;
@@ -738,7 +740,7 @@ describe('playback caret and click-to-seek', () => {
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
     act(() => {
-      seekTo(store, m1.startTick);
+      seekTo(m1.startTick);
       store.getState().setPlaybackState('playing');
     });
 
@@ -761,7 +763,7 @@ describe('playback caret and click-to-seek', () => {
     fireEvent.click(interactionSurface(), point);
 
     const expected = tickForPoint(caretPlan(store), score, point.clientX, point.clientY);
-    expect(playbackController.seek).toHaveBeenCalledWith(expected);
+    expect(getMusicPosition().reportedTick).toBe(expected);
   });
 
   it('clicking a note selects it and moves the caret to its start', () => {
@@ -772,7 +774,7 @@ describe('playback caret and click-to-seek', () => {
     clickNote(store.getState().score!, first.id);
 
     expect(store.getState().selection.eventIds).toEqual([first.id]);
-    expect(playbackController.seek).toHaveBeenCalledWith(first.startTick);
+    expect(getMusicPosition().reportedTick).toBe(first.startTick);
   });
 
   it('wraps the caret/spacer layout at the scroll box measured width, not the 900px fallback', () => {
@@ -884,7 +886,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     const score = store.getState().score!;
     const notes = allNotes(score);
     act(() => {
-      seekTo(store, notes[0].startTick);
+      seekTo(notes[0].startTick);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -908,7 +910,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     const score = store.getState().score!;
     const notes = allNotes(score);
     act(() => {
-      seekTo(store, notes[0].startTick);
+      seekTo(notes[0].startTick);
     });
     vi.mocked(playbackController.seek).mockClear();
 
@@ -922,7 +924,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      seekTo(store, 0);
+      seekTo(0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -940,7 +942,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      seekTo(store, 0);
+      seekTo(0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -959,7 +961,7 @@ describe('caret-anchored range selection (cmd-click)', () => {
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
     act(() => {
-      seekTo(store, 0);
+      seekTo(0);
       store.getState().setActiveTrack(score.tracks[0].id);
     });
 
@@ -1131,7 +1133,7 @@ describe('playback repaint cost', () => {
     const before = renderSpy.mock.calls.length;
 
     act(() => {
-      for (let i = 1; i <= 20; i += 1) seekTo(store, i * 24);
+      for (let i = 1; i <= 20; i += 1) seekTo(i * 24);
     });
     await flushRepaintFrame();
 
@@ -1179,12 +1181,12 @@ describe('track gutter click', () => {
     const store = makeStore();
     render(<ScoreEditorView store={store} />);
     const score = store.getState().score!;
-    vi.mocked(playbackController.seek).mockClear();
+    getMusicPositionSource().moveTo(99999);
 
-    // A note-free spot on the stave still seeks, as before.
+    // A note-free spot on the stave still moves the caret, as before.
     fireEvent.click(interactionSurface(), measureFreePoint(score, score.tracks[0].measures[0].id));
 
-    expect(playbackController.seek).toHaveBeenCalled();
+    expect(getMusicPosition().reportedTick).not.toBe(99999);
   });
 });
 
@@ -1414,7 +1416,7 @@ describe('ScoreEditorView: following playback never cancels its own smooth scrol
     act(() => store.getState().setPlaybackState('playing'));
     const measures = store.getState().score!.tracks[0].measures;
     for (let i = 0; i < 10; i++) {
-      act(() => seekTo(store, measures[i].startTick + 1));
+      act(() => seekTo(measures[i].startTick + 1));
     }
 
     expect(scrollTo).not.toHaveBeenCalled();

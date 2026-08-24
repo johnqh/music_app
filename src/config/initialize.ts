@@ -34,10 +34,12 @@ import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
 import {
   initializeAppStore,
+  setEditingCopy,
   setErrorLogging,
   type PrefsStorage,
   type StoreContext,
 } from '@sudobility/music_lib';
+import { buildEditingCopy } from '@/features/score-editor/command-labels';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';
 import { CONSTANTS } from '@/config/constants';
@@ -356,6 +358,13 @@ export function initializeApp(): AppServices {
   // host. The app knows; the app tells it. Defaults off there, which is what
   // a React Native app would leave it at.
   setErrorLogging(import.meta.env.DEV);
+
+  // Editing lives in music_lib so a second app cannot reimplement it
+  // differently, but an edit still has to be *named* — in the undo history, and
+  // in the toast an edit that breaks a measure raises. The library holds no
+  // strings in any language, so the words come from here, the same way
+  // `setLibraryMessages` and `setErrorLogging` do.
+  setEditingCopy(buildEditingCopy());
 
   // The player comes first: music_lib's playback adapter resolves it from its
   // singleton on first use, and nothing else here may touch playback before it

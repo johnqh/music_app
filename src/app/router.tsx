@@ -22,7 +22,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PaywallDialog } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { LanguageValidator as SharedLanguageValidator } from '@sudobility/components';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';

@@ -18,7 +18,7 @@ import type { GenerationJob, GenerationJobKind } from '@sudobility/music_types';
 import { useAppStore } from '@sudobility/music_lib';
 import type { MusicClient } from '@sudobility/music_client';
 import { getAppServices } from '@/config/initialize';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 /** Matches the server-side poll cadence in music_client's own hook. */
 const POLL_MS = 3000;

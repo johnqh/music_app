@@ -3,7 +3,7 @@ import { createAppStore, testStoreContext } from '@sudobility/music_lib';
 import { ApiError, InsufficientCreditsError } from '@sudobility/music_client';
 import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() }) as unknown as EditorStoreApi;

@@ -23,55 +23,23 @@
  * there; under test `t` returns the key, which is deterministic and harmless.
  */
 import i18next from 'i18next';
-
-/** One key per command, named for the command rather than its wording. */
-export type CommandLabelKey =
-  | 'addNote'
-  | 'addMeasure'
-  | 'addTrack'
-  | 'changeAccidental'
-  | 'changeArticulation'
-  | 'changeDuration'
-  | 'changeDynamic'
-  | 'changePitch'
-  | 'changeClef'
-  | 'changeKeySignature'
-  | 'changeRepeats'
-  | 'changeMetadata'
-  | 'changeTempo'
-  | 'changeTimeSignature'
-  | 'changeTrackProps'
-  | 'changeVelocity'
-  | 'deleteEvents'
-  | 'changeVoice'
-  | 'deleteMeasure'
-  | 'deleteTrack'
-  | 'importScore'
-  | 'insertWithRipple'
-  | 'moveNotes'
-  | 'pasteEvents'
-  | 'quantize'
-  | 'relocateNotes'
-  | 'resizeNotes'
-  | 'setChordSymbol'
-  | 'setFingering'
-  | 'setPickup'
-  | 'setLyric'
-  | 'toGraceNote'
-  | 'changeBeam'
-  | 'changeBarline'
-  | 'changeMeasureClef'
-  | 'changeNavigation'
-  | 'changeOrnament'
-  | 'toggleArpeggiate'
-  | 'toggleGlissando'
-  | 'toggleOttava'
-  | 'toggleFermata'
-  | 'toggleHairpin'
-  | 'toggleSlur'
-  | 'toggleTie'
-  | 'transpose';
+import type { CommandLabelKey, EditingCopy } from '@sudobility/music_lib';
 
 export function commandLabel(key: CommandLabelKey): string {
   return i18next.t(`command.${key}`);
+}
+
+/**
+ * The whole editing-copy contract, for `setEditingCopy` at bootstrap.
+ *
+ * `commandLabel` is passed as the resolver rather than a captured table, so a
+ * language change takes effect on the next edit instead of stranding whatever
+ * was loaded at start-up.
+ */
+export function buildEditingCopy(): EditingCopy {
+  return {
+    commandLabel,
+    validationProblem: (detail: string) => i18next.t('editor.validationProblem', { detail }),
+    lastMeasureKept: i18next.t('editor.lastMeasureKept'),
+  };
 }

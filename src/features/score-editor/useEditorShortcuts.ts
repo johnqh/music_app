@@ -28,7 +28,7 @@
  * this state).
  */
 import { useEffect } from 'react';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import {
   caretToBarEdge,
   caretToScoreEdge,
@@ -47,7 +47,7 @@ import {
   toggleGlissando,
   toggleHairpin,
   toggleOttava,
-} from '@/features/score-editor/editing';
+} from '@sudobility/music_lib';
 import { durationForDigit, isPitchLetter, pitchForLetter } from '@sudobility/music_lib';
 import { withModifier } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';

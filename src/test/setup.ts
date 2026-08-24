@@ -2,6 +2,10 @@ import i18n from 'i18next';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import '@/i18n';
+import { beforeEach } from 'vitest';
+import { resetMusicPosition } from '@sudobility/music_types';
+import { setEditingCopy } from '@sudobility/music_lib';
+import { buildEditingCopy } from '@/features/score-editor/command-labels';
 import '@testing-library/jest-dom/vitest';
 
 // Every language is fetched over HTTP from `public/locales/` at runtime (see
@@ -19,6 +23,21 @@ i18n.addResourceBundle(
   true,
   true,
 );
+
+// Editing lives in music_lib and takes its words from the host, so tests have
+// to install them exactly as `initializeApp` does — otherwise every label and
+// every edit-validation toast is the empty string the library deliberately
+// starts with, and an assertion on that text fails for a reason that has
+// nothing to do with what it is testing.
+setEditingCopy(buildEditingCopy());
+
+// The caret is one shared position, not a store field, so it does not go away
+// when a test builds a fresh store. Left over from the previous test it is a
+// caret sitting wherever that one left it, which is the kind of cross-test
+// leak that fails only in a full run.
+beforeEach(() => {
+  resetMusicPosition();
+});
 
 // jsdom does not implement SVGElement.prototype.getBBox, but VexFlow (used by
 // src/adapters/vexflow) calls it both internally (text measurement) and from

@@ -20,12 +20,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@sudobility/components';
-import { setLyricCommand } from '@sudobility/music_lib';
-import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent } from '@sudobility/music_types';
-import { commandLabel } from '@/features/score-editor/command-labels';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { syllabicFor } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@sudobility/music_lib';
+import { lyricTextAt, writeLyric } from '@sudobility/music_lib';
 
 export type LyricEntryBarProps = {
   store: EditorStoreApi;
@@ -62,33 +59,18 @@ export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryB
   useEffect(() => {
     const id = notes[index]?.id;
     if (!id) return;
-    const score = store.getState().score;
-    const current = score
-      ? score.tracks
-          .flatMap((t) => t.measures)
-          .flatMap((m) => m.voices)
-          .flatMap((v) => v.events)
-          .filter(isNoteEvent)
-          .find((e) => e.id === id)
-      : undefined;
-    setDraft(current?.lyric?.text ?? '');
+    setDraft(lyricTextAt(store, id));
   }, [index, notes, store]);
 
   if (!note) return null;
 
   const commit = (hyphenated: boolean): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        setLyricCommand(
-          note.id,
-          draft.trim() === ''
-            ? undefined
-            : { text: draft, syllabic: syllabicFor(continuing.current, hyphenated) },
-          commandLabel('setLyric'),
-        ),
-      );
-    continuing.current = hyphenated;
+    continuing.current = writeLyric(store, {
+      noteId: note.id,
+      text: draft,
+      continuing: continuing.current,
+      hyphenated,
+    });
   };
 
   const advance = (hyphenated: boolean): void => {

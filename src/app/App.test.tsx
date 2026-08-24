@@ -24,7 +24,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 import { App } from '@/app/App';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices, setAppServices, type AppServices } from '@/config/initialize';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 function setup(): { store: EditorStoreApi; context: TestStoreContext } {
   const context = installTestAppServices();

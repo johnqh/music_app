@@ -18,7 +18,7 @@ import { GlobalSettingsPage, type SettingsSectionConfig } from '@sudobility/buil
 import { useAppStore } from '@sudobility/music_lib';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 import { useFontSize, type FontSizePref } from '@/hooks/useFontSize';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 export type SettingsPageProps = { store?: EditorStoreApi };
 

@@ -12,7 +12,7 @@ import {
   twoTrackScore,
   withRehearsalMarks,
 } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { printRenderOptions } from '@/features/print/print-layout';
 import { PrintView } from '@/features/print/PrintView';

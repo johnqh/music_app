@@ -19,19 +19,19 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@sudobility/components';
 import {
   beatDurationTicks,
-  changeBarlineCommand,
-  changeMeasureClefCommand,
-  changeNavigationCommand,
   changeRepeatsCommand,
-  changeTempoCommand,
   effectiveClef,
-  removeTempoCommand,
-  setPickupCommand,
+  removeTempoAt,
+  setBarline,
+  setMeasureClef,
+  setNavigation,
+  setPickup,
+  setRepeats,
+  setTempoAt,
 } from '@sudobility/music_lib';
 import type { NavigationPatch } from '@sudobility/music_lib';
 import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
-import { commandLabel } from '@/features/score-editor/command-labels';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
 import {
   CLEFS,
@@ -89,11 +89,7 @@ export function PickupField({ store, measure }: { store: EditorStoreApi; measure
     : NO_PICKUP;
 
   const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        setPickupCommand(value === NO_PICKUP ? null : Number(value), commandLabel('setPickup')),
-      );
+    setPickup(store, value === NO_PICKUP ? null : Number(value));
   };
 
   return (
@@ -138,15 +134,7 @@ export function BarlineField({ store, measure }: { store: EditorStoreApi; measur
   if (index === undefined || index < 0) return null;
 
   const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        changeBarlineCommand(
-          index,
-          value === SINGLE_BARLINE ? undefined : (value as BarlineStyle),
-          commandLabel('changeBarline'),
-        ),
-      );
+    setBarline(store, index, value === SINGLE_BARLINE ? undefined : (value as BarlineStyle));
   };
 
   return (
@@ -188,9 +176,7 @@ export function NavigationFields({ store, measure }: { store: EditorStoreApi; me
   if (index === undefined || index < 0) return null;
 
   const patch = (next: NavigationPatch): void => {
-    store
-      .getState()
-      .dispatchCommand(changeNavigationCommand(index, next, commandLabel('changeNavigation')));
+    setNavigation(store, index, next);
   };
 
   return (
@@ -263,16 +249,7 @@ export function MeasureClefField({ store, measure }: { store: EditorStoreApi; me
   const isFirst = index === 0;
 
   const apply = (value: string): void => {
-    store
-      .getState()
-      .dispatchCommand(
-        changeMeasureClefCommand(
-          track.id,
-          index,
-          value === INHERIT_CLEF ? undefined : (value as Clef),
-          commandLabel('changeMeasureClef'),
-        ),
-      );
+    setMeasureClef(store, track.id, index, value === INHERIT_CLEF ? undefined : (value as Clef));
   };
 
   return (
@@ -305,9 +282,7 @@ export function RepeatFields({ store, measure }: { store: EditorStoreApi; measur
   }, [measure.id, measure.endingNumbers]);
 
   const patch = (next: Parameters<typeof changeRepeatsCommand>[1]): void => {
-    store
-      .getState()
-      .dispatchCommand(changeRepeatsCommand(measure.id, next, commandLabel('changeRepeats')));
+    setRepeats(store, measure.id, next);
   };
 
   return (
@@ -395,14 +370,11 @@ export function MeasureTempoField({
       return;
     }
     if (ownEvent && bpm === Math.round(ownEvent.bpm)) return;
-    store
-      .getState()
-      .dispatchCommand(
-        changeTempoCommand(
-          { tempoEventId: ownEvent?.id, tick: measure.startTick, bpm },
-          commandLabel('changeTempo'),
-        ),
-      );
+    setTempoAt(store, {
+      ...(ownEvent ? { tempoEventId: ownEvent.id } : {}),
+      tick: measure.startTick,
+      bpm,
+    });
   };
 
   return (
@@ -424,11 +396,7 @@ export function MeasureTempoField({
           type="button"
           variant="ghost"
           disabled={isPlaying}
-          onClick={() =>
-            store
-              .getState()
-              .dispatchCommand(removeTempoCommand(ownEvent.id, commandLabel('changeTempo')))
-          }
+          onClick={() => removeTempoAt(store, ownEvent.id)}
           className="self-start px-1 py-0.5 text-xs"
         >
           {t('editor.removeTempoChange')}

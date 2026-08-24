@@ -11,11 +11,10 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Input } from '@sudobility/components';
-import { barBeatForTick, setChordSymbolCommand, tickForBarBeat } from '@sudobility/music_lib';
+import { barBeatForTick, setChordSymbol, tickForBarBeat } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { commandLabel } from '@/features/score-editor/command-labels';
-import { setFingering } from '@/features/score-editor/editing';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import { setFingering } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import {
   FIELD_HEIGHT_CLASS,
   FIELD_LABEL_CLASS,
@@ -191,10 +190,7 @@ export function ChordSymbolField({
         aria-label={t('inspector.chordSymbol')}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onBlur={() => {
-          if (draft.trim() === (note.chordSymbol ?? '')) return;
-          store
-            .getState()
-            .dispatchCommand(setChordSymbolCommand(note.id, draft, commandLabel('setChordSymbol')));
+          setChordSymbol(store, note.id, draft);
         }}
         className={TEXT_INPUT_CLASS}
       />

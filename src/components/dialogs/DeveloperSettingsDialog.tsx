@@ -20,7 +20,7 @@ import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { getAppServices } from '@/config/initialize';
 import { runBenchmark, toBenchmarkTable } from '@sudobility/music_lib';

@@ -83,11 +83,12 @@ import { playbackController } from '@sudobility/music_lib';
 import { selectionSummaryLabel } from '@sudobility/music_lib';
 import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
-import { repairAllIssues } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
+import { repairAllIssues } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
-import { selectCurrentMeasureBeat } from '@sudobility/music_lib';
+import { measureBeatAt } from '@sudobility/music_lib';
+import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { TransportBar } from '@/components/transport/TransportBar';
@@ -158,7 +159,11 @@ const SAVE_STATE_CLASS: Record<string, string> = {
  */
 function StatusPosition({ store }: { store: EditorStoreApi }) {
   const { t } = useTranslation();
-  const measureBeat = store(selectCurrentMeasureBeat);
+  // Its own position subscriber: the position lives outside the store, so this
+  // readout follows the music without waking the notation with it.
+  const positionTick = usePlaybackPosition();
+  const score = store((s) => s.score);
+  const measureBeat = measureBeatAt(score, positionTick);
   return (
     <span aria-label={t('editor.position')} className="text-xs text-theme-text-secondary">
       {measureBeat

@@ -568,7 +568,8 @@
     "beamBreakHint": "Start a new beam group at the selected note",
     "beamNone": "No beam",
     "beamNoneHint": "Draw the selected notes with flags instead of a beam",
-    "managePublished": "Published snapshots…"
+    "managePublished": "Published snapshots…",
+    "validationProblem": "This edit produced a validation problem: {{detail}}"
   },
   "credits": {
     "title": "Credits",

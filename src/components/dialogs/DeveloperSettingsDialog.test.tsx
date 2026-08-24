@@ -22,7 +22,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 });
 
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });

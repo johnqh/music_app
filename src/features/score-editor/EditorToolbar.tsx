@@ -47,17 +47,16 @@ import { useAppStore } from '@sudobility/music_lib';
 import {
   addTrackCommand,
   createId,
-  trackMaxPolyphony,
   selectActiveTrackId,
   selectSelectedNotes,
 } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
 import { durationDisplay } from '@sudobility/music_lib';
 import type { BaseDuration } from '@sudobility/music_lib';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
-import { dispatchTracked } from '@/features/score-editor/editing';
+import { dispatchTracked } from '@sudobility/music_lib';
 import type { ReactElement } from 'react';
 import {
   ChevronDoubleLeftIcon,
@@ -115,7 +114,9 @@ import {
   changeAccidental,
   changeArticulation,
   changeOrnament,
-  changeDuration,
+  chooseDuration,
+  chooseEditMode,
+  canStackOnActiveTrack,
   insertNoteAtCaret,
   insertRestAtSelection,
   quantizeSelection,
@@ -126,7 +127,7 @@ import {
   toggleHairpin,
   toggleSlur,
   toggleTie,
-} from '@/features/score-editor/editing';
+} from '@sudobility/music_lib';
 
 export type LayoutMode = 'page' | 'continuous';
 
@@ -299,14 +300,15 @@ export function EditorToolbar({
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrackId = store(selectActiveTrackId);
   const activeTrack = score?.tracks.find((t) => t.id === activeTrackId) ?? null;
-  // Through the track: a drum track's program is a kit, and Brush sits at 40 —
-  // the Violin address — so the toolbar refused a three-piece drum hit.
-  const canStack = activeTrack === null || trackMaxPolyphony(activeTrack) > 1;
+  // Asked through the track, because a drum track's program is a kit: Brush
+  // sits at 40, the Violin address, which is how the toolbar came to refuse a
+  // three-piece drum hit. The rule lives in music_lib; this only draws it.
+  const canStack = canStackOnActiveTrack(store);
 
   // A mode chosen before the track changed would otherwise refuse every edit,
   // and that refusal only surfaces after you have already played something.
   useEffect(() => {
-    if (editMode === 'stack' && !canStack) store.getState().setEditMode('replace');
+    if (editMode === 'stack' && !canStack) chooseEditMode(store, 'replace');
   }, [editMode, canStack, store]);
 
   const editModeOptions: Array<{
@@ -390,8 +392,7 @@ export function EditorToolbar({
   }, [articulationOpen]);
 
   const handleDurationClick = (value: DurationName): void => {
-    store.getState().setSnapGrid(value);
-    changeDuration(store, value);
+    chooseDuration(store, value);
   };
 
   /**
@@ -692,7 +693,7 @@ export function EditorToolbar({
                 aria-label={option.label}
                 aria-pressed={editMode === option.value}
                 disabled={!hasScore || (option.value === 'stack' && !canStack)}
-                onClick={() => store.getState().setEditMode(option.value)}
+                onClick={() => chooseEditMode(store, option.value)}
                 className={TOGGLE_BUTTON_CLASS}
               >
                 <option.Icon className={ICON_GLYPH_CLASS} />

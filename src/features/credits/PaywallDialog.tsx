@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { CreditPaywallDialog } from '@sudobility/consumables_pages';
 import { useAppStore } from '@sudobility/music_lib';
 import { useCreditStore } from '@/features/credits/useCreditStore';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 /** The `dialogs` key, shared by everything that raises the paywall. */
 export const PAYWALL_DIALOG = 'paywall';

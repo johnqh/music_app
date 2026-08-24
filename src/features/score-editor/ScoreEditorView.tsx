@@ -19,7 +19,7 @@
  * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
  */
 import { selectionSummaryCopy } from '@/i18n/lib-copy';
-import { commandLabel } from '@/features/score-editor/command-labels';
+import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type React from 'react';
@@ -35,9 +35,7 @@ import type { LayoutPlan } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { GenerateScoreRequest, Pitch, SoundingNote } from '@sudobility/music_types';
 import {
-  changePitchCommand,
   findEvent,
-  relocateNotesCommand,
   selectionSummaryLabel,
   shiftDiatonic,
   ticksFor,
@@ -53,13 +51,18 @@ import { useAppStore } from '@sudobility/music_lib';
 import {
   caretToBar,
   deleteSelected,
-  insertNoteAtCaret,
+  placeCaret,
   selectAll,
-} from '@/features/score-editor/editing';
+  selectMeasureRange,
+  selectToTick,
+  writeNoteAtPoint,
+  relocateNotes,
+  commitPitchDrag,
+} from '@sudobility/music_lib';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { useClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
@@ -78,7 +81,6 @@ import {
 import type { Point } from '@/features/score-editor/hit-test';
 import { buildNoteColors } from '@/features/score-editor/note-colors';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
-import { noteIdsInTickRange } from '@sudobility/music_lib';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
 import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
@@ -102,6 +104,16 @@ const DEFAULT_WIDTH = 900;
 const CONTAINER_MIN_HEIGHT = 400;
 /** Pixels of pointer movement before a pointerdown-drag counts as a box-select rather than a plain click. */
 const DRAG_THRESHOLD = 3;
+/**
+ * Where the caret is.
+ *
+ * One shared position rather than a store field, so a click that moves it and
+ * a playhead that advances it are the same number — see `IMusicPosition`.
+ */
+function caretTick(): number {
+  return getMusicPosition().reportedTick;
+}
+
 /** The id of the measure `positionTick` currently falls in, read off the score's first track (every track shares the same measure grid — see `store/selectors.ts`'s `selectCurrentMeasureBeat`, same convention). */
 
 export function ScoreEditorView({
@@ -679,6 +691,17 @@ export function ScoreEditorView({
       get scrollBox() {
         return scrollBoxRef.current;
       },
+      /**
+       * Move the caret from a spec.
+       *
+       * The caret is the shared position, not a store field, so a test cannot
+       * reach it through `__SCORESMITH_STORE__` any more. Exposed here rather
+       * than reaching for the singleton through a bundled module, which a
+       * spec has no honest way to import.
+       */
+      seek(tick: number) {
+        getMusicPositionSource().moveTo(tick);
+      },
     };
     const w = window as unknown as Record<string, unknown>;
     w.__scoresmith = handle;
@@ -763,11 +786,6 @@ export function ScoreEditorView({
       if (layoutPlan) {
         const gutterIndex = measureIndexAtGutterPoint(layoutPlan, logical);
         if (gutterIndex !== null) {
-          const tracks =
-            rangeModifier && event.shiftKey
-              ? state.score.tracks
-              : state.score.tracks.filter((t) => t.id === activeTrackId);
-
           /*
             Shift extends from the bar clicked last, so "bars 3 to 12" is two
             clicks rather than ten. Regeneration and Replace Measures both work
@@ -778,15 +796,14 @@ export function ScoreEditorView({
             rather than walking it — the behaviour of every list that does
             this.
           */
-          const anchorIndex = event.shiftKey && !rangeModifier ? measureAnchorRef.current : null;
-          const from = anchorIndex === null ? gutterIndex : Math.min(anchorIndex, gutterIndex);
-          const to = anchorIndex === null ? gutterIndex : Math.max(anchorIndex, gutterIndex);
-
-          const measureIds = tracks.flatMap((t) => t.measures.slice(from, to + 1).map((m) => m.id));
-          if (measureIds.length > 0) {
-            state.selectMeasures(measureIds);
-            if (anchorIndex === null) measureAnchorRef.current = gutterIndex;
-          }
+          measureAnchorRef.current = selectMeasureRange(store, {
+            index: gutterIndex,
+            anchor: measureAnchorRef.current,
+            extend: event.shiftKey && !rangeModifier,
+            // Cmd+Shift means the same bar across every track, which is a
+            // different question from extending a span.
+            allTracks: rangeModifier && event.shiftKey,
+          });
           return;
         }
       }
@@ -798,24 +815,7 @@ export function ScoreEditorView({
         const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
         if (clickedTick === null) return;
 
-        const scopeTrackIds = event.shiftKey
-          ? state.score.tracks.map((t) => t.id)
-          : activeTrackId
-            ? [activeTrackId]
-            : [];
-        state.setSelection({
-          eventIds: noteIdsInTickRange(state.score, state.caretTick, clickedTick, scopeTrackIds),
-          measureIds: [],
-          trackIds: [],
-          // The explicit range matters: regenerating a span of empty measures
-          // must still work, and `selectionToRange` can't derive a span from
-          // an empty eventIds list.
-          range: {
-            startTick: Math.min(state.caretTick, clickedTick),
-            endTick: Math.max(state.caretTick, clickedTick),
-            trackIds: scopeTrackIds,
-          },
-        });
+        selectToTick(store, { tick: clickedTick, allTracks: event.shiftKey });
         return;
       }
 
@@ -863,33 +863,39 @@ export function ScoreEditorView({
         const hit = pitchAtStavePoint(layoutPlan, state.score, logical);
         const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
         if (hit && clickedTick !== null) {
-          state.setActiveTrack(hit.trackId);
-          state.clearSelection();
-          playbackController.seek(clickedTick);
           // `hit.pitch` is what is *drawn* there, and the drawing has been
           // through the display lenses. Storing it raw wrote a note an octave
           // out inside an `8va`, and a transposition out on a written-pitch
           // part — silently, since the note then drew exactly where it was
-          // clicked and only sounded wrong.
-          insertNoteAtCaret(
-            store,
-            soundingPitchForDrawn(state.score, hit.trackId, clickedTick, hit.pitch, pitchDisplay),
-            { advanceCaret: true },
-          );
+          // clicked and only sounded wrong. Inverting them is this view's job,
+          // because only it knows what was drawn; everything after is editing.
+          writeNoteAtPoint(store, {
+            tick: clickedTick,
+            trackId: hit.trackId,
+            pitch: soundingPitchForDrawn(
+              state.score,
+              hit.trackId,
+              clickedTick,
+              hit.pitch,
+              pitchDisplay,
+            ),
+          });
           return;
         }
       }
 
       // ---- plain click anywhere else inside a system: caret + active track.
-      // The selection is cleared so the caret becomes the anchor for the next
-      // cmd-click range.
+      // One call: the caret goes here, the track under the pointer becomes
+      // active, and the selection clears so the caret anchors the next range.
       const measureId = result ? measureIdAtPoint(result.measureIdToBBox, point) : null;
-      if (measureId) {
-        const owner = state.score.tracks.find((t) => t.measures.some((m) => m.id === measureId));
-        if (owner) state.setActiveTrack(owner.id);
-      }
-      state.clearSelection();
-      seekToEventPoint(event);
+      const owner = measureId
+        ? (state.score.tracks.find((t) => t.measures.some((m) => m.id === measureId)) ?? null)
+        : null;
+      const tick =
+        layoutPlan && displayScore
+          ? tickForPoint(layoutPlan, displayScore, logical.x, logical.y)
+          : null;
+      if (tick !== null) placeCaret(store, { tick, trackId: owner?.id ?? null });
     },
     [store, seekToEventPoint, layoutPlan, displayScore, zoom, activeTrackId, pitchDisplay],
   );
@@ -927,7 +933,7 @@ export function ScoreEditorView({
 
   const beginLyricEntry = useCallback(() => {
     if (lyricNotes.length === 0) return;
-    const caret = store.getState().caretTick;
+    const caret = caretTick();
     const at = lyricNotes.findIndex((n) => n.startTick >= caret);
     setLyricStart(at === -1 ? 0 : at);
   }, [lyricNotes, store]);
@@ -1092,17 +1098,11 @@ export function ScoreEditorView({
           suppressNextClickRef.current = true;
           // One command for the whole gesture, so undo restores both the
           // source and the destination in a single step.
-          store.getState().dispatchCommand(
-            relocateNotesCommand(
-              [...ids],
-              {
-                targetTrackId: target.trackId,
-                deltaTicks: target.deltaTicks,
-                collision: collisionForEditMode(editMode),
-              },
-              commandLabel('relocateNotes'),
-            ),
-          );
+          relocateNotes(store, [...ids], {
+            targetTrackId: target.trackId,
+            deltaTicks: target.deltaTicks,
+            collision: collisionForEditMode(editMode),
+          });
         }
         return;
       }
@@ -1117,15 +1117,7 @@ export function ScoreEditorView({
           // One command for the whole gesture, so undo restores the pitch the
           // note had before the drag rather than stepping back through it.
           suppressNextClickRef.current = true;
-          store
-            .getState()
-            .dispatchCommand(
-              changePitchCommand(
-                [pitchDrag.eventId],
-                shiftDiatonic(pitchDrag.pitch, steps),
-                commandLabel('changePitch'),
-              ),
-            );
+          commitPitchDrag(store, pitchDrag.eventId, pitchDrag.pitch, steps);
         }
         return;
       }

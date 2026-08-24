@@ -13,7 +13,7 @@ import { useCallback, useState } from 'react';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent } from '@sudobility/music_types';
 import { findEvent, selectActiveTrackId } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import {
   clipboardSpan,
   cutNeedsPrompt,

@@ -18,7 +18,7 @@ import {
 } from '@sudobility/music_lib';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sudobility/music_lib')>();

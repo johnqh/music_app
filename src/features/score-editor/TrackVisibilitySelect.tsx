@@ -10,7 +10,7 @@
 import { CheckableSelect, Tooltip, cn } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
 import { selectActiveTrackId, selectVisibleTrackIds, useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
 export type TrackVisibilitySelectProps = {

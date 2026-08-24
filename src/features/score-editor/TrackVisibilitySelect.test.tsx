@@ -7,7 +7,7 @@ import {
   threeTrackScore,
   twinkleScore,
 } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 
 function makeStore(score = threeTrackScore()): EditorStoreApi {

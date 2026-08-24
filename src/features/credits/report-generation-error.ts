@@ -9,7 +9,7 @@
  */
 import { InsufficientCreditsError } from '@sudobility/music_client';
 import { reportError, useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@/features/score-editor/editing';
+import type { EditorStoreApi } from '@sudobility/music_lib';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
 
 export type ReportGenerationErrorOptions = {
