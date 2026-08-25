@@ -59,8 +59,8 @@ import {
   MixedSelect,
 } from '@/components/inspector/controls';
 import {
-  ACCIDENTALS,
-  ARTICULATIONS,
+  ACCIDENTAL_OPTIONS,
+  ARTICULATION_OPTIONS,
   CLEFS,
   CUSTOM_DURATION,
   FIELD_HEIGHT_CLASS,
@@ -140,6 +140,7 @@ import type { EditorStoreApi } from '@sudobility/music_lib';
 import type { ReplaceScope } from '@sudobility/music_lib';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
 import type { ReplaceSubmission } from '@sudobility/music_lib';
+import { OTTAVAS } from '@sudobility/music_types';
 
 export type InspectorPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -276,7 +277,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         <MixedSelect
           value={accidentalStr}
           ariaLabel="Accidental"
-          options={ACCIDENTALS.map((a) => ({ value: String(a.value), label: a.label }))}
+          options={ACCIDENTAL_OPTIONS.map((a) => ({ value: String(a.value), label: a.label }))}
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField
@@ -351,7 +352,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         <MixedSelect
           value={articulation}
           ariaLabel="Articulation"
-          options={ARTICULATIONS.map((a) => ({ value: a.value, label: t(a.labelKey) }))}
+          options={ARTICULATION_OPTIONS.map((a) => ({ value: a.value, label: t(a.labelKey) }))}
           onChange={(value) => dispatchArticulation(store, value === 'none' ? undefined : value)}
         />
       </label>
@@ -439,7 +440,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       <div className="flex flex-col gap-2">
         <span className={FIELD_LABEL_CLASS}>{t('inspector.spans')}</span>
         <div className="flex flex-wrap gap-2">
-          {(['8va', '8vb', '15ma', '15mb'] as const).map((kind) => (
+          {OTTAVAS.map((kind) => (
             <Button
               key={kind}
               type="button"

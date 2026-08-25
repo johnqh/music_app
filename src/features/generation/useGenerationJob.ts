@@ -225,10 +225,22 @@ export function useProjectGeneration(
         setGenerating(false);
         generatingRef.current = false;
 
-        // A job we started that ended badly still owes an explanation.
+        /*
+          A job we started that ended badly still owes an explanation.
+
+          Through a toast as well as the inline error, because the overlay that
+          renders the inline one has just been unmounted by the line above: the
+          editor came back, the track was missing, and the reason was written
+          to a component that no longer existed. A toast outlives the overlay,
+          which is the whole point of having one.
+        */
         if (jobId) {
           const job: GenerationJob = await client.getJob(jobId, token);
-          if (!stopped && job.status === 'failed') setError(job.error ?? 'Generation failed.');
+          if (!stopped && job.status === 'failed') {
+            const message = job.error ?? 'Generation failed.';
+            setError(message);
+            store.getState().pushToast({ message, severity: 'error' });
+          }
         }
       } catch (err) {
         // A transient poll failure is not a finished job — keep polling rather

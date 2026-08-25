@@ -12,32 +12,44 @@
  * so a column of them comes out ragged unless the height is stated once.
  */
 
-import type { Accidental, Articulation, Clef, PitchStep } from '@sudobility/music_types';
+import { ACCIDENTALS, ARTICULATIONS } from '@sudobility/music_types';
+import type { Accidental, Articulation } from '@sudobility/music_types';
+
+export { CLEFS, PITCH_STEPS } from '@sudobility/music_types';
 
 /** Sentinel distinguishing "every selected object agrees" from "differing values" (spec §20's "mixed"). */
 export const MIXED = Symbol('mixed');
 
 export type MixedOr<T> = T | typeof MIXED;
 
-export const PITCH_STEPS: PitchStep[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+/**
+ * The label each accidental is written with. A record keyed by the type, not a
+ * list beside it: a sixth accidental would fail to compile here rather than
+ * quietly go missing from the picker.
+ */
+const ACCIDENTAL_LABEL: Record<Accidental, string> = {
+  [-2]: 'bb',
+  [-1]: 'b',
+  [0]: 'natural',
+  [1]: '#',
+  [2]: 'x',
+};
 
-export const ACCIDENTALS: Array<{ value: Accidental; label: string }> = [
-  { value: -2, label: 'bb' },
-  { value: -1, label: 'b' },
-  { value: 0, label: 'natural' },
-  { value: 1, label: '#' },
-  { value: 2, label: 'x' },
-];
+/**
+ * The picker's entries. Named for what it is — a list of options — rather than
+ * `ACCIDENTALS`, which is the vocabulary itself and lives in music_types; two
+ * things under one name in two packages is how a picker comes to offer a set
+ * the model no longer has.
+ */
+export const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; label: string }> = ACCIDENTALS.map(
+  (value) => ({ value, label: ACCIDENTAL_LABEL[value] }),
+);
 
-export const ARTICULATIONS: Array<{ value: Articulation | 'none'; labelKey: string }> = [
+/** The picker's entries; `ARTICULATIONS` itself is the vocabulary, in music_types. */
+export const ARTICULATION_OPTIONS: Array<{ value: Articulation | 'none'; labelKey: string }> = [
   { value: 'none', labelKey: 'articulation.none' },
-  { value: 'staccato', labelKey: 'articulation.staccato' },
-  { value: 'accent', labelKey: 'articulation.accent' },
-  { value: 'tenuto', labelKey: 'articulation.tenuto' },
-  { value: 'marcato', labelKey: 'articulation.marcato' },
+  ...ARTICULATIONS.map((value) => ({ value, labelKey: `articulation.${value}` })),
 ];
-
-export const CLEFS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
 
 export const MIXED_VALUE = '__mixed__';
 

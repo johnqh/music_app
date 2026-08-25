@@ -31,7 +31,34 @@ import {
   trackOfMeasure,
 } from '@sudobility/music_lib';
 import type { NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
+import { BARLINE_STYLES, REPEAT_JUMPS } from '@sudobility/music_types';
 import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
+
+/**
+ * How each barline style and each jump is written on the page.
+ *
+ * Records keyed by the vocabulary rather than lists beside it: the picker's
+ * order comes from `BARLINE_STYLES`/`REPEAT_JUMPS`, and a mark added to the
+ * model fails to compile here until somebody says what it is called. A
+ * hand-written option list would simply have gone on offering the old set.
+ *
+ * The jump labels are not translated on purpose — `D.S. al Coda` is Italian
+ * on every edition in every country, and a reader looking for it is looking
+ * for those letters.
+ */
+const BARLINE_LABEL_KEY: Record<BarlineStyle, string> = {
+  double: 'inspector.barlineDouble',
+  final: 'inspector.barlineFinal',
+};
+
+const JUMP_LABEL: Record<RepeatJump, string> = {
+  'da-capo': 'D.C.',
+  'da-capo-al-fine': 'D.C. al Fine',
+  'da-capo-al-coda': 'D.C. al Coda',
+  'dal-segno': 'D.S.',
+  'dal-segno-al-fine': 'D.S. al Fine',
+  'dal-segno-al-coda': 'D.S. al Coda',
+};
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
 import {
@@ -145,8 +172,7 @@ export function BarlineField({ store, measure }: { store: EditorStoreApi; measur
         disabled={isPlaying}
         options={[
           { value: SINGLE_BARLINE, label: t('inspector.barlineSingle') },
-          { value: 'double', label: t('inspector.barlineDouble') },
-          { value: 'final', label: t('inspector.barlineFinal') },
+          ...BARLINE_STYLES.map((value) => ({ value, label: t(BARLINE_LABEL_KEY[value]) })),
         ]}
         onChange={apply}
       />
@@ -215,12 +241,7 @@ export function NavigationFields({ store, measure }: { store: EditorStoreApi; me
           disabled={isPlaying}
           options={[
             { value: NO_JUMP, label: t('inspector.jumpNone') },
-            { value: 'da-capo', label: 'D.C.' },
-            { value: 'da-capo-al-fine', label: 'D.C. al Fine' },
-            { value: 'da-capo-al-coda', label: 'D.C. al Coda' },
-            { value: 'dal-segno', label: 'D.S.' },
-            { value: 'dal-segno-al-fine', label: 'D.S. al Fine' },
-            { value: 'dal-segno-al-coda', label: 'D.S. al Coda' },
+            ...REPEAT_JUMPS.map((value) => ({ value, label: JUMP_LABEL[value] })),
           ]}
           onChange={(value) =>
             patch({ jump: value === NO_JUMP ? undefined : (value as RepeatJump) })

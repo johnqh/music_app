@@ -169,6 +169,33 @@ describe('useProjectGeneration', () => {
     expect(result.current.generating).toBe(false);
   });
 
+  it('puts the failure somewhere that outlives the overlay', async () => {
+    /*
+      The hook's `error` was always set correctly — and the user still saw
+      nothing. The overlay that renders it is mounted on `generating`, which
+      the poll clears one line before it fetches the failure, so the
+      explanation was written to a component that had just unmounted: the
+      editor came back, the track was missing, and no reason appeared.
+
+      A toast is the channel that survives, which is why this asserts on the
+      store rather than on the hook.
+    */
+    const store = makeStore();
+    const client = fakeClient({
+      getJob: vi.fn(async () => job('failed', 'provider exploded')),
+      getProjectStatus: vi.fn(async () => ({ status: 'ready', updatedAt: 't0' })),
+    });
+    const { result } = renderHook(() => useProjectGeneration('p1', opts(client, { store })));
+
+    await act(async () => {
+      await result.current.start('replace-notes', {});
+    });
+
+    await waitFor(() =>
+      expect(store.getState().toasts.some((t) => /provider exploded/.test(t.message))).toBe(true),
+    );
+  });
+
   it('reports no error for a job that was cancelled, since the user did that', async () => {
     const client = fakeClient({
       getJob: vi.fn(async () => job('cancelled')),

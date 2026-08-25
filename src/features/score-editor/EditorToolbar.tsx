@@ -32,6 +32,7 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
+import { ARTICULATIONS, ORNAMENTS } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -183,10 +184,7 @@ const NO_ARTICULATION = 'none';
 
 const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; labelKey: string }> = [
   { value: undefined, labelKey: 'articulation.none' },
-  { value: 'staccato', labelKey: 'articulation.staccato' },
-  { value: 'accent', labelKey: 'articulation.accent' },
-  { value: 'tenuto', labelKey: 'articulation.tenuto' },
-  { value: 'marcato', labelKey: 'articulation.marcato' },
+  ...ARTICULATIONS.map((value) => ({ value, labelKey: `articulation.${value}` })),
 ];
 
 /**
@@ -199,10 +197,7 @@ const NO_ORNAMENT = 'none';
 
 const ORNAMENT_OPTIONS: Array<{ value: Ornament | undefined; labelKey: string }> = [
   { value: undefined, labelKey: 'ornament.none' },
-  { value: 'trill', labelKey: 'ornament.trill' },
-  { value: 'mordent', labelKey: 'ornament.mordent' },
-  { value: 'inverted-mordent', labelKey: 'ornament.inverted-mordent' },
-  { value: 'turn', labelKey: 'ornament.turn' },
+  ...ORNAMENTS.map((value) => ({ value, labelKey: `ornament.${value}` })),
 ];
 
 /**
