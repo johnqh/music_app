@@ -35,6 +35,17 @@ const ALLOWED_NON_UI = new Set([
   'src/app/theme.ts',
   // Command labels are UI copy, keyed by the commands they name.
   'src/features/score-editor/command-labels.ts',
+  // How the shortcuts are PRESENTED: the key legends a reader sees and the
+  // copy keys beside them. The bindings themselves are music_lib's, and
+  // `shortcut-table.test.ts` checks this list against them.
+  'src/features/score-editor/shortcut-table.ts',
+  // The documentation's structure and its copy keys — the shape of a page,
+  // not anything about music.
+  'src/features/docs/docs-content.ts',
+  // The formats named on the documentation page, with the copy key that
+  // describes each. What the app can actually read and write lives in
+  // music_io; this is the list a reader is shown.
+  'src/features/docs/formats.ts',
   // Geometry that turns pointer coordinates into score positions. It reads a
   // LayoutPlan, which is music_lib's, but everything it does is answer
   // questions about a pointer — see hit-test.ts's own doc.

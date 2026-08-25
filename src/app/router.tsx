@@ -25,6 +25,7 @@ import { playbackController, reportError, useAppStore } from '@sudobility/music_
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { LanguageValidator as SharedLanguageValidator } from '@sudobility/components';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
+import { DocsPage } from '@/features/docs/DocsPage';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { CommunityPage } from '@/features/community/CommunityPage';
 import { PublishedView } from '@/features/community/PublishedView';
@@ -156,6 +157,13 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
             <Route index element={<HomePage />} />
             <Route path="community" element={<CommunityPage />} />
             <Route path="resources" element={<ResourcesPage />} />
+            {/*
+              Two routes, not one with an optional segment: `/docs` redirects
+              to the first topic so the pane is never empty, and the topic in
+              the URL is what makes a link into one section shareable.
+            */}
+            <Route path="docs" element={<DocsPage />} />
+            <Route path="docs/:topicId" element={<DocsPage />} />
             <Route path="settings" element={<SettingsPage store={store} />} />
             <Route path="signin" element={<LoginPage />} />
 

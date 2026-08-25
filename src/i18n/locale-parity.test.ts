@@ -42,6 +42,10 @@ const SHARED_BY_DESIGN = new Set([
   'appName',
   'editor.midi',
   'editor.musicXml',
+  // The documentation names the formats too, and for the same reason: a
+  // Chinese reader looking for the MIDI export is looking for the word MIDI.
+  'docs.formats.name.midi',
+  'docs.formats.name.musicxml',
   'history.sourceApple',
   'history.sourceGoogle',
 ]);

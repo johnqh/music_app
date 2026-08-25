@@ -89,6 +89,7 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/r
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
 import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
+import { STAVE_POSITION_HEIGHT } from '@sudobility/music_drawing';
 import { PlaybackCaret } from '@/features/score-editor/PlaybackCaret';
 
 export type ScoreEditorViewProps = {
@@ -1017,7 +1018,12 @@ export function ScoreEditorView({
         if (!point) return;
         // Only re-renders when the step count actually changes -- about ten
         // times in a drag, not once per pointermove.
-        setPitchDragSteps(stepsForDrag(point.y - pitchDrag.startY, zoom));
+        setPitchDragSteps(
+          // The pixels-per-staff-position is the RENDERER's fact, so the
+          // renderer's constant is passed in rather than the editing engine
+          // importing a drawing package it must not depend on.
+          stepsForDrag(point.y - pitchDrag.startY, zoom, STAVE_POSITION_HEIGHT),
+        );
         return;
       }
 

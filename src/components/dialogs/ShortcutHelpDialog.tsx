@@ -7,7 +7,9 @@
  * `FormModal`'s own top-bar close as its only control.
  */
 import { useTranslation } from 'react-i18next';
+import { SHORTCUTS } from '@/features/score-editor/shortcut-table';
 import { FormModal } from '@sudobility/components';
+import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 
 export type ShortcutHelpDialogProps = {
   open: boolean;
@@ -24,36 +26,15 @@ export type ShortcutHelpDialogProps = {
  * than printing them across: `Ctrl/Cmd+Home / Ctrl/Cmd+End` on one line sets the
  * key column's width for all twenty-four rows, which squeezed every description
  * beside it into two and three lines.
+ *
+ * The rows themselves live in `features/score-editor/shortcut-table.ts`, because
+ * the documentation page shows them too and a second copy is how this one fell
+ * six shortcuts behind the bindings.
  */
-const SHORTCUTS: Array<{ keys?: string; keysKey?: string; actionKey: string }> = [
-  { keys: 'Space', actionKey: 'shortcuts.playPause' },
-  { keys: 'Escape', actionKey: 'shortcuts.clearSelection' },
-  { keys: 'Delete', actionKey: 'shortcuts.deleteNotes' },
-  { keys: 'Ctrl/Cmd+Z', actionKey: 'editor.undo' },
-  { keys: 'Ctrl/Cmd+Shift+Z', actionKey: 'editor.redo' },
-  { keys: 'Ctrl/Cmd+C', actionKey: 'editor.copy' },
-  { keys: 'Ctrl/Cmd+X', actionKey: 'editor.cut' },
-  { keys: 'Ctrl/Cmd+V', actionKey: 'editor.paste' },
-  { keys: 'ArrowUp / ArrowDown', actionKey: 'shortcuts.pitchSemitone' },
-  { keys: 'Shift+ArrowUp / Shift+ArrowDown', actionKey: 'shortcuts.pitchOctave' },
-  { keys: 'ArrowLeft / ArrowRight', actionKey: 'shortcuts.moveSelection' },
-  { keys: 'Ctrl/Cmd+A', actionKey: 'editor.selectAllNotes' },
-  { keys: 'A – G', actionKey: 'shortcuts.enterPitch' },
-  { keys: '1 – 6', actionKey: 'shortcuts.chooseDuration' },
-  { keys: '.', actionKey: 'shortcuts.toggleDotted' },
-  { keys: 'R', actionKey: 'shortcuts.insertRest' },
-  { keys: 'T', actionKey: 'shortcuts.toggleTie' },
-  { keys: 'S', actionKey: 'shortcuts.toggleSlur' },
-  { keys: 'N', actionKey: 'shortcuts.noteInput' },
-  { keys: 'Alt+ArrowLeft / Alt+ArrowRight', actionKey: 'shortcuts.stepCaret' },
-  { keys: 'Home / End', actionKey: 'shortcuts.barEdge' },
-  { keys: 'Ctrl/Cmd+Home / Ctrl/Cmd+End', actionKey: 'shortcuts.scoreEdge' },
-  { keysKey: 'shortcuts.clickChord', actionKey: 'shortcuts.selectEveryNote' },
-  { keysKey: 'shortcuts.pianoKey', actionKey: 'shortcuts.addRemoveNote' },
-];
 
 export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
   const { t } = useTranslation();
+  const lang = useCurrentLanguage();
   return (
     <FormModal
       open={open}
@@ -82,6 +63,19 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
           ))}
         </tbody>
       </table>
+      {/*
+        The dialog is the quick answer; the documentation is the long one. A
+        new tab rather than navigation, because reading about the editor
+        should not mean leaving the score open in it.
+      */}
+      <a
+        href={`/${lang}/docs/shortcuts`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-4 inline-block text-sm text-theme-primary underline"
+      >
+        {t('editor.shortcutsInDocs')}
+      </a>
     </FormModal>
   );
 }

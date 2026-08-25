@@ -61,7 +61,12 @@ import {
 } from '@heroicons/react/24/solid';
 // Line art, deliberately: a solid camera or printer is a heavy blob at 18px,
 // where the arrows and the gear read as line work even in the solid set.
-import { CameraIcon, DocumentArrowDownIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import {
+  BookOpenIcon,
+  CameraIcon,
+  DocumentArrowDownIcon,
+  PrinterIcon,
+} from '@heroicons/react/24/outline';
 import { ICON_GLYPH_CLASS, SunMoonIcon } from '@/components/icons/notation-icons';
 import { variants } from '@sudobility/design';
 import {
@@ -115,6 +120,7 @@ import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/S
 import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
 import { snapshotTree } from '@sudobility/music_lib';
 import type { SnapshotSummary } from '@sudobility/music_types';
+import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -177,6 +183,7 @@ function StatusPosition({ store }: { store: EditorStoreApi }) {
 }
 
 export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
+  const lang = useCurrentLanguage();
   const { t } = useTranslation();
   const projectName = store((s) => s.projectName);
   const saveState = store((s) => s.saveState);
@@ -848,6 +855,27 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               </div>
             )}
           </div>
+
+          {/*
+            The documentation, in a NEW TAB.
+            The editor hides the top bar, so the docs are otherwise
+            unreachable from the one place a reader most wants them — mid-edit,
+            wondering which key does what. A new tab rather than navigation
+            because leaving the editor would mean leaving the score you are
+            working on. `rel` is not optional on a target-blank link: without
+            it the opened page gets a live handle on this one.
+          */}
+          <Tooltip placement="bottom" content={t('nav.docs')}>
+            <a
+              href={`/${lang}/docs`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t('editor.openDocs')}
+              className={ICON_BUTTON_CLASS}
+            >
+              <BookOpenIcon className={ICON_GLYPH_CLASS} />
+            </a>
+          </Tooltip>
 
           <Tooltip placement="bottom" content={t('editor.keyboardShortcuts')}>
             <button

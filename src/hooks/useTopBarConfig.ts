@@ -64,6 +64,7 @@ export function useTopBarConfig(): TopBarConfig {
       menuItems: [
         { id: 'projects', label: t('nav.dashboard'), href: `/${lang}/projects` },
         { id: 'community', label: t('nav.community'), href: `/${lang}/community` },
+        { id: 'docs', label: t('nav.docs'), href: `/${lang}/docs` },
         { id: 'resources', label: t('nav.resources'), href: `/${lang}/resources` },
         { id: 'settings', label: t('nav.settings'), href: `/${lang}/settings` },
       ],

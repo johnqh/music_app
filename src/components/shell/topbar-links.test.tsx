@@ -16,6 +16,7 @@ import { LinkWrapper } from '@/components/layout/LinkWrapper';
 const ITEMS = [
   { id: 'projects', label: 'Projects', href: '/en/projects' },
   { id: 'community', label: 'Community', href: '/en/community' },
+  { id: 'docs', label: 'Docs', href: '/en/docs' },
   { id: 'resources', label: 'Resources', href: '/en/resources' },
   { id: 'settings', label: 'Settings', href: '/en/settings' },
 ];

@@ -51,6 +51,12 @@ PROJECTS=(
     # The canvas renderer. After music_types (its only peer) and before
     # music_lib, which re-exports it.
     "../music_drawing:60"
+    # The editing engine: the editing store and every operation that changes a
+    # score. Its only peer is music_types, so it could go almost anywhere up
+    # here — it sits directly before music_lib because that is what consumes
+    # it, and it needs its own wait for the same reason the packages above do:
+    # music_lib resolves it from npm, so the publish has to land first.
+    "../music_editing:60"
     "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"
