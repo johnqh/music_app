@@ -35,11 +35,13 @@ import { MusicClient } from '@sudobility/music_client';
 import {
   initializeAppStore,
   setEditingCopy,
+  setLibraryMessages,
   setErrorLogging,
   type PrefsStorage,
   type StoreContext,
 } from '@sudobility/music_lib';
 import { buildEditingCopy } from '@/features/score-editor/command-labels';
+import { libraryMessages } from '@/i18n/lib-copy';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';
 import { CONSTANTS } from '@/config/constants';
@@ -365,6 +367,12 @@ export function initializeApp(): AppServices {
   // strings in any language, so the words come from here, the same way
   // `setLibraryMessages` and `setErrorLogging` do.
   setEditingCopy(buildEditingCopy());
+
+  // The other half of the same contract: the strings music_lib raises from
+  // places with no call site left to carry them. It had never been wired at
+  // all, so every one of them — the failed-autosave toast among them — showed
+  // as an empty string.
+  setLibraryMessages(libraryMessages());
 
   // The player comes first: music_lib's playback adapter resolves it from its
   // singleton on first use, and nothing else here may touch playback before it

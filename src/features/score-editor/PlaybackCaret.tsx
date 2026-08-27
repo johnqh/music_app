@@ -28,7 +28,7 @@ import { prefersReducedMotion } from '@/app/theme';
 import type { LayoutPlan, Score } from '@sudobility/music_lib';
 import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
+import type { LayoutMode } from '@sudobility/music_drawing';
 
 /** How much clear space to keep between the caret and the edge it is nearing. */
 const SCROLL_MARGIN = 40;

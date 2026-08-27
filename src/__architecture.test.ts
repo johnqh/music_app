@@ -35,17 +35,14 @@ const ALLOWED_NON_UI = new Set([
   'src/app/theme.ts',
   // Command labels are UI copy, keyed by the commands they name.
   'src/features/score-editor/command-labels.ts',
-  // How the shortcuts are PRESENTED: the key legends a reader sees and the
-  // copy keys beside them. The bindings themselves are music_lib's, and
-  // `shortcut-table.test.ts` checks this list against them.
-  'src/features/score-editor/shortcut-table.ts',
-  // The documentation's structure and its copy keys — the shape of a page,
-  // not anything about music.
-  'src/features/docs/docs-content.ts',
   // The formats named on the documentation page, with the copy key that
   // describes each. What the app can actually read and write lives in
   // music_io; this is the list a reader is shown.
   'src/features/docs/formats.ts',
+  // The links the Resources page lists, with the copy key describing each.
+  // A list of other people's URLs and the i18n keys beside them: page content,
+  // and the only thing music-shaped about it is which importer each feeds.
+  'src/pages/resource-links.ts',
   // Geometry that turns pointer coordinates into score positions. It reads a
   // LayoutPlan, which is music_lib's, but everything it does is answer
   // questions about a pointer — see hit-test.ts's own doc.
@@ -56,8 +53,6 @@ const ALLOWED_NON_UI = new Set([
   'src/features/score-editor/note-colors.ts',
   'src/features/score-editor/render-theme.ts',
   'src/features/score-editor/note-drag.ts',
-  'src/features/print/print-layout.ts',
-  'src/features/piano-keyboard/keyboard-geometry.ts',
   'src/features/piano-keyboard/playing-pitches.ts',
   // Display formatting for a control's readout.
   'src/features/tracks/pan-readout.ts',

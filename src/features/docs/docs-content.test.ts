@@ -13,9 +13,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DOCS_TOPICS, DOCS_GROUPS } from './docs-content';
+import { DOCS_TOPICS, DOCS_GROUPS } from '@sudobility/music_editing';
 import { EXPORT_FORMATS, IMPORT_FORMATS } from './formats';
-import { SHORTCUT_GROUPS } from '@/features/score-editor/shortcut-table';
+import { SHORTCUT_GROUPS } from '@sudobility/music_editing';
 
 function load(lang: string): Record<string, unknown> {
   return JSON.parse(

@@ -7,7 +7,7 @@
  * `FormModal`'s own top-bar close as its only control.
  */
 import { useTranslation } from 'react-i18next';
-import { SHORTCUTS } from '@/features/score-editor/shortcut-table';
+import { SHORTCUTS } from '@sudobility/music_editing';
 import { FormModal } from '@sudobility/components';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 

@@ -529,8 +529,9 @@ export function GenerateScoreDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="major">major</SelectItem>
-              <SelectItem value="minor">minor</SelectItem>
+              {/* Named through the locale: "major" is a word, not a code. */}
+              <SelectItem value="major">{t('key.major')}</SelectItem>
+              <SelectItem value="minor">{t('key.minor')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>

@@ -31,7 +31,7 @@ import {
   trackOfMeasure,
 } from '@sudobility/music_lib';
 import type { NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
-import { BARLINE_STYLES, REPEAT_JUMPS } from '@sudobility/music_types';
+import { BARLINE_STYLES, REPEAT_JUMPS, REPEAT_JUMP_LABEL } from '@sudobility/music_types';
 import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
 
 /**
@@ -51,14 +51,6 @@ const BARLINE_LABEL_KEY: Record<BarlineStyle, string> = {
   final: 'inspector.barlineFinal',
 };
 
-const JUMP_LABEL: Record<RepeatJump, string> = {
-  'da-capo': 'D.C.',
-  'da-capo-al-fine': 'D.C. al Fine',
-  'da-capo-al-coda': 'D.C. al Coda',
-  'dal-segno': 'D.S.',
-  'dal-segno-al-fine': 'D.S. al Fine',
-  'dal-segno-al-coda': 'D.S. al Coda',
-};
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
 import {
@@ -241,7 +233,7 @@ export function NavigationFields({ store, measure }: { store: EditorStoreApi; me
           disabled={isPlaying}
           options={[
             { value: NO_JUMP, label: t('inspector.jumpNone') },
-            ...REPEAT_JUMPS.map((value) => ({ value, label: JUMP_LABEL[value] })),
+            ...REPEAT_JUMPS.map((value) => ({ value, label: REPEAT_JUMP_LABEL[value] })),
           ]}
           onChange={(value) =>
             patch({ jump: value === NO_JUMP ? undefined : (value as RepeatJump) })

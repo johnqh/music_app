@@ -38,6 +38,7 @@ import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { selectSelectedNotes } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
+import type { LayoutMode } from '@sudobility/music_drawing';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
 import { durationDisplay } from '@sudobility/music_lib';
@@ -109,6 +110,8 @@ import {
   insertNoteAtCaret,
   insertRestAtSelection,
   quantizeSelection,
+  zoomIn,
+  zoomOut,
   selectAll,
   changeBeam,
   toggleArpeggiate,
@@ -117,8 +120,6 @@ import {
   toggleSlur,
   toggleTie,
 } from '@sudobility/music_lib';
-
-export type LayoutMode = 'page' | 'continuous';
 
 export type EditorToolbarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -213,14 +214,6 @@ const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName; short: string; labelKe
   { value: 'sixteenth', short: '1/16', labelKey: 'importMidi.gridSixteenth' },
   { value: 'thirtysecond', short: '1/32', labelKey: 'importMidi.gridThirtySecond' },
 ];
-
-const MIN_ZOOM = 0.25;
-const MAX_ZOOM = 4;
-const ZOOM_STEP = 1.25;
-
-function clampZoom(zoom: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
-}
 
 /** A drawn notation glyph: sized by the caller, coloured by `currentColor`. */
 type NotationIcon = (props: { className?: string }) => ReactElement;
@@ -415,8 +408,8 @@ export function EditorToolbar({
     });
   };
 
-  const handleZoomIn = (): void => store.getState().setZoom(clampZoom(zoom * ZOOM_STEP));
-  const handleZoomOut = (): void => store.getState().setZoom(clampZoom(zoom / ZOOM_STEP));
+  const handleZoomIn = (): void => store.getState().setZoom(zoomIn(zoom));
+  const handleZoomOut = (): void => store.getState().setZoom(zoomOut(zoom));
 
   return (
     // Two parts on one row: the tools scroll, the inspector toggle does not.

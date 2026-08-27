@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { computeLayout, twinkleScore } from '@sudobility/music_lib';
 import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
-import { PRINT_SCALE, PRINT_WIDTH, printSystems } from '@/features/print/print-layout';
+import { PRINT_SCALE, PRINT_WIDTH, printSystems } from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
 
 function firstSlice() {

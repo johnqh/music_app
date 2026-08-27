@@ -16,7 +16,7 @@ import { Button } from '@sudobility/components';
 import { computeLayout, createAppStore, playbackController } from '@sudobility/music_lib';
 import type { PublishedSnapshot } from '@sudobility/music_types';
 import { getAppServices } from '@/config/initialize';
-import { printRenderOptions, printSystems } from '@/features/print/print-layout';
+import { printRenderOptions, printSystems } from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
 
 export function PublishedView() {

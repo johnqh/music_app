@@ -25,6 +25,19 @@ export default defineConfig({
   server: {
     port: 5039,
   },
+  build: {
+    // Never inline the Resources page's site icons.
+    //
+    // Vite base64s any asset under 4KB into the JS, and most of these are 16
+    // or 32px favicons that fall well under it — 25 of the 38 did, adding
+    // ~49KB to the main bundle. There is no route-level code splitting here,
+    // so that lands on every visitor to pay for one page few of them open, and
+    // base64 gzips worse than the bytes it encodes. As emitted files they are
+    // fetched only by the page that shows them, and cached separately from the
+    // app.
+    assetsInlineLimit: (filePath: string) =>
+      filePath.includes('resource-icons') ? false : undefined,
+  },
   // Exclude music_lib from dev-mode dep pre-bundling: esbuild's prebundle
   // doesn't process the lib's `new Worker(new URL(...))` calls, breaking the
   // MIDI/quantize workers in dev (prod builds handle them fine). Excluding

@@ -21,7 +21,7 @@ import {
 import { findTrack } from '@sudobility/music_lib';
 import type { PaperOrientation, PaperSize } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import { PRINT_WIDTH, printRenderOptions, printSystems } from '@/features/print/print-layout';
+import { PRINT_WIDTH, printRenderOptions, printSystems } from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
 import '@/features/print/print.css';
 

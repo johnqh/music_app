@@ -11,6 +11,7 @@ import { FormModal } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { TrackerFitReport } from '@sudobility/music_lib';
+import { trackerFitLosses } from '@sudobility/music_lib';
 
 export type TrackerFitDialogProps = {
   open: boolean;
@@ -23,25 +24,17 @@ export type TrackerFitDialogProps = {
 /**
  * The lines describing what this export will lose.
  *
- * Takes `t` rather than calling a hook, since it is a plain function; the
- * counts pluralise through i18next rather than by appending an "s", which is
- * an English-only rule.
+ * Which kinds of loss exist, and the order a reader meets them in, comes from
+ * `trackerFitLosses` in music_codecs — a fact about the format rather than
+ * about this dialog, and one the native app's sheet reads too. Takes `t` rather
+ * than calling a hook, since it is a plain function; the counts pluralise
+ * through i18next rather than by appending an "s", which is an English-only
+ * rule.
  */
 function fitReportLines(report: TrackerFitReport, format: string, t: TFunction): string[] {
-  const out: string[] = [];
-  if (report.clampedNotes > 0) {
-    out.push(t('trackerFit.clampedNotes', { count: report.clampedNotes, format }));
-  }
-  if (report.droppedVoices > 0) {
-    out.push(t('trackerFit.droppedVoices', { count: report.droppedVoices, format }));
-  }
-  if (report.droppedShortNotes > 0) {
-    out.push(t('trackerFit.droppedShortNotes', { count: report.droppedShortNotes }));
-  }
-  if (report.quantisedNotes > 0) {
-    out.push(t('trackerFit.quantisedNotes', { count: report.quantisedNotes }));
-  }
-  return out;
+  return trackerFitLosses(report).map(({ kind, count }) =>
+    t(`trackerFit.${kind}`, { count, format }),
+  );
 }
 
 export function TrackerFitDialog({

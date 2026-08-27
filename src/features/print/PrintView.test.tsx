@@ -14,7 +14,7 @@ import {
 } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
-import { printRenderOptions } from '@/features/print/print-layout';
+import { printRenderOptions } from '@sudobility/music_drawing';
 import { PrintView } from '@/features/print/PrintView';
 
 function makeStore(): EditorStoreApi {

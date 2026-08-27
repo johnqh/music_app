@@ -47,7 +47,7 @@ export function installTestAppServices(
   const services: AppServices = {
     io,
     networkClient: {} as NetworkClient,
-    musicClient: context.client,
+    musicClient: context.client!,
     baseUrl: 'http://test.local',
     prefsStorage: context.storage!,
     auth: {

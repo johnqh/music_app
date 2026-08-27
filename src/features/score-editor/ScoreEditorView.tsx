@@ -23,6 +23,7 @@ import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_type
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type React from 'react';
+import { useClipboardPrompts } from '@sudobility/music_editing';
 import {
   CanvasScoreRenderer,
   playbackController,
@@ -44,6 +45,7 @@ import {
 } from '@sudobility/music_lib';
 import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
+import { buildGenerateTrackRequest } from '@sudobility/music_lib';
 import type { InstrumentChoice } from '@sudobility/music_lib';
 import { resolveDrop } from '@/features/score-editor/note-drag';
 import type { DropTarget } from '@/features/score-editor/note-drag';
@@ -70,10 +72,9 @@ import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
-import { useClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
-import type { LayoutMode } from '@/features/score-editor/EditorToolbar';
+import type { LayoutMode } from '@sudobility/music_drawing';
 import {
   boxFromPoints,
   eventIdAtPoint,
@@ -215,32 +216,9 @@ export function ScoreEditorView({
       setGenerateTrackPending(true);
       setGenerateTrackError(null);
       try {
-        const first = current.tracks[0];
-        const { midiProgram, instrumentName, clef } = instrument;
-        await onGenerateTrackJob({
-          prompt,
-          // Matched to the open score, or the new track will not line up
-          // with the music it is meant to accompany.
-          durationMeasures: first?.measures.length ?? 8,
-          ...(first?.measures[0]
-            ? {
-                timeSignature: first.measures[0].timeSignature,
-                keySignature: first.measures[0].keySignature,
-              }
-            : {}),
-          ...(current.tempoMap[0] ? { tempo: current.tempoMap[0].bpm } : {}),
-          tracks: [
-            {
-              name: instrumentName,
-              instrumentName,
-              midiProgram,
-              // Chosen with the instrument, not derived from its program: a
-              // drum kit is not a GM program, so the percussion clef is the
-              // only thing that distinguishes it.
-              clef,
-            },
-          ],
-        });
+        // Built by music_lib, which takes everything the track has to agree
+        // with — length, time signature, key, tempo — from the score itself.
+        await onGenerateTrackJob(buildGenerateTrackRequest(current, prompt, instrument));
         setGenerateTrackOpen(false);
       } catch (err) {
         setGenerateTrackError(err instanceof Error ? err.message : 'Generation failed');
@@ -1155,13 +1133,13 @@ export function ScoreEditorView({
           {
             value: 'silence' as const,
             label: t('editor.leaveSilence'),
-            detail: 'The rest of the track stays where it is',
+            detail: t('editor.leaveSilenceDetail'),
             primary: true,
           },
           {
             value: 'close' as const,
             label: t('editor.closeGap'),
-            detail: 'Later notes on this track move earlier to fill it',
+            detail: t('editor.closeGapDetail'),
           },
         ]}
         onChoose={clipboard.resolveCut}
@@ -1175,13 +1153,13 @@ export function ScoreEditorView({
           {
             value: 'replace' as const,
             label: t('replace.action'),
-            detail: 'What is there now is removed',
+            detail: t('editor.replaceDetail'),
             primary: true,
           },
           {
             value: 'insert' as const,
             label: t('editor.insert'),
-            detail: 'What is there now moves later on this track',
+            detail: t('editor.insertDetail'),
           },
         ]}
         onChoose={clipboard.resolvePaste}

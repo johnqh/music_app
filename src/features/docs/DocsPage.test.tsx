@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage } from './DocsPage';
-import { DOCS_TOPICS } from './docs-content';
+import { DOCS_TOPICS } from '@sudobility/music_editing';
 
 function renderAt(path: string) {
   return render(

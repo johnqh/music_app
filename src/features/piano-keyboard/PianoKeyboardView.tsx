@@ -32,7 +32,7 @@ import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
 import { resolveColorScheme } from '@/app/theme';
-import type { KeyNaming, PianoKey } from '@/features/piano-keyboard/keyboard-geometry';
+import type { KeyNaming, PianoKey } from '@sudobility/music_drawing';
 import {
   LABEL_ROW_HEIGHT,
   MIN_WHITE_KEY_WIDTH,
@@ -41,7 +41,7 @@ import {
   keyboardWidth,
   snapToWhiteKeys,
   whiteKeyCount,
-} from '@/features/piano-keyboard/keyboard-geometry';
+} from '@sudobility/music_drawing';
 import { playingPitchesForTrack } from '@/features/piano-keyboard/playing-pitches';
 
 /**

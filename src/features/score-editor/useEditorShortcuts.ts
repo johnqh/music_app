@@ -28,9 +28,9 @@
  * this state).
  */
 import { useEffect } from 'react';
+import type { ClipboardPrompts } from '@sudobility/music_editing';
 import type { EditorStoreApi, PlaybackAdapter } from '@sudobility/music_lib';
 import { playbackController, runEditorShortcut } from '@sudobility/music_lib';
-import type { ClipboardPrompts } from '@/features/score-editor/useClipboardPrompts';
 
 /** The slice of `PlaybackAdapter` this hook needs — real-time play/pause, not a score edit (see `controller.ts`'s doc comment). */
 export type PlaybackToggle = Pick<PlaybackAdapter, 'togglePlay'>;

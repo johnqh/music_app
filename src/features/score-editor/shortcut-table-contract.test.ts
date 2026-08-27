@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { SHIFT_MARK_KEYS } from '@sudobility/music_lib';
-import { SHORTCUTS } from './shortcut-table';
+import { SHORTCUTS } from '@sudobility/music_editing';
 
 describe('the shortcut list', () => {
   it('shows every mark the editor binds to Shift', () => {

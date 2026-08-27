@@ -25,7 +25,7 @@ describe('ReplaceMusicDialog', () => {
         onSubmit={vi.fn()}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Replace Notes' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Replace notes' })).toBeInTheDocument();
 
     rerender(
       <ReplaceMusicDialog
@@ -36,7 +36,7 @@ describe('ReplaceMusicDialog', () => {
         onSubmit={vi.fn()}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Replace Measures' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Replace measures' })).toBeInTheDocument();
 
     rerender(
       <ReplaceMusicDialog
@@ -47,7 +47,7 @@ describe('ReplaceMusicDialog', () => {
         onSubmit={vi.fn()}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Replace Track' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Replace track' })).toBeInTheDocument();
   });
 
   it('states exactly what will be replaced', () => {

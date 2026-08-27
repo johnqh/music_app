@@ -43,10 +43,17 @@ export type ReplaceMusicDialogProps = {
   onSubmit: (submission: ReplaceSubmission) => void;
 };
 
-const TITLES: Record<ReplaceScope, string> = {
-  notes: 'Replace Notes',
-  measures: 'Replace Measures',
-  track: 'Replace Track',
+/**
+ * The locale key naming each scope.
+ *
+ * Keys rather than the words: a `Record` of literal English strings renders as
+ * English in the Chinese build, which is exactly the failure `locale-parity`
+ * exists to catch and cannot see — it compares the locale files, not the code.
+ */
+const TITLE_KEYS: Record<ReplaceScope, string> = {
+  notes: 'replace.notesTitle',
+  measures: 'replace.measuresTitle',
+  track: 'replace.trackTitle',
 };
 
 /** Spec §12, verbatim — lifted from the retired RegenerationPanel. */
@@ -140,7 +147,7 @@ export function ReplaceMusicDialog({
   return (
     <FormModal
       open={open}
-      title={TITLES[scope]}
+      title={t(TITLE_KEYS[scope])}
       onClose={onClose}
       size="small"
       closeAriaLabel={t('common.closeDialog')}

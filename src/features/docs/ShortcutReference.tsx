@@ -7,11 +7,7 @@
  */
 import { useTranslation } from 'react-i18next';
 import { Heading } from '@sudobility/components';
-import {
-  SHORTCUTS,
-  SHORTCUT_GROUPS,
-  type ShortcutGroup,
-} from '@/features/score-editor/shortcut-table';
+import { SHORTCUTS, SHORTCUT_GROUPS, type ShortcutGroup } from '@sudobility/music_editing';
 
 export function ShortcutReference() {
   const { t } = useTranslation();

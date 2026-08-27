@@ -8,8 +8,8 @@
 import { useEffect, useRef } from 'react';
 import { CanvasScoreRenderer } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
-import { PRINT_SCALE, PRINT_WIDTH, printRenderOptions } from '@/features/print/print-layout';
-import type { PrintSystemSlice } from '@/features/print/print-layout';
+import { PRINT_SCALE, PRINT_WIDTH, printRenderOptions } from '@sudobility/music_drawing';
+import type { PrintSystemSlice } from '@sudobility/music_drawing';
 
 export type PrintSystemProps = {
   score: Score;

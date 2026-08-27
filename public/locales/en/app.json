@@ -638,6 +638,7 @@
     "clearGraceNotes_other": "Remove {{count}} grace notes",
     "clipboard": "Clipboard",
     "closeGap": "Close the gap",
+    "closeGapDetail": "Later notes on this track move earlier to fill it",
     "continuousHint": "Lay the score out in one scrolling line",
     "continuousLayout": "Continuous layout",
     "copy": "Copy",
@@ -687,6 +688,7 @@
     "go": "Go",
     "goToBar": "Go to bar…",
     "insert": "Insert",
+    "insertDetail": "What is there now moves later on this track",
     "insertMode": "Insert mode",
     "insertModeHint": "Insert: notes you add push this track's later notes out of the way",
     "insertNote": "Insert note",
@@ -702,6 +704,7 @@
     "lastMeasureKept": "A score needs at least one measure, so this one was kept.",
     "layoutMode": "Layout mode",
     "leaveSilence": "Leave silence",
+    "leaveSilenceDetail": "The rest of the track stays where it is",
     "lyricEntry": "Lyric entry",
     "lyricKeysHint": "Space = next word · - = next syllable · Enter = done",
     "lyricNoteOf": "Note {{current}} of {{total}}",
@@ -749,6 +752,7 @@
     "repeatStart": "Repeat starts here",
     "repeats": "Repeats",
     "repeatsPlaybackNote": "Repeats are drawn, exported, and played back. Playback starts from the first time a bar is played.",
+    "replaceDetail": "What is there now is removed",
     "replaceMeasures": "Replace Measures",
     "replaceMode": "Replace mode",
     "replaceModeHint": "Replace: notes you add overwrite what was already there",
@@ -1051,6 +1055,18 @@
     "chordSymbol": "Chord symbol",
     "chordSymbolPlaceholder": "e.g. Cmaj7"
   },
+  "key": {
+    "major": "major",
+    "minor": "minor"
+  },
+  "library": {
+    "authRequired": "Please sign in to continue.",
+    "playbackFailed": "Playback could not start.",
+    "retry": "Retry",
+    "saveFailed": "Autosave failed. Your changes are still here and will be retried.",
+    "scoreLoadFailed": "The score could not be prepared for playback.",
+    "serverUnavailable": "This feature needs a server connection and is not available here."
+  },
   "musicXmlWarn": {
     "unsupportedClef": "Unsupported clef {{sign}} on line {{line}}; treble was used instead.",
     "unsupportedKeyMode": "Unsupported key mode \"{{mode}}\"; major was used instead.",
@@ -1117,29 +1133,97 @@
   "replace": {
     "action": "Replace",
     "instruction": "Instruction",
-    "presetInstructions": "Preset instructions",
-    "preserveBoundary": "Preserve boundary notes",
-    "preserveHarmony": "Preserve harmony",
-    "preserveRhythm": "Preserve rhythm",
-    "preserveMelody": "Preserve melody",
+    "measuresTitle": "Replace measures",
+    "notesTitle": "Replace notes",
     "onTrack": "track \"{{name}}\"",
     "onTracks_one": "{{count}} track",
     "onTracks_other": "{{count}} tracks",
+    "preserveBoundary": "Preserve boundary notes",
+    "preserveHarmony": "Preserve harmony",
+    "preserveMelody": "Preserve melody",
+    "preserveRhythm": "Preserve rhythm",
+    "presetInstructions": "Preset instructions",
     "summary_one": "Replaces {{count}} note on {{where}}.",
-    "summary_other": "Replaces {{count}} notes on {{where}}."
+    "summary_other": "Replaces {{count}} notes on {{where}}.",
+    "trackTitle": "Replace track"
   },
   "resources": {
     "title": "Resources",
-    "intro": "Free archives of music you can bring straight into {{appName}}. Download a file, then use Import on the projects page.",
-    "modarchiveBody": "Tens of thousands of tracker modules — MOD, S3M, XM and IT — from the demoscene era onward.",
-    "bitmidiBody": "A large searchable collection of MIDI files, from classical to game and pop arrangements.",
-    "musescoreBody": "Community sheet music, much of it downloadable as MusicXML.",
-    "imslpBody": "The public-domain library of classical scores, including MusicXML for many works.",
-    "freepatsBody": "Free, openly licensed instrument samples and patch sets for playback.",
-    "viaModule": "Opens with Import → Module",
-    "viaMidi": "Opens with Import → MIDI",
-    "viaMusicXml": "Opens with Import → MusicXML",
-    "viaInstruments": "Instrument samples, not scores"
+    "intro": "Free music you can bring straight into {{appName}}, grouped by the importer each kind of file feeds. Download a file, then use Import on the projects page.",
+    "group": {
+      "scores": {
+        "title": "Sheet music",
+        "route": "Import → MusicXML. Notes, rhythm, lyrics, dynamics and layout all survive the trip."
+      },
+      "midi": {
+        "title": "MIDI files",
+        "route": "Import → MIDI. Notes and timing arrive; barlines and key are estimated, so the wizard lets you correct them."
+      },
+      "modules": {
+        "title": "Tracker modules",
+        "route": "Import → Module. MOD, S3M, XM, IT and MPTM, chosen by what is inside the file rather than by its extension."
+      },
+      "audio": {
+        "title": "Recordings to transcribe",
+        "route": "Import → Audio. One line at a time — transcription is monophonic, so pick a solo instrument or voice."
+      },
+      "datasets": {
+        "title": "Bulk collections",
+        "route": "Import → MIDI or MusicXML. Whole corpora rather than single pieces — download the archive, then open one file from it."
+      },
+      "sound": {
+        "title": "Instruments and sound",
+        "route": "Not importable. These are the samples and SoundFonts behind playback, useful if you want to hear a score somewhere else."
+      },
+      "reference": {
+        "title": "Formats and tools",
+        "route": "Reference, not files. What each format actually holds, and what else can open it."
+      }
+    },
+    "link": {
+      "musescore": "Over a million community scores. The public-domain ones download as MusicXML.",
+      "openscore": "Classical repertoire re-engraved from scratch and released into the public domain.",
+      "imslp": "The public-domain library of classical scores — 200,000 works, many with MusicXML beside the PDF.",
+      "cpdl": "ChoralWiki: 40,000 choral and vocal scores, much of it with editable source files.",
+      "mutopia": "Retypeset public-domain scores, with LilyPond source and MIDI alongside every entry.",
+      "musopenScores": "Sheet music released with no copyright restrictions at all, beside Musopen's recordings.",
+      "openGoldberg": "Bach's Goldberg Variations, score and performance both released for any use.",
+      "musicxmlDirectory": "The format's own list of sites publishing MusicXML — where to look after this page.",
+      "bitmidi": "A large searchable MIDI collection you can play in the browser before downloading.",
+      "vgmusic": "Video game music sequenced by hand, sorted by console and by title.",
+      "kunstderfuge": "The biggest classical MIDI archive on the web, thousands of files free to take.",
+      "midiworld": "Classical, pop and game MIDI side by side, plus drum patterns.",
+      "mfiles": "Well-sequenced MIDI of the classical pieces most people are looking for.",
+      "classicalArchives": "A curated free set you may copy and use without asking permission.",
+      "theSession": "Irish traditional tunes, every setting downloadable as MIDI.",
+      "hymnary": "Hymn tunes and texts, most carrying MIDI of the full harmonisation.",
+      "midkar": "Jazz, blues, ragtime and standards, sequenced over three decades.",
+      "modarchive": "Tens of thousands of modules from the demoscene era onward, with a player built in.",
+      "modland": "The deep archive: every tracker format, filed by composer, browsable as a drive.",
+      "amp": "The Amiga scene's own catalogue, indexed by the people who wrote the music.",
+      "sceneOrg": "The demoscene's file server. The music directory holds decades of party entries.",
+      "woolyss": "A maintained index of where tracker music lives and what still plays it.",
+      "archiveTrackers": "A curated multi-gigabyte set of MOD, XM, IT and S3M as a single download.",
+      "musopenAudio": "Classical performances recorded and released into the public domain.",
+      "freeMusicArchive": "Over 100,000 tracks under Creative Commons, filterable by licence.",
+      "freesound": "Single notes, short phrases and field recordings, all openly licensed.",
+      "archiveAudio": "Live concerts, 78rpm transfers and community uploads, free to download.",
+      "pdmx": "A quarter of a million public-domain MusicXML scores, packaged as one dataset.",
+      "lakh": "176,000 MIDI files gathered for music research and free to download.",
+      "maestro": "200 hours of competition piano performances, MIDI aligned to the audio.",
+      "adlPiano": "Piano MIDI filed by genre, sub-genre and artist.",
+      "museTrainer": "A repository of public-domain piano MusicXML — clone it and open any file.",
+      "womenComposers": "Scores by women composers, encoded and free to use.",
+      "freepats": "Openly licensed instrument samples and patch sets.",
+      "polyphone": "Free SoundFonts to download, and the editor to build your own.",
+      "generalUser": "A General MIDI SoundFont tuned so all 128 programs sit together in one mix.",
+      "philharmonia": "Every orchestral instrument, note by note, recorded by the orchestra itself.",
+      "musicXmlSpec": "The MusicXML specification, element by element.",
+      "generalMidi": "The 128-program sound set every track's instrument is chosen from.",
+      "standardMidiFile": "What a .mid file actually contains, from the MIDI Association.",
+      "openMpt": "The tracker to open a module in when you want its samples too.",
+      "verovio": "Converts Humdrum-encoded scores to MusicXML in the browser."
+    }
   },
   "selection": {
     "notes_one": "{{count}} note selected",

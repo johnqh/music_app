@@ -4,7 +4,7 @@
  * The library was made language-free: templates, MusicXML warnings and the
  * selection readout all take their copy from whoever is driving them. That is
  * the right split — a library cannot know the user's language — but it means
- * this app has to supply three tables, and they are gathered here rather than
+ * this app has to supply four tables, and they are gathered here rather than
  * rebuilt at each call site.
  *
  * Read off the initialised i18next instance rather than a hook, for the same
@@ -20,7 +20,12 @@
  * there; under test `t` returns the key, which is deterministic and harmless.
  */
 import i18next from 'i18next';
-import type { MusicXmlWarnings, SelectionSummaryCopy, TemplateCopy } from '@sudobility/music_lib';
+import type {
+  LibraryMessages,
+  MusicXmlWarnings,
+  SelectionSummaryCopy,
+  TemplateCopy,
+} from '@sudobility/music_lib';
 import { TEMPLATE_IDS } from '@sudobility/music_lib';
 
 /** Name and description per template, keyed by the ids the library declares. */
@@ -81,5 +86,28 @@ export function musicXmlWarnings(): MusicXmlWarnings {
     noTempo: (defaultBpm) => t('musicXmlWarn.noTempo', { defaultBpm }),
     tempoClamped: (bpm, min, max, clamped) =>
       t('musicXmlWarn.tempoClamped', { bpm, min, max, clamped }),
+  };
+}
+
+/**
+ * The messages the library raises from places with no call site left to carry
+ * them — an autosave that fails minutes after the edit that started it, a
+ * transport that cannot reach its engine.
+ *
+ * Every entry is a **function**, called when the message is needed rather than
+ * when this object is built. The catalogue used to hold captured strings,
+ * which strands whatever language was loaded at start-up; a reader who
+ * switched to Chinese went on getting English. It also used to be wired by
+ * nobody at all, so every one of these rendered as an empty string —
+ * `library-messages.test.ts` pins both halves.
+ */
+export function libraryMessages(): LibraryMessages {
+  return {
+    retry: () => i18next.t('library.retry'),
+    saveFailed: () => i18next.t('library.saveFailed'),
+    playbackFailed: () => i18next.t('library.playbackFailed'),
+    scoreLoadFailed: () => i18next.t('library.scoreLoadFailed'),
+    authRequired: () => i18next.t('library.authRequired'),
+    serverUnavailable: () => i18next.t('library.serverUnavailable'),
   };
 }

@@ -638,6 +638,7 @@
     "clearGraceNotes_other": "移除 {{count}} 个装饰音",
     "clipboard": "剪贴板",
     "closeGap": "合并空隙",
+    "closeGapDetail": "该轨道后面的音符前移填补空隙",
     "continuousHint": "将乐谱排成一行连续滚动",
     "continuousLayout": "连续排版",
     "copy": "复制",
@@ -687,6 +688,7 @@
     "go": "跳转",
     "goToBar": "跳转到小节…",
     "insert": "插入",
+    "insertDetail": "当前位置的内容在该轨道上后移",
     "insertMode": "插入模式",
     "insertModeHint": "插入：新增的音符会把该音轨后面的音符向后推",
     "insertNote": "插入音符",
@@ -702,6 +704,7 @@
     "lastMeasureKept": "乐谱至少需要一个小节，因此保留了这一个。",
     "layoutMode": "排版模式",
     "leaveSilence": "保留空白",
+    "leaveSilenceDetail": "轨道其余部分保持原位",
     "lyricEntry": "歌词输入",
     "lyricKeysHint": "空格＝下一个词 · - ＝下一个音节 · 回车＝完成",
     "lyricNoteOf": "第 {{current}} / {{total}} 个音符",
@@ -749,6 +752,7 @@
     "repeatStart": "在此开始反复",
     "repeats": "反复记号",
     "repeatsPlaybackNote": "反复记号会绘制、导出并在播放时生效。播放从该小节第一次出现处开始。",
+    "replaceDetail": "移除当前位置的内容",
     "replaceMeasures": "替换小节",
     "replaceMode": "替换模式",
     "replaceModeHint": "替换：新增的音符会覆盖原有内容",
@@ -1051,6 +1055,18 @@
     "chordSymbol": "和弦标记",
     "chordSymbolPlaceholder": "例如 Cmaj7"
   },
+  "key": {
+    "major": "大调",
+    "minor": "小调"
+  },
+  "library": {
+    "authRequired": "请先登录后再继续。",
+    "playbackFailed": "无法开始播放。",
+    "retry": "重试",
+    "saveFailed": "自动保存失败。您的更改仍保留在本地，稍后会重试。",
+    "scoreLoadFailed": "无法为播放准备乐谱。",
+    "serverUnavailable": "此功能需要服务器连接，在此处不可用。"
+  },
   "musicXmlWarn": {
     "unsupportedClef": "不支持的谱号 {{sign}}（第 {{line}} 线），已改用高音谱号。",
     "unsupportedKeyMode": "不支持的调式“{{mode}}”，已改用大调。",
@@ -1117,29 +1133,97 @@
   "replace": {
     "action": "替换",
     "instruction": "指令",
-    "presetInstructions": "预设指令",
-    "preserveBoundary": "保留边界音符",
-    "preserveHarmony": "保留和声",
-    "preserveRhythm": "保留节奏",
-    "preserveMelody": "保留旋律",
+    "measuresTitle": "替换小节",
+    "notesTitle": "替换音符",
     "onTrack": "音轨「{{name}}」",
     "onTracks_one": "{{count}} 条音轨",
     "onTracks_other": "{{count}} 条音轨",
+    "preserveBoundary": "保留边界音符",
+    "preserveHarmony": "保留和声",
+    "preserveMelody": "保留旋律",
+    "preserveRhythm": "保留节奏",
+    "presetInstructions": "预设指令",
     "summary_one": "将替换 {{where}} 上的 {{count}} 个音符。",
-    "summary_other": "将替换 {{where}} 上的 {{count}} 个音符。"
+    "summary_other": "将替换 {{where}} 上的 {{count}} 个音符。",
+    "trackTitle": "替换音轨"
   },
   "resources": {
     "title": "资源",
-    "intro": "可直接导入 {{appName}} 的免费音乐库。下载文件后，在项目页面使用「导入」。",
-    "modarchiveBody": "数以万计的 tracker 模块文件——MOD、S3M、XM 与 IT——涵盖 demoscene 时期至今。",
-    "bitmidiBody": "可搜索的大型 MIDI 文件合集，从古典到游戏与流行改编曲。",
-    "musescoreBody": "社区乐谱，其中许多可下载为 MusicXML。",
-    "imslpBody": "公共领域的古典乐谱库，许多作品提供 MusicXML。",
-    "freepatsBody": "免费且开放授权的乐器采样与音色集，用于播放。",
-    "viaModule": "通过「导入 → 模块」打开",
-    "viaMidi": "通过「导入 → MIDI」打开",
-    "viaMusicXml": "通过「导入 → MusicXML」打开",
-    "viaInstruments": "乐器采样，而非乐谱"
+    "intro": "可直接导入 {{appName}} 的免费音乐，按各类文件对应的导入方式分组。下载文件后，在项目页面使用「导入」。",
+    "group": {
+      "scores": {
+        "title": "乐谱",
+        "route": "「导入 → MusicXML」。音符、节奏、歌词、力度与排版都会完整保留。"
+      },
+      "midi": {
+        "title": "MIDI 文件",
+        "route": "「导入 → MIDI」。音符与时值可直接读取；小节线与调号为推断结果，可在向导中修正。"
+      },
+      "modules": {
+        "title": "Tracker 模块",
+        "route": "「导入 → 模块」。支持 MOD、S3M、XM、IT 与 MPTM，按文件内容而非扩展名识别。"
+      },
+      "audio": {
+        "title": "可转谱的录音",
+        "route": "「导入 → 音频」。一次只能识别一条旋律线，请选择独奏乐器或独唱。"
+      },
+      "datasets": {
+        "title": "大型合集",
+        "route": "「导入 → MIDI 或 MusicXML」。整套语料而非单曲——先下载压缩包，再打开其中一个文件。"
+      },
+      "sound": {
+        "title": "乐器与音色",
+        "route": "不可导入。这些是播放所用的采样与 SoundFont，适合在其他软件中播放乐谱时使用。"
+      },
+      "reference": {
+        "title": "格式与工具",
+        "route": "参考资料，并非乐曲文件。说明各格式实际保存了什么，以及还有哪些软件能打开它。"
+      }
+    },
+    "link": {
+      "musescore": "上百万份社区乐谱，其中公共领域作品可下载为 MusicXML。",
+      "openscore": "重新打谱的古典曲目，全部释出为公共领域。",
+      "imslp": "公共领域古典乐谱库，收录二十万首作品，许多在 PDF 之外还附有 MusicXML。",
+      "cpdl": "合唱乐谱维基，四万余份合唱与声乐乐谱，大量提供可编辑的源文件。",
+      "mutopia": "重新排版的公共领域乐谱，每首都附有 LilyPond 源文件与 MIDI。",
+      "musopenScores": "完全不受版权限制的乐谱，与 Musopen 的录音收录在一起。",
+      "openGoldberg": "巴赫《哥德堡变奏曲》，乐谱与演奏录音均可自由使用。",
+      "musicxmlDirectory": "该格式官方整理的 MusicXML 站点清单——看完本页后可继续往这里找。",
+      "bitmidi": "可搜索的大型 MIDI 合集，下载前能直接在浏览器里试听。",
+      "vgmusic": "手工制作的电子游戏音乐 MIDI，按主机与曲目分类。",
+      "kunstderfuge": "网上最大的古典 MIDI 档案库，数千个文件可免费取用。",
+      "midiworld": "古典、流行与游戏 MIDI 并列收录，另有鼓点节奏型。",
+      "mfiles": "制作精良的古典 MIDI，收录的大多是最常被寻找的曲目。",
+      "classicalArchives": "经过筛选的免费合集，可自由复制使用，无需事先申请许可。",
+      "theSession": "爱尔兰传统曲调，每个版本都可下载为 MIDI。",
+      "hymnary": "赞美诗曲调与歌词，多数附有完整和声的 MIDI。",
+      "midkar": "爵士、蓝调、雷格泰姆与经典标准曲，经三十年陆续制作。",
+      "modarchive": "数以万计的模块文件，涵盖 demoscene 时期至今，站内自带播放器。",
+      "modland": "最完整的档案库：涵盖各种 tracker 格式，按作者归档，可当作磁盘浏览。",
+      "amp": "Amiga 圈自建的曲库，由创作这些音乐的人亲手整理。",
+      "sceneOrg": "demoscene 的文件服务器，音乐目录收录了数十年来的聚会参赛作品。",
+      "woolyss": "长期维护的索引，汇总 tracker 音乐的来源与仍可播放它的软件。",
+      "archiveTrackers": "精选的数 GB 合集，MOD、XM、IT 与 S3M 一次打包下载。",
+      "musopenAudio": "录制后释出为公共领域的古典音乐演奏。",
+      "freeMusicArchive": "十万余首采用知识共享许可的曲目，可按许可类型筛选。",
+      "freesound": "单音、短乐句与实地录音，全部采用开放许可。",
+      "archiveAudio": "现场演出、78 转唱片转录与社区上传，均可免费下载。",
+      "pdmx": "二十五万份公共领域 MusicXML 乐谱，打包成一个数据集。",
+      "lakh": "为音乐研究收集的十七万六千个 MIDI 文件，可免费下载。",
+      "maestro": "两百小时的钢琴比赛演奏，MIDI 与录音精确对齐。",
+      "adlPiano": "按流派、子流派与艺人归档的钢琴 MIDI。",
+      "museTrainer": "公共领域钢琴 MusicXML 仓库——克隆下来即可打开其中任意文件。",
+      "womenComposers": "女性作曲家的作品乐谱，已完成编码并可自由使用。",
+      "freepats": "采用开放许可的乐器采样与音色集。",
+      "polyphone": "可免费下载的 SoundFont，并附有制作自用音色的编辑器。",
+      "generalUser": "经过调校的通用 MIDI 音色库，全部 128 种音色在同一混音中互不掩盖。",
+      "philharmonia": "由乐团亲自录制的管弦乐器逐音采样。",
+      "musicXmlSpec": "MusicXML 规范，逐个元素说明。",
+      "generalMidi": "每条音轨的乐器都从这 128 种通用 MIDI 音色中选取。",
+      "standardMidiFile": "MIDI 协会官方文档，说明 .mid 文件实际保存了什么。",
+      "openMpt": "当你还想取出模块中的采样时，用这款 tracker 打开它。",
+      "verovio": "在浏览器中把 Humdrum 编码的乐谱转换为 MusicXML。"
+    }
   },
   "selection": {
     "notes_one": "已选择 {{count}} 个音符",
