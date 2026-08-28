@@ -40,8 +40,9 @@ import {
   selectionSummaryLabel,
   shiftDiatonic,
   ticksFor,
-  ottavaScore,
-  writtenScore,
+  // Aliased: the memo below is itself called `displayScore`, and the comments
+  // around it name that.
+  displayScore as applyDisplayLenses,
 } from '@sudobility/music_lib';
 import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
@@ -348,30 +349,23 @@ export function ScoreEditorView({
           )
         : previewed;
 
-    // Written pitch goes on **last**, over everything above. The drag preview
-    // splices in a *sounding* pitch (it comes from the stored score, so the
-    // command it will dispatch is right), and transposing afterwards moves the
-    // dragged note with the rest of the staff. Applying the lens first would
-    // draw that one note an instrument's transposition too low.
-    //
-    // `writtenScore` returns its input object in concert mode and for a score
-    // with nothing transposing, so `computeLayout`'s identity cache below is
-    // untouched unless the lens is actually doing something.
     /*
-      Octave brackets are a *display* instruction — the model stores sounding
-      pitch, and an `8va` says the notes were written an octave lower to keep
-      them on the stave. So the lens moves them there, and it applies in every
-      mode: unlike an instrument's transposition, a bracket is part of the
-      notation itself rather than a way of reading it.
+      Both display lenses, in music_types' own order: the octave bracket first
+      and in every mode, the instrument's transposition last and only in
+      written mode. The composition is a rule about music rather than about
+      this app, so it is declared once upstream and the native app applies the
+      same one — see `displayScore`.
 
-      Before `writtenScore`, so a transposing instrument's bracket moves with
-      the staff rather than against it. Both return their input unchanged when
-      they have nothing to do, so the layout cache is untouched by a score with
-      neither.
+      Applied to `dragged`, after the preview, deliberately. The drag splices
+      in a *sounding* pitch (it comes from the stored score, so the command it
+      will dispatch is right), and transposing afterwards moves the dragged
+      note with the rest of the staff; lensing first would draw that one note
+      an instrument's transposition too low. `displayScore` returns its input
+      object when neither lens has anything to do, so `computeLayout`'s
+      identity cache below is untouched unless a lens is really doing
+      something.
     */
-    const bracketed = dragged ? ottavaScore(dragged) : dragged;
-    if (!bracketed || pitchDisplay !== 'written') return bracketed;
-    return writtenScore(bracketed);
+    return dragged ? applyDisplayLenses(dragged, pitchDisplay) : dragged;
   }, [score, pitchDragSteps, pitchDisplay]);
 
   /**
