@@ -65,6 +65,15 @@ PROJECTS=(
     # on. Under the poll the number costs nothing when CI is quick.
     "../music_lib:150"
     "../music_app:0"
+    # The native app, last: it depends on the whole chain above and nothing
+    # depends on it. `private: true`, so nothing is published to npm — this
+    # entry exists to version, commit and push it like every other repo.
+    #
+    # Note it has no `build` script (an RN app is bundled by Metro at run
+    # time, not built here), which the shared script handles by skipping that
+    # check. Its Jest component suite runs under `test:components` rather than
+    # `test`, so `bun run test` covers the vitest half only.
+    "../music_app_rn:0"
 )
 
 # Source reusable script: prefer local workflows repo, fall back to GitHub
