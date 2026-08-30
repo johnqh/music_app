@@ -32,7 +32,15 @@
  * drag fires continuously and each commit would otherwise be an undo entry.
  */
 import { cn } from '@sudobility/components';
-import { panReadout } from '@/features/tracks/pan-readout';
+/*
+  `panReadout` is music_types', not this app's. It was three lines here and
+  three identical lines in music_app_rn once the native property sheet gained
+  the same row — which is the moment a display conversion stops being a detail
+  of one panel and becomes a fact both apps have to agree on. It sits with the
+  other "say a stored value the way a musician says it" conversions in
+  `music-vocabulary.ts`.
+*/
+import { panReadout } from '@sudobility/music_types';
 /*
   The shell, the groove and the level are shared with the transport bar now.
   They were defined here because this is where the shared `Slider` was first
