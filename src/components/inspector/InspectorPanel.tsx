@@ -59,7 +59,7 @@ import {
   MixedSelect,
 } from '@/components/inspector/controls';
 import {
-  ACCIDENTAL_OPTIONS,
+  ACCIDENTAL_PICKER,
   ARTICULATION_OPTIONS,
   CLEFS,
   CUSTOM_DURATION,
@@ -277,7 +277,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         <MixedSelect
           value={accidentalStr}
           ariaLabel="Accidental"
-          options={ACCIDENTAL_OPTIONS.map((a) => ({ value: String(a.value), label: a.label }))}
+          options={ACCIDENTAL_PICKER.map((a) => ({ value: String(a.value), label: a.label }))}
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField

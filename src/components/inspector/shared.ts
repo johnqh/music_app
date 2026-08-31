@@ -12,8 +12,9 @@
  * so a column of them comes out ragged unless the height is stated once.
  */
 
-import { ACCIDENTALS, ARTICULATIONS } from '@sudobility/music_types';
-import type { Accidental, Articulation } from '@sudobility/music_types';
+import { ACCIDENTAL_OPTIONS } from '@sudobility/music_types';
+import type { Accidental } from '@sudobility/music_types';
+import { commonValue as sharedValue } from '@sudobility/music_types';
 
 export { CLEFS, PITCH_STEPS } from '@sudobility/music_types';
 
@@ -23,11 +24,19 @@ export const MIXED = Symbol('mixed');
 export type MixedOr<T> = T | typeof MIXED;
 
 /**
- * The label each accidental is written with. A record keyed by the type, not a
- * list beside it: a sixth accidental would fail to compile here rather than
- * quietly go missing from the picker.
+ * The symbol each accidental is written with in the inspector's narrow picker.
+ *
+ * A record keyed by the type, not a list beside it: a sixth accidental would
+ * fail to compile here rather than quietly go missing from the picker.
+ *
+ * The *vocabulary and its order* are music_types' — see `ACCIDENTAL_OPTIONS`,
+ * re-exported below. Only the wording is this panel's, which is the split the
+ * library documents: a closed vocabulary is shared, the words a surface writes
+ * it in are not. This picker is one control wide in a column of controls, so it
+ * writes `bb` where the native sheet, which has a whole row per entry, writes
+ * "Double flat".
  */
-const ACCIDENTAL_LABEL: Record<Accidental, string> = {
+const ACCIDENTAL_SYMBOL: Record<Accidental, string> = {
   [-2]: 'bb',
   [-1]: 'b',
   [0]: 'natural',
@@ -36,20 +45,29 @@ const ACCIDENTAL_LABEL: Record<Accidental, string> = {
 };
 
 /**
- * The picker's entries. Named for what it is — a list of options — rather than
- * `ACCIDENTALS`, which is the vocabulary itself and lives in music_types; two
- * things under one name in two packages is how a picker comes to offer a set
- * the model no longer has.
+ * This panel's accidental picker: the library's vocabulary and order, written
+ * in this panel's own symbols.
+ *
+ * Deliberately not named `ACCIDENTAL_OPTIONS` — music_types exports one of
+ * those, and two things under one name in two packages is exactly how a picker
+ * comes to offer a set the model no longer has. `__single-source.test.ts`
+ * fails on that name here, which is how this was caught.
  */
-export const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; label: string }> = ACCIDENTALS.map(
-  (value) => ({ value, label: ACCIDENTAL_LABEL[value] }),
-);
+export const ACCIDENTAL_PICKER: Array<{ value: Accidental; label: string }> =
+  ACCIDENTAL_OPTIONS.map(({ value }) => ({
+    value,
+    label: ACCIDENTAL_SYMBOL[value],
+  }));
 
-/** The picker's entries; `ARTICULATIONS` itself is the vocabulary, in music_types. */
-export const ARTICULATION_OPTIONS: Array<{ value: Articulation | 'none'; labelKey: string }> = [
-  { value: 'none', labelKey: 'articulation.none' },
-  ...ARTICULATIONS.map((value) => ({ value, labelKey: `articulation.${value}` })),
-];
+/*
+  The picker's entries are music_types', not this app's.
+
+  This list existed here, in music_app_rn's toolbar and in its Note tab, and the
+  three agreed only because nobody had added a fifth articulation yet. It is
+  mapped off the vocabulary beside the vocabulary now, so a new member reaches
+  every picker in both apps without anybody remembering to.
+*/
+export { ARTICULATION_OPTIONS, ORNAMENT_OPTIONS, NO_MARK } from '@sudobility/music_types';
 
 export const MIXED_VALUE = '__mixed__';
 
@@ -94,8 +112,14 @@ export const SELECT_CLASS = `${FIELD_HEIGHT_CLASS} w-full justify-between px-2 p
 
 /** `values[0]` if every entry deep-equals it (by `JSON.stringify`, sufficient for this panel's primitive/plain-object fields), `MIXED` if they differ, or `null` for an empty list. */
 export function commonValue<T>(values: T[]): MixedOr<T> | null {
+  /*
+    The agreement test is music_types' `commonValue`, which both apps' panels
+    need and which answers `null` for "they differ". This wrapper keeps *this*
+    app's `MIXED` sentinel, because the web inspector distinguishes "no
+    selection" (null) from "a selection that disagrees" (MIXED) and the native
+    one does not — a difference in what the panel renders, not in the rule.
+  */
   if (values.length === 0) return null;
-  const first = values[0];
-  const firstKey = JSON.stringify(first);
-  return values.every((v) => JSON.stringify(v) === firstKey) ? first : MIXED;
+  const agreed = sharedValue(values);
+  return agreed === null ? MIXED : agreed;
 }

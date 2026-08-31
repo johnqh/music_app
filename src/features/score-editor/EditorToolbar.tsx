@@ -32,7 +32,12 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
-import { ARTICULATIONS, ORNAMENTS } from '@sudobility/music_types';
+import {
+  ACCIDENTAL_OPTIONS,
+  ARTICULATION_OPTIONS,
+  NO_MARK,
+  ORNAMENT_OPTIONS,
+} from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
@@ -172,34 +177,31 @@ function SelectedDurationIcon({ base }: { base: BaseDuration }) {
   );
 }
 
-const ACCIDENTAL_OPTIONS: Array<{ value: Accidental; Icon: NotationIcon; ariaLabel: string }> = [
-  { value: -2, Icon: DoubleFlatIcon, ariaLabel: 'Double flat' },
-  { value: -1, Icon: FlatIcon, ariaLabel: 'Flat' },
-  { value: 0, Icon: NaturalIcon, ariaLabel: 'Natural' },
-  { value: 1, Icon: SharpIcon, ariaLabel: 'Sharp' },
-  { value: 2, Icon: DoubleSharpIcon, ariaLabel: 'Double sharp' },
-];
-
-/** Radix rejects an empty item value, so "None" travels under a sentinel. */
-const NO_ARTICULATION = 'none';
-
-const ARTICULATION_OPTIONS: Array<{ value: Articulation | undefined; labelKey: string }> = [
-  { value: undefined, labelKey: 'articulation.none' },
-  ...ARTICULATIONS.map((value) => ({ value, labelKey: `articulation.${value}` })),
-];
-
 /**
- * The ornament signs, in the order a picker should offer them.
+ * The glyph and the spoken name for each accidental.
  *
- * Shares `NO_ARTICULATION`'s problem and its fix: Radix rejects an empty item
- * value, so "None" travels under a sentinel.
+ * A `Record` keyed by the vocabulary rather than a list beside it: a sixth
+ * accidental fails to compile here instead of quietly going missing. The
+ * vocabulary and its *order* are music_types' — `ACCIDENTAL_OPTIONS`, which the
+ * menu below is built from — because a drawing is the one thing a shared
+ * vocabulary cannot carry, and everything else about the list can be.
  */
-const NO_ORNAMENT = 'none';
+const ACCIDENTAL_GLYPHS: Record<Accidental, { Icon: NotationIcon; ariaLabel: string }> = {
+  [-2]: { Icon: DoubleFlatIcon, ariaLabel: 'Double flat' },
+  [-1]: { Icon: FlatIcon, ariaLabel: 'Flat' },
+  [0]: { Icon: NaturalIcon, ariaLabel: 'Natural' },
+  [1]: { Icon: SharpIcon, ariaLabel: 'Sharp' },
+  [2]: { Icon: DoubleSharpIcon, ariaLabel: 'Double sharp' },
+};
 
-const ORNAMENT_OPTIONS: Array<{ value: Ornament | undefined; labelKey: string }> = [
-  { value: undefined, labelKey: 'ornament.none' },
-  ...ORNAMENTS.map((value) => ({ value, labelKey: `ornament.${value}` })),
-];
+/*
+  The articulation and ornament entries are music_types', imported above.
+
+  Both lists lived here as well as in the inspector and in both of the native
+  app's pickers, and the four agreed only because nobody had added a fifth
+  member yet. `NO_MARK` is the library's sentinel for "none": a picker's value
+  is a string, and Radix rejects an empty one.
+*/
 
 /**
  * Quantize grid values, with the short label the trigger shows.
@@ -380,11 +382,11 @@ export function EditorToolbar({
   };
 
   const handleArticulationSelect = (value: string): void => {
-    changeArticulation(store, value === NO_ARTICULATION ? undefined : (value as Articulation));
+    changeArticulation(store, value === NO_MARK ? undefined : (value as Articulation));
   };
 
   const handleOrnamentSelect = (value: string): void => {
-    changeOrnament(store, value === NO_ORNAMENT ? undefined : (value as Ornament));
+    changeOrnament(store, value === NO_MARK ? undefined : (value as Ornament));
   };
 
   const handleInsertNote = (): void => {
@@ -561,9 +563,9 @@ export function EditorToolbar({
             </SelectTrigger>
           </Tooltip>
           <SelectContent>
-            {ACCIDENTAL_OPTIONS.map((option) => (
-              <SelectItem key={option.ariaLabel} value={String(option.value)}>
-                {option.ariaLabel}
+            {ACCIDENTAL_OPTIONS.map(({ value }) => (
+              <SelectItem key={String(value)} value={String(value)}>
+                {ACCIDENTAL_GLYPHS[value].ariaLabel}
               </SelectItem>
             ))}
           </SelectContent>
@@ -594,7 +596,7 @@ export function EditorToolbar({
           </Tooltip>
           <SelectContent>
             {ARTICULATION_OPTIONS.map((option) => (
-              <SelectItem key={option.labelKey} value={option.value ?? NO_ARTICULATION}>
+              <SelectItem key={option.labelKey} value={option.value}>
                 {t(option.labelKey)}
               </SelectItem>
             ))}
@@ -618,7 +620,7 @@ export function EditorToolbar({
           </Tooltip>
           <SelectContent>
             {ORNAMENT_OPTIONS.map((option) => (
-              <SelectItem key={option.labelKey} value={option.value ?? NO_ORNAMENT}>
+              <SelectItem key={option.labelKey} value={option.value}>
                 {t(option.labelKey)}
               </SelectItem>
             ))}

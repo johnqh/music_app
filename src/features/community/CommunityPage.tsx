@@ -18,6 +18,7 @@ import { Card, Heading, SearchInput, Section, Stack, Text } from '@sudobility/co
 import { EmptyState } from '@sudobility/building_blocks';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 import type { CommunityItem } from '@sudobility/music_types';
+import { filterCommunity } from '@sudobility/music_types';
 import { getAppServices } from '@/config/initialize';
 
 export function CommunityPage() {
@@ -42,16 +43,12 @@ export function CommunityPage() {
     };
   }, []);
 
-  // Title and publisher, which is what someone scanning this list is reading.
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return items ?? [];
-    return (items ?? []).filter(
-      (item) =>
-        item.publicName.toLowerCase().includes(needle) ||
-        item.publisherName.toLowerCase().includes(needle),
-    );
-  }, [items, query]);
+  /*
+    The predicate is music_types' — both apps show this list, and a filter that
+    differed between them would mean the same search found different music
+    depending on which app you ran it in.
+  */
+  const visible = useMemo(() => filterCommunity(items ?? [], query), [items, query]);
 
   return (
     <Section spacing="xl" className="mx-auto max-w-3xl">
