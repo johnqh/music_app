@@ -43,16 +43,11 @@ const ALLOWED_NON_UI = new Set([
   // A list of other people's URLs and the i18n keys beside them: page content,
   // and the only thing music-shaped about it is which importer each feeds.
   'src/pages/resource-links.ts',
-  // Geometry that turns pointer coordinates into score positions. It reads a
-  // LayoutPlan, which is music_lib's, but everything it does is answer
-  // questions about a pointer — see hit-test.ts's own doc.
-  'src/features/score-editor/hit-test.ts',
-  'src/features/score-editor/track-gutter.ts',
+  // App layout geometry, which is this app's rather than the canvas's:
+  // a pointer near the edge of a *scroll box* and the per-frame scroll delta
+  // that follows. Canvas geometry — anything that reasons about the drawn
+  // score — belongs to music_drawing instead; see CLAUDE.md.
   'src/features/score-editor/autoscroll.ts',
-  'src/features/score-editor/playback-scroll.ts',
-  'src/features/score-editor/note-colors.ts',
-  'src/features/score-editor/render-theme.ts',
-  'src/features/score-editor/note-drag.ts',
   'src/features/piano-keyboard/playing-pitches.ts',
   // The inspector's shared vocabulary: the MIXED sentinel and the class names
   // that keep a column of controls the same height. Presentation, not logic.

@@ -51,9 +51,9 @@ import {
 import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
-import { measureBeatAt, setOpeningTempo } from '@sudobility/music_lib';
+import { barBeatForTick, setOpeningTempo } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
-import type { MeasureBeat } from '@sudobility/music_lib';
+import type { BarBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
 import {
@@ -84,8 +84,8 @@ const TOGGLE_BUTTON_CLASS = cn(
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
-function formatMeasureBeat(mb: MeasureBeat | null): string {
-  return mb ? `${mb.measureIndex}.${mb.beat}` : '-.-';
+function formatMeasureBeat(mb: BarBeat | null): string {
+  return mb ? `${mb.bar}.${mb.beat}` : '-.-';
 }
 
 /** `M:SS.d` (minutes, zero-padded seconds, tenths) — tenths update ~3x/sec during playback, making the actual playback rate visible against a wall clock. */
@@ -223,7 +223,13 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
   // a value changing thirty times a second from waking the whole tree.
   const positionTick = usePlaybackPosition();
   const score = store((s) => s.score);
-  const measureBeat = measureBeatAt(score, positionTick);
+  /*
+    `barBeatForTick`, not the `measureBeatAt` that used to live in
+    music_editing. The two disagreed: that one numbered bars `index + 1`, which
+    counts a pickup, so on a score with an anacrusis this readout said one bar
+    and the inspector — and "go to bar N" — said another.
+  */
+  const measureBeat = score ? barBeatForTick(score, positionTick) : null;
   return (
     <Tooltip content={t('transport.measureBeat')}>
       <span

@@ -28,6 +28,7 @@ import {
   CanvasScoreRenderer,
   playbackController,
   selectActiveTrackId,
+  selectNotes,
   selectVisibleTrackIds,
 } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
@@ -48,8 +49,8 @@ import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import { buildGenerateTrackRequest } from '@sudobility/music_lib';
 import type { InstrumentChoice } from '@sudobility/music_lib';
-import { resolveDrop } from '@/features/score-editor/note-drag';
-import type { DropTarget } from '@/features/score-editor/note-drag';
+import { resolveDrop } from '@sudobility/music_drawing';
+import type { DropTarget } from '@sudobility/music_drawing';
 import { useAppStore } from '@sudobility/music_lib';
 import {
   caretToBar,
@@ -84,14 +85,13 @@ import {
   measureIdAtPoint,
   pitchAtStavePoint,
   measureIndexAtGutterPoint,
-} from '@/features/score-editor/hit-test';
-import type { Point } from '@/features/score-editor/hit-test';
-import { buildNoteColors } from '@/features/score-editor/note-colors';
-import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
+} from '@sudobility/music_drawing';
+import type { Point } from '@sudobility/music_drawing';
+import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
-import { trackIdAtGutterPoint } from '@/features/score-editor/track-gutter';
+import { trackIdAtGutterPoint } from '@sudobility/music_drawing';
 import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
-import { STAVE_POSITION_HEIGHT } from '@sudobility/music_drawing';
+import { STAVE_POSITION_HEIGHT, buildNoteColors, noteColorsFor } from '@sudobility/music_drawing';
 import { PlaybackCaret } from '@/features/score-editor/PlaybackCaret';
 
 export type ScoreEditorViewProps = {
@@ -167,6 +167,17 @@ export function ScoreEditorView({
   const rendererRef = useRef<CanvasScoreRenderer | null>(null);
   if (!rendererRef.current) rendererRef.current = new CanvasScoreRenderer();
   const resultRef = useRef<CanvasRenderResult | null>(null);
+  /*
+    The drawn window's note positions, as a stable getter.
+
+    Both the caret and click-to-seek interpolate between the noteheads
+    themselves — the renderer records the x each was drawn at — so both agree
+    with the page exactly rather than approximating it across the stave box,
+    which begins at the barline and spends its left edge on the clef, key and
+    time signature. Handed down as a function so the caret's frame loop reads
+    the current window without re-subscribing every time a new one is drawn.
+  */
+  const notePositionsGetter = useCallback(() => resultRef.current?.measureNotePositions, []);
   const dragStateRef = useRef<{ start: Point; moved: boolean; additive: boolean } | null>(null);
   /**
    * A pitch drag in progress: the single selected note being dragged, its
@@ -312,9 +323,10 @@ export function ScoreEditorView({
    */
   const colorsWithPlaying = useCallback(
     (sounding: readonly SoundingNote[]) =>
-      buildNoteColors({
+      noteColorsFor({
         selectedIds: selection.eventIds,
-        playingIds: sounding.filter((n) => n.trackId === activeTrackId).map((n) => n.noteId),
+        sounding,
+        activeTrackId: activeTrackId ?? null,
         regenerated: selectionRegenerated,
       }),
     [selection.eventIds, selectionRegenerated, activeTrackId],
@@ -769,7 +781,13 @@ export function ScoreEditorView({
       // move the caret, so the same anchor can be extended repeatedly.
       if (rangeModifier) {
         if (!layoutPlan || !displayScore) return;
-        const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
+        const clickedTick = tickForPoint(
+          layoutPlan,
+          displayScore,
+          logical.x,
+          logical.y,
+          resultRef.current?.measureNotePositions,
+        );
         if (clickedTick === null) return;
 
         selectToTick(store, { tick: clickedTick, allTracks: event.shiftKey });
@@ -789,23 +807,21 @@ export function ScoreEditorView({
           state.toggleEvent(noteId);
           return;
         }
-        // Plain click: caret to the note's start, select the whole chord.
-        //
-        // The whole chord, not one arbitrary member: every note in a chord
-        // shares one bounding box, so "which note did you click" is not a
-        // question the geometry can answer. Adding and removing individual
-        // notes is the piano keyboard's job.
-        const note = findEvent(state.score, noteId);
+        /*
+          Plain click: caret to the note's start, select the whole chord.
+
+          The whole chord, not one arbitrary member: every note in a chord
+          shares one bounding box, so "which note did you click" is not a
+          question the geometry can answer. Adding and removing individual
+          notes is the piano keyboard's job.
+
+          `selectNotes` does all three writes — selection, active track, caret —
+          because a caller doing them separately can get two of the three right.
+          It is shared with the React Native app, whose tap means the same
+          thing; this used to be written out here as well.
+        */
         const chordIds = result ? eventIdsAtPoint(result.idToBBox, point) : [];
-        state.setSelection({
-          eventIds: chordIds.length > 0 ? chordIds : [noteId],
-          measureIds: [],
-          trackIds: [],
-        });
-        if (note) {
-          state.setActiveTrack(note.trackId);
-          playbackController.seek(note.startTick);
-        }
+        selectNotes(store, chordIds.length > 0 ? chordIds : [noteId]);
         return;
       }
 
@@ -818,7 +834,13 @@ export function ScoreEditorView({
       // keyboard already use.
       if (state.noteInput && layoutPlan && displayScore && !rangeModifier) {
         const hit = pitchAtStavePoint(layoutPlan, state.score, logical);
-        const clickedTick = tickForPoint(layoutPlan, displayScore, logical.x, logical.y);
+        const clickedTick = tickForPoint(
+          layoutPlan,
+          displayScore,
+          logical.x,
+          logical.y,
+          resultRef.current?.measureNotePositions,
+        );
         if (hit && clickedTick !== null) {
           // `hit.pitch` is what is *drawn* there, and the drawing has been
           // through the display lenses. Storing it raw wrote a note an octave
@@ -848,7 +870,13 @@ export function ScoreEditorView({
       const owner = measureId ? trackOfMeasure(state.score, measureId) : null;
       const tick =
         layoutPlan && displayScore
-          ? tickForPoint(layoutPlan, displayScore, logical.x, logical.y)
+          ? tickForPoint(
+              layoutPlan,
+              displayScore,
+              logical.x,
+              logical.y,
+              resultRef.current?.measureNotePositions,
+            )
           : null;
       if (tick !== null) placeCaret(store, { tick, trackId: owner?.id ?? null });
     },
@@ -1303,6 +1331,7 @@ export function ScoreEditorView({
           color={renderTheme.caret}
           layoutMode={layoutMode}
           scrollBoxRef={scrollBoxRef}
+          notePositions={notePositionsGetter}
         />
       </div>
     </div>

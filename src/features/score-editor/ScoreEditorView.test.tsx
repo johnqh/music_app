@@ -47,7 +47,7 @@ import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 function seekTo(tick: number): void {
   getMusicPositionSource().moveTo(tick);
 }
-import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
+import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 
 // The component's own light theme, not a stand-in: reference renders below
@@ -639,6 +639,19 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
 });
 
 describe('playback caret and click-to-seek', () => {
+  /*
+    The note positions the component's own caret is using.
+
+    Both `caretPositionForTick` and `tickForPoint` interpolate between the
+    noteheads VexFlow drew, not across the stave box — so an oracle that omits
+    them is computing the *old* geometry and disagrees by the width of the
+    clef. `referenceRender` draws the same window the component does, which is
+    where they come from.
+  */
+  function caretPositions(store: EditorStoreApi) {
+    return referenceRender(store.getState().score!).measureNotePositions;
+  }
+
   function caretPlan(store: EditorStoreApi) {
     // Same inputs the component uses in jsdom: zoom 1, page mode, and the
     // DEFAULT_WIDTH 900 fallback (clientWidth is 0 here).
@@ -650,10 +663,23 @@ describe('playback caret and click-to-seek', () => {
     });
   }
 
-  it('shows the caret at the score start (tick 0) before any playback', () => {
+  it('shows the caret at the score start (tick 0) before any playback', async () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
-    const expected = caretPositionForTick(caretPlan(store), store.getState().score!, 0)!;
+    /*
+      A frame, because the caret's exact x is not knowable until the canvas has
+      drawn: it interpolates between the note positions the renderer records
+      while building a measure, and a child's effects run before its parent's.
+      The caret paints once from the stave box and corrects itself on the next
+      frame — see `PlaybackCaret`.
+    */
+    await flushRepaintFrame();
+    const expected = caretPositionForTick(
+      caretPlan(store),
+      store.getState().score!,
+      0,
+      caretPositions(store),
+    )!;
     // Positioned by transform, not `left`: animating a layout property forced
     // a layout pass on every update.
     expect(getByTestId('playback-caret').style.transform).toContain(`translate(${expected.x}px`);
@@ -676,7 +702,12 @@ describe('playback caret and click-to-seek', () => {
     expect(caret.style.visibility).toBe('');
 
     // Scroll the caret's content position in under the gutter.
-    const x = caretPositionForTick(caretPlan(store), store.getState().score!, 0)!.x;
+    const x = caretPositionForTick(
+      caretPlan(store),
+      store.getState().score!,
+      0,
+      caretPositions(store),
+    )!.x;
     Object.defineProperty(scrollBox, 'scrollLeft', {
       value: x - TRACK_INFO_WIDTH + 1,
       configurable: true,
@@ -762,7 +793,13 @@ describe('playback caret and click-to-seek', () => {
 
     fireEvent.click(interactionSurface(), point);
 
-    const expected = tickForPoint(caretPlan(store), score, point.clientX, point.clientY);
+    const expected = tickForPoint(
+      caretPlan(store),
+      score,
+      point.clientX,
+      point.clientY,
+      caretPositions(store),
+    );
     expect(getMusicPosition().reportedTick).toBe(expected);
   });
 

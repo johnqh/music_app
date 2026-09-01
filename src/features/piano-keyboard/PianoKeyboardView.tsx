@@ -25,12 +25,20 @@ import {
 } from '@sudobility/music_lib';
 // `chordSelection` for what the keys should *look* like; `playKeyGroup` for
 // what pressing them does. Only the first is this component's business.
-import { chordSelection, playKeyGroup } from '@sudobility/music_lib';
+import {
+  EMPTY_GROUP,
+  chordSelection,
+  playKeyGroup,
+  playingPitchesForTrack,
+  pressKey as pressGroupKey,
+  releaseKey as releaseGroupKey,
+} from '@sudobility/music_lib';
+import type { KeyGroup } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { useSoundingNotes } from '@/features/score-editor/usePlayback';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
+import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { resolveColorScheme } from '@/app/theme';
 import type { KeyNaming, PianoKey } from '@sudobility/music_drawing';
 import {
@@ -42,7 +50,6 @@ import {
   snapToWhiteKeys,
   whiteKeyCount,
 } from '@sudobility/music_drawing';
-import { playingPitchesForTrack } from '@/features/piano-keyboard/playing-pitches';
 
 /**
  * One key. `React.memo` on primitive props matters here: a note boundary
@@ -304,23 +311,24 @@ export function PianoKeyboardView({
   }, [trackProgram, trackClef]);
 
   /**
-   * Keys currently held by the pointer, and when each went down.
+   * The chord being played: which keys, which are still down, and when it began.
    *
-   * The timestamps live in a ref because nothing renders from them; only the
-   * set of held keys is state, so a held key can be drawn pressed.
-   */
-  const heldSinceRef = useRef(new Map<number, number>());
-  /**
-   * The notes of the chord currently being played, and when the first of them
-   * went down.
+   * Keys pressed while another is still held belong to one chord, and the whole
+   * group is written when the last of them lifts — which is simply what playing
+   * a chord is. Accumulating rather than writing per release is what makes that
+   * possible: a note written on its own release has already chosen a start tick
+   * and a duration, and cannot retroactively join anything.
    *
-   * Keys pressed while another is still held belong to one chord, and the
-   * whole group is written when the last of them lifts — which is simply what
-   * playing a chord is. Accumulating here rather than writing per release is
-   * what makes that possible: a note written on its own release has already
-   * chosen a start tick and a duration, and cannot retroactively join anything.
+   * The rule itself is `pressKey`/`releaseKey`, shared with the React Native
+   * app. It used to be written out here instead, against a `{midis,
+   * firstPressAt}` object and a separate map of press times — a second
+   * statement of what counts as one chord, inside a component, where it could
+   * not be tested without a renderer.
+   *
+   * A ref because nothing renders from it; the *held* set is state, so a held
+   * key can be drawn pressed.
    */
-  const chordRef = useRef<{ midis: number[]; firstPressAt: number } | null>(null);
+  const groupRef = useRef<KeyGroup>(EMPTY_GROUP);
 
   /**
    * The selected chord, when the selection is exactly one — the keyboard's
@@ -337,14 +345,7 @@ export function PianoKeyboardView({
 
   const pressKey = useCallback(
     (midi: number) => {
-      const now = performance.now();
-      heldSinceRef.current.set(midi, now);
-      const group = chordRef.current;
-      if (group) {
-        if (!group.midis.includes(midi)) group.midis.push(midi);
-      } else {
-        chordRef.current = { midis: [midi], firstPressAt: now };
-      }
+      groupRef.current = pressGroupKey(groupRef.current, midi, performance.now());
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
       // must be heard whether or not a score is loaded or playing.
@@ -358,8 +359,6 @@ export function PianoKeyboardView({
 
   const releaseKey = useCallback(
     (midi: number) => {
-      const since = heldSinceRef.current.get(midi);
-      heldSinceRef.current.delete(midi);
       setHeldKeys((held) => {
         if (!held.has(midi)) return held;
         const next = new Set(held);
@@ -367,23 +366,17 @@ export function PianoKeyboardView({
         return next;
       });
       playbackController.noteOff(midi);
-      if (since === undefined) return;
 
-      // Nothing is written until every key of the group is up: until then the
+      // `finished` is set only once the last finger lifts: until then the
       // player may still be adding notes to the same chord.
-      if (heldSinceRef.current.size > 0) return;
-
-      const group = chordRef.current;
-      chordRef.current = null;
-      if (!group || group.midis.length === 0) return;
+      const { group, finished } = releaseGroupKey(groupRef.current, midi, performance.now());
+      groupRef.current = group;
+      if (!finished) return;
 
       // One call, because it is one user action. Which of the two things it
       // means — writing a chord at the caret, or toggling the pitches of a
       // selected one — is a rule about editing, and lives with the editing.
-      playKeyGroup(store, {
-        midis: group.midis,
-        heldMs: performance.now() - group.firstPressAt,
-      });
+      playKeyGroup(store, finished);
     },
     [store],
   );

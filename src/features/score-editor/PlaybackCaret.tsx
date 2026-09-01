@@ -26,9 +26,9 @@ import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { getMusicPosition } from '@sudobility/music_lib';
 import { prefersReducedMotion } from '@/app/theme';
 import type { LayoutPlan, Score } from '@sudobility/music_lib';
-import { playbackScrollTarget } from '@/features/score-editor/playback-scroll';
+import { playbackScrollTarget } from '@sudobility/music_drawing';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import type { LayoutMode } from '@sudobility/music_drawing';
+import type { LayoutMode, NotePositions } from '@sudobility/music_drawing';
 
 /** How much clear space to keep between the caret and the edge it is nearing. */
 const SCROLL_MARGIN = 40;
@@ -48,6 +48,18 @@ type PlaybackCaretProps = {
   /** Which way the score wraps, which decides how following playback scrolls. */
   layoutMode: LayoutMode;
   scrollBoxRef: React.RefObject<HTMLDivElement | null>;
+  /**
+   * Where the notes of each drawn measure were placed, read fresh each frame.
+   *
+   * The caret interpolates between the noteheads themselves rather than across
+   * the measure, so it draws exactly on the note it is pointing at — see
+   * `playhead.ts`. A getter rather than a value, for the reason the scroll box
+   * is a ref: this changes on every repaint of a new window, and taking it as a
+   * prop would re-run the frame loop's effect at that rate. Absent while
+   * nothing has been drawn, which the playhead handles by falling back to the
+   * stave box.
+   */
+  notePositions?: () => NotePositions | undefined;
 };
 
 /**
@@ -72,6 +84,7 @@ export function PlaybackCaret({
   color,
   layoutMode,
   scrollBoxRef,
+  notePositions,
 }: PlaybackCaretProps) {
   // From the bus, not the store — this is the ~30Hz value the whole split
   // exists to keep out of Zustand. Still isolated to this component for the
@@ -116,7 +129,7 @@ export function PlaybackCaret({
     (tick: number) => {
       const el = elementRef.current;
       if (!el || !plan || !score) return;
-      const caret = caretPositionForTick(plan, score, tick);
+      const caret = caretPositionForTick(plan, score, tick, notePositions?.());
       if (!caret) {
         el.style.visibility = 'hidden';
         return;
@@ -137,13 +150,31 @@ export function PlaybackCaret({
       const height = `${(caret.yBottom - caret.yTop) * zoom}px`;
       if (el.style.height !== height) el.style.height = height;
     },
-    [plan, score, zoom, scrollBoxRef],
+    [plan, score, zoom, scrollBoxRef, notePositions],
   );
 
   useLayoutEffect(() => {
     // While playing, the loop below owns the caret; re-applying here would
     // snap it back to the last 30Hz sample between frames.
-    if (playbackState !== 'playing') applyGeometry(musicPosition.tick);
+    if (playbackState === 'playing') return;
+    applyGeometry(musicPosition.tick);
+
+    /*
+      Then once more, after the canvas has drawn.
+
+      The caret draws from the note positions the *renderer* records while
+      building a measure, and a child's effects run before its parent's — so on
+      the first paint of a window this effect runs before `ScoreEditorView` has
+      drawn anything and `notePositions()` is still empty. Without the second
+      pass the caret keeps the fall-back geometry (a measure's duration spread
+      evenly across its stave box, which begins at the barline) until something
+      else moves it, which while paused is nothing at all.
+
+      One frame, and only while paused: the playing loop below already
+      re-applies every frame and needs no help.
+    */
+    const frame = requestAnimationFrame(() => applyGeometry(musicPosition.tick));
+    return () => cancelAnimationFrame(frame);
   }, [positionTick, playbackState, applyGeometry, musicPosition]);
 
   /**

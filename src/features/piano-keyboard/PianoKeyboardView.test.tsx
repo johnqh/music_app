@@ -41,7 +41,7 @@ import type { Score, SoundingNote } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { addNoteCommand, createEmptyScore } from '@sudobility/music_lib';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
-import { LIGHT_RENDER_THEME } from '@/features/score-editor/render-theme';
+import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 
 function makeStore(score: Score = twinkleScore()): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });

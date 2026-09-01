@@ -84,7 +84,7 @@ import {
   Tabs,
   TabsContent,
   TabsList,
-  TabsTrigger,
+  ToggleGroup,
 } from '@sudobility/components';
 import type {
   Accidental,
@@ -971,14 +971,33 @@ export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPane
   return (
     <div className="flex h-full flex-col overflow-auto" aria-label={t('editor.inspectorPanel')}>
       <Tabs value={tab} onValueChange={(value) => setTab(value as InspectorTab)}>
-        <TabsList aria-label={t('editor.inspectorTabs')}>
-          {/* Not `t` as the parameter name: it would shadow the translation
-              function this now calls. */}
-          {TABS.map((tab_) => (
-            <TabsTrigger key={tab_.value} value={tab_.value}>
-              {t(tab_.labelKey)}
-            </TabsTrigger>
-          ))}
+        {/*
+          A segmented control rather than a tab strip.
+
+          Four sections at the top of a panel is what a segmented control is
+          for, and it is what both mobile apps show — iOS a real
+          `UISegmentedControl`, macOS and Android a drawn one — so the web
+          reading as a web page's tab strip was the odd one out.
+
+          `ToggleGroup` is `@sudobility/components`' own ("similar to iOS
+          segmented control"), so this is the library's control rather than a
+          fourth drawing of the same thing.
+
+          Kept inside `Tabs`: the panels are still `TabsContent`, which is what
+          gives each one its `tabpanel` role and its `aria-labelledby`. Only the
+          strip changes.
+        */}
+        <TabsList aria-label={t('editor.inspectorTabs')} asChild>
+          <ToggleGroup
+            role="tablist"
+            size="sm"
+            options={TABS.map((tab_) => ({
+              value: tab_.value,
+              label: t(tab_.labelKey),
+            }))}
+            value={tab}
+            onChange={(value) => setTab(value as InspectorTab)}
+          />
         </TabsList>
         <TabsContent value="score">
           <ScoreTab store={store} />

@@ -98,7 +98,7 @@ import type { EditorStoreApi } from '@sudobility/music_lib';
 import { repairAllIssues } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
-import { measureBeatAt } from '@sudobility/music_lib';
+import { barBeatForTick } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -169,12 +169,18 @@ function StatusPosition({ store }: { store: EditorStoreApi }) {
   // readout follows the music without waking the notation with it.
   const positionTick = usePlaybackPosition();
   const score = store((s) => s.score);
-  const measureBeat = measureBeatAt(score, positionTick);
+  /*
+    `barBeatForTick`, not the `measureBeatAt` that used to live in
+    music_editing. The two disagreed: that one numbered bars `index + 1`, which
+    counts a pickup, so on a score with an anacrusis this readout said one bar
+    and the inspector — and "go to bar N" — said another.
+  */
+  const measureBeat = score ? barBeatForTick(score, positionTick) : null;
   return (
     <span aria-label={t('editor.position')} className="text-xs text-theme-text-secondary">
       {measureBeat
         ? t('editor.measureBeat', {
-            measure: measureBeat.measureIndex,
+            measure: measureBeat.bar,
             beat: measureBeat.beat,
           })
         : '-.-'}

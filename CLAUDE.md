@@ -56,7 +56,11 @@ Each package has one job, and `src/__architecture.test.ts` enforces it rather th
 
 Nine modules had already drifted into music_app — `note-entry`, `lyric-syllables`, `duration-modifiers`, `duration-selection`, `range-select`, `pitch-drag`, `snapshot-tree`, `selection-editing`, `tap-to-note` — none of which touched React, the DOM or layout geometry. They now live in music_lib. The guard has an explicit `ALLOWED_NON_UI` list so an exemption is a decision somebody makes on purpose, and it checks deep imports against each package's **declared `exports` map** rather than a pattern — music_io legitimately publishes `/web`, `/rn`, `/mocks` and two `/rn/*` tables, and a hand-written allow-list of those would go stale the moment it adds one.
 
-**Geometry stays in the app.** `hit-test`, `track-gutter`, `autoscroll`, `playback-scroll`, `note-colors` and `keyboard-geometry` read a `LayoutPlan` from music_lib but exist to answer questions about a pointer or a scroll position, which is UI work.
+**Canvas geometry belongs to `music_drawing`; app layout geometry stays in the app.** The line is the canvas edge. Anything that reasons about the _drawn score_ — where a note went, which measure or track a point lands in, what pitch a stave position means, where the playing measure sits, the colours VexFlow draws with — is `music_drawing`'s, because the canvas is what that package owns and because two apps now draw the same score. So `hit-test`, `track-gutter`, `note-drag`, `playback-scroll`, `note-colors`, `playhead` and `render-theme` all live there.
+
+Anything that reasons about the _app around_ the canvas stays here: `autoscroll` takes a pointer near the edge of a scroll box and returns a scroll delta, which is a fact about this app's scroll container and not about the score.
+
+This used to read "geometry stays in the app", on the grounds that a question about a pointer is UI work. That held while there was one app. It stopped holding when the React Native app needed the same answers: what it actually produced was a tap that could only resolve to a _measure_, because the note bounding boxes lived on the other side of a boundary drawn in the wrong place.
 
 ## Gotchas
 

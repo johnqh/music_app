@@ -1,0 +1,72 @@
+- generic [ref=e3]:
+    - banner [ref=e4]:
+        - banner "Main navigation" [ref=e5]:
+            - link "Skip to main content" [ref=e6] [cursor=pointer]:
+                - /url: '#main-content'
+            - generic [ref=e7]:
+                - generic [ref=e8]:
+                    - button "Go to Logo" [ref=e9] [cursor=pointer]:
+                        - generic [ref=e10]:
+                            - img "Moosiac" [ref=e11]
+                            - generic [ref=e12]: Moosiac
+                    - navigation "Main navigation" [ref=e13]:
+                        - link "Projects" [ref=e14] [cursor=pointer]:
+                            - /url: /en/projects
+                        - link "Community" [ref=e15] [cursor=pointer]:
+                            - /url: /en/community
+                        - link "Docs" [ref=e16] [cursor=pointer]:
+                            - /url: /en/docs
+                        - link "Resources" [ref=e17] [cursor=pointer]:
+                            - /url: /en/resources
+                        - link "Settings" [ref=e18] [cursor=pointer]:
+                            - /url: /en/settings
+                - generic [ref=e20]:
+                    - button "Select language" [ref=e22] [cursor=pointer]:
+                        - generic [ref=e23]: 🇺🇸
+                        - generic [ref=e24]: English
+                    - button "Sign in" [ref=e27] [cursor=pointer]
+    - main [ref=e28]:
+        - generic [ref=e29]:
+            - generic [ref=e32]:
+                - heading "Compose with AI, refine by hand" [level=1] [ref=e33]
+                - paragraph [ref=e34]: 'Moosiac pairs a full notation editor and piano roll with AI generation: describe the music you want, then edit every note.'
+                - button "Get started free" [ref=e35] [cursor=pointer]
+            - generic [ref=e38]:
+                - generic [ref=e39]:
+                    - heading "Real notation editing" [level=2] [ref=e40]
+                    - paragraph [ref=e41]: Engraved notation and a piano roll over the same score, with full undo history.
+                - generic [ref=e42]:
+                    - heading "AI generation" [level=2] [ref=e43]
+                    - paragraph [ref=e44]: Generate whole pieces or regenerate a selection with candidate previews.
+                - generic [ref=e45]:
+                    - heading "MIDI & MusicXML" [level=2] [ref=e46]
+                    - paragraph [ref=e47]: Import and export standard formats that work with your other tools.
+    - contentinfo [ref=e48]:
+        - contentinfo [ref=e49]:
+            - generic [ref=e50]:
+                - navigation "Footer Navigation" [ref=e51]:
+                    - generic [ref=e52]:
+                        - generic [ref=e53]: Create
+                        - link "Projects" [ref=e54] [cursor=pointer]:
+                            - /url: /en/projects
+                    - generic [ref=e55]:
+                        - generic [ref=e56]: Community
+                        - link "Browse shared scores" [ref=e57] [cursor=pointer]:
+                            - /url: /en/community
+                    - generic [ref=e58]:
+                        - generic [ref=e59]: Resources
+                        - link "Find music files" [ref=e60] [cursor=pointer]:
+                            - /url: /en/resources
+                    - generic [ref=e61]:
+                        - generic [ref=e62]: Account
+                        - link "Settings" [ref=e63] [cursor=pointer]:
+                            - /url: /en/settings
+                        - generic [ref=e64]: ·
+                        - link "Credits" [ref=e65] [cursor=pointer]:
+                            - /url: /en/credits
+                - generic [ref=e67]:
+                    - generic [ref=e68]: Moosiac
+                    - generic [ref=e69]: ·
+                    - generic [ref=e70]: Write, generate and play sheet music in your browser.
+                    - generic [ref=e71]: ·
+                    - generic [ref=e72]: © 2026 Sudobility. All rights reserved

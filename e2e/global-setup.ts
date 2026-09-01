@@ -20,7 +20,22 @@ export default function globalSetup(): void {
         stdio: 'inherit',
       },
     );
-  } catch {
-    // Tables may not exist yet on a fresh database; music_api creates them on boot.
+  } catch (error) {
+    /*
+      A fresh database has none of these tables yet — music_api creates them on
+      boot — so a failure here is expected exactly once and fatal never.
+
+      But it is *reported*, because swallowing it silently turns a dirty
+      database into a confusing failure much later and somewhere else: the run
+      proceeds, inherits the last one's rows, and surfaces as a 500 from a
+      unique-constraint violation inside whichever spec happens to touch that
+      table first. Which is precisely how it presented.
+    */
+    console.warn(
+      '[e2e] could not truncate the test database; the run may inherit ' +
+        'rows from the last one. If a spec fails with a 500 and a duplicate ' +
+        'key, this is why.',
+      error instanceof Error ? error.message : error,
+    );
   }
 }
