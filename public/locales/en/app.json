@@ -149,7 +149,8 @@
     "resetMessage": "This permanently deletes every saved project and setting from this browser. This cannot be undone.",
     "dismissBenchmark": "Dismiss benchmark result",
     "dismissReset": "Dismiss reset confirmation",
-    "databaseCleared": "Local database cleared. Reload the app to start fresh."
+    "databaseCleared": "Local database cleared. Reload the app to start fresh.",
+    "generationBackend": "Generation backend"
   },
   "docs": {
     "editor": {

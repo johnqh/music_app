@@ -55,6 +55,7 @@ import {
   projectTemplates,
   reportError,
   useAppStore,
+  withGenerationVariant,
 } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
@@ -738,7 +739,20 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         open={generateOpen}
         onClose={() => setGenerateOpen(false)}
         submitting={creatingGeneration}
-        onSubmit={(request) => void startWholeScoreGeneration(request)}
+        /*
+          The generation backend is attached here, not in the dialog.
+
+          It is a developer setting rather than part of the musical brief, so
+          the dialog stays a pure form with no store of its own — and this page
+          already takes an injectable store, which is what keeps both testable.
+          Sent only when it is not the default, so an ordinary request is
+          exactly what it was before this existed.
+        */
+        onSubmit={(request) =>
+          void startWholeScoreGeneration(
+            withGenerationVariant(request, store.getState().devSettings.generationVariant),
+          )
+        }
       />
     </div>
   );

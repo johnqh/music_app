@@ -14,10 +14,21 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Checkbox, FormModal, cn } from '@sudobility/components';
+import {
+  Button,
+  Checkbox,
+  FormModal,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn,
+} from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
+import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
@@ -153,6 +164,38 @@ export function DeveloperSettingsDialog({
         actions={[]}
       >
         <div className="flex flex-col">
+          {/*
+            Which backend generation is asked from.
+
+            A developer setting rather than a control in the Generate dialog:
+            the answer is the same for every generation until somebody is
+            deliberately comparing two of them, and asking every user to pick a
+            model is asking a question they have no basis to answer. The labels
+            come from music_types so the picker and the server cannot disagree
+            about what is on offer; the server resolves the value through its
+            own allow-list and falls back to the default, so a stale choice
+            stored here is harmless.
+          */}
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className="text-sm text-theme-text-primary">
+              {t('devSettings.generationBackend')}
+            </span>
+            <Select
+              value={devSettings.generationVariant}
+              onValueChange={(v) => store.getState().setDevSettings({ generationVariant: v })}
+            >
+              <SelectTrigger aria-label={t('devSettings.generationBackend')} className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GENERATION_VARIANTS.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {GENERATION_VARIANT_LABELS[v]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <DevToggle
             label={t('devSettings.generationDiagnostics')}
             checked={devSettings.enableDiagnostics}

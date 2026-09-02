@@ -149,7 +149,8 @@
     "resetMessage": "这将永久删除此浏览器中保存的所有项目和设置，且无法撤销。",
     "dismissBenchmark": "关闭基准测试结果",
     "dismissReset": "关闭重置确认",
-    "databaseCleared": "本地数据库已清空。重新加载应用即可重新开始。"
+    "databaseCleared": "本地数据库已清空。重新加载应用即可重新开始。",
+    "generationBackend": "生成后端"
   },
   "docs": {
     "editor": {
