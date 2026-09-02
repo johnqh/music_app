@@ -98,7 +98,7 @@ import type { EditorStoreApi } from '@sudobility/music_lib';
 import { repairAllIssues } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
-import { barBeatForTick } from '@sudobility/music_lib';
+import { barBeatForTick, wholeBarBeat } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -175,7 +175,10 @@ function StatusPosition({ store }: { store: EditorStoreApi }) {
     counts a pickup, so on a score with an anacrusis this readout said one bar
     and the inspector — and "go to bar N" — said another.
   */
-  const measureBeat = score ? barBeatForTick(score, positionTick) : null;
+  // Through `wholeBarBeat`: the raw position carries a fraction for the
+  // inspector's editable field, and interpolating it here printed a
+  // seventeen-digit beat that changed with every position report.
+  const measureBeat = wholeBarBeat(score ? barBeatForTick(score, positionTick) : null);
   return (
     <span aria-label={t('editor.position')} className="text-xs text-theme-text-secondary">
       {measureBeat

@@ -76,6 +76,8 @@ import {
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
   GENERATE_SCORE_STYLE_OPTIONS,
+  GENERATE_SCORE_STYLE_PRESETS,
+  styleInstrumentsWithGuest,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
   buildGenerateScoreRequest,
   canBuildGenerateScoreRequest,
@@ -192,6 +194,49 @@ export function GenerateScoreDialog({
   const [keyFifths, setKeyFifths] = useState(0);
   const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
   const [timeSigPreset, setTimeSigPreset] = useState('4/4');
+
+  /*
+    Choosing a style fills the form with the ordinary shape of that genre.
+
+    Reggae is an electric guitar, an organ, a bass and a kit at 78bpm; picking
+    the word and then being handed a lone piano at 120 is the generator asking
+    the reader to already know the answer. `GENERATE_SCORE_STYLE_PRESETS` in
+    music_lib is where the shape lives — both apps fill from it, so a genre
+    means the same ensemble on a phone as on the web.
+
+    It **overwrites**, deliberately. A preset that skipped fields the reader had
+    touched would leave a half-country, half-whatever-was-there-before ensemble
+    that matches no genre and that nobody chose. Everything it sets stays
+    editable; this is a starting point, not a lock.
+
+    Clearing the style back to "No style" leaves the form alone: that is the
+    reader saying they want no genre, not that they want the defaults back.
+  */
+  const applyStyle = (next: string) => {
+    setStyle(next);
+    const preset = next ? GENERATE_SCORE_STYLE_PRESETS[next] : undefined;
+    if (!preset) return;
+    /*
+      The roster plus one guest, from `styleInstrumentsWithGuest` — shared with
+      the React Native sheet, which fills the same list. Every generation of one
+      style otherwise draws the same five instruments, so two goes at country
+      are the same country twice; one instrument from outside the genre's own
+      lineup is what makes each attempt its own piece. Appended last and shown
+      in this editable list, so it can be removed before generating.
+    */
+    const withGuest = styleInstrumentsWithGuest(next);
+    setEnsemble(
+      withGuest.map((value: string, index: number) => ({
+        id: index,
+        value,
+      })),
+    );
+    setNextEntryId(withGuest.length);
+    setTempo(String(preset.tempo));
+    setMeasures(String(preset.measures));
+    setTimeSigPreset(preset.timeSignature);
+    if (preset.mode) setKeyMode(preset.mode);
+  };
   const [presetOpen, setPresetOpen] = useState(false);
   const presetRef = useRef<HTMLDivElement | null>(null);
 
@@ -377,7 +422,7 @@ export function GenerateScoreDialog({
         <div className="flex gap-2">
           <Select
             value={style === '' ? NONE_VALUE : style}
-            onValueChange={(v) => setStyle(v === NONE_VALUE ? '' : v)}
+            onValueChange={(v) => applyStyle(v === NONE_VALUE ? '' : v)}
           >
             <SelectTrigger
               aria-label={t('generateScore.style')}

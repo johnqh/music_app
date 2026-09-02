@@ -51,9 +51,8 @@ import {
 import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
-import { barBeatForTick, setOpeningTempo } from '@sudobility/music_lib';
+import { barBeatForTick, formatBarBeat, setOpeningTempo } from '@sudobility/music_lib';
 import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
-import type { BarBeat } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
 import {
@@ -83,10 +82,6 @@ const TOGGLE_BUTTON_CLASS = cn(
   ICON_CONTROL_CLASS,
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
-
-function formatMeasureBeat(mb: BarBeat | null): string {
-  return mb ? `${mb.bar}.${mb.beat}` : '-.-';
-}
 
 /** `M:SS.d` (minutes, zero-padded seconds, tenths) — tenths update ~3x/sec during playback, making the actual playback rate visible against a wall clock. */
 function formatTimecode(seconds: number): string {
@@ -234,9 +229,12 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
     <Tooltip content={t('transport.measureBeat')}>
       <span
         aria-label={t('transport.measureBeat')}
-        className="min-w-[40px] text-center text-sm text-theme-text-primary"
+        // `tabular-nums` because the digits change under the reader: with
+        // proportional figures "1.1" and "1.4" are different widths, so the
+        // centred text shuffled on every beat even once the fraction was gone.
+        className="min-w-[40px] text-center text-sm tabular-nums text-theme-text-primary"
       >
-        {formatMeasureBeat(measureBeat)}
+        {formatBarBeat(measureBeat)}
       </span>
     </Tooltip>
   );

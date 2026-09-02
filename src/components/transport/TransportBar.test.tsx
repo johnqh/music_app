@@ -44,6 +44,56 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+/*
+ * The bar/beat readout, which shipped rendering a seventeen-digit beat.
+ *
+ * `barBeatForTick` returns a fractional beat on purpose — the inspector's
+ * position field is editable and a note can sit on beat 2.5 — and this readout
+ * used to call a `measureBeatAt` that floored internally. Swapping in
+ * `barBeatForTick` (correct: the old one numbered bars `index + 1` and
+ * miscounted every score with a pickup) handed it the raw fraction, so it
+ * printed "1.1.3333333333333333" and changed with every position report,
+ * thirty times a second.
+ *
+ * Nothing caught it because nothing asserted the rendered string. React Native
+ * was fine only because it happened to floor the beat inline — the reason the
+ * formatting is now shared rather than written out per app.
+ */
+describe('the bar and beat readout', () => {
+  it('shows a whole beat at every offset within one', async () => {
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    const readout = screen.getByLabelText('Measure and beat', { exact: false });
+
+    // Every tick inside beat 1 of bar 1: a readout that changes on a
+    // sub-beat is the flicker, so all of these must render identically.
+    for (const tick of [0, 1, 60, 120, 160, 239, 320, 479]) {
+      await act(async () => {
+        playbackController.bus.publishPosition(tick);
+      });
+      expect(readout.textContent).toBe('1.1');
+    }
+  });
+
+  it('advances a whole beat at a time', async () => {
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    const readout = screen.getByLabelText('Measure and beat', { exact: false });
+
+    for (const [tick, shown] of [
+      [480, '1.2'],
+      [700, '1.2'],
+      [960, '1.3'],
+      [1440, '1.4'],
+    ] as const) {
+      await act(async () => {
+        playbackController.bus.publishPosition(tick);
+      });
+      expect(readout.textContent).toBe(shown);
+    }
+  });
+});
+
 function renderBar(store: PlaybackStoreApi) {
   render(<TransportBar store={store} />);
 }
