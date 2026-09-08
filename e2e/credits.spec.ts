@@ -58,9 +58,10 @@ test('generating spends exactly what it produced', async ({ page }) => {
 
 test('the dialog quotes the cost before committing to it', async ({ page }) => {
   await gotoDashboard(page);
-  await page.getByRole('button', { name: 'Generate Score', exact: true }).click();
+  await page.getByRole('button', { name: 'New Project', exact: true }).click();
+  await page.getByRole('switch', { name: 'Generate for me' }).click();
   await page.getByLabel('Prompt', { exact: true }).fill('A short piano phrase');
-  await page.getByLabel('Measures', { exact: true }).fill('8');
+  await page.getByLabel('Bars', { exact: true }).fill('8');
 
   await expect(page.getByText(/about \d+ credits/i)).toBeVisible();
 });

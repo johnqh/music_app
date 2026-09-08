@@ -19,6 +19,7 @@ import {
   InfoBox,
   Select,
   SelectContent,
+  SelectItem,
   SelectTrigger,
   SelectValue,
   Stack,
@@ -27,6 +28,8 @@ import {
 } from '@sudobility/components';
 import {
   DEFAULT_INSTRUMENT_VALUE,
+  GENERATION_VARIANTS,
+  GENERATION_VARIANT_LABELS,
   instrumentChoiceFor,
   type InstrumentChoice,
 } from '@sudobility/music_lib';
@@ -36,7 +39,7 @@ export type GenerateTrackDialogProps = {
   open: boolean;
   pending: boolean;
   error?: string | null;
-  onGenerate: (prompt: string, instrument: InstrumentChoice) => void;
+  onGenerate: (prompt: string, instrument: InstrumentChoice, variant: string) => void;
   onClose: () => void;
 };
 
@@ -50,6 +53,10 @@ export function GenerateTrackDialog({
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [value, setValue] = useState(DEFAULT_INSTRUMENT_VALUE);
+  // The same default the Generate and Replace dialogs use. Not remembered
+  // across openings on purpose: it is a per-call choice, and the setting that
+  // does persist is the developer one behind it.
+  const [variant, setVariant] = useState<string>('deepseek');
 
   useEffect(() => {
     if (open) setPrompt('');
@@ -62,7 +69,7 @@ export function GenerateTrackDialog({
       open={open}
       title={t('generateTrack.title')}
       onClose={onClose}
-      onSave={() => onGenerate(trimmed, instrumentChoiceFor(value))}
+      onSave={() => onGenerate(trimmed, instrumentChoiceFor(value), variant)}
       saving={pending}
       canSave={trimmed.length > 0}
       saveLabel={t('generate.action')}
@@ -96,6 +103,24 @@ export function GenerateTrackDialog({
             </SelectTrigger>
             <SelectContent>
               <InstrumentSelectItems />
+            </SelectContent>
+          </Select>
+        </Stack>
+
+        <Stack direction="vertical" spacing="xs">
+          <Text as="label" size="sm" color="muted">
+            {t('generateScore.model')}
+          </Text>
+          <Select value={variant} onValueChange={setVariant}>
+            <SelectTrigger aria-label={t('generateScore.model')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GENERATION_VARIANTS.map((v) => (
+                <SelectItem key={v} value={v}>
+                  {GENERATION_VARIANT_LABELS[v]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Stack>

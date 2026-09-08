@@ -1,10 +1,30 @@
 /**
- * Whole-score generation panel (spec §11, §21, §32): prompt + preset-prompt
- * menu, style/mood/complexity, an instrumentation checklist, measures/
- * tempo/key/time-signature, and a Generate button with
- * progress + cancel. Shown by the app shell (Task 16) when
- * `generation-slice.mode === 'generate'` (an empty selection); its sibling,
- * `RegenerationPanel`, takes over once a region is selected.
+ * Starting a new project, with or without a model writing the music.
+ *
+ * One form, two builders. The **Generate for me** toggle decides only which of
+ * music_lib's two builders runs over the same draft:
+ * `buildGenerateScoreRequest` reads the prompt half and produces a job request,
+ * `buildNewProjectScore` ignores it and produces an empty score with the chosen
+ * instrumentation. `GenerateScoreRequestDraft` is assignable to
+ * `NewProjectDraft`, which is what lets one piece of state feed both — two
+ * drafts would be two shapes to keep in step for no gain.
+ *
+ * Off is the default, because this is New Project: a blank score with the right
+ * instruments is the ordinary way to start one. Off hides the whole AI half —
+ * prompt, presets, style, mood, complexity, model and the credit line — so
+ * there is one rule to learn rather than an exception. Instrumentation and
+ * everything below it stays in both modes.
+ *
+ * **The Style picker goes with the AI half, and it costs something.** Choosing
+ * a style also *fills* the form from `GENERATE_SCORE_STYLE_PRESETS` — ensemble,
+ * tempo, bars, meter — which is the fastest way to start a country project
+ * whether or not a model writes the notes. Keeping it visible in blank mode
+ * would have been the one exception to "everything above Instrumentation is
+ * the AI half", and a rule with one exception is a rule nobody can apply.
+ *
+ * It emits a `NewProjectSubmission` rather than a request: the dashboard turns
+ * that into a project on the server, and the native app's File menu turns the
+ * same thing into a local document.
  *
  * Two fields spec §21's prose lists alongside these ("candidate count",
  * "seed") no longer apply: whole-score generation adopts exactly one
@@ -55,7 +75,8 @@ import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
 import { useSiteAdmin } from '@/app/AuthContext';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
+import type * as React from 'react';
 import {
   Button,
   FormModal,
@@ -65,6 +86,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
   Text,
   TextArea,
   cn,
@@ -76,28 +98,38 @@ import {
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
   GENERATE_SCORE_STYLE_OPTIONS,
+  GENERATION_VARIANTS,
+  GENERATION_VARIANT_LABELS,
+  withGenerationVariant,
   GENERATE_SCORE_STYLE_PRESETS,
   styleInstrumentsWithGuest,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
   buildGenerateScoreRequest,
+  buildNewProjectScore,
   canBuildGenerateScoreRequest,
+  canBuildNewProjectScore,
   estimateGenerateScoreCredits,
   firstMelodyInstrumentEntryId,
   type InstrumentValueEntry,
   generateScoreTrackForInstrumentValue,
   instrumentLabelFor,
   type GenerateScoreComplexity,
-  type GenerateScoreRequest,
   type KeySignature,
+  type NewProjectSubmission,
 } from '@sudobility/music_lib';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { variants } from '@sudobility/design';
 
-export type GenerateScoreDialogProps = {
+export type NewProjectDialogProps = {
   open: boolean;
   onClose: () => void;
-  /** Receives the assembled request; the dashboard creates the project and starts the job. */
-  onSubmit: (request: GenerateScoreRequest) => void;
+  /**
+   * Receives what was asked for; the caller decides where it lands.
+   *
+   * A discriminated result rather than a request, because the same form backs a
+   * server project here and a local document on the native side.
+   */
+  onSubmit: (submission: NewProjectSubmission) => void;
   /** True while the project is being created, to disable the CTA. */
   submitting?: boolean;
 };
@@ -136,6 +168,53 @@ const SELECT_TRIGGER_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm'
 
 const TEXT_INPUT_CLASS = 'w-full px-2 py-1.5 text-sm';
 
+/**
+ * A block that grows and fades in when it is wanted, and collapses when it is
+ * not.
+ *
+ * `grid-template-rows` from `0fr` to `1fr` is what animates a height nobody can
+ * state in advance. `max-height` is the usual alternative and needs a guessed
+ * number: guess low and the content clips, guess high and the easing happens
+ * mostly against empty space, so the block appears to hang before it moves. The
+ * inner element carries `overflow-hidden` **and** `min-h-0`, without which a
+ * grid row refuses to shrink below its content and nothing collapses at all.
+ *
+ * The negative margin while collapsed cancels one of the parent's `gap-4`s: a
+ * zero-height child still sits between two gaps, which leaves a visible hole
+ * exactly where the block used to be.
+ *
+ * **Hidden means hidden.** `aria-hidden` and `inert` together take it out of
+ * the accessibility tree and the tab order, so a collapsed field cannot be
+ * tabbed into or announced. A block that is merely invisible and still
+ * focusable is worse than one left on screen — the caret vanishes into nothing.
+ *
+ * `motion-reduce:transition-none` because somebody who asked the OS for less
+ * motion asked this dialog too.
+ */
+function CollapsibleReveal({
+  shown,
+  children,
+  ...group
+}: {
+  shown: boolean;
+  children: ReactNode;
+} & Pick<React.HTMLAttributes<HTMLDivElement>, 'role' | 'aria-label'>) {
+  return (
+    <div
+      {...group}
+      aria-hidden={!shown}
+      inert={!shown}
+      className={cn(
+        'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
+        'motion-reduce:transition-none',
+        shown ? 'mb-0 grid-rows-[1fr] opacity-100' : '-mb-4 grid-rows-[0fr] opacity-0',
+      )}
+    >
+      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
 function LabeledInput({
   label,
   value,
@@ -168,14 +247,26 @@ function LabeledInput({
   );
 }
 
-export function GenerateScoreDialog({
+export function NewProjectDialog({
   open,
   onClose,
   onSubmit,
   submitting = false,
-}: GenerateScoreDialogProps) {
+}: NewProjectDialogProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
+  /*
+    Whether a model writes the music.
+
+    Off by default: this is New Project, and a blank score with the right
+    instruments is the ordinary way to start one. On, the form is exactly the
+    Generate dialog it grew out of.
+
+    Flipping it never clears anything. Somebody who types a prompt, turns this
+    off and turns it back on gets their prompt back — losing typed text to a
+    toggle is not worth the tidiness.
+  */
+  const [generateForMe, setGenerateForMe] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
@@ -190,6 +281,21 @@ export function GenerateScoreDialog({
   const [nextEntryId, setNextEntryId] = useState(1);
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
   const [measures, setMeasures] = useState(String(DEFAULT_GENERATE_SCORE_MEASURES));
+  /*
+    Which backend writes the music.
+
+    DeepSeek by default because it is the one whose output people preferred in
+    listening: measured side by side on the same briefs, its country and metal
+    came back more recognisably in their genre and markedly less over-written
+    than the frontier model's, which produced denser, busier parts for the same
+    request.
+
+    Chosen HERE rather than in developer settings because it is a property of
+    the piece being commissioned, not of the machine doing the commissioning —
+    and because someone comparing two backends wants to choose per generation
+    rather than open a settings dialog between them.
+  */
+  const [variant, setVariant] = useState<string>('deepseek');
   const [tempo, setTempo] = useState('');
   const [keyFifths, setKeyFifths] = useState(0);
   const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
@@ -291,7 +397,17 @@ export function GenerateScoreDialog({
     tempoText: tempo,
   };
 
-  const canGenerate = !submitting && !outOfCredits && canBuildGenerateScoreRequest(generationDraft);
+  /*
+    One rule per mode, both from music_lib, so the form cannot offer a Create
+    the builder would then refuse. `outOfCredits` gates generation only — a
+    blank project costs nothing, and refusing it would refuse work the server
+    never charges for.
+  */
+  const canCreate =
+    !submitting &&
+    (generateForMe
+      ? !outOfCredits && canBuildGenerateScoreRequest(generationDraft)
+      : canBuildNewProjectScore(generationDraft));
   // Blank is fine — no tempo is sent. Anything else that is not a positive
   // number is what stops Generate, so say so rather than just greying it out.
   const tempoRefused = tempo.trim() !== '' && !(Number(tempo) > 0);
@@ -316,48 +432,58 @@ export function GenerateScoreDialog({
     setPresetOpen(false);
   };
 
-  const handleGenerate = (): void => {
-    if (!canGenerate) return;
-    const request = buildGenerateScoreRequest(generationDraft);
-    if (!request) return;
-    onSubmit(request);
+  const handleCreate = (): void => {
+    if (!canCreate) return;
+    if (generateForMe) {
+      const request = buildGenerateScoreRequest(generationDraft);
+      if (!request) return;
+      onSubmit({ kind: 'generate', request: withGenerationVariant(request, variant) });
+      return;
+    }
+    const score = buildNewProjectScore(generationDraft);
+    if (!score) return;
+    // The score's title and the project's name are different things: the score
+    // says "Untitled", and a row in a list needs something a reader can pick out.
+    onSubmit({ kind: 'blank', title: title.trim() || t('newProject.untitled'), score });
   };
 
   return (
     <FormModal
       open={open}
-      title={t('generateScore.title')}
+      title={t('newProject.title')}
       onClose={onClose}
       size="large"
       closeAriaLabel={t('common.closeDialog')}
       actions={[
         { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
         {
-          label: t('generate.action'),
-          onClick: handleGenerate,
+          label: t('dashboard.create'),
+          onClick: handleCreate,
           variant: 'primary',
-          disabled: !canGenerate,
+          disabled: !canCreate,
           loading: submitting,
-          loadingLabel: 'Creating…',
+          loadingLabel: t('common.loading'),
         },
       ]}
     >
       <div className="flex flex-col gap-4">
-        {outOfCredits ? (
-          <p className="text-sm text-theme-text-secondary">
-            {t('generate.outOfCreditsBefore')}{' '}
-            <LocalizedLink to="/credits" className="underline">
-              {t('generate.buyMore')}
-            </LocalizedLink>{' '}
-            {t('generate.outOfCreditsAfter')}
-          </p>
-        ) : (
-          estimatedCredits > 0 && (
-            <p className="text-xs text-theme-text-secondary">
-              {t('generate.estimate', { count: estimatedCredits })}
+        <CollapsibleReveal shown={generateForMe}>
+          {outOfCredits ? (
+            <p className="text-sm text-theme-text-secondary">
+              {t('generate.outOfCreditsBefore')}{' '}
+              <LocalizedLink to="/credits" className="underline">
+                {t('generate.buyMore')}
+              </LocalizedLink>{' '}
+              {t('generate.outOfCreditsAfter')}
             </p>
-          )
-        )}
+          ) : (
+            estimatedCredits > 0 && (
+              <p className="text-xs text-theme-text-secondary">
+                {t('generate.estimate', { count: estimatedCredits })}
+              </p>
+            )
+          )}
+        </CollapsibleReveal>
 
         {/* Named up front: every generated project would otherwise be called
           "Generated score", which is useless the moment you have two. */}
@@ -372,111 +498,150 @@ export function GenerateScoreDialog({
           />
         </label>
 
-        <div className="flex items-start gap-2">
-          <label className="flex flex-1 flex-col gap-1">
-            <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
-            <TextArea
-              value={prompt}
-              onChange={setPrompt}
-              rows={3}
-              textareaProps={{ 'aria-label': 'Prompt' }}
-            />
-          </label>
-          <div ref={presetRef} className="relative shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={t('generateScore.presetPrompts')}
-              aria-haspopup="menu"
-              aria-expanded={presetOpen}
-              onClick={() => setPresetOpen((open) => !open)}
-              className="px-3 py-1.5"
-            >
-              {t('generate.presets')}
-            </Button>
-            {presetOpen && (
-              <div
-                role="menu"
-                className={cn(
-                  variants.card.default.base(),
-                  'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
-                )}
-              >
-                {PRESET_KEYS.map((key) => t(`generateScore.preset.${key}`)).map((text) => (
-                  <Button
-                    key={text}
-                    type="button"
-                    variant="ghost"
-                    role="menuitem"
-                    onClick={() => handlePresetSelect(text)}
-                    className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
-                  >
-                    {text}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Under the Title, because it is the next thing you decide: whether
+            anything is written for you, or you get the staves and write it
+            yourself. Everything above Instrumentation belongs to the AI half
+            and appears with it; everything below stays in both modes. */}
+        <label className="flex items-center gap-3">
+          <Switch
+            checked={generateForMe}
+            onCheckedChange={setGenerateForMe}
+            aria-label={t('newProject.generateForMe')}
+          />
+          <span className="flex flex-col">
+            <span className="text-sm text-theme-text-primary">{t('newProject.generateForMe')}</span>
+            <span className="text-xs text-theme-text-secondary">
+              {t('newProject.generateForMeHint')}
+            </span>
+          </span>
+        </label>
 
-        <div className="flex gap-2">
-          <Select
-            value={style === '' ? NONE_VALUE : style}
-            onValueChange={(v) => applyStyle(v === NONE_VALUE ? '' : v)}
-          >
-            <SelectTrigger
-              aria-label={t('generateScore.style')}
-              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+        <CollapsibleReveal
+          shown={generateForMe}
+          role="group"
+          aria-label={t('newProject.aiSettings')}
+        >
+          <div className="flex items-start gap-2">
+            <label className="flex flex-1 flex-col gap-1">
+              <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
+              <TextArea
+                value={prompt}
+                onChange={setPrompt}
+                rows={3}
+                textareaProps={{ 'aria-label': 'Prompt' }}
+              />
+            </label>
+            <div ref={presetRef} className="relative shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                aria-label={t('generateScore.presetPrompts')}
+                aria-haspopup="menu"
+                aria-expanded={presetOpen}
+                onClick={() => setPresetOpen((open) => !open)}
+                className="px-3 py-1.5"
+              >
+                {t('generate.presets')}
+              </Button>
+              {presetOpen && (
+                <div
+                  role="menu"
+                  className={cn(
+                    variants.card.default.base(),
+                    'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
+                  )}
+                >
+                  {PRESET_KEYS.map((key) => t(`generateScore.preset.${key}`)).map((text) => (
+                    <Button
+                      key={text}
+                      type="button"
+                      variant="ghost"
+                      role="menuitem"
+                      onClick={() => handlePresetSelect(text)}
+                      className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
+                    >
+                      {text}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Select
+              value={style === '' ? NONE_VALUE : style}
+              onValueChange={(v) => applyStyle(v === NONE_VALUE ? '' : v)}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
-              {GENERATE_SCORE_STYLE_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {t(`generateScore.styleName.${s}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={mood === '' ? NONE_VALUE : mood}
-            onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
-          >
-            <SelectTrigger
-              aria-label={t('generateScore.mood')}
-              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              <SelectTrigger
+                aria-label={t('generateScore.style')}
+                className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
+                {GENERATE_SCORE_STYLE_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`generateScore.styleName.${s}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={mood === '' ? NONE_VALUE : mood}
+              onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
-              {GENERATE_SCORE_MOOD_OPTIONS.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {t(`generateScore.moodName.${m}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={complexity}
-            onValueChange={(v) => setComplexity(v as GenerateScoreComplexity)}
-          >
-            <SelectTrigger
-              aria-label={t('generateScore.complexity')}
-              className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              <SelectTrigger
+                aria-label={t('generateScore.mood')}
+                className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
+                {GENERATE_SCORE_MOOD_OPTIONS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {t(`generateScore.moodName.${m}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={complexity}
+              onValueChange={(v) => setComplexity(v as GenerateScoreComplexity)}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {GENERATE_SCORE_COMPLEXITY_OPTIONS.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {t(`generateScore.complexityName.${c}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              <SelectTrigger
+                aria-label={t('generateScore.complexity')}
+                className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GENERATE_SCORE_COMPLEXITY_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {t(`generateScore.complexityName.${c}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={variant} onValueChange={setVariant}>
+              <SelectTrigger
+                aria-label={t('generateScore.model')}
+                className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GENERATION_VARIANTS.map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {GENERATION_VARIANT_LABELS[v]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CollapsibleReveal>
 
         <div
           role="group"

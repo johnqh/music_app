@@ -31,8 +31,8 @@ test.describe('region replacement', () => {
     const point = await findMeasureGutterClickPoint(page, 2); // measure 3 (0-based)
     await page.mouse.click(point.x, point.y);
 
-    await page.getByRole('tab', { name: 'Measure' }).click();
-    await expect(page.getByRole('button', { name: 'Replace Measures' })).toBeEnabled();
+    await page.getByRole('tab', { name: 'Bar' }).click();
+    await expect(page.getByRole('button', { name: 'Replace Bars' })).toBeEnabled();
 
     expect(getErrors()).toEqual([]);
   });
@@ -49,10 +49,10 @@ test.describe('region replacement', () => {
     expect(before).not.toBeNull();
 
     await selectMeasuresByIndex(page, [2, 3]);
-    await page.getByRole('tab', { name: 'Measure' }).click();
-    await page.getByRole('button', { name: 'Replace Measures' }).click();
+    await page.getByRole('tab', { name: 'Bar' }).click();
+    await page.getByRole('button', { name: 'Replace Bars' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Replace Measures' });
+    const dialog = page.getByRole('dialog', { name: 'Replace Bars' });
     await expect(dialog).toBeVisible();
     // States what it will overwrite before doing it.
     await expect(dialog.getByText(/Replaces \d+ notes?/)).toBeVisible();
@@ -90,10 +90,10 @@ test.describe('region replacement', () => {
     });
 
     await selectMeasuresByIndex(page, [1]);
-    await page.getByRole('tab', { name: 'Measure' }).click();
-    await page.getByRole('button', { name: 'Replace Measures' }).click();
+    await page.getByRole('tab', { name: 'Bar' }).click();
+    await page.getByRole('button', { name: 'Replace Bars' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Replace Measures' });
+    const dialog = page.getByRole('dialog', { name: 'Replace Bars' });
     await expect(dialog.getByLabel(/candidate/i)).toHaveCount(0);
   });
 });

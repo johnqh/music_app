@@ -83,22 +83,22 @@ export function BarBeatField({
   return (
     <div className="flex gap-2">
       <label className="flex flex-1 flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.bar')}</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.bar')}</span>
         <Input
           value={barDraft}
           inputMode="numeric"
-          aria-label={t('editor.bar')}
+          aria-label={t('inspector.bar')}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setBarDraft(e.target.value)}
           onBlur={() => commit(barDraft, beatDraft)}
           className={TEXT_INPUT_CLASS}
         />
       </label>
       <label className="flex flex-1 flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.beat')}</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.beat')}</span>
         <Input
           value={beatDraft}
           inputMode="decimal"
-          aria-label={t('editor.beat')}
+          aria-label={t('inspector.beat')}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setBeatDraft(e.target.value)}
           onBlur={() => commit(barDraft, beatDraft)}
           className={TEXT_INPUT_CLASS}

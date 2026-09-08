@@ -53,15 +53,11 @@ import type { ReactElement } from 'react';
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
-  ClipboardIcon,
   EllipsisHorizontalIcon,
-  DocumentDuplicateIcon,
   MagnifyingGlassMinusIcon,
   PencilIcon,
   MagnifyingGlassPlusIcon,
   PlusIcon,
-  ScissorsIcon,
-  TrashIcon,
 } from '@heroicons/react/24/solid';
 import {
   DoubleFlatIcon,
@@ -103,7 +99,6 @@ import {
   addBlankTrack,
   addMeasure,
   deleteMeasureAtCaret,
-  deleteSelected,
   changeAccidental,
   changeArticulation,
   changeOrnament,
@@ -121,6 +116,7 @@ import {
   changeBeam,
   toggleArpeggiate,
   toggleFermata,
+  toggleGlissando,
   toggleHairpin,
   toggleSlur,
   toggleTie,
@@ -136,13 +132,6 @@ export type EditorToolbarProps = {
   onToggleInspector?: () => void;
   /** Opens the generate-track modal. Omitted when no host provides one. */
   onGenerateTrack?: () => void;
-  /**
-   * Cut and paste go through the view's prompt hook rather than the store, so
-   * the button and the keyboard shortcut ask the same question. Optional so
-   * the toolbar still renders standalone in a test.
-   */
-  onCut?: () => void;
-  onPaste?: () => void;
   /** Opens the Go to bar prompt. Omitted in isolation tests. */
   onGoToBar?: () => void;
   /** Starts lyric entry on the active track. Omitted in isolation tests. */
@@ -155,13 +144,13 @@ export type EditorToolbarProps = {
  * rendered as tofu on a plain system — and the two that were widely available
  * (`♩`, `♪`) came from a different block and never matched the others' size.
  */
-const DURATION_OPTIONS: Array<{ value: BaseDuration; Icon: NotationIcon; ariaLabel: string }> = [
-  { value: 'whole', Icon: WholeNoteIcon, ariaLabel: 'Whole note' },
-  { value: 'half', Icon: HalfNoteIcon, ariaLabel: 'Half note' },
-  { value: 'quarter', Icon: QuarterNoteIcon, ariaLabel: 'Quarter note' },
-  { value: 'eighth', Icon: EighthNoteIcon, ariaLabel: 'Eighth note' },
-  { value: 'sixteenth', Icon: SixteenthNoteIcon, ariaLabel: 'Sixteenth note' },
-  { value: 'thirtysecond', Icon: ThirtySecondNoteIcon, ariaLabel: 'Thirty-second note' },
+const DURATION_OPTIONS: Array<{ value: BaseDuration; Icon: NotationIcon }> = [
+  { value: 'whole', Icon: WholeNoteIcon },
+  { value: 'half', Icon: HalfNoteIcon },
+  { value: 'quarter', Icon: QuarterNoteIcon },
+  { value: 'eighth', Icon: EighthNoteIcon },
+  { value: 'sixteenth', Icon: SixteenthNoteIcon },
+  { value: 'thirtysecond', Icon: ThirtySecondNoteIcon },
 ];
 
 /**
@@ -186,12 +175,12 @@ function SelectedDurationIcon({ base }: { base: BaseDuration }) {
  * menu below is built from — because a drawing is the one thing a shared
  * vocabulary cannot carry, and everything else about the list can be.
  */
-const ACCIDENTAL_GLYPHS: Record<Accidental, { Icon: NotationIcon; ariaLabel: string }> = {
-  [-2]: { Icon: DoubleFlatIcon, ariaLabel: 'Double flat' },
-  [-1]: { Icon: FlatIcon, ariaLabel: 'Flat' },
-  [0]: { Icon: NaturalIcon, ariaLabel: 'Natural' },
-  [1]: { Icon: SharpIcon, ariaLabel: 'Sharp' },
-  [2]: { Icon: DoubleSharpIcon, ariaLabel: 'Double sharp' },
+const ACCIDENTAL_GLYPHS: Record<Accidental, NotationIcon> = {
+  [-2]: DoubleFlatIcon,
+  [-1]: FlatIcon,
+  [0]: NaturalIcon,
+  [1]: SharpIcon,
+  [2]: DoubleSharpIcon,
 };
 
 /*
@@ -238,8 +227,6 @@ export function EditorToolbar({
   onLayoutModeChange,
   inspectorOpen,
   onToggleInspector,
-  onCut,
-  onPaste,
   onGoToBar,
   onEnterLyrics,
   onGenerateTrack,
@@ -338,7 +325,6 @@ export function EditorToolbar({
    * It used to stay live whether or not anything had been copied, so it was the
    * one control on the bar that could look ready and do nothing.
    */
-  const hasClipboard = store((s) => s.clipboard !== null);
   const noteInput = store((s) => s.noteInput);
 
   const [quantizeGrid, setQuantizeGrid] = useState<DurationName>('sixteenth');
@@ -375,6 +361,7 @@ export function EditorToolbar({
     else if (value === 'delete-measure') deleteMeasureAtCaret(store);
     else if (value === 'go-to-bar') onGoToBar?.();
     else if (value === 'enter-lyrics') onEnterLyrics?.();
+    else if (value === 'glissando') toggleGlissando(store);
   };
 
   const handleAccidentalSelect = (value: string): void => {
@@ -483,8 +470,8 @@ export function EditorToolbar({
             placement="bottom"
             content={
               durationShown.kind === 'mixed'
-                ? 'The selected notes are different lengths — pick one to make them all match'
-                : 'Note length — for the notes you add, and for any that are selected'
+                ? t('editor.mixedDurationsHint')
+                : t('editor.noteDurationHint')
             }
           >
             <SelectTrigger
@@ -506,7 +493,7 @@ export function EditorToolbar({
               <SelectItem key={option.value} value={option.value}>
                 <span className="flex items-center gap-2">
                   <option.Icon className={ICON_GLYPH_CLASS} />
-                  {option.ariaLabel}
+                  {t(`duration.${option.value}`)}
                 </span>
               </SelectItem>
             ))}
@@ -563,11 +550,17 @@ export function EditorToolbar({
             </SelectTrigger>
           </Tooltip>
           <SelectContent>
-            {ACCIDENTAL_OPTIONS.map(({ value }) => (
-              <SelectItem key={String(value)} value={String(value)}>
-                {ACCIDENTAL_GLYPHS[value].ariaLabel}
-              </SelectItem>
-            ))}
+            {ACCIDENTAL_OPTIONS.map(({ value, labelKey }) => {
+              const Glyph = ACCIDENTAL_GLYPHS[value];
+              return (
+                <SelectItem key={String(value)} value={String(value)}>
+                  <span className="flex items-center gap-2">
+                    <Glyph className={ICON_GLYPH_CLASS} />
+                    {t(labelKey)}
+                  </span>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
 
@@ -819,58 +812,17 @@ export function EditorToolbar({
             <InsertRestIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
-        <div role="group" aria-label={t('editor.clipboard')} className="flex items-center gap-0.5">
-          <Tooltip placement="bottom" content={t('editor.copyHint')}>
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={t('editor.copy')}
-              disabled={!hasScore || !hasSelection}
-              onClick={() => store.getState().copySelection()}
-              className={ICON_BUTTON_CLASS}
-            >
-              <DocumentDuplicateIcon className={ICON_GLYPH_CLASS} />
-            </Button>
-          </Tooltip>
-          <Tooltip placement="bottom" content={t('editor.cutHint')}>
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={t('editor.cut')}
-              disabled={!canEdit || !hasSelection}
-              onClick={onCut}
-              className={ICON_BUTTON_CLASS}
-            >
-              <ScissorsIcon className={ICON_GLYPH_CLASS} />
-            </Button>
-          </Tooltip>
-          <Tooltip placement="bottom" content={t('editor.pasteHint')}>
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={t('editor.paste')}
-              disabled={!canEdit || !hasClipboard}
-              onClick={onPaste}
-              className={ICON_BUTTON_CLASS}
-            >
-              <ClipboardIcon className={ICON_GLYPH_CLASS} />
-            </Button>
-          </Tooltip>
-        </div>
+        {/*
+          Copy, Cut, Paste and Delete used to sit here.
 
-        <Tooltip placement="bottom" content={t('editor.deleteHint')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('editor.deleteSelection')}
-            disabled={!canEdit || !hasSelection}
-            onClick={() => deleteSelected(store)}
-            className={ICON_BUTTON_CLASS}
-          >
-            <TrashIcon className={ICON_GLYPH_CLASS} />
-          </Button>
-        </Tooltip>
-
+          They moved to the score's own context menu — right-click, or long-press
+          on a touch screen — because all four act on something already selected
+          and none of them could say *what*. Delete means three different edits
+          depending on whether a track, a span of bars or a run of notes is
+          selected, and a permanently visible button cannot name its subject. A
+          menu opened on the thing itself can, and does. The keyboard shortcuts
+          are unchanged.
+        */}
         <VerticalDivider />
 
         <Tooltip placement="bottom" content={t('editor.quantizeGridHint')}>
@@ -932,7 +884,7 @@ export function EditorToolbar({
               <Button
                 type="button"
                 variant="ghost"
-                aria-label={`Voice ${index + 1}`}
+                aria-label={t('editor.voiceNumber', { number: index + 1 })}
                 aria-pressed={activeVoiceIndex === index}
                 disabled={!hasScore}
                 onClick={() => store.getState().setActiveVoice(index)}
@@ -965,6 +917,18 @@ export function EditorToolbar({
             <SelectItem value="delete-measure">{t('editor.deleteMeasure')}</SelectItem>
             <SelectItem value="go-to-bar">{t('editor.goToBar')}</SelectItem>
             <SelectItem value="enter-lyrics">{t('editor.enterLyrics')}</SelectItem>
+            {/*
+              A slide is a span, like the slur, so it needs two notes — and it
+              is here rather than on the bar for the reason everything in this
+              menu is: it is a mark somebody reaches for occasionally, and the
+              bar is already the widest thing in the editor. The native app has
+              always offered it in its own More menu; the web had it in the
+              inspector and on Shift+G alone, so the same product answered
+              "where is glissando?" two different ways.
+            */}
+            <SelectItem value="glissando" disabled={!canEdit || selection.eventIds.length < 2}>
+              {t('editor.glissando')}
+            </SelectItem>
           </SelectContent>
         </Select>
 
@@ -1048,14 +1012,28 @@ export function EditorToolbar({
               // The label names what clicking *does*, not the current state,
               // which is what a button should say — so the two names below are
               // two states of one control, not two controls.
-              aria-label={pitchDisplay === 'written' ? 'Show concert pitch' : 'Show written pitch'}
+              aria-label={
+                pitchDisplay === 'written'
+                  ? t('editor.showConcertPitch')
+                  : t('editor.showWrittenPitch')
+              }
               aria-pressed={pitchDisplay === 'written'}
               onClick={() =>
                 store.getState().setPitchDisplay(pitchDisplay === 'written' ? 'concert' : 'written')
               }
               className={TOGGLE_BUTTON_CLASS}
             >
-              {pitchDisplay === 'written' ? 'Wrt' : 'Con'}
+              {/*
+                Abbreviated because the chip sits in a row of 18px glyphs, but
+                translated all the same: both apps hardcoded the same two
+                English letters here, which is exactly why no parity check
+                could see them.
+              */}
+              {t(
+                pitchDisplay === 'written'
+                  ? 'editor.pitchWrittenShort'
+                  : 'editor.pitchConcertShort',
+              )}
             </Button>
           </Tooltip>
         </div>
@@ -1066,7 +1044,10 @@ export function EditorToolbar({
           apart from the tools rather than among them. */}
       {onToggleInspector && (
         <div className="flex shrink-0 items-center pr-1">
-          <Tooltip placement="bottom" content={inspectorOpen ? 'Hide inspector' : 'Show inspector'}>
+          <Tooltip
+            placement="bottom"
+            content={inspectorOpen ? t('editor.hideInspector') : t('editor.showInspector')}
+          >
             <Button
               type="button"
               variant="ghost"

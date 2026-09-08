@@ -61,6 +61,7 @@ import {
   ICON_GLYPH_CLASS,
   MetronomeIcon,
   NextMeasureIcon,
+  PianoKeysIcon,
   PreviousMeasureIcon,
   TEXT_CONTROL_CLASS,
 } from '@/components/icons/notation-icons';
@@ -69,6 +70,15 @@ import { ExclamationTriangleIcon, PauseIcon, PlayIcon, StopIcon } from '@heroico
 export type TransportBarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: PlaybackStoreApi;
+  /**
+   * Whether the piano keyboard below is collapsed, and how to toggle it.
+   *
+   * The keyboard's own header bar used to carry this. Optional so the bar still
+   * renders standalone in a test, and so a host with no keyboard below it
+   * simply does not offer the control rather than offering a dead one.
+   */
+  keyboardCollapsed?: boolean;
+  onToggleKeyboard?: () => void;
 };
 
 /** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
@@ -328,7 +338,11 @@ function Timecode({
   );
 }
 
-export function TransportBar({ store = useAppStore }: TransportBarProps) {
+export function TransportBar({
+  store = useAppStore,
+  keyboardCollapsed,
+  onToggleKeyboard,
+}: TransportBarProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
   // `state` is deliberately not read here: `PlayPauseButton` is the only
@@ -573,6 +587,31 @@ export function TransportBar({ store = useAppStore }: TransportBarProps) {
       </div>
 
       <Timecode maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
+
+      {/*
+        The keyboard toggle, rightmost.
+
+        It used to sit on a bar of the keyboard's own, above it — which cost a
+        whole row to hold one button, and put the control that *reveals* the
+        keyboard inside the thing it reveals. Here it is a transport control
+        like the metronome beside it: something you turn on while playing rather
+        than something you edit.
+      */}
+      {onToggleKeyboard ? (
+        <Tooltip content={keyboardCollapsed ? t('editor.showKeyboard') : t('editor.hideKeyboard')}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={keyboardCollapsed ? t('editor.showKeyboard') : t('editor.hideKeyboard')}
+            aria-pressed={!keyboardCollapsed}
+            onClick={onToggleKeyboard}
+            className={ICON_BUTTON_CLASS}
+          >
+            <PianoKeysIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+      ) : null}
 
       {/* Last, so it never shifts the controls: it appears only while loading. */}
       <SynthLoadIndicator store={store} />

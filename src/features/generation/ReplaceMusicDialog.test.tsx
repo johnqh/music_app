@@ -36,7 +36,7 @@ describe('ReplaceMusicDialog', () => {
         onSubmit={vi.fn()}
       />,
     );
-    expect(screen.getByRole('dialog', { name: 'Replace measures' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Replace bars' })).toBeInTheDocument();
 
     rerender(
       <ReplaceMusicDialog
@@ -150,6 +150,27 @@ describe('ReplaceMusicDialog', () => {
     expect(submitted).not.toHaveProperty('mood');
   });
 
+  it('defaults to DeepSeek and sends the chosen backend with the submission', async () => {
+    // Replacing a bar is the cheapest thing in the system to run twice and
+    // compare by ear, so the backend is chosen here rather than fixed.
+    const onSubmit = vi.fn();
+    render(
+      <ReplaceMusicDialog
+        open
+        scope="track"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByLabelText('Model')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Instruction'), 'x');
+    await userEvent.click(screen.getByRole('button', { name: 'Replace' }));
+
+    expect(onSubmit.mock.calls[0][0].variant).toBe('deepseek');
+  });
+
   it('submits the preservation constraints', async () => {
     const onSubmit = vi.fn();
     render(
@@ -214,7 +235,7 @@ describe('ReplaceMusicDialog', () => {
         onSubmit={vi.fn()}
       />,
     );
-    for (const name of [/measures/i, /tempo/i, /time signature/i, /key/i]) {
+    for (const name of [/bars/i, /tempo/i, /time signature/i, /key/i]) {
       expect(screen.queryByLabelText(name)).not.toBeInTheDocument();
     }
   });

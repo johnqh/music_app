@@ -15,11 +15,11 @@ import {
   waitForGenerationSettled,
 } from './helpers';
 
-/** Starts a Replace Measures job and returns once the editor has locked. */
+/** Starts a Replace Bars job and returns once the editor has locked. */
 async function startReplaceJob(page: import('@playwright/test').Page): Promise<void> {
   await selectMeasuresByIndex(page, [1, 2]);
-  await page.getByRole('tab', { name: 'Measure' }).click();
-  await page.getByRole('button', { name: 'Replace Measures' }).click();
+  await page.getByRole('tab', { name: 'Bar' }).click();
+  await page.getByRole('button', { name: 'Replace Bars' }).click();
   await page.getByLabel('Instruction', { exact: true }).fill('Make this more dramatic');
   await page.getByRole('button', { name: 'Replace', exact: true }).click();
   await expect(page.getByText('Generating notes…')).toBeVisible();
@@ -29,7 +29,7 @@ test.describe('generation jobs', () => {
   test('locks the editor, survives navigating away, and lands', async ({ page }) => {
     const getErrors = collectPageErrors(page);
 
-    await generateWholeScore(page, {
+    const title = await generateWholeScore(page, {
       prompt: 'Create a gentle eight-measure piano melody in C major',
       measures: 8,
     });
@@ -39,7 +39,18 @@ test.describe('generation jobs', () => {
 
     // Leaving is ordinary navigation: nothing is held in the browser.
     await gotoDashboard(page);
-    await expect(page.getByText('Generating…')).toBeVisible();
+    /*
+      Scoped to this test's own card, not to the page. Two workers share one
+      `music_test` database, so another spec's project can be generating at the
+      same moment — and an unscoped `getByText` then matches two badges and
+      fails strict mode, which is a property of the schedule rather than of the
+      code under test.
+    */
+    await expect(
+      page
+        .getByRole('button', { name: `Open project: ${title}`, exact: true })
+        .getByText('Generating…'),
+    ).toBeVisible();
 
     // Come back and the result is there.
     await page.goto(projectUrl);

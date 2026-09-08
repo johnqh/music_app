@@ -134,7 +134,7 @@ export function FileImportModal({
             type="file"
             accept={accept}
             className="sr-only"
-            aria-label={`${fileKind} input`}
+            aria-label={t('import.fileInput', { kind: fileKind })}
             disabled={busy}
             onChange={handleChange}
           />

@@ -346,7 +346,7 @@ export function MidiImportWizard({
                             }
                           >
                             <SelectTrigger
-                              aria-label={`Clef: ${track.name}`}
+                              aria-label={t('importMidi.clefOfTrack', { name: track.name })}
                               className={SELECT_TRIGGER_CLASS}
                             >
                               <SelectValue />

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render } from '@testing-library/react';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { stressScore, threeTrackScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
@@ -302,7 +302,7 @@ describe('ScoreEditorView', () => {
     // The six duration toggles are one control now.
     const user = userEvent.setup();
     await user.click(screen.getByLabelText('Note duration'));
-    await user.click(await screen.findByRole('option', { name: /Eighth note/ }));
+    await user.click(await screen.findByRole('option', { name: /Eighth/ }));
 
     const updated = findEvent(store.getState().score!, first.id);
     expect(updated?.durationTicks).toBe(store.getState().score!.ppq / 2);
@@ -1224,6 +1224,80 @@ describe('track gutter click', () => {
     fireEvent.click(interactionSurface(), measureFreePoint(score, score.tracks[0].measures[0].id));
 
     expect(getMusicPosition().reportedTick).not.toBe(99999);
+  });
+});
+
+describe('right-click selects what is under it, then opens the menu', () => {
+  /*
+    The one failure this shape must not have: a menu that opens over one thing
+    and acts on another. It names its subject and Delete means three different
+    edits, so opening it over bar 40 while bar 3 is selected would quietly
+    delete the wrong bar.
+  */
+  function gutterCell(store: EditorStoreApi, trackIndex: number) {
+    const plan = computeLayout(store.getState().score!, {
+      zoom: 1,
+      layoutMode: 'page',
+      width: 900,
+      theme: THEME,
+    });
+    const box = plan.trackLayouts[trackIndex].measures[0].box;
+    return { clientX: 20, clientY: box.y + box.height / 2 };
+  }
+
+  const menu = () => screen.queryByRole('menu', { name: 'Score actions' });
+
+  it('selects the track under it and says so', () => {
+    const store = makeStore();
+    store.getState().setScore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.contextMenu(interactionSurface(), gutterCell(store, 1));
+
+    expect(store.getState().selection.trackIds).toEqual([score.tracks[1].id]);
+    expect(within(menu()!).getByText('Track')).toBeInTheDocument();
+  });
+
+  it('selects the bar under it and says so', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+
+    fireEvent.contextMenu(interactionSurface(), gutterPoint(score, 1));
+
+    expect(store.getState().selection.measureIds.length).toBeGreaterThan(0);
+    expect(within(menu()!).getByText('Bar')).toBeInTheDocument();
+  });
+
+  it('selects the note under it and says so', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const note = allNotes(score)[0];
+    const box = referenceRender(score).idToBBox.get(note.id)!;
+
+    fireEvent.contextMenu(interactionSurface(), center(box));
+
+    expect(store.getState().selection.eventIds).toContain(note.id);
+    expect(within(menu()!).getByText('Note')).toBeInTheDocument();
+  });
+
+  it('keeps a selection the click falls inside, rather than narrowing to one bar', () => {
+    // Right-clicking one of four selected bars means those four. Narrowing is
+    // the classic way a context menu throws away the selection just built.
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const ids = [0, 1, 2].map((i) => score.tracks[0].measures[i].id);
+    act(() => {
+      store.getState().selectMeasures(ids);
+    });
+
+    fireEvent.contextMenu(interactionSurface(), gutterPoint(score, 1));
+
+    expect(store.getState().selection.measureIds).toEqual(ids);
+    expect(within(menu()!).getByText('Bars')).toBeInTheDocument();
   });
 });
 

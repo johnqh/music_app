@@ -64,7 +64,7 @@ describe('EditorToolbar', () => {
 
     // One control now, not six toggles: open it and pick.
     await user.click(screen.getByLabelText('Note duration'));
-    await user.click(await screen.findByRole('option', { name: /Eighth note/ }));
+    await user.click(await screen.findByRole('option', { name: /Eighth/ }));
 
     const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
     expect(updated.durationTicks).toBe(store.getState().score!.ppq / 2);
@@ -78,7 +78,7 @@ describe('EditorToolbar', () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Note duration'));
-    await user.click(await screen.findByRole('option', { name: /Sixteenth note/ }));
+    await user.click(await screen.findByRole('option', { name: /16th/ }));
 
     expect(store.getState().snapGrid).toBe('sixteenth');
     expect(store.getState().canUndo).toBe(false);
@@ -120,7 +120,7 @@ describe('EditorToolbar', () => {
     const user = userEvent.setup();
     // Make the first note an eighth, then select it together with a quarter.
     await user.click(screen.getByLabelText('Note duration'));
-    await user.click(await screen.findByRole('option', { name: /Eighth note/ }));
+    await user.click(await screen.findByRole('option', { name: /Eighth/ }));
     await act(async () => {
       store2.getState().setSelection({
         eventIds: [notes[0].id, notes[1].id],
@@ -148,7 +148,7 @@ describe('EditorToolbar', () => {
     // 4/4 bar, and reflow would legitimately refuse — which would be a test
     // about measure capacity, not about the control reaching every note.
     await user.click(screen.getByLabelText('Note duration'));
-    await user.click(await screen.findByRole('option', { name: /Eighth note/ }));
+    await user.click(await screen.findByRole('option', { name: /Eighth/ }));
 
     const ppq = store.getState().score!.ppq;
     for (const id of ids) {
@@ -432,7 +432,7 @@ describe('duration modifiers', () => {
     renderToolbar(store);
 
     await userEvent.click(screen.getByLabelText('Note duration'));
-    await userEvent.click(await screen.findByRole('option', { name: /Eighth note/ }));
+    await userEvent.click(await screen.findByRole('option', { name: /Eighth/ }));
 
     expect(store.getState().snapGrid).toBe('dotted-eighth');
   });
@@ -459,13 +459,62 @@ describe('duration modifiers', () => {
   });
 });
 
+describe('the overflow menu', () => {
+  /*
+    A slide is a span, so it needs two notes — and it belongs on the same menu
+    in both apps. The web offered it in the inspector and on Shift+G alone,
+    which is a different answer to "where is glissando?" from the one the
+    native app gives.
+  */
+  it('slides between the selected notes', async () => {
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!) as NoteEvent[];
+    act(() => {
+      store.getState().setSelection({
+        eventIds: [notes[0].id, notes[1].id],
+        measureIds: [],
+        trackIds: [],
+      });
+    });
+    renderToolbar(store);
+
+    await chooseMoreAction('Glissando');
+
+    const first = findEvent(store.getState().score!, notes[0].id) as NoteEvent;
+    const second = findEvent(store.getState().score!, notes[1].id) as NoteEvent;
+    expect(first.glissandoStart).toBe(true);
+    expect(second.glissandoStop).toBe(true);
+  });
+
+  it('offers no slide with fewer than two notes selected', async () => {
+    // One note has nothing to slide to, and a live control that quietly
+    // returns is worse than one plainly unavailable.
+    const store = makeStore();
+    const notes = allNotes(store.getState().score!) as NoteEvent[];
+    act(() => {
+      store.getState().setSelection({
+        eventIds: [notes[0].id],
+        measureIds: [],
+        trackIds: [],
+      });
+    });
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('More actions'));
+    expect(await screen.findByRole('option', { name: 'Glissando' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+});
+
 describe('measure and delete controls', () => {
   it('adds a measure to every track', async () => {
     const store = makeStore();
     const before = store.getState().score!.tracks.map((t) => t.measures.length);
     renderToolbar(store);
 
-    await chooseMoreAction('Add measure');
+    await chooseMoreAction('Add bar');
 
     const after = store.getState().score!.tracks.map((t) => t.measures.length);
     expect(after).toEqual(before.map((n) => n + 1));
@@ -477,7 +526,7 @@ describe('measure and delete controls', () => {
     const before = store.getState().score!.tracks[0].measures.length;
     renderToolbar(store);
 
-    await chooseMoreAction('Delete measure at caret');
+    await chooseMoreAction('Delete bar at caret');
 
     expect(store.getState().score!.tracks[0].measures.length).toBe(before - 1);
   });
@@ -491,22 +540,18 @@ describe('measure and delete controls', () => {
     }
     renderToolbar(store);
 
-    await chooseMoreAction('Delete measure at caret');
+    await chooseMoreAction('Delete bar at caret');
 
     expect(store.getState().score!.tracks[0].measures.length).toBe(1);
-    expect(store.getState().toasts.some((t) => /at least one measure/.test(t.message))).toBe(true);
+    expect(store.getState().toasts.some((t) => /at least one bar/.test(t.message))).toBe(true);
   });
 
-  it('deletes the selected notes', async () => {
-    const store = makeStore();
-    const note = allNotes(store.getState().score!)[0];
-    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
-    renderToolbar(store);
-
-    await userEvent.click(screen.getByLabelText('Delete selection'));
-
-    expect(findEvent(store.getState().score!, note.id)).toBeNull();
-  });
+  /*
+    Copy, Cut, Paste and Delete are the context menu's now — see
+    `ScoreContextMenu.test.tsx`, which covers all four and the Clear that joined
+    them. They were four permanently visible buttons for actions that only apply
+    to a selection and could not name what they would act on.
+  */
 });
 
 describe('accessible names are unambiguous', () => {
@@ -526,15 +571,7 @@ describe('accessible names are unambiguous', () => {
 });
 
 describe('selection-only controls say so', () => {
-  const SELECTION_ONLY = [
-    'Accidental',
-    'Articulation',
-    'Toggle tie',
-    'Quantize',
-    'Delete selection',
-    'Copy',
-    'Cut',
-  ];
+  const SELECTION_ONLY = ['Accidental', 'Articulation', 'Toggle tie', 'Quantize'];
 
   it('are disabled with a score open but nothing selected', () => {
     // They all return early when the selection is empty. Enabled, they invited
@@ -562,24 +599,6 @@ describe('selection-only controls say so', () => {
     renderToolbar(store);
     expect(screen.getByLabelText('Insert note')).toBeEnabled();
     expect(screen.getByLabelText('Note duration')).toBeEnabled();
-  });
-
-  it('gates Paste on the clipboard, not on the selection', () => {
-    // Paste needs something copied, which is a different question from
-    // whether anything is selected. It used to stay live either way, so it
-    // was the one control on the bar that could look ready and do nothing.
-    const store = makeStore();
-    renderToolbar(store);
-    expect(screen.getByLabelText('Paste')).toBeDisabled();
-
-    const note = allNotes(store.getState().score!)[0];
-    act(() => {
-      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
-      store.getState().copySelection();
-      store.getState().clearSelection();
-    });
-
-    expect(screen.getByLabelText('Paste')).toBeEnabled();
   });
 });
 

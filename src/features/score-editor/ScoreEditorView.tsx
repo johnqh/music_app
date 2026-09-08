@@ -29,6 +29,9 @@ import {
   playbackController,
   selectActiveTrackId,
   selectNotes,
+  selectionKind,
+  canPasteInto,
+  clearSelected,
   selectVisibleTrackIds,
 } from '@sudobility/music_lib';
 import type { BBox, CanvasRenderResult, RenderTheme } from '@sudobility/music_lib';
@@ -47,7 +50,7 @@ import {
 } from '@sudobility/music_lib';
 import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import { buildGenerateTrackRequest } from '@sudobility/music_lib';
+import { buildGenerateTrackRequest, withGenerationVariant } from '@sudobility/music_lib';
 import type { InstrumentChoice } from '@sudobility/music_lib';
 import { resolveDrop } from '@sudobility/music_drawing';
 import type { DropTarget } from '@sudobility/music_drawing';
@@ -221,7 +224,7 @@ export function ScoreEditorView({
    * coming back.
    */
   const generateTrack = useCallback(
-    async (prompt: string, instrument: InstrumentChoice) => {
+    async (prompt: string, instrument: InstrumentChoice, variant: string) => {
       const current = store.getState().score;
       if (!current || !onGenerateTrackJob) return;
 
@@ -230,7 +233,9 @@ export function ScoreEditorView({
       try {
         // Built by music_lib, which takes everything the track has to agree
         // with — length, time signature, key, tempo — from the score itself.
-        await onGenerateTrackJob(buildGenerateTrackRequest(current, prompt, instrument));
+        await onGenerateTrackJob(
+          withGenerationVariant(buildGenerateTrackRequest(current, prompt, instrument), variant),
+        );
         setGenerateTrackOpen(false);
       } catch (err) {
         setGenerateTrackError(err instanceof Error ? err.message : 'Generation failed');
@@ -914,10 +919,85 @@ export function ScoreEditorView({
     setLyricStart(noteIndexAtOrAfter(lyricNotes, caretTick()));
   }, [lyricNotes]);
 
-  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY });
-  }, []);
+  /**
+   * Right-click selects what is under the pointer, then opens the menu on it.
+   *
+   * The menu names the object it acts on and Delete means three different edits
+   * depending on which, so opening it over one thing while it targets another
+   * is the one failure it must not have. Same hit-test order as an ordinary
+   * click — track gutter, then measure gutter, then a note — so the two
+   * gestures cannot come to disagree about what is where.
+   *
+   * **A click inside an existing selection keeps it.** Right-clicking one of
+   * four selected bars means "these four", not "this one"; narrowing to the
+   * clicked object is the classic way a context menu throws away the selection
+   * somebody just built.
+   */
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const state = store.getState();
+      const container = containerRef.current;
+      const scrollBox = scrollBoxRef.current;
+
+      if (container && scrollBox && layoutPlan) {
+        const rect = container.getBoundingClientRect();
+        const logical = {
+          x: (event.clientX - rect.left + container.scrollLeft) / zoom,
+          y: (event.clientY - rect.top + container.scrollTop) / zoom,
+        };
+        const point = {
+          x: event.clientX - rect.left + container.scrollLeft,
+          y: event.clientY - rect.top + container.scrollTop,
+        };
+        const boxRect = scrollBox.getBoundingClientRect();
+
+        const trackId = trackIdAtGutterPoint(layoutPlan, zoom, scrollBox.scrollTop, {
+          x: event.clientX - boxRect.left,
+          y: event.clientY - boxRect.top,
+        });
+        if (trackId) {
+          if (!state.selection.trackIds.includes(trackId)) {
+            state.setActiveTrack(trackId);
+            state.selectTrack(trackId);
+          }
+          setContextMenu({ x: event.clientX, y: event.clientY });
+          return;
+        }
+
+        const gutterIndex = measureIndexAtGutterPoint(layoutPlan, logical);
+        if (gutterIndex !== null) {
+          const already = state.score?.tracks.some((track) =>
+            track.measures.some(
+              (m) => m.index === gutterIndex && state.selection.measureIds.includes(m.id),
+            ),
+          );
+          if (!already)
+            measureAnchorRef.current = selectMeasureRange(store, {
+              index: gutterIndex,
+              anchor: null,
+              extend: false,
+              allTracks: false,
+            });
+          setContextMenu({ x: event.clientX, y: event.clientY });
+          return;
+        }
+
+        const result = resultRef.current;
+        const noteId = result ? eventIdAtPoint(result.idToBBox, point) : null;
+        if (noteId && !state.selection.eventIds.includes(noteId)) {
+          // The whole chord, as an ordinary click does: one bounding box holds
+          // every note at that tick, so which one was clicked is not a question
+          // the geometry can answer.
+          const chordIds = result ? eventIdsAtPoint(result.idToBBox, point) : [];
+          selectNotes(store, chordIds.length > 0 ? chordIds : [noteId]);
+        }
+      }
+
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    },
+    [store, layoutPlan, zoom],
+  );
 
   const pointFromEvent = useCallback((event: React.PointerEvent<HTMLDivElement>): Point | null => {
     const container = containerRef.current;
@@ -1191,8 +1271,13 @@ export function ScoreEditorView({
         <ScoreContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          hasSelection={selection.eventIds.length > 0}
-          hasClipboard={store.getState().clipboard !== null}
+          kind={selectionKind(selection)}
+          count={
+            selectionKind(selection) === 'measures'
+              ? selection.measureIds.length
+              : selection.eventIds.length
+          }
+          canPaste={canPasteInto(selection, store.getState().clipboard)}
           canEdit={store.getState().state !== 'playing'}
           onClose={() => setContextMenu(null)}
           onAction={(action) => {
@@ -1200,6 +1285,7 @@ export function ScoreEditorView({
             if (action === 'copy') state.copySelection();
             else if (action === 'cut') clipboard.requestCut();
             else if (action === 'paste') clipboard.requestPaste();
+            else if (action === 'clear') clearSelected(store);
             else if (action === 'delete') deleteSelected(store);
             else selectAll(store);
           }}
@@ -1223,8 +1309,6 @@ export function ScoreEditorView({
         store={store}
         onEnterLyrics={beginLyricEntry}
         onGoToBar={() => setGoToBarOpen(true)}
-        onCut={clipboard.requestCut}
-        onPaste={clipboard.requestPaste}
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
         inspectorOpen={inspectorOpen}
@@ -1239,7 +1323,9 @@ export function ScoreEditorView({
         open={generateTrackOpen}
         pending={generateTrackPending}
         error={generateTrackError}
-        onGenerate={(prompt, instrument) => void generateTrack(prompt, instrument)}
+        onGenerate={(prompt, instrument, variant) =>
+          void generateTrack(prompt, instrument, variant)
+        }
         onClose={() => setGenerateTrackOpen(false)}
       />
       <div

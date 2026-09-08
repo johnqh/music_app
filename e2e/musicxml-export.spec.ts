@@ -8,6 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 import {
+  chooseImport,
   collectPageErrors,
   createNewProject,
   generateWholeScore,
@@ -46,7 +47,7 @@ test.describe('MusicXML export', () => {
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
     await expect(page).toHaveURL(/\/en\/projects$/);
 
-    await page.getByRole('button', { name: 'Import MusicXML' }).click();
+    await chooseImport(page, 'Import MusicXML');
     await page.getByLabel('MusicXML file input').setInputFiles(xmlPath!);
 
     const importButton = page.getByRole('button', { name: 'Import', exact: true });

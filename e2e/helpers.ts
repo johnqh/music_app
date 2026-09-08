@@ -115,12 +115,29 @@ export async function gotoDashboard(page: Page): Promise<void> {
   await expect(page.getByLabel('Search projects')).toBeVisible();
 }
 
-/** Creates a brand-new project from the dashboard and waits for the editor route to load. */
+/**
+ * Picks one format out of the dashboard's Import menu.
+ *
+ * The five import buttons became one Select — a menu whose trigger keeps
+ * reading "Import" — so every spec that used to click a button by name now
+ * opens this and chooses an option.
+ */
+export async function chooseImport(page: Page, label: string): Promise<void> {
+  await page.getByRole('combobox', { name: 'Import a file' }).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
+}
+
+/**
+ * Creates a brand-new project from the dashboard and waits for the editor route.
+ *
+ * Through the New Project modal, which replaced the inline name field: the
+ * project's name is the modal's Title, which is also the score's title, so a
+ * project is named once rather than twice.
+ */
 export async function createNewProject(page: Page, name = 'E2E Project'): Promise<void> {
-  await page.getByRole('button', { name: 'New project' }).click();
-  const nameField = page.getByLabel('New project name');
-  await nameField.fill(name);
-  await page.getByRole('button', { name: 'Create' }).click();
+  await page.getByRole('button', { name: 'New Project', exact: true }).click();
+  await page.getByLabel('Title', { exact: true }).fill(name);
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page).toHaveURL(/\/project\//);
   await expect(page.getByLabel('Edit project title')).toBeVisible();
 }
@@ -136,7 +153,9 @@ export async function createNewProject(page: Page, name = 'E2E Project'): Promis
  */
 export async function generateWholeScore(page: Page, options: GenerationOptions): Promise<string> {
   await gotoDashboard(page);
-  await page.getByRole('button', { name: 'Generate Score', exact: true }).click();
+  await page.getByRole('button', { name: 'New Project', exact: true }).click();
+  // Generation is a toggle on the New Project form now, and it starts off.
+  await page.getByRole('switch', { name: 'Generate for me' }).click();
 
   generatedCounter += 1;
   const title =
@@ -148,7 +167,7 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
   // several nearby controls contain these as substrings.
   await page.getByLabel('Prompt', { exact: true }).fill(options.prompt);
   if (options.measures !== undefined) {
-    await page.getByLabel('Measures', { exact: true }).fill(String(options.measures));
+    await page.getByLabel('Bars', { exact: true }).fill(String(options.measures));
   }
   if (options.keyFifths !== undefined) {
     await page.getByRole('combobox', { name: 'Key', exact: true }).click();
@@ -169,7 +188,7 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
     await page.getByLabel('Tempo', { exact: true }).fill(String(options.tempo));
   }
 
-  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   // Wait on a positive condition, never on the badge being absent: the badge
   // has not necessarily rendered yet at this point, so "no badge" passes
@@ -192,16 +211,22 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
 }
 
 /**
- * Waits for every generation job to finish.
+ * Waits for the open project's generation to finish.
  *
- * Generation is a server-side job now, so "settled" means no project is
- * marked generating any more — on the dashboard that is the badge, in the
- * editor it is the overlay. Both are checked so callers need not care where
- * they are.
+ * The editor's overlay, and deliberately *only* that. It used to also assert
+ * that no dashboard badge said "Generating…" anywhere on the page, which was
+ * two mistakes at once: every caller is in the editor, where that badge does
+ * not exist, so the line was unreachable — and it was scoped to the whole page
+ * rather than to a project, so the moment anything did call it from the
+ * dashboard it would have been satisfied (or blocked) by a *different worker's*
+ * project. The suite runs two workers against one `music_test` database, so
+ * "no project anywhere is generating" is not a condition this test controls.
+ *
+ * A dashboard check belongs in the spec that owns the project, scoped to that
+ * project's own card — see `generation-jobs.spec.ts`.
  */
 export async function waitForGenerationSettled(page: Page): Promise<void> {
   await expect(page.getByText('Generating notes…')).toHaveCount(0, { timeout: 60_000 });
-  await expect(page.getByText('Generating…')).toHaveCount(0, { timeout: 60_000 });
 }
 
 /**

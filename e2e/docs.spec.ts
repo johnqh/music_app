@@ -47,7 +47,8 @@ test.describe('documentation from the editor', () => {
     // inside a score — and it must not navigate away from the open project.
     await page.goto('/en');
     await page.getByRole('link', { name: 'Projects' }).first().click();
-    await page.getByRole('button', { name: 'New Project' }).click();
+    await page.getByRole('button', { name: 'New Project', exact: true }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Docs link check');
     await page.getByRole('button', { name: 'Create', exact: true }).click();
     await page.waitForURL(/\/project\//);
 

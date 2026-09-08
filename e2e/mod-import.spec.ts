@@ -9,7 +9,13 @@
  */
 import { expect, test } from '@playwright/test';
 import { buildMod } from '@sudobility/music_codecs/fixtures';
-import { collectPageErrors, gotoDashboard, readScoreSummary, waitForNotation } from './helpers';
+import {
+  chooseImport,
+  collectPageErrors,
+  gotoDashboard,
+  readScoreSummary,
+  waitForNotation,
+} from './helpers';
 
 /** C-3, D-3, E-3 and G-3 as ProTracker periods, one per row on channel 0. */
 const PERIODS = [428, 381, 339, 285];
@@ -36,9 +42,9 @@ test.describe('module import', () => {
 
     // Import lives on the dashboard, not in the editor: every import makes a
     // project, so a menu on the editor's own title bar could only throw you
-    // out of the project you had open. `Import MOD` exactly — the dashboard
-    // has five buttons whose names all begin "Import".
-    await page.getByRole('button', { name: 'Import MOD', exact: true }).click();
+    // out of the project you had open. It is one menu now, and `chooseImport`
+    // matches the option name exactly — every one of them begins "Import".
+    await chooseImport(page, 'Import MOD');
     await page.getByLabel('module file input').setInputFiles({
       name: 'e2e.mod',
       mimeType: 'application/octet-stream',
@@ -65,7 +71,7 @@ test.describe('module import', () => {
     // imported and quietly is not the music.
     await gotoDashboard(page);
 
-    await page.getByRole('button', { name: 'Import MOD', exact: true }).click();
+    await chooseImport(page, 'Import MOD');
     const dialog = page.getByRole('dialog', { name: 'Import module' });
     await dialog.getByLabel('module file input').setInputFiles({
       name: 'notes.txt',

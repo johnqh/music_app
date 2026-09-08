@@ -63,7 +63,7 @@ describe('the bar and beat readout', () => {
   it('shows a whole beat at every offset within one', async () => {
     const store = makeStore();
     render(<TransportBar store={store} />);
-    const readout = screen.getByLabelText('Measure and beat', { exact: false });
+    const readout = screen.getByLabelText('bar and beat', { exact: false });
 
     // Every tick inside beat 1 of bar 1: a readout that changes on a
     // sub-beat is the flicker, so all of these must render identically.
@@ -78,7 +78,7 @@ describe('the bar and beat readout', () => {
   it('advances a whole beat at a time', async () => {
     const store = makeStore();
     render(<TransportBar store={store} />);
-    const readout = screen.getByLabelText('Measure and beat', { exact: false });
+    const readout = screen.getByLabelText('bar and beat', { exact: false });
 
     for (const [tick, shown] of [
       [480, '1.2'],
@@ -133,8 +133,8 @@ describe('TransportBar: transport buttons', () => {
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Go to start' }));
-    await user.click(screen.getByRole('button', { name: 'Previous measure' }));
-    await user.click(screen.getByRole('button', { name: 'Next measure' }));
+    await user.click(screen.getByRole('button', { name: 'Previous bar' }));
+    await user.click(screen.getByRole('button', { name: 'Next bar' }));
 
     expect(playbackController.goToStart).toHaveBeenCalledTimes(1);
     expect(playbackController.previousMeasure).toHaveBeenCalledTimes(1);
@@ -147,10 +147,10 @@ describe('TransportBar: transport buttons', () => {
 
     for (const name of [
       'Go to start',
-      'Previous measure',
+      'Previous bar',
       'Play',
       'Stop',
-      'Next measure',
+      'Next bar',
       'Toggle loop',
       'Toggle metronome',
     ]) {
@@ -199,14 +199,14 @@ describe('TransportBar: position display', () => {
     getMusicPositionSource().moveTo(score.tracks[0].measures[1].startTick);
     renderBar(store);
 
-    expect(screen.getByLabelText('Current measure and beat')).toHaveTextContent('2.1');
+    expect(screen.getByLabelText('Current bar and beat')).toHaveTextContent('2.1');
   });
 
   it('shows a placeholder with no score loaded', () => {
     const store = makeStore(false);
     renderBar(store);
 
-    expect(screen.getByLabelText('Current measure and beat')).toHaveTextContent('-.-');
+    expect(screen.getByLabelText('Current bar and beat')).toHaveTextContent('-.-');
   });
 });
 
@@ -422,5 +422,48 @@ describe('TransportBar: synth loading', () => {
 
     act(() => store.getState().setSynthLoad({ status: 'failed', message: 'boom' }));
     expect(screen.getByText('Instruments failed to load')).toBeInTheDocument();
+  });
+});
+
+describe('the keyboard toggle', () => {
+  /*
+    It used to sit on a bar of the keyboard's own, above it — a whole row for one
+    button, and the control that *reveals* the keyboard was inside the thing it
+    reveals, so the row had to survive collapsing in order to stay reachable.
+    Here it is a transport control like the metronome: something you turn on
+    while playing rather than something you edit.
+  */
+  it('reports a toggle rather than holding the state itself', async () => {
+    const onToggleKeyboard = vi.fn();
+    render(
+      <TransportBar
+        store={makeStore()}
+        keyboardCollapsed={false}
+        onToggleKeyboard={onToggleKeyboard}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide keyboard' }));
+    expect(onToggleKeyboard).toHaveBeenCalled();
+  });
+
+  it('names what pressing it will do, not what is showing', () => {
+    // A button says what it does. Collapsed, it offers to show the keyboard.
+    render(<TransportBar store={makeStore()} keyboardCollapsed onToggleKeyboard={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Show keyboard' })).toBeInTheDocument();
+  });
+
+  it('is the rightmost control on the bar', () => {
+    render(<TransportBar store={makeStore()} keyboardCollapsed onToggleKeyboard={vi.fn()} />);
+    const bar = screen.getByRole('toolbar', { name: 'Playback transport' });
+    const buttons = Array.from(bar.querySelectorAll('button'));
+    expect(buttons[buttons.length - 1]).toHaveAccessibleName('Show keyboard');
+  });
+
+  it('offers nothing when the host has no keyboard below it', () => {
+    // Rather than a dead control: the print view and the published page both
+    // render a transport with no keyboard under it.
+    render(<TransportBar store={makeStore()} />);
+    expect(screen.queryByRole('button', { name: /keyboard/i })).not.toBeInTheDocument();
   });
 });

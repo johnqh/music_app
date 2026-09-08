@@ -281,7 +281,7 @@ function NoteTab({ store, onReplace }: TabProps) {
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField
-          label={t('editor.octave')}
+          label={t('inspector.octave')}
           value={octave}
           onCommit={(v) => applyPitchPatch({ octave: v })}
         />
@@ -295,7 +295,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         it as the nearest name.
       */}
       <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.duration')}</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.duration')}</span>
         <MixedSelect
           value={
             durationTicks === MIXED
@@ -304,7 +304,7 @@ function NoteTab({ store, onReplace }: TabProps) {
                 ? null
                 : (durationNameForTicks(durationTicks, score.ppq) ?? CUSTOM_DURATION)
           }
-          ariaLabel={t('editor.duration')}
+          ariaLabel={t('inspector.duration')}
           options={[
             ...DURATION_NAMES.map((name) => ({ value: name, label: durationLabel(name) })),
             ...(durationTicks !== MIXED &&
@@ -313,7 +313,7 @@ function NoteTab({ store, onReplace }: TabProps) {
               ? [
                   {
                     value: CUSTOM_DURATION,
-                    label: t('editor.customDuration', { ticks: durationTicks }),
+                    label: t('inspector.customDuration', { ticks: durationTicks }),
                   },
                 ]
               : []),
@@ -340,7 +340,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       ) : null}
 
       <MixedNumberField
-        label={t('editor.velocity')}
+        label={t('inspector.velocity')}
         value={velocity}
         min={0}
         max={127}
@@ -384,14 +384,14 @@ function NoteTab({ store, onReplace }: TabProps) {
           value={trackName === MIXED ? '' : (trackName ?? '')}
           placeholder={trackName === MIXED ? t('inspector.mixed') : undefined}
           disabled
-          aria-label={t('editor.trackReadOnly')}
+          aria-label={t('inspector.trackReadOnly')}
           className={TEXT_INPUT_CLASS}
           readOnly
         />
       </label>
 
       <MixedNumberField
-        label={t('editor.voice')}
+        label={t('inspector.voice')}
         value={commonValue(
           // Counted from 1, matching the toolbar's own Voice 1 / Voice 2
           // buttons. The same note used to read as "Voice 1" on the bar and
@@ -404,13 +404,13 @@ function NoteTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-4">
         <MixedCheckbox
-          label={t('editor.tieStart')}
+          label={t('inspector.tieStart')}
           checked={tieStart === true}
           indeterminate={tieStart === MIXED}
           onChange={() => dispatchToggleTie(store, 'tieStart')}
         />
         <MixedCheckbox
-          label={t('editor.tieStop')}
+          label={t('inspector.tieStop')}
           checked={tieStop === true}
           indeterminate={tieStop === MIXED}
           onChange={() => dispatchToggleTie(store, 'tieStop')}
@@ -480,7 +480,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             onClick={() => toGraceNote(store, notes[0].id)}
             className="w-full px-3 py-1.5 text-sm"
           >
-            {t('editor.makeGraceNote')}
+            {t('inspector.makeGraceNote')}
           </Button>
           {notes[0].graceNotes?.length ? (
             <Button
@@ -490,7 +490,7 @@ function NoteTab({ store, onReplace }: TabProps) {
               onClick={() => clearGraceNotes(store, [notes[0].id])}
               className="w-full px-3 py-1 text-xs"
             >
-              {t('editor.clearGraceNotes', { count: notes[0].graceNotes.length })}
+              {t('inspector.clearGraceNotes', { count: notes[0].graceNotes.length })}
             </Button>
           ) : null}
         </div>
@@ -499,7 +499,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       <ReplaceButton
         store={store}
         scope="notes"
-        label={t('editor.replaceNotes')}
+        label={t('inspector.replaceNotes')}
         onReplace={onReplace}
       />
     </div>
@@ -550,7 +550,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-2">
         <MixedNumberField
-          label={t('editor.timeSigNumerator')}
+          label={t('inspector.timeSigNumerator')}
           value={timeSig === MIXED ? MIXED : (timeSig?.numerator ?? null)}
           min={1}
           onCommit={(v) =>
@@ -561,7 +561,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
           }
         />
         <MixedNumberField
-          label={t('editor.timeSigDenominator')}
+          label={t('inspector.timeSigDenominator')}
           value={timeSig === MIXED ? MIXED : (timeSig?.denominator ?? null)}
           min={1}
           onCommit={(v) =>
@@ -581,7 +581,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
         */}
         <MixedSelect
           value={keySig === MIXED ? MIXED : keySig ? String(keySig.fifths) : null}
-          ariaLabel={t('editor.key')}
+          ariaLabel={t('inspector.key')}
           options={keySignatureOptions(keySig !== MIXED ? (keySig?.mode ?? 'major') : 'major').map(
             (option) => ({ value: String(option.fifths), label: option.label }),
           )}
@@ -655,7 +655,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
       <ReplaceButton
         store={store}
         scope="measures"
-        label={t('editor.replaceMeasures')}
+        label={t('inspector.replaceMeasures')}
         onReplace={onReplace}
       />
     </div>
@@ -713,7 +713,7 @@ function TrackTab({ store, onReplace }: TabProps) {
     // instrument can play, so nothing was changed.
     if (!result.ok && result.reason === 'outOfRange')
       store.getState().pushToast({
-        message: t('track.instrumentRangeError', { instrument: result.instrumentName }),
+        message: t('inspector.instrumentRangeError', { instrument: result.instrumentName }),
         severity: 'error',
       });
   };
@@ -737,7 +737,7 @@ function TrackTab({ store, onReplace }: TabProps) {
             store.getState().renameTrack(track.id, nameDraft, commandLabel('changeTrackProps'));
             setNameDraft(track.name);
           }}
-          aria-label={t('editor.trackName')}
+          aria-label={t('inspector.name')}
           className={TEXT_INPUT_CLASS}
         />
       </label>
@@ -755,8 +755,8 @@ function TrackTab({ store, onReplace }: TabProps) {
           */}
           {isPercussionTrack(track) ? (
             <SheetSelector
-              title={t('track.drumKit')}
-              aria-label={t('track.kitOf', { name: track.name })}
+              title={t('inspector.drumKit')}
+              aria-label={t('inspector.kitOf', { name: track.name })}
               disabled={isPlaying}
               options={KIT_OPTIONS}
               value={kitOptionValue(track.midiProgram)}
@@ -793,15 +793,15 @@ function TrackTab({ store, onReplace }: TabProps) {
       </label>
 
       <CommitSlider
-        label={t('editor.trackVolume')}
+        label={t('inspector.trackVolume')}
         rowLabel={t('inspector.volume')}
         value={track.volume}
         onCommit={(v) => mix({ volume: v })}
         kind="volume"
       />
       <CommitSlider
-        label={t('editor.trackPan')}
-        rowLabel={t('track.pan')}
+        label={t('inspector.trackPan')}
+        rowLabel={t('inspector.pan')}
         value={track.pan}
         onCommit={(v) => mix({ pan: v })}
         kind="pan"
@@ -809,12 +809,12 @@ function TrackTab({ store, onReplace }: TabProps) {
 
       <div className="flex gap-4">
         <MixedCheckbox
-          label={t('editor.muted')}
+          label={t('inspector.mute')}
           checked={track.muted === true}
           onChange={(checked) => mix({ muted: checked })}
         />
         <MixedCheckbox
-          label={t('editor.solo')}
+          label={t('inspector.solo')}
           checked={track.solo === true}
           onChange={(checked) => mix({ solo: checked })}
         />
@@ -823,7 +823,7 @@ function TrackTab({ store, onReplace }: TabProps) {
       <ReplaceButton
         store={store}
         scope="track"
-        label={t('editor.replaceTrack')}
+        label={t('inspector.replaceTrack')}
         onReplace={onReplace}
       />
 
@@ -837,16 +837,16 @@ function TrackTab({ store, onReplace }: TabProps) {
         variant="destructive"
         onClick={() => setPendingDelete(true)}
         disabled={!canDelete || isPlaying}
-        aria-label={t('editor.deleteTrack')}
+        aria-label={t('inspector.deleteTrack')}
       >
-        {t('editor.deleteTrack')}
+        {t('inspector.deleteTrack')}
       </Button>
 
       <ConfirmDialog
         open={pendingDelete}
-        title={t('editor.deleteTrack')}
-        message={t('editor.deleteTrackConfirm', { name: track.name })}
-        confirmLabel={t('editor.deleteTrack')}
+        title={t('inspector.deleteTrack')}
+        message={t('inspector.deleteTrackConfirm', { name: track.name })}
+        confirmLabel={t('inspector.deleteTrack')}
         destructive
         onConfirm={() => {
           setPendingDelete(false);

@@ -202,13 +202,6 @@ describe('PianoKeyboardView', () => {
       // No pitch names anywhere: on a drum staff "C4" names nothing.
       expect(screen.queryByText('C4')).not.toBeInTheDocument();
     });
-
-    it('heads the panel with the kit, not with the instrument at that address', () => {
-      // Program 40 is Brush as a kit and Violin as an instrument.
-      render(<PianoKeyboardView store={makeDrumStore(40)} />);
-      expect(screen.getByText(/Brush Kit/)).toBeInTheDocument();
-      expect(screen.queryByText(/Violin/)).not.toBeInTheDocument();
-    });
   });
 
   it('labels C and F, the landmarks of the black-key groups', () => {
@@ -287,23 +280,16 @@ describe('PianoKeyboardView', () => {
     expect(container.querySelectorAll('[data-playing="true"]')).toHaveLength(0);
   });
 
-  it('names the active track and follows it when it changes', () => {
-    const store = makeStore(twoTrackScore());
-    const score = store.getState().score!;
-    const { container } = render(<PianoKeyboardView store={store} />);
-    expect(container.textContent).toContain(score.tracks[0].name);
-
-    act(() => store.getState().setActiveTrack(score.tracks[1].id));
-
-    expect(container.textContent).toContain(score.tracks[1].name);
-  });
-
-  it('renders only the header when collapsed, so the expand control survives', () => {
-    const { container, getByLabelText } = render(
-      <PianoKeyboardView store={makeStore()} collapsed />,
-    );
+  it('draws nothing at all when collapsed', () => {
+    /*
+      It used to keep a header row so the expand control survived. The control
+      is the transport bar's now, so there is nothing down here that has to
+      stay on screen to remain reachable — and a row holding one button was the
+      whole reason that header existed.
+    */
+    const { container } = render(<PianoKeyboardView store={makeStore()} collapsed />);
     expect(container.querySelectorAll('[data-testid^="piano-key-"]')).toHaveLength(0);
-    expect(getByLabelText('Expand piano keyboard')).toBeInTheDocument();
+    expect(container.textContent).toBe('');
   });
 
   it('uses the shared playing color, so notation and keyboard agree', () => {
@@ -318,70 +304,14 @@ describe('PianoKeyboardView', () => {
   });
 });
 
-describe('header names the active instrument', () => {
-  it('shows the active track instrument, not the literal "Piano"', () => {
-    const store = makeStore(twoTrackScore());
-    const score = store.getState().score!;
-    act(() => {
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(
-          score.tracks[1].id,
-          {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          },
-          commandLabel('changeTrackProps'),
-        ),
-      );
-      store.getState().setActiveTrack(score.tracks[1].id);
-    });
-
-    const { container } = render(<PianoKeyboardView store={store} />);
-
-    expect(container.textContent).toContain('Trumpet');
-  });
-
-  it('follows the active track', () => {
-    const store = makeStore(twoTrackScore());
-    const score = store.getState().score!;
-    act(() => {
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(
-          score.tracks[0].id,
-          {
-            midiProgram: 40,
-            instrumentName: 'Violin',
-          },
-          commandLabel('changeTrackProps'),
-        ),
-      );
-      store.getState().dispatchCommand(
-        changeTrackPropsCommand(
-          score.tracks[1].id,
-          {
-            midiProgram: 56,
-            instrumentName: 'Trumpet',
-          },
-          commandLabel('changeTrackProps'),
-        ),
-      );
-      store.getState().setActiveTrack(score.tracks[0].id);
-    });
-    const { container } = render(<PianoKeyboardView store={store} />);
-    expect(container.textContent).toContain('Violin');
-
-    act(() => store.getState().setActiveTrack(score.tracks[1].id));
-
-    expect(container.textContent).toContain('Trumpet');
-    expect(container.textContent).not.toContain('Violin');
-  });
-
-  it('falls back to "Keyboard" with no score', () => {
-    const store = createAppStore({ context: testStoreContext() });
-    const { container } = render(<PianoKeyboardView store={store} />);
-    expect(container.textContent).toContain('Keyboard');
-  });
-});
+/*
+  The header that named the active instrument is gone with the rest of the
+  keyboard's own bar — a whole row for one button, holding a label the canvas
+  gutter already paints beside every system. `trackInstrumentLabel`'s rules,
+  including the drum-kit address it exists for (program 40 is Brush as a kit and
+  Violin as an instrument), are tested where they live, in music_types'
+  `track-instrument.test.ts`.
+*/
 
 describe('playing the keyboard writes notes', () => {
   /** Presses a key, holds it for `heldMs` of mocked time, releases. */

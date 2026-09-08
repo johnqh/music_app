@@ -388,12 +388,12 @@ export function MeasureTempoField({
   return (
     <div className="flex flex-col gap-1">
       <label className="flex flex-col gap-1">
-        <span className={FIELD_LABEL_CLASS}>{t('editor.tempoHere')}</span>
+        <span className={FIELD_LABEL_CLASS}>{t('inspector.tempoHere')}</span>
         <Input
           value={draft}
           inputMode="numeric"
           disabled={isPlaying}
-          aria-label={t('editor.tempoHere')}
+          aria-label={t('inspector.tempoHere')}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
           onBlur={commit}
           className={TEXT_INPUT_CLASS}
@@ -411,7 +411,7 @@ export function MeasureTempoField({
         </Button>
       ) : (
         <span className="text-xs text-theme-text-secondary">
-          {ownEvent ? t('editor.tempoStarting') : t('editor.tempoInherited')}
+          {ownEvent ? t('inspector.tempoStarting') : t('inspector.tempoInherited')}
         </span>
       )}
     </div>

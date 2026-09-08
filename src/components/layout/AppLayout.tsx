@@ -4,7 +4,7 @@
  * and settings icons), a three-pane layout (track panel | main editor |
  * inspector + generation panel) with collapsible side panels, the
  * playback transport, a status bar (selection summary, validation issue
- * count with a click-to-navigate popover, position, zoom), toasts, and
+ * count with a click-to-navigate popover), toasts, and
  * every dialog this task owns.
  *
  * Rendered by `router.tsx` for the `/project/:id` route, once a project
@@ -98,8 +98,6 @@ import type { EditorStoreApi } from '@sudobility/music_lib';
 import { repairAllIssues } from '@sudobility/music_lib';
 import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
-import { barBeatForTick, wholeBarBeat } from '@sudobility/music_lib';
-import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { TransportBar } from '@/components/transport/TransportBar';
@@ -154,43 +152,6 @@ const SAVE_STATE_CLASS: Record<string, string> = {
 // isn't designed for an inverted (text-on-primary) toolbar and would lose
 // contrast there.
 
-/**
- * The status bar's measure/beat readout, isolated as its own subscriber.
- *
- * `selectCurrentMeasureBeat` is memoized on `positionTick`, so it hands back a
- * fresh object on every one of the engine's 30 reports a second. Read at
- * `AppLayout`'s top level that re-rendered the entire app tree — notation,
- * keyboard and all — 30 times a second during playback. Down here only this
- * span re-renders.
- */
-function StatusPosition({ store }: { store: EditorStoreApi }) {
-  const { t } = useTranslation();
-  // Its own position subscriber: the position lives outside the store, so this
-  // readout follows the music without waking the notation with it.
-  const positionTick = usePlaybackPosition();
-  const score = store((s) => s.score);
-  /*
-    `barBeatForTick`, not the `measureBeatAt` that used to live in
-    music_editing. The two disagreed: that one numbered bars `index + 1`, which
-    counts a pickup, so on a score with an anacrusis this readout said one bar
-    and the inspector — and "go to bar N" — said another.
-  */
-  // Through `wholeBarBeat`: the raw position carries a fraction for the
-  // inspector's editable field, and interpolating it here printed a
-  // seventeen-digit beat that changed with every position report.
-  const measureBeat = wholeBarBeat(score ? barBeatForTick(score, positionTick) : null);
-  return (
-    <span aria-label={t('editor.position')} className="text-xs text-theme-text-secondary">
-      {measureBeat
-        ? t('editor.measureBeat', {
-            measure: measureBeat.bar,
-            beat: measureBeat.beat,
-          })
-        : '-.-'}
-    </span>
-  );
-}
-
 export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const lang = useCurrentLanguage();
   const { t } = useTranslation();
@@ -200,7 +161,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const canRedo = store((s) => s.canRedo);
   const undoLabel = store((s) => s.undoLabel);
   const redoLabel = store((s) => s.redoLabel);
-  const zoom = store((s) => s.zoom);
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
   const dialogs = store((s) => s.dialogs);
@@ -998,32 +958,40 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           )}
         </div>
 
+        {/* Pinned bottom bars, outside the scrolling score region so neither
+          scrolls away with the sheet.
+
+          The transport sits directly under the sheet and above the keyboard.
+          The keyboard is the one panel here that changes height — it collapses,
+          and it is optional — so with it in between, opening or closing it moved
+          the transport, which is the row a reader's hand goes to without
+          looking. Fixed rows first, the variable one last. */}
+        <TransportBar
+          store={store}
+          keyboardCollapsed={keyboardCollapsed}
+          onToggleKeyboard={() => setKeyboardCollapsed((v) => !v)}
+        />
+
         {/* Full-width piano keyboard: a sibling of the transport rather than a
           child of the centre column, so it spans the whole window beneath the
-          track and inspector panels. Fixed height, collapsible, and its own
-          horizontal scroll when the window is too narrow for 88 keys. */}
-        <div
-          className="shrink-0 overflow-hidden border-t border-theme-border"
-          style={keyboardCollapsed ? undefined : { height: PIANO_KEYBOARD_PANEL_HEIGHT }}
-        >
-          {/* The editor panel shares the keyboard's row and the canvas gutter's
-            width, so a track's label on the sheet and its controls sit on the
-            same column. Both show only the active track. */}
-          <div className="flex h-full min-h-0">
-            <div className="min-w-0 flex-1">
-              <PianoKeyboardView
-                store={store}
-                collapsed={keyboardCollapsed}
-                onToggleCollapsed={() => setKeyboardCollapsed((v) => !v)}
-              />
+          track and inspector panels. Fixed height and its own horizontal scroll
+          when the window is too narrow for 88 keys.
+
+          Collapsed, it renders nothing at all — the control that brings it back
+          is on the transport bar above, so there is no header row left down here
+          that has to survive in order to stay reachable. */}
+        {keyboardCollapsed ? null : (
+          <div
+            className="shrink-0 overflow-hidden border-t border-theme-border"
+            style={{ height: PIANO_KEYBOARD_PANEL_HEIGHT }}
+          >
+            <div className="flex h-full min-h-0">
+              <div className="min-w-0 flex-1">
+                <PianoKeyboardView store={store} />
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Pinned bottom bars: the transport sits directly above the status
-          bar, outside the scrolling score region, so neither scrolls away
-          with the sheet. */}
-        <TransportBar store={store} />
+        )}
 
         {generation.generating && (
           <GeneratingOverlay onCancel={() => void generation.cancel()} error={generation.error} />
@@ -1117,10 +1085,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </div>
           )}
         </div>
-        <StatusPosition store={store} />
-        <span aria-label={t('editor.zoomLevel')} className="text-xs text-theme-text-secondary">
-          {Math.round(zoom * 100)}%
-        </span>
       </div>
 
       <Toasts store={store} />

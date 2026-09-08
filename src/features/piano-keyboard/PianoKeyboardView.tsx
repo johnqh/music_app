@@ -12,12 +12,10 @@
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Tooltip } from '@sudobility/components';
 import {
   findTrack,
   playbackController,
   selectActiveTrackId,
-  trackInstrumentLabel,
   trackKeyboardRange,
   useAppStore,
   pitchToMidi,
@@ -36,7 +34,6 @@ import {
 import type { KeyGroup } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { useSoundingNotes } from '@/features/score-editor/usePlayback';
-import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { resolveColorScheme } from '@/app/theme';
@@ -157,12 +154,17 @@ export type PianoKeyboardViewProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
   /** When true, only the header strip renders. Owned by `AppLayout`, which also persists it. */
+  /**
+   * Whether the panel is collapsed.
+   *
+   * Only to skip the work of drawing when it is: the *control* is the transport
+   * bar's now, so this view no longer offers one. It used to carry a header row
+   * of its own holding one button, which is a whole row for a control that also
+   * sat inside the thing it reveals.
+   */
   collapsed?: boolean;
-  onToggleCollapsed?: () => void;
 };
 
-/** Height of the header strip holding the track name and the collapse control. */
-const HEADER_HEIGHT = 28;
 /** Room below the keys for the C labels. */
 const LABEL_GUTTER = 14;
 /** Used when the panel isn't measurable (jsdom reports 0), so tests get real geometry. */
@@ -241,7 +243,6 @@ const PianoKeyRow = memo(function PianoKeyRow({
 export function PianoKeyboardView({
   store = useAppStore,
   collapsed = false,
-  onToggleCollapsed = () => undefined,
 }: PianoKeyboardViewProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
@@ -418,52 +419,13 @@ export function PianoKeyboardView({
     [whiteKeyWidth, keyHeight, range, naming],
   );
 
-  /**
-   * The instrument, not the literal word "Piano": the keyboard is a view of
-   * whichever track is active, and that track is frequently not a piano — and
-   * on a percussion track it is a drum kit rather than an instrument at all.
-   * Falls back to the track's own name when the program has no catalogue entry
-   * (a hand-edited score), and to "Keyboard" when there is no score.
-   */
-  const headerLabel = activeTrack
-    ? (trackInstrumentLabel(activeTrack) ?? activeTrack.name)
-    : 'Keyboard';
-
-  const header = (
-    <div
-      className="flex shrink-0 items-center gap-2 border-b border-theme-border px-2"
-      style={{ height: HEADER_HEIGHT }}
-    >
-      {activeTrack && <InstrumentIcon track={activeTrack} className="size-4 shrink-0" />}
-      <span className="text-xs font-medium text-theme-text-primary">
-        {/* The keyboard carries no track identity of its own, so the header is
-            the only thing telling you which part you are looking at. */}
-        {headerLabel}
-        {activeTrack ? ` — ${activeTrack.name}` : ''}
-      </span>
-      <div className="flex-1" />
-      <Tooltip content={collapsed ? 'Expand piano keyboard' : 'Collapse piano keyboard'}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={collapsed ? 'Expand piano keyboard' : 'Collapse piano keyboard'}
-          aria-expanded={!collapsed}
-          onClick={onToggleCollapsed}
-          className="h-auto w-auto p-1 text-sm leading-none"
-        >
-          {collapsed ? '▴' : '▾'}
-        </Button>
-      </Tooltip>
-    </div>
-  );
-
-  // Collapsed: the header alone, so the expand control survives.
-  if (collapsed) return <div className="flex flex-col">{header}</div>;
+  // Nothing at all when collapsed. The control that brings it back lives on the
+  // transport bar, so no part of this has to stay on screen to remain reachable
+  // — which is what the header row it replaced was for.
+  if (collapsed) return null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {header}
       <div
         ref={boxRef}
         className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain"

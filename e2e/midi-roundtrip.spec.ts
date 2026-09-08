@@ -7,6 +7,7 @@
  */
 import { expect, test } from '@playwright/test';
 import {
+  chooseImport,
   collectPageErrors,
   createNewProject,
   generateWholeScore,
@@ -43,7 +44,7 @@ test.describe('MIDI export and import round-trip', () => {
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
     await expect(page).toHaveURL(/\/en\/projects$/);
 
-    await page.getByRole('button', { name: 'Import MIDI' }).click();
+    await chooseImport(page, 'Import MIDI');
     await page.getByLabel('MIDI file input').setInputFiles(midiPath!);
 
     await expect(page.getByRole('table', { name: 'MIDI track summary' })).toBeVisible();

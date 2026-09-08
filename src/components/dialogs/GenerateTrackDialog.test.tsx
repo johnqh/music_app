@@ -6,7 +6,7 @@
  * the program table and has to be carried by the clef instead. Getting that
  * wrong is silent: the request still generates, just as a melodic track.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -80,6 +80,28 @@ describe('GenerateTrackDialog', () => {
     expect(screen.getByText('Drum Kits')).toBeInTheDocument();
     expect(screen.getByText(GM_FAMILY_LABELS.piano)).toBeInTheDocument();
     expect(screen.getByText(GM_FAMILY_LABELS['sound-effects'])).toBeInTheDocument();
+  });
+
+  it('defaults to DeepSeek and hands the chosen backend to the caller', async () => {
+    // A one-track generation is the cheapest whole-part request there is, so
+    // it is the one most worth running through a second backend to compare.
+    const user = userEvent.setup();
+    const onGenerate = vi.fn();
+    render(
+      <GenerateTrackDialog
+        open
+        pending={false}
+        onGenerate={onGenerate}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByLabelText('Model')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Prompt'), 'a walking bass');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(onGenerate).toHaveBeenCalledTimes(1);
+    expect(onGenerate.mock.calls[0][2]).toBe('deepseek');
   });
 });
 

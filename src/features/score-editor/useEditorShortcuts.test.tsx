@@ -155,13 +155,20 @@ describe('useEditorShortcuts', () => {
     render(<Harness store={store} />);
     const user = userEvent.setup();
 
+    // The clipboard is tagged now — it can hold a track or a span of bars as
+    // well — so a note assertion has to say which kind it expects.
+    const copiedNotes = () => {
+      const clip = store.getState().clipboard;
+      return clip?.kind === 'notes' ? clip.events : null;
+    };
+
     await user.keyboard('{Control>}c{/Control}');
-    expect(store.getState().clipboard?.events).toHaveLength(1);
+    expect(copiedNotes()).toHaveLength(1);
 
     const beforeCut = allNotes(store.getState().score!).length;
     await user.keyboard('{Control>}x{/Control}');
     expect(allNotes(store.getState().score!).length).toBe(beforeCut - 1);
-    expect(store.getState().clipboard?.events).toHaveLength(1);
+    expect(copiedNotes()).toHaveLength(1);
 
     const beforePaste = allNotes(store.getState().score!).length;
     await user.keyboard('{Control>}v{/Control}');

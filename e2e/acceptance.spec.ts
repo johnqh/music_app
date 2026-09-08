@@ -16,6 +16,7 @@
  */
 import { expect, test } from '@playwright/test';
 import {
+  chooseImport,
   clickNoteGroup,
   collectPageErrors,
   createNewProject,
@@ -64,8 +65,8 @@ test.describe('spec §39 acceptance scenario', () => {
     // 8-13. Select measures 3-4 and replace them. One result, applied by the
     // job — no candidate list to preview or accept.
     await selectMeasuresByIndex(page, [2, 3]);
-    await page.getByRole('tab', { name: 'Measure' }).click();
-    await page.getByRole('button', { name: 'Replace Measures' }).click();
+    await page.getByRole('tab', { name: 'Bar' }).click();
+    await page.getByRole('button', { name: 'Replace Bars' }).click();
     await page
       .getByLabel('Instruction', { exact: true })
       .fill('Make this section more dramatic while preserving the melody.');
@@ -143,7 +144,7 @@ test.describe('spec §39 acceptance scenario', () => {
 
     await page.getByRole('button', { name: 'Back to dashboard' }).click();
     await expect(page).toHaveURL(/\/en\/projects$/);
-    await page.getByRole('button', { name: 'Import MIDI' }).click();
+    await chooseImport(page, 'Import MIDI');
     await page.getByLabel('MIDI file input').setInputFiles(midiPath!);
     await expect(page.getByRole('table', { name: 'MIDI track summary' })).toBeVisible();
     await page.getByRole('button', { name: 'Import', exact: true }).click();

@@ -60,7 +60,7 @@ PROJECTS=(
     "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"
-    "../music_io:0"
+    "../music_io:60"
     # music_app installs from this one, so it is the publish most worth waiting
     # on. Under the poll the number costs nothing when CI is quick.
     "../music_lib:150"

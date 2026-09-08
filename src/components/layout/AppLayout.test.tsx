@@ -265,16 +265,33 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
     expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
   });
 
+  it('puts the transport above the keyboard', () => {
+    /*
+      The keyboard is the only row down there whose height changes — it
+      collapses, and it is optional. With it in between, opening or closing it
+      moved the transport, which is the row a hand goes to without looking.
+      `compareDocumentPosition` rather than a snapshot: what is being pinned is
+      the order, not the markup around it.
+    */
+    render(<AppLayout store={makeStore()} />);
+    const transport = screen.getByRole('toolbar', { name: 'Playback transport' });
+    const keyboard = screen.getByRole('img', { name: /Piano keyboard/ });
+
+    expect(
+      transport.compareDocumentPosition(keyboard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('collapses and re-expands the keyboard panel', async () => {
     render(<AppLayout store={makeStore()} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Collapse piano keyboard' }));
+    await user.click(screen.getByRole('button', { name: 'Hide keyboard' }));
     expect(screen.queryByRole('img', { name: /Piano keyboard/ })).not.toBeInTheDocument();
     // The notation is unaffected — collapsing the keyboard is not a mode switch.
     expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Expand piano keyboard' }));
+    await user.click(screen.getByRole('button', { name: 'Show keyboard' }));
     expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
   });
 

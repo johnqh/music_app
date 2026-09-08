@@ -176,7 +176,7 @@ export function CommitSlider({
   const { t } = useTranslation();
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
-  const resetLabel = t('track.centerPan');
+  const resetLabel = t('inspector.centerPan');
 
   /**
    * Commits whatever the slider was left at.

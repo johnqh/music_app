@@ -65,12 +65,19 @@ test.describe('caret-anchored selection', () => {
     // No mode switch exists any more.
     await expect(page.getByRole('group', { name: 'Editor view' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Collapse piano keyboard' }).click();
+    /*
+      The toggle is the transport bar's rightmost button now, not a header of
+      the keyboard's own — that row cost a whole strip to hold one control, and
+      it put the thing that *reveals* the keyboard inside the thing it reveals.
+      So it is named for what it does to the keyboard rather than for the panel:
+      "Hide keyboard" while it is showing, "Show keyboard" once it is not.
+    */
+    await page.getByRole('button', { name: 'Hide keyboard' }).click();
     await expect(keyboard).toHaveCount(0);
     // Collapsing the keyboard must not disturb the notation.
     await expect(page.getByTestId('score-editor-canvas')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Expand piano keyboard' }).click();
+    await page.getByRole('button', { name: 'Show keyboard' }).click();
     await expect(keyboard).toBeVisible();
 
     expect(getErrors()).toEqual([]);

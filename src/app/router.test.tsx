@@ -20,7 +20,6 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 import { AppRouter } from '@/app/router';
 import { AuthProvider } from '@/app/AuthContext';
 import { playbackController } from '@sudobility/music_lib';
-import { CONSTANTS } from '@/config/constants';
 
 let context: TestStoreContext;
 
@@ -62,10 +61,13 @@ describe('AppRouter', () => {
     );
 
     await waitFor(() =>
-      // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
-      // here made these tests pass in CI and fail on any machine with a .env
-      // that rebrands the app.
-      expect(screen.getByRole('heading', { name: CONSTANTS.APP_NAME })).toBeInTheDocument(),
+      // The dashboard's own search field, not the app name. It used to be the
+      // page heading, which is gone — the top bar already names the app, and a
+      // second copy of the name only took width from the search field. This is
+      // also what `gotoDashboard` waits on in the e2e suite, and for the older
+      // reason too: VITE_APP_NAME is configurable, so anything keyed to it
+      // passes in CI and fails on a machine whose .env rebrands the app.
+      expect(screen.getByLabelText('Search projects')).toBeInTheDocument(),
     );
   });
 
@@ -169,9 +171,7 @@ describe('AppRouter', () => {
     */
     const ROUTE_CHANGE = { timeout: 10_000 };
     await waitFor(() => expect(window.location.pathname).toBe('/en/projects'), ROUTE_CHANGE);
-    // Not the literal name: VITE_APP_NAME is configurable, so hardcoding it
-    // here made these tests pass in CI and fail on any machine with a .env
-    // that rebrands the app.
-    await screen.findByRole('heading', { name: CONSTANTS.APP_NAME }, ROUTE_CHANGE);
+    // The dashboard's own search field — see above for why it is not the name.
+    await screen.findByLabelText('Search projects', undefined, ROUTE_CHANGE);
   });
 });

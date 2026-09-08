@@ -25,6 +25,7 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
+import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_lib';
 import type { ReplaceScope, ReplaceSubmission, ReplacementRegion } from '@sudobility/music_lib';
 
 // `ReplaceSubmission` now lives in music_lib beside `prepareReplacement`,
@@ -118,6 +119,9 @@ export function ReplaceMusicDialog({
   const [style, setStyle] = useState(NONE);
   const [mood, setMood] = useState(NONE);
   const [complexity, setComplexity] = useState<string>('moderate');
+  // The same default the Generate dialog uses, and for the same reason: it is
+  // the backend the piece around this region was most likely written by.
+  const [variant, setVariant] = useState<string>('deepseek');
   const [preserveBoundaryNotes, setPreserveBoundaryNotes] = useState(false);
   const [preserveHarmony, setPreserveHarmony] = useState(false);
   const [preserveRhythm, setPreserveRhythm] = useState(false);
@@ -140,6 +144,7 @@ export function ReplaceMusicDialog({
       ...(style !== NONE ? { style } : {}),
       ...(mood !== NONE ? { mood } : {}),
       complexity: complexity as ReplaceSubmission['complexity'],
+      variant,
       constraints: { preserveBoundaryNotes, preserveHarmony, preserveRhythm, preserveMelody },
     });
   };
@@ -270,6 +275,22 @@ export function ReplaceMusicDialog({
               {COMPLEXITY_OPTIONS.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-theme-text-secondary">{t('generateScore.model')}</span>
+          <Select value={variant} onValueChange={setVariant}>
+            <SelectTrigger aria-label={t('generateScore.model')} className={SELECT_CLASS}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {GENERATION_VARIANTS.map((v) => (
+                <SelectItem key={v} value={v}>
+                  {GENERATION_VARIANT_LABELS[v]}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -84,7 +84,7 @@ test.describe('track gutter and editor', () => {
     // Labelled "Track name", not "Track name: <name>" — the per-track suffix
     // belonged to the deleted panel, where several tracks were on screen at
     // once and each field needed its own name. One track is shown here.
-    await expect(editor.getByLabel('Track name', { exact: true })).toHaveValue('New track');
+    await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('New track');
 
     expect(getErrors()).toEqual([]);
   });

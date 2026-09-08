@@ -1,31 +1,43 @@
 /**
- * Project dashboard (spec §19), server-backed: a searchable/sortable grid
- * of the signed-in user's projects (from music_api via MusicClient), a
- * Templates section ("New from template" starter scores — replacing the
- * old locally-installed sample projects), New Project, MIDI/MusicXML/
- * Project-JSON import, and duplicate/delete (delete confirmed).
+ * Project dashboard (spec §19), server-backed: a searchable/sortable grid of
+ * the signed-in user's projects (from music_api via MusicClient), and three
+ * ways to start one — **New Project**, **New from Template** and **Import** —
+ * plus duplicate/delete (delete confirmed).
  *
  * Opening or creating a project loads it into the shared app-wide store
  * (`openProject`/`newProject`) and then calls `onNavigate`.
  *
- * Re-skinned onto Tailwind + @sudobility/components (T12 batch 5): the MUI
- * Toolbar/Card/CardActionArea/Grid become a plain flex toolbar and a
- * Tailwind `grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3` card grid, MUI
- * Select becomes a native `<select>`, and the import buttons' MUI Tooltips
- * become `@sudobility/components`' Tooltip — same roles/labels/accessible
- * names as before, so no test assertions changed.
+ * **Three controls, where there were seven.** "New Project" and "Generate
+ * Score" were one decision asked twice — they differ only in whether a prompt
+ * is sent — and are now the one `NewProjectDialog` with a Generate-for-me
+ * toggle. The five import buttons were one decision (which file) spread across
+ * five controls that differed by a word, and are now one `Select` used as a
+ * menu: held at `value=""` so its trigger goes on reading "Import" rather than
+ * becoming the last format chosen. Each item opens the dialog its button
+ * opened; none of those dialogs changed.
  *
- * Adopts `@sudobility/components` controls (library sweep 2): the sort
- * `<select>` becomes the library's Radix-backed `Select`; the search field
- * and new-project-name field become the library `Input` (not
- * `SearchInput`: it has no top-level `aria-label` prop, and its built-in
- * icon/clear affordances aren't part of this toolbar's current design, so
- * plain `Input` -- already used identically for every other text field in
- * this library sweep -- is the better fit); every button, including the
- * card actions and the "New from template" cards (already `<button>`
- * elements), becomes the library `Button`. The "Import Project JSON" label
- * + hidden file input stays exactly as-is (same reasoning as
- * `MidiImportWizard`'s file picker).
+ * **The templates moved behind a button too.** Twelve cards sat permanently
+ * between the toolbar and the project list, above the projects somebody came
+ * to open, and pushed the list below the fold once a few existed. Starting from
+ * a template is a *way of starting a project*, so it belongs beside the other
+ * two rather than occupying the page — see `TemplatePickerDialog`. The score is
+ * still built here, from music_lib's list; the dialog only reports which id was
+ * chosen.
+ *
+ * The toolbar is two rows on purpose. Search and sort are the first, as one
+ * `flex-nowrap` line that cannot come apart — search takes whatever width is
+ * left, so sort sits hard against the page's right edge — and the three ways to
+ * start a project are the second, in the order you reach for them: New Project,
+ * New from Template, Import. One row of five controls wrapped unpredictably,
+ * which is how the sort select ended up on a line of its own. There is no page
+ * heading: the top bar already names the app, and a second copy of the name
+ * only took width from the search field.
+ *
+ * Adopts `@sudobility/components` controls (library sweep 2): the sort and
+ * import `<select>`s are the library's Radix-backed `Select`; the search field
+ * is the library `Input` (not `SearchInput`: it has no top-level `aria-label`
+ * prop, and its built-in icon/clear affordances aren't part of this toolbar's
+ * design); every button, including the card actions, is the library `Button`.
  */
 import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { templateCopy } from '@/i18n/lib-copy';
@@ -34,7 +46,6 @@ import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import {
   Button,
-  Heading,
   Input,
   Select,
   SelectContent,
@@ -42,7 +53,6 @@ import {
   SelectTrigger,
   SelectValue,
   Text,
-  Tooltip,
   cn,
 } from '@sudobility/components';
 import { EmptyState } from '@sudobility/building_blocks';
@@ -60,8 +70,9 @@ import {
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import type { GenerateScoreRequest } from '@sudobility/music_types';
-import { GenerateScoreDialog } from '@/features/generation/GenerateScoreDialog';
-import { CONSTANTS } from '@/config/constants';
+import { NewProjectDialog } from '@/features/projects/NewProjectDialog';
+import { TemplatePickerDialog } from '@/features/projects/TemplatePickerDialog';
+import type { NewProjectSubmission } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
@@ -122,13 +133,31 @@ const ROW_BUTTON_CLASS = `${ROW_CONTROL_CLASS} justify-center px-3`;
 
 const CARD_CLASS = cn(variants.card.default.base(), 'flex flex-col overflow-hidden rounded-md');
 
+/**
+ * What the Import menu offers.
+ *
+ * A closed vocabulary declared as an array with the type read off it, so the
+ * dispatcher below fails to compile when a format is added without a home —
+ * the same shape every closed list in this family uses.
+ */
+const IMPORT_KINDS = ['midi', 'musicxml', 'audio', 'module', 'project'] as const;
+type ImportKind = (typeof IMPORT_KINDS)[number];
+
+/** The label each one shows. A `Record`, so a new kind cannot ship unlabelled. */
+const IMPORT_LABEL_KEYS: Record<ImportKind, string> = {
+  midi: 'dashboard.importMidi',
+  musicxml: 'dashboard.importMusicXml',
+  audio: 'dashboard.importAudio',
+  module: 'dashboard.importModule',
+  project: 'dashboard.importProject',
+};
+
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
   const { t } = useTranslation();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('updatedAt');
-  const [creatingName, setCreatingName] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
@@ -150,8 +179,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [jsonImportOpen, setJsonImportOpen] = useState(false);
   const [jsonBusy, setJsonBusy] = useState(false);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [generateOpen, setGenerateOpen] = useState(false);
-  const [creatingGeneration, setCreatingGeneration] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -195,7 +225,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
   /** Creates the project immediately, then starts a job against it: it shows up in this list with its badge from the first second rather than materialising minutes later. */
   const startWholeScoreGeneration = async (request: GenerateScoreRequest): Promise<void> => {
-    setCreatingGeneration(true);
+    setCreatingProject(true);
     try {
       const { client, token } = await clientAndToken();
       const project = await client.createProject(
@@ -218,16 +248,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         });
         throw jobErr;
       }
-      setGenerateOpen(false);
+      setNewProjectOpen(false);
       await refresh();
     } catch (err) {
       // A refusal for want of credits opens the store; everything else is a
       // toast. The dialog closes either way — behind the paywall, an open
       // Generate form is one more thing in the way of buying.
-      setGenerateOpen(false);
+      setNewProjectOpen(false);
       reportGenerationError(err, { context: t('errors.startGeneration'), store });
     } finally {
-      setCreatingGeneration(false);
+      setCreatingProject(false);
     }
   };
 
@@ -243,17 +273,83 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
   };
 
-  const handleCreate = async (): Promise<void> => {
-    const name = (creatingName ?? '').trim();
-    if (name === '') return;
-    setCreatingName(null);
+  /**
+   * Turns what the modal asked for into a project.
+   *
+   * The modal reports the *decision*; where it lands is this page's business,
+   * which is what lets the same form back a local document on the native side.
+   */
+  const handleNewProject = async (submission: NewProjectSubmission): Promise<void> => {
+    if (submission.kind === 'generate') {
+      /*
+        The dialog chooses the backend; this fills in when it did not.
+
+        It used to be attached here alone, from developer settings, on the
+        reasoning that the backend is a property of the machine rather than of
+        the music. Choosing per generation is what the picker in the dialog is
+        for, so a request that already names one keeps it.
+      */
+      await startWholeScoreGeneration(
+        submission.request.variant
+          ? submission.request
+          : withGenerationVariant(
+              submission.request,
+              store.getState().devSettings.generationVariant,
+            ),
+      );
+      return;
+    }
+    setCreatingProject(true);
     try {
-      await store.getState().newProject({ name });
+      await store.getState().newProject({ name: submission.title, score: submission.score });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
+      setNewProjectOpen(false);
+      /*
+        Deliberately no `refresh()` here, unlike the generate branch above.
+
+        That branch stays on the dashboard, so the list has to pick up the new
+        row. This one navigates away from it — refetching a list nobody is about
+        to look at only delays the navigation, and it does so on the slowest
+        call the page makes. It is what put the New Project flow over
+        Playwright's expect timeout under load.
+      */
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       reportError(err, { context: t('errors.createProject'), store });
+    } finally {
+      setCreatingProject(false);
+    }
+  };
+
+  /**
+   * Opens the dialog for one format.
+   *
+   * Audio carries the capability probe its button used to own: uploading a
+   * recording and only then being told the server never could is the worst
+   * order to learn it in.
+   */
+  const openImport = (kind: ImportKind): void => {
+    if (kind === 'midi') setMidiImportOpen(true);
+    else if (kind === 'musicxml') setMusicXmlImportOpen(true);
+    else if (kind === 'module') setModImportOpen(true);
+    else if (kind === 'project') setJsonImportOpen(true);
+    else {
+      setAudioError(null);
+      setAudioImportOpen(true);
+      // Probed per opening, not once per session: a deployment can gain or lose
+      // its credentials while a tab stays open.
+      void (async () => {
+        try {
+          const { client, token } = await clientAndToken();
+          setCanTranscribe((await client.getTranscriptionCapability(token)).available);
+        } catch {
+          // Left unknown rather than false: a failed probe says nothing about
+          // whether transcription works, and the POST reports its own 503
+          // clearly enough if it does not.
+          setCanTranscribe(null);
+        }
+      })();
     }
   };
 
@@ -442,22 +538,32 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
   return (
     <div className="p-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Heading level={1} size="xl" weight="semibold" className="flex-1">
-          {CONSTANTS.APP_NAME}
-        </Heading>
+      {/*
+        Search and sort are one row and never come apart: `flex-nowrap` keeps
+        them on a line together however narrow the window gets, and the search
+        field is what gives (`min-w-0`, since a flex item's default
+        `min-width: auto` refuses to shrink below its content and is what pushes
+        a neighbour onto the next row). Search takes the whole width left over,
+        so sort ends up hard against the right edge of the page.
 
+        There is no page heading above it: the top bar already names the app, and
+        a second "Moosiac" only took width away from the field.
+      */}
+      <div className="flex min-w-0 flex-nowrap items-center gap-2">
         <Input
           type="text"
           aria-label={t('dashboard.searchProjects')}
           placeholder={t('dashboard.searchProjects')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className={TEXT_INPUT_CLASS}
+          className={cn(TEXT_INPUT_CLASS, 'min-w-0 flex-1')}
         />
 
         <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
-          <SelectTrigger aria-label={t('dashboard.sortProjects')} className={SELECT_TRIGGER_CLASS}>
+          <SelectTrigger
+            aria-label={t('dashboard.sortProjects')}
+            className={cn(SELECT_TRIGGER_CLASS, 'shrink-0')}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -465,149 +571,50 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             <SelectItem value="name">{t('dashboard.sortName')}</SelectItem>
           </SelectContent>
         </Select>
-
-        {creatingName !== null ? (
-          <div className="flex items-center gap-1">
-            <Input
-              autoFocus
-              type="text"
-              aria-label={t('dashboard.newProjectName')}
-              value={creatingName}
-              onChange={(e) => setCreatingName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleCreate();
-                else if (e.key === 'Escape') setCreatingName(null);
-              }}
-              className={TEXT_INPUT_CLASS}
-            />
-            <Button
-              type="button"
-              variant="primary"
-              aria-label={t('dashboard.create')}
-              onClick={() => void handleCreate()}
-              className={ROW_BUTTON_CLASS}
-            >
-              {t('dashboard.create')}
-            </Button>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="primary"
-            aria-label={t('dashboard.newProject')}
-            onClick={() => setCreatingName('Untitled Project')}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.newProject')}
-          </Button>
-        )}
-
-        <Tooltip content={t('dashboard.generateScoreHint')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.generateScore')}
-            onClick={() => setGenerateOpen(true)}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.generateScore')}
-          </Button>
-        </Tooltip>
-        <Tooltip content={t('dashboard.importMidi')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.importMidi')}
-            onClick={() => setMidiImportOpen(true)}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.importMidi')}
-          </Button>
-        </Tooltip>
-        <Tooltip content={t('dashboard.importMusicXml')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.importMusicXml')}
-            onClick={() => setMusicXmlImportOpen(true)}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.importMusicXml')}
-          </Button>
-        </Tooltip>
-        <Tooltip content={t('dashboard.importAudioHint')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.importAudio')}
-            onClick={() => {
-              setAudioError(null);
-              setAudioImportOpen(true);
-              // Probed per opening, not once per session: a deployment can gain
-              // or lose its credentials while a tab stays open.
-              void (async () => {
-                try {
-                  const { client, token } = await clientAndToken();
-                  setCanTranscribe((await client.getTranscriptionCapability(token)).available);
-                } catch {
-                  // Left unknown rather than false: a probe that failed says
-                  // nothing about whether separation works, and the POST
-                  // reports its own 503 clearly enough if it does not.
-                  setCanTranscribe(null);
-                }
-              })();
-            }}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.importAudio')}
-          </Button>
-        </Tooltip>
-        <Tooltip content={t('dashboard.importModuleHint')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.importModule')}
-            onClick={() => setModImportOpen(true)}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.importModule')}
-          </Button>
-        </Tooltip>
-        <Tooltip content={t('dashboard.importProject')}>
-          <Button
-            type="button"
-            variant="outline"
-            aria-label={t('dashboard.importProject')}
-            onClick={() => setJsonImportOpen(true)}
-            className={ROW_BUTTON_CLASS}
-          >
-            {t('dashboard.importProject')}
-          </Button>
-        </Tooltip>
       </div>
 
-      <div className="mt-6" aria-label={t('dashboard.templates')}>
-        <Text as="p" size="xs" weight="medium" color="muted" className="uppercase tracking-wide">
-          {t('dashboard.templates')}
-        </Text>
-        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-          {projectTemplates(templateCopy()).map((template) => (
-            <Button
-              key={template.id}
-              type="button"
-              variant="ghost"
-              aria-label={t('dashboard.newFromTemplate', { name: template.name })}
-              onClick={() => void handleCreateFromTemplate(template.id)}
-              className={cn(
-                variants.card.default.interactive(),
-                'h-auto flex-col items-start gap-1 rounded-md p-4 text-left',
-              )}
-            >
-              <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
-              <span className="text-xs text-theme-text-secondary">{template.description}</span>
-            </Button>
-          ))}
-        </div>
+      {/* The actions get a row of their own, so the search/sort pair above can
+          keep the full width it needs on a narrow window. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="primary"
+          aria-label={t('dashboard.newProject')}
+          onClick={() => setNewProjectOpen(true)}
+          className={ROW_BUTTON_CLASS}
+        >
+          {t('dashboard.newProject')}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          aria-label={t('dashboard.newFromTemplateAction')}
+          onClick={() => setTemplatesOpen(true)}
+          className={ROW_BUTTON_CLASS}
+        >
+          {t('dashboard.newFromTemplateAction')}
+        </Button>
+
+        {/*
+          A menu, not a value. Held at `value=""` so Radix keeps rendering the
+          placeholder — the trigger must go on reading "Import" rather than
+          becoming "MusicXML" after one use — and so `onValueChange` fires on
+          every selection, which a controlled Select does because it never
+          adopts the value itself.
+        */}
+        <Select value="" onValueChange={(v) => openImport(v as ImportKind)}>
+          <SelectTrigger aria-label={t('dashboard.importFormat')} className={SELECT_TRIGGER_CLASS}>
+            <SelectValue placeholder={t('dashboard.import')} />
+          </SelectTrigger>
+          <SelectContent>
+            {IMPORT_KINDS.map((kind) => (
+              <SelectItem key={kind} value={kind}>
+                {t(IMPORT_LABEL_KEYS[kind])}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loaded && filtered.length === 0 && (
@@ -637,9 +644,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             buttonLabel={
               search.trim() === '' ? t('dashboard.createFirstProject') : t('common.clearSearch')
             }
-            onPress={() =>
-              search.trim() === '' ? setCreatingName('Untitled Project') : setSearch('')
-            }
+            onPress={() => (search.trim() === '' ? setNewProjectOpen(true) : setSearch(''))}
           />
         </div>
       )}
@@ -735,24 +740,19 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           onNavigate?.(`/project/${projectId}`);
         }}
       />
-      <GenerateScoreDialog
-        open={generateOpen}
-        onClose={() => setGenerateOpen(false)}
-        submitting={creatingGeneration}
-        /*
-          The generation backend is attached here, not in the dialog.
-
-          It is a developer setting rather than part of the musical brief, so
-          the dialog stays a pure form with no store of its own — and this page
-          already takes an injectable store, which is what keeps both testable.
-          Sent only when it is not the default, so an ordinary request is
-          exactly what it was before this existed.
-        */
-        onSubmit={(request) =>
-          void startWholeScoreGeneration(
-            withGenerationVariant(request, store.getState().devSettings.generationVariant),
-          )
-        }
+      <TemplatePickerDialog
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onChoose={(templateId) => {
+          setTemplatesOpen(false);
+          void handleCreateFromTemplate(templateId);
+        }}
+      />
+      <NewProjectDialog
+        open={newProjectOpen}
+        onClose={() => setNewProjectOpen(false)}
+        submitting={creatingProject}
+        onSubmit={(submission) => void handleNewProject(submission)}
       />
     </div>
   );

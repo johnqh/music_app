@@ -625,6 +625,55 @@ export function SunMoonIcon(props: GlyphProps) {
   );
 }
 
+/**
+ * The piano-keyboard toggle: white, black, white.
+ *
+ * Drawn rather than borrowed because the general sets have no piano, and the
+ * nearest stand-in — three identical filled bars — reads as three black keys,
+ * which is not a shape a keyboard ever makes. The outer two are outlines and the
+ * middle one is filled, which is the smallest arrangement that says "keyboard"
+ * rather than "columns": a black key only ever sits *between* two whites.
+ *
+ * The stroke is what makes the outer keys read as white rather than as gaps, so
+ * they are drawn as rects with `fill="none"` — the glyph inherits `currentColor`
+ * for both, so it follows the theme like every other icon here.
+ */
+const KEY_TOP = 5;
+const KEY_BOTTOM = 19;
+const KEY_W = 5.2;
+const KEY_GAP = 0.6;
+/** The white keys sit either side of centre; the black one is centred on it. */
+const KEY_MID_X = 12 - KEY_W / 2;
+
+export function PianoKeysIcon(props: GlyphProps) {
+  const height = KEY_BOTTOM - KEY_TOP;
+  return (
+    <Glyph {...props}>
+      <rect
+        x={KEY_MID_X - KEY_W - KEY_GAP}
+        y={KEY_TOP}
+        width={KEY_W}
+        height={height}
+        rx={0.9}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+      />
+      <rect x={KEY_MID_X} y={KEY_TOP} width={KEY_W} height={height} rx={0.9} />
+      <rect
+        x={KEY_MID_X + KEY_W + KEY_GAP}
+        y={KEY_TOP}
+        width={KEY_W}
+        height={height}
+        rx={0.9}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.6}
+      />
+    </Glyph>
+  );
+}
+
 // --- transport navigation -------------------------------------------------
 //
 // The three of these are one family, built from two parts: a bar that means

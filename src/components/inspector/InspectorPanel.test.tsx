@@ -333,7 +333,7 @@ describe('InspectorPanel: the track tab', () => {
     const store = makeStore();
     render(<InspectorPanel store={store} />);
 
-    const field = screen.getByLabelText('Track name');
+    const field = screen.getByLabelText('Name');
     await user.clear(field);
     await user.type(field, 'Lead');
     expect(store.getState().score!.tracks[0].name).not.toBe('Lead');
@@ -391,7 +391,7 @@ describe('InspectorPanel: the track tab', () => {
     });
     render(<InspectorPanel store={store} />);
 
-    expect(screen.getByLabelText('Track name')).toBeDisabled();
+    expect(screen.getByLabelText('Name')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Instrument' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Delete track' })).toBeDisabled();
     expect(screen.getByLabelText('Track volume')).toBeEnabled();
@@ -573,7 +573,7 @@ describe('the measure clef field', () => {
       store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
     });
     render(<InspectorPanel store={store} />);
-    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
     return { user, measure };
   }
 
@@ -640,7 +640,7 @@ describe('the pickup field', () => {
       store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
     });
     render(<InspectorPanel store={store} />);
-    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
     return user;
   }
 
@@ -709,7 +709,7 @@ describe('the barline field', () => {
       store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
     });
     render(<InspectorPanel store={store} />);
-    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
     return user;
   }
 
@@ -769,7 +769,7 @@ describe('the navigation fields', () => {
       store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
     });
     render(<InspectorPanel store={store} />);
-    await user.click(screen.getByRole('tab', { name: 'Measure' }));
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
     return user;
   }
 

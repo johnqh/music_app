@@ -44,10 +44,32 @@ afterEach(() => {
   resetTestAppServices();
 });
 
+/**
+ * Picks one format out of the Import menu.
+ *
+ * Five buttons that differed by a word were one decision — which file — spread
+ * across five controls; they are one Select now, so every test that used to
+ * click a button by name opens the menu and chooses an option.
+ */
+async function chooseImport(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole('combobox', { name: 'Import a file' }));
+  await user.click(await screen.findByRole('option', { name: label }));
+}
+
 describe('DashboardPage', () => {
-  it('shows every project template', () => {
+  it('offers every project template, behind the button rather than down the page', async () => {
+    // Twelve cards used to sit permanently between the toolbar and the project
+    // list, above the projects somebody came to open.
     const { store } = setup();
     render(<DashboardPage store={store} />);
+    const user = userEvent.setup();
+
+    const first = projectTemplates(TEST_TEMPLATE_COPY)[0];
+    expect(
+      screen.queryByRole('button', { name: `New from template: ${first.name}` }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'New from Template' }));
     for (const template of projectTemplates(TEST_TEMPLATE_COPY)) {
       expect(
         screen.getByRole('button', { name: `New from template: ${template.name}` }),
@@ -55,13 +77,15 @@ describe('DashboardPage', () => {
     }
   });
 
-  it('offers every kind of import here, since each one makes a new project', () => {
+  it('offers every kind of import from one control, since each one makes a new project', async () => {
     // These moved off the editor's title bar: every one of them creates a
     // project and navigates away, which is not something a screen showing one
     // open project should be doing.
     const { store } = setup();
     render(<DashboardPage store={store} />);
+    const user = userEvent.setup();
 
+    await user.click(screen.getByRole('combobox', { name: 'Import a file' }));
     for (const label of [
       'Import MIDI',
       'Import MusicXML',
@@ -69,7 +93,7 @@ describe('DashboardPage', () => {
       'Import MOD',
       'Import project JSON',
     ]) {
-      expect(screen.getByRole('button', { name: label }), label).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: label }), label).toBeInTheDocument();
     }
   });
 
@@ -81,32 +105,75 @@ describe('DashboardPage', () => {
     render(<DashboardPage store={store} />);
     const user = userEvent.setup();
 
-    for (const [button, title] of [
+    for (const [item, title] of [
       ['Import MOD', 'Import module'],
       ['Import project JSON', 'Import project JSON'],
       ['Import Audio', 'Import audio'],
     ] as const) {
-      await user.click(screen.getByRole('button', { name: button }));
-      expect(await screen.findByRole('dialog', { name: title }), button).toBeInTheDocument();
+      await chooseImport(user, item);
+      expect(await screen.findByRole('dialog', { name: title }), item).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
     }
   });
 
-  it('accepts the formats each import claims to', async () => {
-    // The button says WAV, MP3 and MPA; the picker has to agree, or the file
-    // the user was told to bring is greyed out in their own file dialog.
+  it('keeps reading "Import" after one has been chosen', async () => {
+    // A menu, not a value: the trigger must not become "MusicXML" and leave the
+    // reader with no word for what the control does.
     const { store } = setup();
     render(<DashboardPage store={store} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: 'Import Audio' }));
+    await chooseImport(user, 'Import MOD');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    // Anchored: `toHaveTextContent` is a substring match, and "Import MOD"
+    // contains "Import" — so an unanchored assertion passes against exactly the
+    // regression this test exists to catch.
+    expect(screen.getByRole('combobox', { name: 'Import a file' })).toHaveTextContent(/^Import$/);
+  });
+
+  it('accepts the formats each import claims to', async () => {
+    // The menu says WAV, MP3 and MPA; the picker has to agree, or the file the
+    // user was told to bring is greyed out in their own file dialog.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+    const user = userEvent.setup();
+
+    await chooseImport(user, 'Import Audio');
     const audio = (await screen.findByLabelText('audio file input')) as HTMLInputElement;
     for (const ext of ['.wav', '.mp3', '.mpa']) expect(audio.accept).toContain(ext);
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await user.click(screen.getByRole('button', { name: 'Import MOD' }));
+    await chooseImport(user, 'Import MOD');
     const mod = (await screen.findByLabelText('module file input')) as HTMLInputElement;
     expect(mod.accept).toContain('.mod');
+  });
+
+  it('keeps search and sort in one group, so they cannot wrap apart', () => {
+    /*
+      Layout itself is untestable here — jsdom has no layout — but the thing
+      that actually regressed is structural: the sort select was a sibling of
+      the buttons in one wrapping row, so it wrapped onto a line of its own.
+      Sharing a parent with the search field is what stops that, and it is what
+      this pins. The `flex-nowrap` on that parent is the CSS half.
+    */
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+
+    const search = screen.getByLabelText('Search projects');
+    const sort = screen.getByRole('combobox', { name: 'Sort projects' });
+    expect(search.parentElement).toBe(sort.parentElement);
+    // And the buttons are deliberately *not* in it.
+    expect(screen.getByRole('button', { name: 'New Project' }).parentElement).not.toBe(
+      search.parentElement,
+    );
+  });
+
+  it('no longer carries a separate Generate Score button', () => {
+    // One decision, asked once: generating and not generating differ only in
+    // whether a prompt is sent.
+    const { store } = setup();
+    render(<DashboardPage store={store} />);
+    expect(screen.queryByRole('button', { name: 'Generate Score' })).not.toBeInTheDocument();
   });
 
   it("lists the signed-in user's server-side projects", async () => {
@@ -129,9 +196,9 @@ describe('DashboardPage', () => {
     // "New project" while the button read "New Project", which is exactly the
     // mismatch WCAG's "Label in Name" is about. Localising them merged the two.
     await user.click(screen.getByRole('button', { name: 'New Project' }));
-    const nameField = screen.getByLabelText('New project name');
-    await user.clear(nameField);
-    await user.type(nameField, 'Brand New Song');
+    // The name comes from the modal's Title field now — the same field that
+    // titles the score, so a project is named once rather than twice.
+    await user.type(await screen.findByLabelText('Title', { exact: true }), 'Brand New Song');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => expect(onNavigate).toHaveBeenCalled());
@@ -147,8 +214,9 @@ describe('DashboardPage', () => {
     render(<DashboardPage store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
 
+    await user.click(screen.getByRole('button', { name: 'New from Template' }));
     await user.click(
-      screen.getByRole('button', {
+      await screen.findByRole('button', {
         name: `New from template: ${projectTemplates(TEST_TEMPLATE_COPY)[0].name}`,
       }),
     );
@@ -221,19 +289,17 @@ describe('DashboardPage', () => {
 });
 
 describe('DashboardPage generation', () => {
-  it('offers Generate Score', () => {
+  it('reaches whole-score generation through the New Project modal', async () => {
+    // The sidebar gave this up when generation became a server-side job, and
+    // the dashboard's second button gave it up when the toggle arrived.
     const { store } = setup();
     render(<DashboardPage store={store} />);
-    expect(screen.getByRole('button', { name: 'Generate Score' })).toBeVisible();
-  });
+    const user = userEvent.setup();
 
-  it('opens the whole-score dialog, which the sidebar no longer carries', async () => {
-    const { store } = setup();
-    render(<DashboardPage store={store} />);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Generate Score' }));
-
-    expect(screen.getByRole('dialog', { name: 'Generate a new score' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New Project' }));
+    expect(await screen.findByRole('dialog', { name: 'New Project' })).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Generate for me' }));
+    expect(screen.getByLabelText('Prompt')).toBeInTheDocument();
   });
 
   it('marks a generating project in the list', async () => {
@@ -284,9 +350,10 @@ describe('DashboardPage generation', () => {
     const { store } = setup();
     render(<DashboardPage store={store} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Generate Score' }));
+    await userEvent.click(screen.getByRole('button', { name: 'New Project' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Generate for me' }));
     await userEvent.type(screen.getByLabelText('Prompt'), 'a gentle waltz');
-    await userEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(await screen.findByText('Generating…')).toBeVisible();
   });

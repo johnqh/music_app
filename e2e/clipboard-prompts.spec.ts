@@ -35,8 +35,21 @@ async function selectNotes(page: import('@playwright/test').Page, ids: string[])
  * to the region it belongs to is more precise than fighting that with `exact`,
  * and it keeps reading like the thing being described.
  */
-const clipboardButton = (page: import('@playwright/test').Page, name: string) =>
-  page.getByRole('group', { name: 'Clipboard' }).getByRole('button', { name, exact: true });
+/**
+ * Cut, copy, paste, clear and delete are the score's context menu now, not
+ * toolbar buttons — so reaching one means right-clicking the score first.
+ *
+ * The selection is set through the store above rather than by clicking, and a
+ * right-click inside an existing selection deliberately keeps it, so opening
+ * the menu anywhere over the sheet acts on what was selected.
+ */
+async function chooseScoreAction(page: import('@playwright/test').Page, name: string) {
+  await page.getByTestId('score-editor-canvas').click({ button: 'right' });
+  await page
+    .getByRole('menu', { name: 'Score actions' })
+    .getByRole('menuitem', { name, exact: true })
+    .click();
+}
 
 const dialogButton = (page: import('@playwright/test').Page, name: string) =>
   page.getByRole('dialog').getByRole('button', { name, exact: true });
@@ -65,7 +78,7 @@ test.describe('cut and paste prompts', () => {
     const cut = onTrack[0];
     const following = onTrack[onTrack.length - 1];
     await selectNotes(page, [cut.id]);
-    await clipboardButton(page, 'Cut').click();
+    await chooseScoreAction(page, 'Cut');
 
     await expect(page.getByText('Cut these notes')).toBeVisible();
     await dialogButton(page, 'Close the gap').click();
@@ -89,7 +102,7 @@ test.describe('cut and paste prompts', () => {
 
     const following = onTrack[onTrack.length - 1];
     await selectNotes(page, [onTrack[0].id]);
-    await clipboardButton(page, 'Cut').click();
+    await chooseScoreAction(page, 'Cut');
     await dialogButton(page, 'Leave silence').click();
 
     const after = await readScoreSummary(page);
@@ -113,7 +126,7 @@ test.describe('cut and paste prompts', () => {
       page,
       onTrack.map((n) => n.id),
     );
-    await clipboardButton(page, 'Cut').click();
+    await chooseScoreAction(page, 'Cut');
 
     await expect(page.getByText('Cut these notes')).toBeHidden();
     expect(getErrors()).toEqual([]);
@@ -130,8 +143,8 @@ test.describe('cut and paste prompts', () => {
       .sort((a, b) => a.startTick - b.startTick);
 
     await selectNotes(page, [onTrack[0].id]);
-    await clipboardButton(page, 'Copy').click();
-    await clipboardButton(page, 'Paste').click();
+    await chooseScoreAction(page, 'Copy');
+    await chooseScoreAction(page, 'Paste');
 
     await expect(page.getByText('Paste over this music')).toBeVisible();
     await dialogButton(page, 'Insert').click();
