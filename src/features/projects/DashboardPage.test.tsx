@@ -18,6 +18,7 @@ import {
 } from '@sudobility/music_lib';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+import { withQueryClient } from '@/test/query';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => {
@@ -61,7 +62,7 @@ describe('DashboardPage', () => {
     // Twelve cards used to sit permanently between the toolbar and the project
     // list, above the projects somebody came to open.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     const first = projectTemplates(TEST_TEMPLATE_COPY)[0];
@@ -82,7 +83,7 @@ describe('DashboardPage', () => {
     // project and navigates away, which is not something a screen showing one
     // open project should be doing.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('combobox', { name: 'Import a file' }));
@@ -102,7 +103,7 @@ describe('DashboardPage', () => {
     // of the five imports had no title, no description of what they would do,
     // and nowhere to report a file that could not be read.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     for (const [item, title] of [
@@ -120,7 +121,7 @@ describe('DashboardPage', () => {
     // A menu, not a value: the trigger must not become "MusicXML" and leave the
     // reader with no word for what the control does.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     await chooseImport(user, 'Import MOD');
@@ -135,7 +136,7 @@ describe('DashboardPage', () => {
     // The menu says WAV, MP3 and MPA; the picker has to agree, or the file the
     // user was told to bring is greyed out in their own file dialog.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     await chooseImport(user, 'Import Audio');
@@ -157,7 +158,7 @@ describe('DashboardPage', () => {
       this pins. The `flex-nowrap` on that parent is the CSS half.
     */
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
 
     const search = screen.getByLabelText('Search projects');
     const sort = screen.getByRole('combobox', { name: 'Sort projects' });
@@ -172,7 +173,7 @@ describe('DashboardPage', () => {
     // One decision, asked once: generating and not generating differ only in
     // whether a prompt is sent.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     expect(screen.queryByRole('button', { name: 'Generate Score' })).not.toBeInTheDocument();
   });
 
@@ -182,14 +183,14 @@ describe('DashboardPage', () => {
       { name: 'My Existing Song', score: createEmptyScore({ title: 'My Existing Song' }) },
       'test-token',
     );
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     await waitFor(() => expect(screen.getByText('My Existing Song')).toBeInTheDocument());
   });
 
   it('New Project creates a project on the server and navigates to it', async () => {
     const { store, context } = setup();
     const onNavigate = vi.fn();
-    render(<DashboardPage store={store} onNavigate={onNavigate} />);
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
     const user = userEvent.setup();
 
     // "New Project", matching the visible label: the aria-label used to read
@@ -211,7 +212,7 @@ describe('DashboardPage', () => {
   it('"New from template" creates a project seeded with the template score', async () => {
     const { store } = setup();
     const onNavigate = vi.fn();
-    render(<DashboardPage store={store} onNavigate={onNavigate} />);
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'New from Template' }));
@@ -237,7 +238,7 @@ describe('DashboardPage', () => {
       { name: 'Beta Tune', score: createEmptyScore({ title: 'B' }) },
       't',
     );
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     await waitFor(() => expect(screen.getByText('Alpha Song')).toBeInTheDocument());
 
     const user = userEvent.setup();
@@ -253,7 +254,7 @@ describe('DashboardPage', () => {
       't',
     );
     const onNavigate = vi.fn();
-    render(<DashboardPage store={store} onNavigate={onNavigate} />);
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
     await waitFor(() => expect(screen.getByText('Openable')).toBeInTheDocument());
 
     const user = userEvent.setup();
@@ -269,7 +270,7 @@ describe('DashboardPage', () => {
       { name: 'Original', score: createEmptyScore({ title: 'Original' }) },
       't',
     );
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
     const user = userEvent.setup();
     const getProject = vi.spyOn(context.fakeClient, 'getProject');
@@ -293,7 +294,7 @@ describe('DashboardPage generation', () => {
     // The sidebar gave this up when generation became a server-side job, and
     // the dashboard's second button gave it up when the toggle arrived.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'New Project' }));
@@ -310,7 +311,7 @@ describe('DashboardPage generation', () => {
     );
     context.fakeClient.setProjectStatus(project.id, 'generating');
 
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
 
     expect(await screen.findByText('Generating…')).toBeVisible();
   });
@@ -322,7 +323,7 @@ describe('DashboardPage generation', () => {
       'tok',
     );
 
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
 
     expect(await screen.findByText('Calm Song')).toBeVisible();
     expect(screen.queryByText('Generating…')).not.toBeInTheDocument();
@@ -336,7 +337,7 @@ describe('DashboardPage generation', () => {
     );
     context.fakeClient.setProjectStatus(project.id, 'generating');
 
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
     await userEvent.click(
       await screen.findByRole('button', { name: 'Cancel generation: Busy Song' }),
     );
@@ -348,7 +349,7 @@ describe('DashboardPage generation', () => {
     // Created immediately rather than on completion: otherwise it would
     // materialise in this list minutes later out of nowhere.
     const { store } = setup();
-    render(<DashboardPage store={store} />);
+    render(withQueryClient(<DashboardPage store={store} />));
 
     await userEvent.click(screen.getByRole('button', { name: 'New Project' }));
     await userEvent.click(screen.getByRole('switch', { name: 'Generate for me' }));

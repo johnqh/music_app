@@ -5,15 +5,33 @@
  * The estimate is bars × instruments because that is what the server bills: a
  * four-bar quartet costs about four times a four-bar solo to produce.
  */
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { NewProjectSubmission } from '@sudobility/music_lib';
 import { MemoryRouter } from 'react-router-dom';
 import { NewProjectDialog } from './NewProjectDialog';
+import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
+
+/*
+  The dialog reads `getAppServices()` for the network client the presets query
+  needs. Public route, no token — but the services registry still has to exist,
+  the same requirement the import dialogs have.
+*/
+beforeEach(() => {
+  installTestAppServices();
+});
+afterEach(() => {
+  resetTestAppServices();
+});
 
 const useBalance = vi.fn();
 vi.mock('@sudobility/consumables_client', () => ({
   useBalance: () => useBalance() as unknown,
+}));
+
+const useScorePresets = vi.fn(() => ({ data: undefined as string[] | undefined }));
+vi.mock('@sudobility/music_client', () => ({
+  useScorePresets: (...args: unknown[]) => useScorePresets(...(args as [])) as unknown,
 }));
 
 const useSiteAdmin = vi.fn(() => false);
@@ -23,6 +41,9 @@ vi.mock('@/app/AuthContext', () => ({
 
 function open(balance: number, siteAdmin = false, onSubmit = vi.fn()) {
   useBalance.mockReturnValue({ balance, isLoading: false });
+  // No briefs unless a test says otherwise: the server owns the list, and the
+  // menu is meant to be absent when it has not arrived.
+  useScorePresets.mockReturnValue({ data: undefined });
   useSiteAdmin.mockReturnValue(siteAdmin);
   // Inside a router: the out-of-credits message links to the store, and the
   // dialog is always rendered within the app's router in production.
@@ -48,13 +69,15 @@ function turnGenerationOn() {
 /**
  * Brings the ensemble to exactly `count` instruments.
  *
- * The dialog starts with one (Piano) and refuses to drop below one, so this
- * adds the remainder with the Add button rather than setting a checkbox set.
+ * Adds with the Add button and removes from the end, rather than setting a
+ * checkbox set. It has to do both: turning the AI half on adds a singer, so a
+ * roster of one is now reached by removing rather than by starting there.
  */
 function selectInstruments(count: number) {
+  const removes = () => screen.getAllByRole('button', { name: /^Remove / });
   const add = screen.getByRole('button', { name: 'Add' });
-  const current = screen.getAllByRole('button', { name: /^Remove / }).length;
-  for (let i = current; i < count; i++) fireEvent.click(add);
+  for (let i = removes().length; i < count; i++) fireEvent.click(add);
+  while (removes().length > count) fireEvent.click(removes()[removes().length - 1]);
 }
 
 function setMeasures(n: number) {
@@ -106,7 +129,9 @@ describe('NewProjectDialog cost', () => {
     setMeasures(4);
     selectInstruments(1);
 
-    expect(screen.getByText(/about/i)).toBeInTheDocument();
+    // Specifically the credit line's "about" — the lyric-subject field's label
+    // also contains the word.
+    expect(screen.getByText(/about \d+ credits/i)).toBeInTheDocument();
   });
 
   it('disables Create when the balance is spent', () => {
@@ -320,14 +345,17 @@ describe('NewProjectDialog: creating', () => {
     expect(submission.score.tracks.every((t) => typeof t.midiProgram === 'number')).toBe(true);
   });
 
-  it('names the project Untitled Project when the Title is blank', () => {
-    // The score inside says "Untitled"; the row in a list of rows needs a name
-    // a reader can tell from the others.
+  it('names the project New Score when the Title is blank', () => {
+    // The score inside still says "Untitled"; the row in a list of rows needs a
+    // name a reader can tell from the others, and it is the one the placeholder
+    // showed them.
     const { onSubmit } = open(1000);
     fireEvent.click(createButton());
     const submission = onSubmit.mock.calls[0]?.[0] as NewProjectSubmission;
     if (submission.kind !== 'blank') throw new Error('expected a blank submission');
-    expect(submission.title).toBe('Untitled Project');
+    expect(submission.title).toBe('New Score');
+    // The score's own title is not the project's name: blank still means
+    // "Untitled" inside the score, which is what names an exported file.
     expect(submission.score.metadata.title).toBe('Untitled');
   });
 
@@ -389,5 +417,337 @@ describe('choosing the model', () => {
     // Read off the vocabulary rather than restated: a variant added to
     // music_types must appear here without this test being edited.
     expect(screen.getByLabelText(/model/i)).toBeInTheDocument();
+  });
+});
+
+describe('NewProjectDialog: finding a style', () => {
+  function optionsOf(name: string): string[] {
+    fireEvent.click(screen.getByLabelText(name));
+    return screen.getAllByRole('option').map((option) => option.textContent ?? '');
+  }
+
+  it('lists the styles alphabetically, with No style pinned above them', () => {
+    // Declaration order — waltz, jazz, pop, cinematic — is the order the
+    // vocabulary grew in and no order to hunt through thirty-three entries by.
+    open(1000);
+    turnGenerationOn();
+    const [first, ...styles] = optionsOf('Style');
+    expect(first).toBe('No style');
+    expect(styles).toEqual([...styles].sort((a, b) => a.localeCompare(b)));
+    expect(styles[0]).toBe('Ambient');
+  });
+
+  it('lists the moods alphabetically too, with No mood pinned above them', () => {
+    open(1000);
+    turnGenerationOn();
+    const [first, ...moods] = optionsOf('Mood');
+    expect(first).toBe('No mood');
+    expect(moods).toEqual([...moods].sort((a, b) => a.localeCompare(b)));
+  });
+});
+
+describe('NewProjectDialog: singers', () => {
+  function instrumentOptions(): string[] {
+    fireEvent.click(screen.getByLabelText('Add instrument'));
+    return screen.getAllByRole('option').map((option) => option.textContent ?? '');
+  }
+
+  function roster(): string[] {
+    return screen
+      .getAllByRole('button', { name: /^Remove / })
+      .map((button) => button.getAttribute('aria-label')?.replace('Remove ', '') ?? '');
+  }
+
+  it('offers the voices as their own group, ahead of the kits and the families', () => {
+    // GM files them under Ensemble, between String Ensemble and Orchestra Hit,
+    // which is where nobody looking for a singer thinks to look.
+    open(1000);
+    const options = instrumentOptions();
+    expect(screen.getByText('Voice')).toBeInTheDocument();
+    expect(options.slice(0, 3)).toEqual(['Voice Oohs', 'Choir Aahs', 'Synth Voice']);
+    expect(options.indexOf('Voice Oohs')).toBeLessThan(options.indexOf('Jazz Kit'));
+  });
+
+  it('lists each voice once, not again under the family GM filed it in', () => {
+    open(1000);
+    const options = instrumentOptions();
+    expect(options.filter((label) => label === 'Voice Oohs')).toHaveLength(1);
+  });
+
+  it('adds a singer when the model is asked to write the music', () => {
+    // A song needs somebody singing it, and the roster otherwise opens on a
+    // piano solo — so the reader has to know to go and find a voice first.
+    open(1000);
+    expect(roster()).toEqual(['Acoustic Grand Piano']);
+    turnGenerationOn();
+    expect(roster()).toEqual(['Voice Oohs', 'Acoustic Grand Piano']);
+  });
+
+  it('takes it away again when the model is not writing the music', () => {
+    open(1000);
+    turnGenerationOn();
+    turnGenerationOn();
+    expect(roster()).toEqual(['Acoustic Grand Piano']);
+  });
+
+  it('leaves a singer the reader chose themselves alone', () => {
+    // Removing "the vocal" on the way out must mean the one that was added
+    // for them, not whichever one happens to be at the top of the list.
+    open(1000);
+    turnGenerationOn();
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Add instrument'));
+    fireEvent.click(screen.getByRole('option', { name: 'Choir Aahs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(roster()).toEqual(['Acoustic Grand Piano', 'Choir Aahs']);
+
+    turnGenerationOn();
+    turnGenerationOn();
+    expect(roster()).toEqual(['Acoustic Grand Piano', 'Choir Aahs']);
+  });
+
+  it('adds no second singer when one is already in the roster', () => {
+    open(1000);
+    fireEvent.click(screen.getByLabelText('Add instrument'));
+    fireEvent.click(screen.getByRole('option', { name: 'Voice Oohs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    turnGenerationOn();
+    expect(roster()).toEqual(['Acoustic Grand Piano', 'Voice Oohs']);
+  });
+
+  it('keeps the singer when a style rewrites the whole ensemble', () => {
+    // Choosing a style overwrites the roster deliberately; a vocal that
+    // vanished at that moment would be a song the reader thought they asked for.
+    open(1000);
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Rock' }));
+    expect(roster()[0]).toBe('Voice Oohs');
+  });
+});
+
+describe('NewProjectDialog: lyrics', () => {
+  const lyricsSwitch = () => screen.queryByRole('switch', { name: 'Write lyrics' });
+
+  it('is offered once somebody in the roster can sing them', () => {
+    open(1000);
+    turnGenerationOn();
+    expect(lyricsSwitch()).toBeInTheDocument();
+    expect(lyricsSwitch()).toBeChecked();
+  });
+
+  it('is not offered over an entirely instrumental roster', () => {
+    // Syllables under a bass line are not a lyric.
+    open(1000);
+    turnGenerationOn();
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove Voice Oohs/ })[0]);
+    expect(lyricsSwitch()).not.toBeInTheDocument();
+  });
+
+  it('asks the server for words', () => {
+    const { onSubmit } = open(1000);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind).toBe('generate');
+    expect(submission.kind === 'generate' && submission.request.lyrics).toBe(true);
+  });
+
+  it('takes a subject for the words, when they are about something of their own', () => {
+    // "A slow waltz in D minor" describes the music; the words over it can be
+    // about coming home without the music brief being about coming home.
+    const { onSubmit } = open(1000);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    fireEvent.change(screen.getByLabelText('What the words are about'), {
+      target: { value: 'a love song about coming home' },
+    });
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'generate' && submission.request.lyricsTheme).toBe(
+      'a love song about coming home',
+    );
+  });
+
+  it('offers nowhere to describe words it is not writing', () => {
+    open(1000);
+    turnGenerationOn();
+    expect(screen.getByLabelText('What the words are about')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Write lyrics' }));
+    expect(screen.queryByLabelText('What the words are about')).not.toBeInTheDocument();
+  });
+
+  it('sends no subject when none was typed, so the words follow the piece', () => {
+    const { onSubmit } = open(1000);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'generate' && 'lyricsTheme' in submission.request).toBe(false);
+  });
+
+  it('leaves the field off the request when it is switched off', () => {
+    const { onSubmit } = open(1000);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    fireEvent.click(screen.getByRole('switch', { name: 'Write lyrics' }));
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'generate' && 'lyrics' in submission.request).toBe(false);
+  });
+});
+
+describe('NewProjectDialog: the AI half does not clip what is inside it', () => {
+  it('stops hiding its overflow once it is open', async () => {
+    /*
+      The block collapses by animating `grid-template-rows` from `0fr` to `1fr`,
+      which only works while the inner element hides its overflow — and that
+      same `overflow-hidden` cut the Presets menu off at the bottom of the
+      block. jsdom has no layout to measure the clipping with, so this asserts
+      the mechanism: hidden while collapsed, not hidden once open.
+    */
+    open(1000);
+    const inner = () => screen.getByLabelText('Prompt').closest('[aria-hidden]')?.firstElementChild;
+    expect(inner()).toHaveClass('overflow-hidden');
+    turnGenerationOn();
+    // After it has finished growing: dropping the clip immediately would let
+    // the full-height content overlap the rows below while it animates.
+    await waitFor(() => expect(inner()).not.toHaveClass('overflow-hidden'));
+  });
+});
+
+describe('NewProjectDialog: preset briefs', () => {
+  function openWithPresets(keys: string[]) {
+    const onSubmit = vi.fn();
+    useBalance.mockReturnValue({ balance: 1000, isLoading: false });
+    useSiteAdmin.mockReturnValue(false);
+    useScorePresets.mockReturnValue({ data: keys });
+    render(
+      <MemoryRouter>
+        <NewProjectDialog open onClose={vi.fn()} onSubmit={onSubmit} submitting={false} />
+      </MemoryRouter>,
+    );
+    turnGenerationOn();
+    return { onSubmit };
+  }
+
+  const presetsButton = () => screen.queryByRole('button', { name: 'Preset prompts' });
+
+  it('offers no Presets button until the server has sent briefs', () => {
+    // Hidden rather than dead: a button that opens an empty menu is worse
+    // than no button, and this list is the server's to supply.
+    open(1000);
+    turnGenerationOn();
+    expect(presetsButton()).not.toBeInTheDocument();
+  });
+
+  it('offers no Presets button when the server sends an empty list', () => {
+    useScorePresets.mockReturnValue({ data: [] });
+    open(1000);
+    turnGenerationOn();
+    expect(presetsButton()).not.toBeInTheDocument();
+  });
+
+  it('shows the briefs the server chose, in this reader’s language', () => {
+    openWithPresets(['organStabs', 'lockedGroove']);
+    fireEvent.click(presetsButton()!);
+    expect(
+      screen.getByRole('menuitem', { name: 'Off-beat organ stabs over a deep bass' }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+  });
+
+  it('keeps the server’s order, which is what makes two apps agree', () => {
+    openWithPresets(['lockedGroove', 'organStabs']);
+    fireEvent.click(presetsButton()!);
+    expect(screen.getAllByRole('menuitem')[0]).toHaveTextContent(
+      'A groove where bass and drums lock together',
+    );
+  });
+
+  it('writes the chosen brief into the prompt and closes the menu', () => {
+    openWithPresets(['lullaby']);
+    fireEvent.click(presetsButton()!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'A lullaby, slow and simple' }));
+    expect(screen.getByLabelText('Prompt')).toHaveValue('A lullaby, slow and simple');
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+  });
+
+  it('skips a brief it has no words for, rather than printing its id', () => {
+    // A server one version ahead of this app. Showing `someNewBrief` in a menu
+    // is worse than showing one fewer brief.
+    openWithPresets(['lullaby', 'someBriefFromTheFuture']);
+    fireEvent.click(presetsButton()!);
+    expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+  });
+
+  it('asks for the briefs of the style that is chosen', () => {
+    openWithPresets(['lullaby']);
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Reggae' }));
+    expect(useScorePresets).toHaveBeenLastCalledWith(expect.anything(), 'reggae');
+  });
+});
+
+describe('NewProjectDialog: the default title', () => {
+  const titleField = () => screen.getByLabelText('Title');
+
+  it('offers New Score for a blank project', () => {
+    open(1000);
+    expect(titleField()).toHaveAttribute('placeholder', 'New Score');
+  });
+
+  it('offers Generated Score once the model is writing it', () => {
+    open(1000);
+    turnGenerationOn();
+    expect(titleField()).toHaveAttribute('placeholder', 'Generated Score');
+  });
+
+  it('names a blank project what the placeholder promised', () => {
+    // A placeholder that is not what you get if you leave the field alone is
+    // a label for a value that never existed.
+    const { onSubmit } = open(1000);
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'blank' && submission.title).toBe('New Score');
+  });
+
+  it('names a generated project Generated Score', () => {
+    const { onSubmit } = open(1000);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'generate' && submission.request.title).toBe('Generated Score');
+  });
+
+  it('still takes a title that was typed', () => {
+    const { onSubmit } = open(1000);
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Wedding March' } });
+    fireEvent.click(createButton());
+    const submission = onSubmit.mock.calls[0][0] as NewProjectSubmission;
+    expect(submission.kind === 'blank' && submission.title).toBe('Wedding March');
+  });
+});
+
+describe('NewProjectDialog: the backends on offer', () => {
+  it('names the ordinary backend after the provider it reaches', () => {
+    open(1000);
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Model'));
+    expect(screen.getByRole('option', { name: 'Open AI' })).toBeInTheDocument();
+  });
+
+  it('no longer offers the cheap model', () => {
+    open(1000);
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Model'));
+    expect(screen.queryByRole('option', { name: /cheap/i })).not.toBeInTheDocument();
   });
 });

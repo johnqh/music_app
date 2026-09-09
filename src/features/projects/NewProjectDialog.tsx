@@ -70,10 +70,12 @@
  * element that actually carries `role="progressbar"`, so there's no way to
  * keep the required "Generating" accessible name on a library swap.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
+import { useScorePresets } from '@sudobility/music_client';
+import { getAppServices } from '@/config/initialize';
 import { useSiteAdmin } from '@/app/AuthContext';
 import type { ChangeEvent, ReactNode } from 'react';
 import type * as React from 'react';
@@ -98,6 +100,9 @@ import {
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
   GENERATE_SCORE_STYLE_OPTIONS,
+  DEFAULT_VOCAL_INSTRUMENT_VALUE,
+  hasVocalInstrument,
+  sortOptionsByLabel,
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
   withGenerationVariant,
@@ -142,24 +147,19 @@ export type NewProjectDialogProps = {
  */
 type EnsembleEntry = InstrumentValueEntry;
 
-/**
- * The preset prompts, by key.
- *
- * Copy, so the host owns it: the text a reader picks is also the text sent to
- * the model, and a Chinese reader should be prompting in Chinese rather than
- * choosing between eight English sentences. music_lib keeps only the style and
- * mood *values*, which the prompt parser matches against.
- */
-const PRESET_KEYS = [
-  'gentlePiano',
-  'cinematic',
-  'pop',
-  'beginner',
-  'jazz',
-  'battle',
-  'ambient',
-  'waltz',
-] as const;
+/*
+  The preset briefs are the server's list and this app's words.
+
+  Which briefs suit which genre is product data — `GET /public/presets?style=`
+  — so it can be retuned without shipping an app and two apps cannot offer
+  different starting points for the same style. The *text* stays here, because
+  the brief a reader picks is also the prompt sent to the model, and a Chinese
+  reader should be prompting in Chinese rather than choosing between English
+  sentences. Same division as `MusicXmlWarnings`.
+
+  It used to be eight hardcoded prompts that had nothing to do with the chosen
+  style, so picking Reggae still offered a waltz.
+*/
 
 /** Sentinel for Style/Mood's "no selection" option: Radix `Select.Item` rejects an empty-string `value` (it's reserved to mean "cleared"). */
 const NONE_VALUE = '__none__';
@@ -191,6 +191,8 @@ const TEXT_INPUT_CLASS = 'w-full px-2 py-1.5 text-sm';
  * `motion-reduce:transition-none` because somebody who asked the OS for less
  * motion asked this dialog too.
  */
+const REVEAL_MS = 200;
+
 function CollapsibleReveal({
   shown,
   children,
@@ -199,6 +201,26 @@ function CollapsibleReveal({
   shown: boolean;
   children: ReactNode;
 } & Pick<React.HTMLAttributes<HTMLDivElement>, 'role' | 'aria-label'>) {
+  /*
+    `overflow-hidden` is what makes the collapse work, and it is also what cut
+    the Presets menu off at the bottom of this block: the menu is an absolutely
+    positioned child, so it is clipped to the box it grows out of. The Style and
+    Mood selects escaped only because Radix portals them out of the tree.
+
+    So it is clipped while collapsed and while animating, and not once open —
+    dropping it immediately instead would let the full-height content overlap
+    the rows below for the 200ms the block takes to grow.
+  */
+  const [clipping, setClipping] = useState(true);
+  useEffect(() => {
+    if (!shown) {
+      setClipping(true);
+      return;
+    }
+    const timer = setTimeout(() => setClipping(false), REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+
   return (
     <div
       {...group}
@@ -210,7 +232,9 @@ function CollapsibleReveal({
         shown ? 'mb-0 grid-rows-[1fr] opacity-100' : '-mb-4 grid-rows-[0fr] opacity-0',
       )}
     >
-      <div className="flex min-h-0 flex-col gap-4 overflow-hidden">{children}</div>
+      <div className={cn('flex min-h-0 flex-col gap-4', clipping && 'overflow-hidden')}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -253,7 +277,7 @@ export function NewProjectDialog({
   onSubmit,
   submitting = false,
 }: NewProjectDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [title, setTitle] = useState('');
   /*
     Whether a model writes the music.
@@ -267,6 +291,24 @@ export function NewProjectDialog({
     toggle is not worth the tidiness.
   */
   const [generateForMe, setGenerateForMe] = useState(false);
+  /*
+    Words under the sung notes. On by default, because somebody who has just
+    been given a singer is writing a song — but a switch rather than an
+    inference, since a voice program held as a wordless "ooh" pad is a
+    different piece of music and there is no way to tell the two apart from the
+    roster alone. Only reaches the wire when somebody can sing them, which
+    `buildGenerateScoreRequest` enforces.
+  */
+  const [lyrics, setLyrics] = useState(true);
+  /*
+    What the words are about, when that is not what the piece is about.
+
+    A separate field because they are separate questions: the prompt describes
+    the music, and the words over it can be about coming home without the music
+    brief being about coming home. Blank means "the same as the piece", which is
+    what the lyric always followed — so leaving it alone changes nothing.
+  */
+  const [lyricsTheme, setLyricsTheme] = useState('');
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('');
   const [mood, setMood] = useState('');
@@ -279,6 +321,12 @@ export function NewProjectDialog({
     { id: 0, value: DEFAULT_INSTRUMENT_VALUE },
   ]);
   const [nextEntryId, setNextEntryId] = useState(1);
+  /*
+    The singer this dialog added, so turning the toggle back off removes that
+    one and not whichever voice happens to be at the top of the list. A ref
+    rather than state: it is read inside handlers and must never cause a render.
+  */
+  const autoVocalId = useRef<number | null>(null);
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
   const [measures, setMeasures] = useState(String(DEFAULT_GENERATE_SCORE_MEASURES));
   /*
@@ -331,18 +379,73 @@ export function NewProjectDialog({
       in this editable list, so it can be removed before generating.
     */
     const withGuest = styleInstrumentsWithGuest(next);
+    const entries = withGuest.map((value: string, index: number) => ({
+      id: index,
+      value,
+    }));
+    /*
+      A style overwrites the whole roster deliberately, so the singer has to be
+      put back: a vocal that vanished the moment a genre was chosen is a song
+      the reader thought they had asked for and did not get. Not added when the
+      preset brought its own voice, and not added at all in blank mode.
+    */
+    const singing = generateForMe && !hasVocalInstrument(withGuest);
+    autoVocalId.current = singing ? withGuest.length : null;
     setEnsemble(
-      withGuest.map((value: string, index: number) => ({
-        id: index,
-        value,
-      })),
+      singing
+        ? [{ id: withGuest.length, value: DEFAULT_VOCAL_INSTRUMENT_VALUE }, ...entries]
+        : entries,
     );
-    setNextEntryId(withGuest.length);
+    setNextEntryId(withGuest.length + (singing ? 1 : 0));
     setTempo(String(preset.tempo));
     setMeasures(String(preset.measures));
     setTimeSigPreset(preset.timeSignature);
     if (preset.mode) setKeyMode(preset.mode);
   };
+  /*
+    The vocabularies in the order they are read, not the order they were
+    written. Thirty-three styles in declaration order — waltz, jazz, pop,
+    cinematic, ambient — is a list nobody can find "reggae" in. Sorted on the
+    translated label rather than the key, because `electroSwing` is not what is
+    on screen, and under the active language, because the labels a Chinese
+    reader scans are Chinese. `sortOptionsByLabel` is shared with the native
+    app, which draws the same two pickers.
+  */
+  const styleOptions = useMemo(
+    () =>
+      sortOptionsByLabel(
+        GENERATE_SCORE_STYLE_OPTIONS,
+        (value) => t(`generateScore.styleName.${value}`),
+        i18n.language,
+      ),
+    [t, i18n.language],
+  );
+  const moodOptions = useMemo(
+    () =>
+      sortOptionsByLabel(
+        GENERATE_SCORE_MOOD_OPTIONS,
+        (value) => t(`generateScore.moodName.${value}`),
+        i18n.language,
+      ),
+    [t, i18n.language],
+  );
+
+  /*
+    The briefs the server offers for the style in hand.
+
+    Keyed on the style, so choosing Reggae asks for reggae's briefs — the whole
+    point of moving this off a hardcoded list. `i18n.exists` filters what
+    arrives: a server one version ahead of this app would otherwise print a
+    brief's id at the reader, which is worse than showing one fewer brief.
+  */
+  const { data: presetKeys } = useScorePresets(
+    { ...getAppServices(), token: null },
+    style || undefined,
+  );
+  const presets = (presetKeys ?? [])
+    .filter((key) => i18n.exists(`generateScore.preset.${key}`))
+    .map((key) => t(`generateScore.preset.${key}`));
+
   const [presetOpen, setPresetOpen] = useState(false);
   const presetRef = useRef<HTMLDivElement | null>(null);
 
@@ -354,6 +457,18 @@ export function NewProjectDialog({
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [presetOpen]);
+
+  /*
+    What the project is called when nothing was typed.
+
+    Two names rather than one, because the two modes produce different things
+    and a reader can tell them apart in a list at a glance. It is the
+    placeholder *and* the fallback: a placeholder showing a name you do not get
+    is a label for a value that never existed.
+  */
+  const defaultTitle = t(
+    generateForMe ? 'newProject.defaultTitleGenerated' : 'newProject.defaultTitle',
+  );
 
   const durationMeasures = Number(measures);
   const instrumentValues = ensemble.map((entry) => entry.value);
@@ -395,6 +510,8 @@ export function NewProjectDialog({
     style,
     mood,
     tempoText: tempo,
+    lyrics,
+    lyricsTheme,
   };
 
   /*
@@ -412,6 +529,29 @@ export function NewProjectDialog({
   // number is what stops Generate, so say so rather than just greying it out.
   const tempoRefused = tempo.trim() !== '' && !(Number(tempo) > 0);
 
+  /*
+    Turning the model on gives the roster somebody to sing, because a song needs
+    one and the form otherwise opens on a piano solo — leaving the reader to
+    know that a voice is filed under Ensemble before they can ask for a song.
+    Turning it off takes back exactly what was given: a voice the reader chose
+    themselves is theirs.
+  */
+  const toggleGenerateForMe = (next: boolean): void => {
+    setGenerateForMe(next);
+    if (next) {
+      if (hasVocalInstrument(instrumentValues)) return;
+      const id = nextEntryId;
+      autoVocalId.current = id;
+      setEnsemble((prev) => [{ id, value: DEFAULT_VOCAL_INSTRUMENT_VALUE }, ...prev]);
+      setNextEntryId((value) => value + 1);
+      return;
+    }
+    const id = autoVocalId.current;
+    if (id === null) return;
+    autoVocalId.current = null;
+    setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
+  };
+
   const addInstrument = (): void => {
     setEnsemble((prev) => [...prev, { id: nextEntryId, value: picker }]);
     setNextEntryId((id) => id + 1);
@@ -421,6 +561,8 @@ export function NewProjectDialog({
   // would refuse it anyway — better to disable the last remove than to let the
   // form reach a state it cannot submit from.
   const removeInstrument = (id: number): void => {
+    // Removed by hand, so the toggle has nothing left to take back.
+    if (autoVocalId.current === id) autoVocalId.current = null;
     setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
   };
 
@@ -435,7 +577,18 @@ export function NewProjectDialog({
   const handleCreate = (): void => {
     if (!canCreate) return;
     if (generateForMe) {
-      const request = buildGenerateScoreRequest(generationDraft);
+      /*
+        The default title reaches the *request*, not the draft.
+
+        `buildNewProjectScore` reads the same draft and writes the title into
+        the score's own metadata, where blank has always meant "Untitled" — the
+        score's title and the project's name are different things, and only the
+        second is what this default is for.
+      */
+      const request = buildGenerateScoreRequest({
+        ...generationDraft,
+        title: title.trim() || defaultTitle,
+      });
       if (!request) return;
       onSubmit({ kind: 'generate', request: withGenerationVariant(request, variant) });
       return;
@@ -444,7 +597,7 @@ export function NewProjectDialog({
     if (!score) return;
     // The score's title and the project's name are different things: the score
     // says "Untitled", and a row in a list needs something a reader can pick out.
-    onSubmit({ kind: 'blank', title: title.trim() || t('newProject.untitled'), score });
+    onSubmit({ kind: 'blank', title: title.trim() || defaultTitle, score });
   };
 
   return (
@@ -492,7 +645,7 @@ export function NewProjectDialog({
           <Input
             value={title}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-            placeholder={t('generateScore.titlePlaceholder')}
+            placeholder={defaultTitle}
             aria-label={t('generateScore.titleField')}
             className="px-2 py-1.5 text-sm"
           />
@@ -505,7 +658,7 @@ export function NewProjectDialog({
         <label className="flex items-center gap-3">
           <Switch
             checked={generateForMe}
-            onCheckedChange={setGenerateForMe}
+            onCheckedChange={toggleGenerateForMe}
             aria-label={t('newProject.generateForMe')}
           />
           <span className="flex flex-col">
@@ -521,48 +674,61 @@ export function NewProjectDialog({
           role="group"
           aria-label={t('newProject.aiSettings')}
         >
-          <div className="flex items-start gap-2">
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
-              <TextArea
-                value={prompt}
-                onChange={setPrompt}
-                rows={3}
-                textareaProps={{ 'aria-label': 'Prompt' }}
-              />
-            </label>
-            <div ref={presetRef} className="relative shrink-0">
-              <Button
-                type="button"
-                variant="outline"
-                aria-label={t('generateScore.presetPrompts')}
-                aria-haspopup="menu"
-                aria-expanded={presetOpen}
-                onClick={() => setPresetOpen((open) => !open)}
-                className="px-3 py-1.5"
-              >
-                {t('generate.presets')}
-              </Button>
-              {presetOpen && (
-                <div
-                  role="menu"
-                  className={cn(
-                    variants.card.default.base(),
-                    'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
-                  )}
-                >
-                  {PRESET_KEYS.map((key) => t(`generateScore.preset.${key}`)).map((text) => (
-                    <Button
-                      key={text}
-                      type="button"
-                      variant="ghost"
-                      role="menuitem"
-                      onClick={() => handlePresetSelect(text)}
-                      className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
+          {/* The caption sits above the whole row rather than above the prompt
+              alone, so the Presets button starts at the top of the prompt box
+              instead of a caption's height above it. Its accessible name comes
+              from `aria-label`, not from a wrapping `<label>`. */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
+            <div className="flex items-start gap-2">
+              <div className="flex-1">
+                <TextArea
+                  value={prompt}
+                  onChange={setPrompt}
+                  rows={3}
+                  textareaProps={{ 'aria-label': 'Prompt' }}
+                />
+              </div>
+              {/* No briefs, no button. The list is the server's, so an
+                  unreachable API means a control that would open an empty menu
+                  — which reads worse than one that is simply not there. Not
+                  rendered rather than hidden: a button that is merely invisible
+                  is still in the tab order and still announced. */}
+              {presets.length > 0 && (
+                <div ref={presetRef} className="relative shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={t('generateScore.presetPrompts')}
+                    aria-haspopup="menu"
+                    aria-expanded={presetOpen}
+                    onClick={() => setPresetOpen((open) => !open)}
+                    className="px-3 py-1.5"
+                  >
+                    {t('generate.presets')}
+                  </Button>
+                  {presetOpen && (
+                    <div
+                      role="menu"
+                      className={cn(
+                        variants.card.default.base(),
+                        'absolute right-0 top-full z-10 mt-1 max-h-72 w-80 overflow-y-auto rounded-md py-1 shadow-lg',
+                      )}
                     >
-                      {text}
-                    </Button>
-                  ))}
+                      {presets.map((text) => (
+                        <Button
+                          key={text}
+                          type="button"
+                          variant="ghost"
+                          role="menuitem"
+                          onClick={() => handlePresetSelect(text)}
+                          className="block w-full justify-start rounded-none px-3 py-1.5 text-left"
+                        >
+                          {text}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -581,7 +747,7 @@ export function NewProjectDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
-                {GENERATE_SCORE_STYLE_OPTIONS.map((s) => (
+                {styleOptions.map((s) => (
                   <SelectItem key={s} value={s}>
                     {t(`generateScore.styleName.${s}`)}
                   </SelectItem>
@@ -600,7 +766,7 @@ export function NewProjectDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
-                {GENERATE_SCORE_MOOD_OPTIONS.map((m) => (
+                {moodOptions.map((m) => (
                   <SelectItem key={m} value={m}>
                     {t(`generateScore.moodName.${m}`)}
                   </SelectItem>
@@ -641,6 +807,46 @@ export function NewProjectDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Only where somebody can sing them: syllables under a bass line are
+              not a lyric. The request omits the field entirely otherwise, which
+              music_lib enforces rather than trusting this to stay in step. */}
+          {hasVocalInstrument(instrumentValues) ? (
+            <label className="flex items-center gap-3">
+              <Switch
+                checked={lyrics}
+                onCheckedChange={setLyrics}
+                aria-label={t('newProject.writeLyrics')}
+              />
+              <span className="flex flex-col">
+                <span className="text-sm text-theme-text-primary">
+                  {t('newProject.writeLyrics')}
+                </span>
+                <span className="text-xs text-theme-text-secondary">
+                  {t('newProject.writeLyricsHint')}
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          {/* Only where words are actually being written: a subject for a lyric
+              nobody asked for is the disagreement this field was once left out
+              to avoid, and music_lib drops it from the request on the same
+              rule rather than trusting this to stay in step. */}
+          {hasVocalInstrument(instrumentValues) && lyrics ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-theme-text-secondary">
+                {t('newProject.lyricsTheme')}
+              </span>
+              <Input
+                value={lyricsTheme}
+                placeholder={t('newProject.lyricsThemePlaceholder')}
+                aria-label={t('newProject.lyricsTheme')}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setLyricsTheme(e.target.value)}
+                className={TEXT_INPUT_CLASS}
+              />
+            </label>
+          ) : null}
         </CollapsibleReveal>
 
         <div

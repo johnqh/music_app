@@ -1,3 +1,8 @@
+// Configure the Firebase China proxy before anything initializes Firebase.
+// Blank/unset means standard Firebase (the library holds no default).
+import { setFirebaseProxy } from '@sudobility/di';
+setFirebaseProxy(import.meta.env.VITE_FIREBASE_PROXY);
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/app/App';

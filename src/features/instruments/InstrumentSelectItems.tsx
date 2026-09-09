@@ -7,12 +7,25 @@
  */
 import { SelectGroup, SelectItem, SelectLabel } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
-import { FAMILY_GROUPS, KIT_OPTIONS } from '@sudobility/music_lib';
+import { FAMILY_GROUPS, KIT_OPTIONS, VOICE_OPTIONS } from '@sudobility/music_lib';
 
 export function InstrumentSelectItems() {
   const { t } = useTranslation();
   return (
     <>
+      {/* Voices first, because General MIDI files them under Ensemble between
+          String Ensemble and Orchestra Hit — which is where nobody setting out
+          to write a song looks for a singer, and is why generated scores never
+          had one. They are removed from that family upstream, so no program is
+          offered twice here. */}
+      <SelectGroup>
+        <SelectLabel>{t('generate.voices')}</SelectLabel>
+        {VOICE_OPTIONS.map((voice) => (
+          <SelectItem key={voice.value} value={voice.value}>
+            {voice.label}
+          </SelectItem>
+        ))}
+      </SelectGroup>
       <SelectGroup>
         <SelectLabel>{t('generate.drumKits')}</SelectLabel>
         {KIT_OPTIONS.map((kit) => (

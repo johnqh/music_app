@@ -17,6 +17,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
   };
 });
 
+import { withQueryClient } from '@/test/query';
 import { AppRouter } from '@/app/router';
 import { AuthProvider } from '@/app/AuthContext';
 import { playbackController } from '@sudobility/music_lib';
@@ -40,9 +41,11 @@ describe('AppRouter', () => {
   it('redirects "/" to the localized home page', async () => {
     const store = makeStore();
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     // The home page itself is public and lives in `App.tsx`, matched before the
@@ -55,9 +58,11 @@ describe('AppRouter', () => {
     const store = makeStore();
     window.history.pushState({}, '', '/en/projects');
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     await waitFor(() =>
@@ -80,9 +85,11 @@ describe('AppRouter', () => {
     window.history.pushState({}, '', `/en/project/${record.id}`);
 
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
@@ -96,9 +103,11 @@ describe('AppRouter', () => {
     window.history.pushState({}, '', '/en/project/proj-1/print');
 
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument();
@@ -109,9 +118,11 @@ describe('AppRouter', () => {
     window.history.pushState({}, '', '/nope');
 
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     // The home page itself is public and lives in `App.tsx`, matched before the
@@ -129,9 +140,11 @@ describe('AppRouter', () => {
     window.history.pushState({}, '', `/en/project/${record.id}`);
 
     const { unmount } = render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     await waitFor(() => expect(store.getState().projectId).toBe(record.id));
@@ -147,9 +160,11 @@ describe('AppRouter', () => {
     window.history.pushState({}, '', '/en/project/does-not-exist');
 
     render(
-      <AuthProvider>
-        <AppRouter store={store} />
-      </AuthProvider>,
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
     );
 
     /*
