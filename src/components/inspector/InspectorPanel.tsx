@@ -42,6 +42,8 @@
  *   continuous `onChange`, no commit-on-release callback of its own).
  * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
+import { GenerationChoices } from '@/features/generation/GenerationChoices';
+import type { GenerationChoicesProps } from '@/features/generation/GenerationChoices';
 import { commandLabel } from '@/features/score-editor/command-labels';
 import { outOfRangeNoteIds } from '@sudobility/music_drawing';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
@@ -151,6 +153,11 @@ export type InspectorPanelProps = {
    * still render and disable correctly but do nothing.
    */
   onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+  /**
+   * The open project's last generation and how to run it again, shown on the
+   * Score tab. Omitted where the project was never generated.
+   */
+  generation?: GenerationChoicesProps;
 };
 
 /**
@@ -901,7 +908,13 @@ function TrackTab({ store, onReplace }: TabProps) {
  * and the file was still String Quartet.mid. Composer had no path at all,
  * which left every exported and published score anonymous.
  */
-function ScoreTab({ store }: { store: EditorStoreApi }) {
+function ScoreTab({
+  store,
+  generation,
+}: {
+  store: EditorStoreApi;
+  generation?: GenerationChoicesProps;
+}) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
   const isPlaying = store((s) => s.state === 'playing');
@@ -957,6 +970,8 @@ function ScoreTab({ store }: { store: EditorStoreApi }) {
       </label>
 
       <p className="text-xs text-theme-text-secondary">{t('inspector.scoreTitleHint')}</p>
+
+      {generation && <GenerationChoices {...generation} />}
     </div>
   );
 }
@@ -987,7 +1002,11 @@ const TABS: Array<{ value: InspectorTab; labelKey: string }> = [
   { value: 'measure', labelKey: 'inspector.measure' },
 ];
 
-export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPanelProps) {
+export function InspectorPanel({
+  store = useAppStore,
+  onReplace,
+  generation,
+}: InspectorPanelProps) {
   const { t } = useTranslation();
   const selection = store((s) => s.selection);
   const [tab, setTab] = useState<InspectorTab>(() => defaultTabFor(selection));
@@ -1032,7 +1051,7 @@ export function InspectorPanel({ store = useAppStore, onReplace }: InspectorPane
           />
         </TabsList>
         <TabsContent value="score">
-          <ScoreTab store={store} />
+          <ScoreTab store={store} generation={generation} />
         </TabsContent>
         <TabsContent value="note">
           <NoteTab store={store} onReplace={onReplace} />

@@ -1527,5 +1527,25 @@
     "defaultTitleGenerated": "生成的乐谱",
     "lyricsTheme": "歌词的主题",
     "lyricsThemePlaceholder": "例如：一首关于归乡的情歌"
+  },
+  "generationChoices": {
+    "heading": "这首作品的生成方式",
+    "hint": "锁定想保留的选项后重新生成：锁定的选项保持不变，其余的重新随机选择。",
+    "lock": "保留{{name}}",
+    "groove": "律动",
+    "cycle": "和弦",
+    "arcEntry": "开头",
+    "arcIntensity": "推进",
+    "moment": "亮点段落",
+    "carrier": "旋律",
+    "formShape": "曲式",
+    "hook": "主题动机",
+    "lyric": "歌词",
+    "again": "重新生成",
+    "againKeeping_one": "重新生成，保留 1 个选项",
+    "againKeeping_other": "重新生成，保留 {{count}} 个选项",
+    "confirmTitle": "重新生成这首作品？",
+    "confirmMessage": "这会用新生成的结果替换整份乐谱。除非先保存快照，否则当前乐谱不会保留。",
+    "confirm": "重新生成"
   }
 }

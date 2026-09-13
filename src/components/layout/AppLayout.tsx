@@ -177,6 +177,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * Reloads the project after a job applies its result server-side. The score
    * in the store is stale by definition at that point — the server wrote it.
    */
+  const lastGeneration = store((s) => s.lastGeneration);
   const generation = useProjectGeneration(projectId, {
     store,
     onApplied: async () => {
@@ -952,6 +953,21 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 <InspectorPanel
                   store={store}
                   onReplace={(scope, submission) => void startReplacement(scope, submission)}
+                  generation={
+                    lastGeneration
+                      ? {
+                          record: lastGeneration,
+                          generating: generation.generating,
+                          // The same request, with the locked choices kept and
+                          // everything else rolled again by the server.
+                          onGenerateAgain: (locks) =>
+                            void generation.start('generate-score', {
+                              ...lastGeneration.request,
+                              choices: locks,
+                            }),
+                        }
+                      : undefined
+                  }
                 />
               </div>
             </div>

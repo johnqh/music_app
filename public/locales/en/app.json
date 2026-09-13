@@ -1527,5 +1527,25 @@
     "defaultTitleGenerated": "Generated Score",
     "lyricsTheme": "What the words are about",
     "lyricsThemePlaceholder": "e.g. a love song about coming home"
+  },
+  "generationChoices": {
+    "heading": "How this piece was generated",
+    "hint": "Lock what you want to keep, then generate again: locked choices stay, the rest are rolled fresh.",
+    "lock": "Keep {{name}}",
+    "groove": "Groove",
+    "cycle": "Chords",
+    "arcEntry": "Opening",
+    "arcIntensity": "Build",
+    "moment": "Moment",
+    "carrier": "Melody",
+    "formShape": "Form",
+    "hook": "Hook",
+    "lyric": "Lyrics",
+    "again": "Generate again",
+    "againKeeping_one": "Generate again, keeping 1 choice",
+    "againKeeping_other": "Generate again, keeping {{count}} choices",
+    "confirmTitle": "Generate this piece again?",
+    "confirmMessage": "This replaces the whole score with a new generation. Your current score is not kept unless you save a snapshot first.",
+    "confirm": "Generate again"
   }
 }
