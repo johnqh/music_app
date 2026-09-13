@@ -1089,6 +1089,8 @@
     "drumKit": "鼓组",
     "duration": "时值",
     "instrumentRangeError": "{{instrument}} 无法在不改变音程的情况下覆盖该音轨的音域。",
+    "outOfRange_one": "有 {{count}} 个音符超出该乐器 {{low}}-{{high}} 的音域，无法演奏。",
+    "outOfRange_other": "有 {{count}} 个音符超出该乐器 {{low}}-{{high}} 的音域，无法演奏。",
     "key": "调号",
     "kitOf": "鼓组：{{name}}",
     "makeGraceNote": "作为下一音符的装饰音",
@@ -1208,7 +1210,8 @@
     "turn": "回音"
   },
   "overlay": {
-    "generatingNotes": "正在生成音符…"
+    "generatingNotes": "正在生成音符…",
+    "openingProject": "正在打开项目…"
   },
   "player": {
     "play": "播放",

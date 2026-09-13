@@ -6,7 +6,9 @@
  * four-bar quartet costs about four times a four-bar solo to produce.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { GENERATE_SCORE_STYLE_PRESETS, styleTempoRange } from '@sudobility/music_types';
+import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS } from '@sudobility/music_lib';
 import type { NewProjectSubmission } from '@sudobility/music_lib';
 import { MemoryRouter } from 'react-router-dom';
 import { NewProjectDialog } from './NewProjectDialog';
@@ -435,6 +437,61 @@ describe('NewProjectDialog: finding a style', () => {
     expect(first).toBe('No style');
     expect(styles).toEqual([...styles].sort((a, b) => a.localeCompare(b)));
     expect(styles[0]).toBe('Ambient');
+  });
+
+  /*
+   * Picking a style settles the key and the tempo, and not the same ones every
+   * time.
+   *
+   * Every score this app generated was in C at its genre's one nominal tempo —
+   * measured across every stored project, `fifths` was 0 without exception —
+   * because choosing a style set the mode and nothing else. Two pieces in one
+   * key at one speed sound like each other whatever their rhythms do.
+   */
+  it('sets a key and a tempo the chosen genre is actually played at', () => {
+    open(1000);
+    turnGenerationOn();
+
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Swing' }));
+
+    /*
+      One of swing's own keys, as the picker labels them. Derived from the two
+      tables the dialog reads rather than typed out: this used to list 'B♭'
+      and 'E♭' while the picker spells them 'Bb' and 'Eb', so it failed exactly
+      when the roll landed on a flat key — half the time.
+    */
+    const labels = (GENERATE_SCORE_STYLE_PRESETS.swing.keys ?? []).map(
+      (fifths) => GENERATE_SCORE_KEY_FIFTHS_OPTIONS.find((o) => o.fifths === fifths)!.label,
+    );
+    expect(labels.length).toBeGreaterThan(1);
+    const key = screen.getByLabelText('Key').textContent ?? '';
+    expect(
+      labels.some((label) => key.startsWith(label)),
+      `key label "${key}"`,
+    ).toBe(true);
+
+    const [min, max] = styleTempoRange('swing')!;
+    const tempo = Number((screen.getByLabelText('Tempo') as HTMLInputElement).value);
+    expect(tempo).toBeGreaterThanOrEqual(min);
+    expect(tempo).toBeLessThanOrEqual(max);
+  });
+
+  it('does not give every generation of one genre the same key and tempo', () => {
+    // Rolled per pick, so choosing the same style twice is two settings, not
+    // one — the guest instrument beside them has worked this way all along.
+    const seen = new Set<string>();
+    for (let i = 0; i < 12; i += 1) {
+      open(1000);
+      turnGenerationOn();
+      fireEvent.click(screen.getByLabelText('Style'));
+      fireEvent.click(screen.getByRole('option', { name: 'Salsa' }));
+      const key = screen.getByLabelText('Key').textContent ?? '';
+      const tempo = (screen.getByLabelText('Tempo') as HTMLInputElement).value;
+      seen.add(`${key}@${tempo}`);
+      cleanup();
+    }
+    expect(seen.size).toBeGreaterThan(1);
   });
 
   it('lists the moods alphabetically too, with No mood pinned above them', () => {

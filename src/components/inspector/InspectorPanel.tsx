@@ -43,6 +43,7 @@
  * - The Name/Instrument text fields (track tab) become the library `Input`.
  */
 import { commandLabel } from '@/features/score-editor/command-labels';
+import { outOfRangeNoteIds } from '@sudobility/music_drawing';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
 import {
   BarlineField,
@@ -74,7 +75,7 @@ import {
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent } from 'react';
 import {
@@ -97,7 +98,7 @@ import type {
   DurationName,
   TimeSignature,
 } from '@sudobility/music_types';
-import { DYNAMICS, isNoteEvent } from '@sudobility/music_types';
+import { DYNAMICS, isNoteEvent, midiToPitch, pitchToString } from '@sudobility/music_types';
 import {
   findEvent,
   findMeasure,
@@ -690,6 +691,18 @@ function TrackTab({ store, onReplace }: TabProps) {
   const canDelete = store((s) => s.canDeleteTrack());
   const [pendingDelete, setPendingDelete] = useState(false);
 
+  /**
+   * What this track holds that its instrument cannot play.
+   *
+   * Scanned from the score on the score's identity, like the notation's own
+   * marks, so the panel and the page agree by construction rather than by two
+   * lookups that could drift.
+   */
+  const outOfRange = useMemo(
+    () => outOfRangeNoteIds(score).byTrack.find((entry) => entry.trackId === track?.id) ?? null,
+    [score, track?.id],
+  );
+
   // Local draft so typing does not dispatch a command per keystroke — which
   // would put one undo entry on the history per character. Committed on blur,
   // and reset whenever the track changes underneath us.
@@ -778,6 +791,25 @@ function TrackTab({ store, onReplace }: TabProps) {
           )}
         </div>
       </label>
+
+      {/*
+        Notes this instrument cannot play, said in words.
+
+        The notation marks them in its own colour, which tells a reader that
+        something is wrong with a note; this says what, beside the instrument
+        picker — which is the other half of the fix available to them, since
+        choosing an instrument that can play the part is as valid an answer as
+        moving the notes.
+      */}
+      {outOfRange ? (
+        <p className="text-xs text-theme-text-secondary">
+          {t('inspector.outOfRange', {
+            count: outOfRange.count,
+            low: pitchToString(midiToPitch(outOfRange.compass.min)),
+            high: pitchToString(midiToPitch(outOfRange.compass.max)),
+          })}
+        </p>
+      ) : null}
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>{t('importMidi.colClef')}</span>

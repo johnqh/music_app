@@ -94,7 +94,12 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { trackIdAtGutterPoint } from '@sudobility/music_drawing';
 import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
-import { STAVE_POSITION_HEIGHT, buildNoteColors, noteColorsFor } from '@sudobility/music_drawing';
+import {
+  STAVE_POSITION_HEIGHT,
+  buildNoteColors,
+  noteColorsFor,
+  outOfRangeNoteIds,
+} from '@sudobility/music_drawing';
 import { PlaybackCaret } from '@/features/score-editor/PlaybackCaret';
 
 export type ScoreEditorViewProps = {
@@ -303,14 +308,24 @@ export function ScoreEditorView({
    * The `regenerated` role survives the removal of candidate previews:
    * `selectionRegenerated` still marks material a generation just produced.
    */
+  /**
+   * Notes the instrument cannot play, scanned from the score itself.
+   *
+   * Keyed on the score's identity: every mutation returns a new object, so an
+   * unchanged reference is an unchanged score — and a selection change must
+   * not re-walk it, since colours repaint far more often than notes move.
+   */
+  const outOfRangeIds = useMemo(() => outOfRangeNoteIds(score).ids, [score]);
+
   const noteColors = useMemo(
     () =>
       buildNoteColors({
         selectedIds: selection.eventIds,
         playingIds: [],
+        outOfRangeIds,
         regenerated: selectionRegenerated,
       }),
-    [selection.eventIds, selectionRegenerated],
+    [selection.eventIds, outOfRangeIds, selectionRegenerated],
   );
 
   /**
@@ -330,11 +345,12 @@ export function ScoreEditorView({
     (sounding: readonly SoundingNote[]) =>
       noteColorsFor({
         selectedIds: selection.eventIds,
+        outOfRangeIds,
         sounding,
         activeTrackId: activeTrackId ?? null,
         regenerated: selectionRegenerated,
       }),
-    [selection.eventIds, selectionRegenerated, activeTrackId],
+    [selection.eventIds, outOfRangeIds, selectionRegenerated, activeTrackId],
   );
 
   const selectedMeasureIds = useMemo(() => new Set(selection.measureIds), [selection.measureIds]);

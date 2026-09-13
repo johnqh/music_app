@@ -134,6 +134,47 @@ describe('PianoKeyboardView', () => {
       expect(Math.min(...high)).toBeGreaterThan(Math.max(...low));
     });
 
+    /*
+      The keys keep their SOUNDING midi numbers and only the lettering moves.
+      On a B-flat trumpet read in written pitch the two differ by a tone, and
+      the mismatch was silent: the key said C4, pressing it stored a sounding
+      C4 — correctly — and the staff drew the D4 the player reads.
+    */
+    it('letters the keys in written pitch when the staff is', () => {
+      const store = makeStore();
+      const { container } = render(<PianoKeyboardView store={store} />);
+      setProgram(store, 56); // Trumpet in B flat: written a tone above sounding
+
+      const nameOf = (midi: number) =>
+        container.querySelector(`[data-testid="piano-key-${midi}"]`)?.getAttribute('aria-label');
+
+      // Concert pitch: the key is what it sounds.
+      expect(nameOf(60)).toBe('C4');
+
+      act(() => {
+        store.getState().setPitchDisplay('written');
+      });
+
+      // Written: the same key, the same sounding note, lettered as the player
+      // reads it — press it and a C4 appears on the staff.
+      expect(nameOf(58)).toBe('C4');
+      expect(nameOf(60)).toBe('D4');
+    });
+
+    it("leaves a piano's lettering alone in either mode", () => {
+      const store = makeStore();
+      const { container } = render(<PianoKeyboardView store={store} />);
+      setProgram(store, 0);
+
+      act(() => {
+        store.getState().setPitchDisplay('written');
+      });
+
+      expect(
+        container.querySelector('[data-testid="piano-key-60"]')?.getAttribute('aria-label'),
+      ).toBe('C4');
+    });
+
     it('begins and ends on a white key, which a black one cannot do', () => {
       // A black key at either end has no white neighbour to hang off.
       const store = makeStore();

@@ -1089,6 +1089,8 @@
     "drumKit": "Drum kit",
     "duration": "Duration",
     "instrumentRangeError": "{{instrument}} cannot cover this track's note span without changing intervals.",
+    "outOfRange_one": "{{count}} note is outside this instrument's range of {{low}}-{{high}} and cannot be played on it.",
+    "outOfRange_other": "{{count}} notes are outside this instrument's range of {{low}}-{{high}} and cannot be played on it.",
     "key": "Key",
     "kitOf": "Drum kit: {{name}}",
     "makeGraceNote": "Make grace note of the next",
@@ -1208,7 +1210,8 @@
     "turn": "Turn"
   },
   "overlay": {
-    "generatingNotes": "Generating notes…"
+    "generatingNotes": "Generating notes…",
+    "openingProject": "Opening project…"
   },
   "player": {
     "play": "Play",

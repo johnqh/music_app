@@ -187,6 +187,34 @@ describe('DashboardPage', () => {
     await waitFor(() => expect(screen.getByText('My Existing Song')).toBeInTheDocument());
   });
 
+  /*
+   * Clicking a project navigates; it does not fetch it first.
+   *
+   * The wait used to happen here, on the screen you are leaving: the whole
+   * project — score JSON, parsed — was fetched before anything navigated, with
+   * nothing on the dashboard to say so. The editor owns the load now, and says
+   * so while it happens.
+   */
+  it('opens a project by navigating, without waiting for it to load', async () => {
+    const { store, context } = setup();
+    const record = await context.fakeClient.createProject(
+      { name: 'Slow Song', score: createEmptyScore({ title: 'Slow Song' }) },
+      'test-token',
+    );
+    // A fetch that never settles: if the click awaited it, nothing navigates.
+    context.fakeClient.getProject = () => new Promise(() => {});
+
+    const onNavigate = vi.fn();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Open project: Slow Song' }));
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(`/project/${record.id}`));
+    // And nothing was opened here: the editor route does that.
+    expect(store.getState().projectId).toBeNull();
+  });
+
   it('New Project creates a project on the server and navigates to it', async () => {
     const { store, context } = setup();
     const onNavigate = vi.fn();
@@ -247,7 +275,7 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Beta Tune')).not.toBeInTheDocument();
   });
 
-  it('clicking a project card opens it and navigates to /project/:id', async () => {
+  it('clicking a project card navigates to /project/:id', async () => {
     const { store, context } = setup();
     const record = await context.fakeClient.createProject(
       { name: 'Openable', score: createEmptyScore({ title: 'Openable' }) },
@@ -260,8 +288,14 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Open project: Openable' }));
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(`/project/${record.id}`));
-    expect(store.getState().projectId).toBe(record.id);
-    expect(playbackController.stop).toHaveBeenCalledTimes(1);
+    /*
+      The project itself is loaded by the editor route, which also stops the
+      transport once it has one. This page neither fetches nor touches
+      playback: it used to do both, and the fetch is what made a click feel
+      like nothing had happened.
+    */
+    expect(store.getState().projectId).toBeNull();
+    expect(playbackController.stop).not.toHaveBeenCalled();
   });
 
   it('Duplicate copies a project; Delete (after confirming) removes it', async () => {

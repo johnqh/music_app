@@ -97,6 +97,63 @@ describe('AppRouter', () => {
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('Router Test Project');
   });
 
+  /*
+   * The editor never shows a project the URL did not ask for.
+   *
+   * Reported from the app: clicking a project showed the PREVIOUS one — its
+   * music, and its name in the app bar — for a few seconds, then swapped. The
+   * dashboard navigates immediately now, so the store still holds the last
+   * project while the new one is fetched, and an editor mounted over that is
+   * an editor showing the wrong thing.
+   */
+  it('shows a loading screen, never the previous project', async () => {
+    const store = makeStore();
+    const first = await context.fakeClient.createProject(
+      { name: 'The Old One', score: createEmptyScore({ title: 'The Old One' }) },
+      'test-token',
+    );
+    const second = await context.fakeClient.createProject(
+      { name: 'The New One', score: createEmptyScore({ title: 'The New One' }) },
+      'test-token',
+    );
+    // The editor is already showing the first project, as it would be after a
+    // visit; the URL asks for the second.
+    await store.getState().openProject(first.id);
+
+    // Assigned inside the executor, which runs synchronously — the `!` is
+    // what tells TypeScript that, since it cannot see the timing.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const realGet = context.fakeClient.getProject.bind(context.fakeClient);
+    context.fakeClient.getProject = async (id: string, token: string) => {
+      await held;
+      return realGet(id, token);
+    };
+
+    window.history.pushState({}, '', `/en/project/${second.id}`);
+    render(
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
+    );
+
+    // While the fetch is held: the spinner, and nothing of the old project.
+    expect(await screen.findByTestId('project-loading')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Edit project title')).not.toBeInTheDocument();
+    expect(screen.queryByText('The Old One')).not.toBeInTheDocument();
+
+    release();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Edit project title')).toHaveTextContent('The New One'),
+    );
+    expect(screen.queryByTestId('project-loading')).not.toBeInTheDocument();
+  });
+
   it('renders the print view at "/project/:id/print"', async () => {
     const store = makeStore();
     store.getState().setScore(createEmptyScore({ title: 'Printable' }));

@@ -263,14 +263,22 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
-  const openProject = async (id: string): Promise<void> => {
-    try {
-      await store.getState().openProject(id);
-      resetOpenedProjectTransport();
-      onNavigate?.(`/project/${id}`);
-    } catch (err) {
-      reportError(err, { context: t('errors.openProject'), store });
-    }
+  /**
+   * Open a project by GOING to it, not by fetching it first.
+   *
+   * This used to await the whole project — the score JSON, and the parse of
+   * it — and navigate afterwards, so the wait happened on the screen you were
+   * leaving, with nothing on it to say anything was happening. The editor
+   * route already opens a project it does not have (that is what a pasted URL
+   * or a page reload does), so awaiting here only made that check pass: the
+   * work is the same, and this decides which screen you spend it on.
+   *
+   * Nothing to catch, either. A failed open is reported by the editor route,
+   * which sends you back here — where an error on a dashboard you are standing
+   * on makes sense, rather than one on a dashboard you were trying to leave.
+   */
+  const openProject = (id: string): void => {
+    onNavigate?.(`/project/${id}`);
   };
 
   /**
@@ -482,7 +490,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         type="button"
         variant="ghost"
         aria-label={t('dashboard.openProject', { name: project.name })}
-        onClick={() => void openProject(project.id)}
+        onClick={() => openProject(project.id)}
         className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
       >
         <Text size="sm" weight="medium">

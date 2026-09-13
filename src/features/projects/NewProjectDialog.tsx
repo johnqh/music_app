@@ -108,6 +108,8 @@ import {
   withGenerationVariant,
   GENERATE_SCORE_STYLE_PRESETS,
   styleInstrumentsWithGuest,
+  styleKey,
+  styleTempo,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
   buildGenerateScoreRequest,
   buildNewProjectScore,
@@ -397,10 +399,41 @@ export function NewProjectDialog({
         : entries,
     );
     setNextEntryId(withGuest.length + (singing ? 1 : 0));
-    setTempo(String(preset.tempo));
-    setMeasures(String(preset.measures));
+    /*
+      The tempo, and a different one each time — with the bar count that goes
+      with it.
+
+      Both used to come straight off the preset, so every salsa ever generated
+      ran at exactly 190bpm for exactly 168 bars. `styleTempo` picks inside the
+      genre's own range and recomputes the bars, because the bar count is
+      derived from the tempo: at a faster speed the same count is a shorter
+      song.
+    */
+    const pace = styleTempo(next);
+    setTempo(String(pace?.tempo ?? preset.tempo));
+    setMeasures(String(pace?.measures ?? preset.measures));
     setTimeSigPreset(preset.timeSignature);
-    if (preset.mode) setKeyMode(preset.mode);
+    /*
+      The key, and a different one each time.
+
+      This used to set the MODE alone, so the tonic stayed at whatever the
+      field was initialised to — 0 — and every score this app generated came
+      back in C. Measured across every stored project: `fifths` was 0 without
+      exception. Two genres in one key, played by rosters that overlap by
+      design, sound like each other however different their rhythms are.
+
+      Chosen from the keys the genre is actually played in, and set into the
+      field rather than sent invisibly, so it can be read and overridden before
+      anything is generated — the same reasoning as the guest instrument, which
+      lands in the editable roster above.
+    */
+    const key = styleKey(next);
+    if (key) {
+      setKeyFifths(key.fifths);
+      setKeyMode(key.mode);
+    } else if (preset.mode) {
+      setKeyMode(preset.mode);
+    }
   };
   /*
     The vocabularies in the order they are read, not the order they were

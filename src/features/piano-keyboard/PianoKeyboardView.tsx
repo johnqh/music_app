@@ -43,6 +43,8 @@ import {
   MIN_WHITE_KEY_WIDTH,
   FULL_RANGE,
   computeKeys,
+  keyboardLabelSemitones,
+  relabelKeys,
   keyboardWidth,
   snapToWhiteKeys,
   whiteKeyCount,
@@ -248,6 +250,11 @@ export function PianoKeyboardView({
   const score = store((s) => s.score);
   const activeTrackId = store(selectActiveTrackId);
   const themeMode = store((s) => s.themeMode);
+  /*
+    What the staff is showing, which is the only thing that moves the key
+    LETTERING. Its own narrow subscription, like every other read here.
+  */
+  const pitchDisplay = store((s) => s.pitchDisplay);
 
   const theme = useMemo(
     () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
@@ -414,9 +421,29 @@ export function PianoKeyboardView({
   const labelGutter = naming === 'percussion' ? LABEL_ROW_HEIGHT * 2 : LABEL_GUTTER;
   /** What is left for the keys themselves once the labels have their rows. */
   const keyHeight = Math.max(1, box.height - labelGutter);
+  /**
+   * How far the LETTERING moves for this track, given what the staff shows.
+   *
+   * Zero everywhere except a transposing instrument read in written pitch, and
+   * `relabelKeys` returns the identical array at zero — so a piano keyboard
+   * re-reconciles nothing.
+   *
+   * Only the names move. The midi numbers stay sounding, because that is what
+   * the store holds, what the audition plays, what lights during playback and
+   * what note entry writes; converting those here would fix the label by
+   * breaking the note. On a B-flat trumpet the key that reads C4 is the
+   * sounding B-flat 3 the player writes as C — press it and C4 appears on the
+   * staff, which is what a reader comparing the two surfaces expects.
+   */
+  const labelSemitones = keyboardLabelSemitones(
+    trackProgram === undefined || trackClef === undefined
+      ? null
+      : { clef: trackClef, midiProgram: trackProgram },
+    pitchDisplay,
+  );
   const keys = useMemo(
-    () => computeKeys(whiteKeyWidth, keyHeight, range, naming),
-    [whiteKeyWidth, keyHeight, range, naming],
+    () => relabelKeys(computeKeys(whiteKeyWidth, keyHeight, range, naming), labelSemitones),
+    [whiteKeyWidth, keyHeight, range, naming, labelSemitones],
   );
 
   // Nothing at all when collapsed. The control that brings it back lives on the

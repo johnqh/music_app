@@ -277,6 +277,39 @@ describe('InspectorPanel: the track tab', () => {
     expect(track.instrumentName).toBe('Jazz Kit');
   });
 
+  /*
+    Notes the instrument cannot play, said in words beside the picker.
+
+    The notation marks them in its own colour, which says a note is wrong; this
+    says what, and sits beside the control that offers the other fix — an
+    instrument that can actually play the part.
+  */
+  it('names notes the instrument cannot play', () => {
+    /*
+      The program is set on the score directly rather than through
+      `setTrackInstrument`, which FITS the existing notes into the new
+      instrument's compass by whole octaves — so choosing a timpani in the
+      picker cannot produce this state. What produces it is a score that
+      already holds such notes, which is what a generation gave us: 482 of a
+      timpani part's 1,067 notes below its lowest drum.
+    */
+    const score = twinkleScore();
+    const store = makeStore({
+      ...score,
+      tracks: [{ ...score.tracks[0], midiProgram: 47 }],
+    });
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.getByText(/outside this instrument's range of D2-A3/)).toBeInTheDocument();
+  });
+
+  it('says nothing about range when every note fits', () => {
+    const store = makeStore();
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.queryByText(/outside this instrument's range/)).not.toBeInTheDocument();
+  });
+
   it('deletes the track once the confirmation is accepted', async () => {
     const user = userEvent.setup();
     const store = makeStore(twoTrackScore());

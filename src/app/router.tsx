@@ -19,6 +19,7 @@ import {
   useParams,
 } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { ProjectLoading } from '@/components/layout/ProjectLoading';
 import { PaywallDialog } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
@@ -125,7 +126,33 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
     };
   }, []);
 
+  /**
+   * Whether the editor would be showing the WRONG project.
+   *
+   * Derived from the URL against what is loaded, rather than from a flag the
+   * fetch sets: a flag is only true once the effect has run, so the first
+   * render still painted the previous project — and nothing covered the app
+   * bar, which went on naming it for the whole load. Clicking one project and
+   * reading another one's title for a few seconds is the bug this replaces.
+   *
+   * True on a cold load (nothing open yet) and while switching from one
+   * project to another; false the instant the store holds what the URL asked
+   * for, which is also what the create/import paths produce — they have the
+   * project before they navigate, so they never flash this.
+   */
+  const openProjectId = store((s) => s.projectId);
+  const loading = !id || openProjectId !== id;
+
   const localizedNavigate = useLocalizedNavigate();
+  /*
+    The editor is not rendered at all while loading, rather than covered.
+
+    An overlay leaves a whole editor mounted over the previous project's score
+    — its title, its transport, its inspector — and every one of those is a
+    surface that can leak through or be read. Mounting `AppLayout` only when
+    the score is the right one means there is nothing stale to leak.
+  */
+  if (loading) return <ProjectLoading />;
   return <AppLayout store={store} onNavigate={localizedNavigate} />;
 }
 
