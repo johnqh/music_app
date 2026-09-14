@@ -94,6 +94,7 @@ import {
   cn,
 } from '@sudobility/components';
 import {
+  DEFAULT_BPM,
   DEFAULT_GENERATE_SCORE_MEASURES,
   DEFAULT_INSTRUMENT_VALUE,
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
@@ -241,6 +242,45 @@ function CollapsibleReveal({
   );
 }
 
+/**
+ * How long a number of bars plays, and back again.
+ *
+ * The Duration field is the Bars field read in seconds: somebody cutting music
+ * to a video knows how long the clip is, not how many bars that makes. Bars
+ * stay what the request carries; this only converts between the two at the
+ * tempo and meter in the form. A blank tempo is the server's default, which is
+ * what the piece will actually play at. The tempo counts quarter notes, so a
+ * bar of 6/8 is three of them.
+ */
+function secondsForBars(bars: number, tempoText: string, timeSigPreset: string): number {
+  const bpm = Number(tempoText) > 0 ? Number(tempoText) : DEFAULT_BPM;
+  const ts = GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset] ?? {
+    numerator: 4,
+    denominator: 4,
+  };
+  return (bars * ((ts.numerator * 4) / ts.denominator) * 60) / bpm;
+}
+
+function barsForSeconds(seconds: number, tempoText: string, timeSigPreset: string): number {
+  return Math.max(1, Math.round(seconds / secondsForBars(1, tempoText, timeSigPreset)));
+}
+
+/** Seconds as `m:ss`. */
+function formatDuration(seconds: number): string {
+  const whole = Math.max(0, Math.round(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+/** `"45"`, `"0:45"` or `"1:05"` as seconds; null for anything else. */
+function parseDuration(text: string): number | null {
+  const match = /^(?:(\d+):)?(\d+)$/.exec(text.trim());
+  if (!match) return null;
+  const seconds = Number(match[2]);
+  if (match[1] !== undefined && seconds >= 60) return null;
+  const total = Number(match[1] ?? 0) * 60 + seconds;
+  return total > 0 ? total : null;
+}
+
 function LabeledInput({
   label,
   value,
@@ -248,10 +288,14 @@ function LabeledInput({
   min,
   className,
   hint,
+  type = 'number',
+  onBlur,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: 'number' | 'text';
+  onBlur?: () => void;
   min?: number;
   className?: string;
   /** Shown under the field when what was typed is refused. */
@@ -261,11 +305,12 @@ function LabeledInput({
     <label className={`flex flex-1 flex-col gap-1 ${className ?? ''}`}>
       <span className="text-xs text-theme-text-secondary">{label}</span>
       <Input
-        type="number"
+        type={type}
         aria-label={label}
         value={value}
         min={min}
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+        {...(onBlur ? { onBlur } : {})}
         className={TEXT_INPUT_CLASS}
       />
       {hint ? <span className="text-xs text-amber-700 dark:text-amber-400">{hint}</span> : null}
@@ -350,6 +395,37 @@ export function NewProjectDialog({
   const [keyFifths, setKeyFifths] = useState(0);
   const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
   const [timeSigPreset, setTimeSigPreset] = useState('4/4');
+  /*
+    The Duration field's text. Bars are the value; this is what is typed, kept
+    apart so "1:" mid-edit is not rewritten under the cursor. Every change to
+    bars, tempo or meter refreshes it; typing it sets the bars.
+  */
+  const [durationText, setDurationText] = useState(() =>
+    formatDuration(secondsForBars(DEFAULT_GENERATE_SCORE_MEASURES, '', '4/4')),
+  );
+  const refreshDuration = (bars: string, tempoText: string, meter: string): void => {
+    const count = Number(bars);
+    if (Number.isInteger(count) && count > 0) {
+      setDurationText(formatDuration(secondsForBars(count, tempoText, meter)));
+    }
+  };
+  const changeMeasures = (next: string): void => {
+    setMeasures(next);
+    refreshDuration(next, tempo, timeSigPreset);
+  };
+  const changeTempo = (next: string): void => {
+    setTempo(next);
+    refreshDuration(measures, next, timeSigPreset);
+  };
+  const changeTimeSig = (next: string): void => {
+    setTimeSigPreset(next);
+    refreshDuration(measures, tempo, next);
+  };
+  const changeDuration = (next: string): void => {
+    setDurationText(next);
+    const seconds = parseDuration(next);
+    if (seconds !== null) setMeasures(String(barsForSeconds(seconds, tempo, timeSigPreset)));
+  };
 
   /*
     Choosing a style fills the form with the ordinary shape of that genre.
@@ -410,9 +486,12 @@ export function NewProjectDialog({
       song.
     */
     const pace = styleTempo(next);
-    setTempo(String(pace?.tempo ?? preset.tempo));
-    setMeasures(String(pace?.measures ?? preset.measures));
+    const nextTempo = String(pace?.tempo ?? preset.tempo);
+    const nextMeasures = String(pace?.measures ?? preset.measures);
+    setTempo(nextTempo);
+    setMeasures(nextMeasures);
     setTimeSigPreset(preset.timeSignature);
+    refreshDuration(nextMeasures, nextTempo, preset.timeSignature);
     /*
       The key, and a different one each time.
 
@@ -939,13 +1018,28 @@ export function NewProjectDialog({
           <LabeledInput
             label={t('generateScore.measures')}
             value={measures}
-            onChange={setMeasures}
+            onChange={changeMeasures}
             min={1}
           />
+          {/* Not while words are being written: a song's length is its form,
+              and the lyric follows verses and choruses rather than a clock. */}
+          {generateForMe && hasVocalInstrument(instrumentValues) && lyrics ? null : (
+            <LabeledInput
+              label={t('generateScore.duration')}
+              type="text"
+              value={durationText}
+              onChange={changeDuration}
+              // Tidy what was typed ("45" -> "0:45") to what the bars now play.
+              onBlur={() => refreshDuration(measures, tempo, timeSigPreset)}
+              {...(parseDuration(durationText) === null
+                ? { hint: t('generateScore.durationInvalid') }
+                : {})}
+            />
+          )}
           <LabeledInput
             label={t('generateScore.tempo')}
             value={tempo}
-            onChange={setTempo}
+            onChange={changeTempo}
             min={1}
             // Left blank the tempo is simply not sent; typed wrong it blocks
             // Generate, and a disabled button with no reason is the trap this
@@ -983,7 +1077,7 @@ export function NewProjectDialog({
               <SelectItem value="minor">{t('key.minor')}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={timeSigPreset} onValueChange={setTimeSigPreset}>
+          <Select value={timeSigPreset} onValueChange={changeTimeSig}>
             <SelectTrigger
               aria-label={t('generateScore.timeSignature')}
               className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}

@@ -808,3 +808,44 @@ describe('NewProjectDialog: the backends on offer', () => {
     expect(screen.queryByRole('option', { name: /cheap/i })).not.toBeInTheDocument();
   });
 });
+
+/*
+ * Duration is the Bars field read in seconds, for somebody fitting music to a
+ * video: editing either refreshes the other at the form's tempo and meter.
+ */
+describe('NewProjectDialog: duration', () => {
+  const bars = () => screen.getByLabelText('Bars') as HTMLInputElement;
+  const duration = () => screen.getByLabelText('Duration') as HTMLInputElement;
+
+  it('follows the bars at the tempo', () => {
+    open(10);
+    fireEvent.change(screen.getByLabelText('Tempo'), { target: { value: '120' } });
+    fireEvent.change(bars(), { target: { value: '16' } });
+    expect(duration().value).toBe('0:32');
+  });
+
+  it('sets the bars when a length is typed, and tidies it on leaving', () => {
+    open(10);
+    fireEvent.change(screen.getByLabelText('Tempo'), { target: { value: '120' } });
+    fireEvent.change(duration(), { target: { value: '61' } });
+    expect(bars().value).toBe('31');
+    fireEvent.blur(duration());
+    expect(duration().value).toBe('1:02');
+  });
+
+  it('recalculates when the tempo changes', () => {
+    open(10);
+    fireEvent.change(bars(), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Tempo'), { target: { value: '60' } });
+    expect(duration().value).toBe('0:32');
+  });
+
+  it('is not offered while lyrics are being written', () => {
+    open(10);
+    turnGenerationOn();
+    expect(screen.queryByRole('switch', { name: 'Write lyrics' })).toBeChecked();
+    expect(screen.queryByLabelText('Duration')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Write lyrics' }));
+    expect(screen.getByLabelText('Duration')).toBeInTheDocument();
+  });
+});

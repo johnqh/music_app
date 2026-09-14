@@ -881,6 +881,8 @@
     "melody": "(melody)",
     "removeInstrument": "Remove {{instrument}}",
     "measures": "Bars",
+    "duration": "Duration",
+    "durationInvalid": "Enter a length like 0:45 or 1:30.",
     "tempo": "Tempo",
     "key": "Key",
     "mode": "Mode",

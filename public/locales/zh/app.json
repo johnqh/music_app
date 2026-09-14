@@ -881,6 +881,8 @@
     "melody": "（旋律）",
     "removeInstrument": "移除{{instrument}}",
     "measures": "小节数",
+    "duration": "时长",
+    "durationInvalid": "请输入时长，例如 0:45 或 1:30。",
     "tempo": "速度",
     "key": "调号",
     "mode": "调式",
