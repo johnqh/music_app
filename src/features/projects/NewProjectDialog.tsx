@@ -108,7 +108,8 @@ import {
   GENERATION_VARIANT_LABELS,
   withGenerationVariant,
   GENERATE_SCORE_STYLE_PRESETS,
-  styleInstrumentsWithGuest,
+  styleRoster,
+  type StyleTier,
   styleKey,
   styleTempo,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
@@ -148,7 +149,11 @@ export type NewProjectDialogProps = {
  * `firstMelodyInstrumentEntryId` reads — aliased rather than redeclared, since
  * two identical declarations are how the two come apart.
  */
-type EnsembleEntry = InstrumentValueEntry;
+/**
+ * An ensemble row, and which of the style's tiers put it there. Rows added by
+ * hand carry no tier, so a second kit added on purpose is always removable.
+ */
+type EnsembleEntry = InstrumentValueEntry & { tier?: StyleTier };
 
 /*
   The preset briefs are the server's list and this app's words.
@@ -449,32 +454,26 @@ export function NewProjectDialog({
     const preset = next ? GENERATE_SCORE_STYLE_PRESETS[next] : undefined;
     if (!preset) return;
     /*
-      The roster plus one guest, from `styleInstrumentsWithGuest` — shared with
-      the React Native sheet, which fills the same list. Every generation of one
-      style otherwise draws the same five instruments, so two goes at country
-      are the same country twice; one instrument from outside the genre's own
-      lineup is what makes each attempt its own piece. Appended last and shown
-      in this editable list, so it can be removed before generating.
+      The style's roster in tiers, from `styleRoster` — shared with the React
+      Native sheet. Essential instruments are always there and cannot be
+      removed while generating, preferred ones are added and removable, and a
+      couple of optional ones are drawn fresh each time so two goes at one
+      style are not the same band. The singer is a preferred track in a song
+      style, and only while the model writes the music.
+
+      A style overwrites the whole roster deliberately: a preset that kept
+      whatever was there before would be half one genre and half another.
     */
-    const withGuest = styleInstrumentsWithGuest(next);
-    const entries = withGuest.map((value: string, index: number) => ({
+    const roster = styleRoster(next, { voice: generateForMe });
+    const entries: EnsembleEntry[] = roster.map((entry, index) => ({
       id: index,
-      value,
+      value: entry.value,
+      tier: entry.tier,
     }));
-    /*
-      A style overwrites the whole roster deliberately, so the singer has to be
-      put back: a vocal that vanished the moment a genre was chosen is a song
-      the reader thought they had asked for and did not get. Not added when the
-      preset brought its own voice, and not added at all in blank mode.
-    */
-    const singing = generateForMe && !hasVocalInstrument(withGuest);
-    autoVocalId.current = singing ? withGuest.length : null;
-    setEnsemble(
-      singing
-        ? [{ id: withGuest.length, value: DEFAULT_VOCAL_INSTRUMENT_VALUE }, ...entries]
-        : entries,
-    );
-    setNextEntryId(withGuest.length + (singing ? 1 : 0));
+    // The singer the style added is the one turning generation off takes back.
+    autoVocalId.current = entries.find((entry) => hasVocalInstrument([entry.value]))?.id ?? null;
+    setEnsemble(entries);
+    setNextEntryId(entries.length);
     /*
       The tempo, and a different one each time — with the bar count that goes
       with it.
@@ -672,7 +671,12 @@ export function NewProjectDialog({
   // The floor is one: a score with no tracks is not a score, and `canGenerate`
   // would refuse it anyway — better to disable the last remove than to let the
   // form reach a state it cannot submit from.
+  /** An essential instrument of the chosen style, which generation cannot do without. */
+  const isLocked = (entry: EnsembleEntry): boolean =>
+    generateForMe && style !== '' && entry.tier === 'essential';
+
   const removeInstrument = (id: number): void => {
+    if (ensemble.some((entry) => entry.id === id && isLocked(entry))) return;
     // Removed by hand, so the toggle has nothing left to take back.
     if (autoVocalId.current === id) autoVocalId.current = null;
     setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
@@ -996,6 +1000,7 @@ export function NewProjectDialog({
                 <Text size="sm">
                   {index + 1}. {instrumentLabelFor(entry.value)}
                   {entry.id === melodyEntryId ? ` ${t('generateScore.melody')}` : ''}
+                  {isLocked(entry) ? ` ${t('generateScore.essential')}` : ''}
                 </Text>
                 <Button
                   type="button"
@@ -1004,7 +1009,7 @@ export function NewProjectDialog({
                   aria-label={t('generateScore.removeInstrument', {
                     instrument: instrumentLabelFor(entry.value),
                   })}
-                  disabled={ensemble.length <= 1}
+                  disabled={ensemble.length <= 1 || isLocked(entry)}
                   onClick={() => removeInstrument(entry.id)}
                 >
                   {t('common.remove')}

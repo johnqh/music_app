@@ -879,6 +879,7 @@
     "instrumentation": "Instrumentation",
     "addInstrument": "Add instrument",
     "melody": "(melody)",
+    "essential": "(essential)",
     "removeInstrument": "Remove {{instrument}}",
     "measures": "Bars",
     "duration": "Duration",

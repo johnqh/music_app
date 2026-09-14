@@ -879,6 +879,7 @@
     "instrumentation": "配器",
     "addInstrument": "添加乐器",
     "melody": "（旋律）",
+    "essential": "（必需）",
     "removeInstrument": "移除{{instrument}}",
     "measures": "小节数",
     "duration": "时长",

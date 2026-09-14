@@ -849,3 +849,38 @@ describe('NewProjectDialog: duration', () => {
     expect(screen.getByLabelText('Duration')).toBeInTheDocument();
   });
 });
+
+/*
+ * A style's essential instruments are always in the roster while generating
+ * and cannot be removed: a reggae without its kit is not reggae. Everything
+ * else stays removable, and anything can still be added.
+ */
+describe('NewProjectDialog: essential instruments', () => {
+  const chooseReggae = () => {
+    open(10);
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Reggae' }));
+  };
+  const removeButtonFor = (label: RegExp) =>
+    screen.getAllByRole('button', { name: label })[0] as HTMLButtonElement;
+
+  it('puts the kit in and will not take it out', () => {
+    chooseReggae();
+    expect(screen.getByText(/Standard Kit.*\(essential\)/)).toBeInTheDocument();
+    expect(removeButtonFor(/Remove Standard Kit/)).toBeDisabled();
+  });
+
+  it('keeps preferred instruments removable, the singer included', () => {
+    chooseReggae();
+    expect(removeButtonFor(/Remove Rock Organ/)).not.toBeDisabled();
+    expect(removeButtonFor(/Remove Voice Oohs/)).not.toBeDisabled();
+  });
+
+  it('locks nothing once generation is off', () => {
+    chooseReggae();
+    turnGenerationOn();
+    expect(screen.queryByText(/\(essential\)/)).not.toBeInTheDocument();
+    expect(removeButtonFor(/Remove Standard Kit/)).not.toBeDisabled();
+  });
+});
