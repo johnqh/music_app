@@ -42,6 +42,8 @@ export type ReplaceMusicDialogProps = {
   trackLabel?: string;
   onClose: () => void;
   onSubmit: (submission: ReplaceSubmission) => void;
+  /** The bars the region touches times its tracks: what the server bills. */
+  estimatedCredits?: number;
 };
 
 /**
@@ -112,6 +114,7 @@ export function ReplaceMusicDialog({
   trackLabel,
   onClose,
   onSubmit,
+  estimatedCredits = 0,
 }: ReplaceMusicDialogProps) {
   const { t } = useTranslation();
   const [instruction, setInstruction] = useState('');
@@ -179,6 +182,11 @@ export function ReplaceMusicDialog({
                 {region.unselectedNoteCount === 1 ? 'is' : 'are'} not selected.
               </span>
             )}
+          </p>
+        )}
+        {region && estimatedCredits > 0 && (
+          <p className="text-xs text-theme-text-secondary">
+            {t('generate.estimate', { count: estimatedCredits })}
           </p>
         )}
 

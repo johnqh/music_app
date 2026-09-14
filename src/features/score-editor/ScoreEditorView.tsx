@@ -50,7 +50,11 @@ import {
 } from '@sudobility/music_lib';
 import { resolveColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import { buildGenerateTrackRequest, withGenerationVariant } from '@sudobility/music_lib';
+import {
+  buildGenerateTrackRequest,
+  estimateGenerateTrackCredits,
+  withGenerationVariant,
+} from '@sudobility/music_lib';
 import type { InstrumentChoice } from '@sudobility/music_lib';
 import { resolveDrop } from '@sudobility/music_drawing';
 import type { DropTarget } from '@sudobility/music_drawing';
@@ -1339,6 +1343,7 @@ export function ScoreEditorView({
         open={generateTrackOpen}
         pending={generateTrackPending}
         error={generateTrackError}
+        estimatedCredits={score ? estimateGenerateTrackCredits(score) : 0}
         onGenerate={(prompt, instrument, variant) =>
           void generateTrack(prompt, instrument, variant)
         }

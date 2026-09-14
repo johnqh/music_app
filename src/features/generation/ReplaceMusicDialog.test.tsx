@@ -288,3 +288,19 @@ describe('ReplaceMusicDialog', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 });
+
+describe('ReplaceMusicDialog: the credit quote', () => {
+  it('says what the replacement will cost', () => {
+    render(
+      <ReplaceMusicDialog
+        open
+        scope="measures"
+        region={region()}
+        estimatedCredits={8}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('This will use about 8 credits.')).toBeInTheDocument();
+  });
+});

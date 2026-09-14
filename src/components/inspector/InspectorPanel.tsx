@@ -106,6 +106,7 @@ import {
   findMeasure,
   findTrack,
   replacementRegion,
+  estimateReplacementCredits,
   selectActiveTrackId,
   isPercussionTrack,
   durationLabel,
@@ -204,6 +205,7 @@ function ReplaceButton({
         open={open}
         scope={scope}
         region={region}
+        estimatedCredits={score && region ? estimateReplacementCredits(score, region) : 0}
         trackLabel={trackLabel}
         onClose={() => setOpen(false)}
         onSubmit={(submission) => {

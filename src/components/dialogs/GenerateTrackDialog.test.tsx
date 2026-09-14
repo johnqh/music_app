@@ -122,3 +122,18 @@ describe('the list as a whole', () => {
     expect(GM_KITS).toHaveLength(8);
   });
 });
+
+describe('GenerateTrackDialog: the credit quote', () => {
+  it('says what the new track will cost', () => {
+    render(
+      <GenerateTrackDialog
+        open
+        pending={false}
+        estimatedCredits={32}
+        onGenerate={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getByText('This will use about 32 credits.')).toBeInTheDocument();
+  });
+});

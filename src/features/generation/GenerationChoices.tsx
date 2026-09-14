@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GenerationChoices as Choices, GenerationRecord } from '@sudobility/music_types';
+import { estimateGenerateScoreCredits } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 /** The choices a user can lock, in the order they are shown. */
@@ -48,6 +49,11 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
     return typeof value === 'string' ? value : null;
   };
   const rows = LOCKABLE.filter((key) => shown(key) !== null);
+  // The same request again, so the same bill: its bars times its tracks.
+  const estimatedCredits = estimateGenerateScoreCredits(
+    record.request.durationMeasures,
+    record.request.tracks.length,
+  );
 
   const toggle = (key: Lockable): void =>
     setLocked((current) => {
@@ -102,6 +108,11 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
           ? t('generationChoices.againKeeping', { count: locked.size })
           : t('generationChoices.again')}
       </button>
+      {estimatedCredits > 0 && (
+        <p className="text-xs text-theme-text-secondary">
+          {t('generate.estimate', { count: estimatedCredits })}
+        </p>
+      )}
       <ConfirmDialog
         open={confirming}
         title={t('generationChoices.confirmTitle')}

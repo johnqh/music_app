@@ -46,3 +46,20 @@ describe('GenerationChoices', () => {
     expect(onGenerateAgain).toHaveBeenCalledWith({ groove: 'songo' });
   });
 });
+
+describe('GenerationChoices: the credit quote', () => {
+  it('quotes generating again at bars times tracks', () => {
+    const withTracks: GenerationRecord = {
+      ...record,
+      request: {
+        ...record.request,
+        tracks: [
+          { name: 'Piano', instrumentName: 'Piano', midiProgram: 0, clef: 'treble' },
+          { name: 'Bass', instrumentName: 'Bass', midiProgram: 32, clef: 'bass' },
+        ],
+      },
+    };
+    render(<GenerationChoices record={withTracks} generating={false} onGenerateAgain={() => {}} />);
+    expect(screen.getByText('This will use about 96 credits.')).toBeTruthy();
+  });
+});

@@ -41,12 +41,15 @@ export type GenerateTrackDialogProps = {
   error?: string | null;
   onGenerate: (prompt: string, instrument: InstrumentChoice, variant: string) => void;
   onClose: () => void;
+  /** Bars times one track: what the server bills for the new part. */
+  estimatedCredits?: number;
 };
 
 export function GenerateTrackDialog({
   open,
   pending,
   error,
+  estimatedCredits = 0,
   onGenerate,
   onClose,
 }: GenerateTrackDialogProps) {
@@ -124,6 +127,12 @@ export function GenerateTrackDialog({
             </SelectContent>
           </Select>
         </Stack>
+
+        {estimatedCredits > 0 && (
+          <Text as="p" size="xs" color="muted">
+            {t('generate.estimate', { count: estimatedCredits })}
+          </Text>
+        )}
 
         {error && (
           <InfoBox variant="danger" size="sm">
