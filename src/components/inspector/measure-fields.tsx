@@ -18,50 +18,47 @@ import { useTranslation } from 'react-i18next';
 
 import { Button, Input } from '@sudobility/components';
 import {
-  beatDurationTicks,
-  effectiveClef,
+  commitBarTempo,
+  measureClefOptions,
   removeTempoAt,
+  selectEditLocked,
   setBarline,
-  setMeasureClef,
+  setClefAtMeasure,
   setNavigation,
   setPickup,
   setRepeats,
-  setTempoAt,
   measureIndexOf,
   trackOfMeasure,
 } from '@sudobility/music_lib';
-import type { NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
-import { BARLINE_STYLES, REPEAT_JUMPS, REPEAT_JUMP_LABEL } from '@sudobility/music_types';
-import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
+import type { EditorStoreApi, NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
+/*
+  The pickers' lists and sentinels are music_types', and what each field does
+  with a value — the clef options a bar offers, what a typed tempo commits, the
+  pickup lengths, how "1, 2" becomes a volta — is music_editing's and
+  music_types'. The native property sheet writes the same fields, and the two
+  used to agree only where nobody had yet changed one of them.
 
-/**
- * How each barline style and each jump is written on the page.
- *
- * Records keyed by the vocabulary rather than lists beside it: the picker's
- * order comes from `BARLINE_STYLES`/`REPEAT_JUMPS`, and a mark added to the
- * model fails to compile here until somebody says what it is called. A
- * hand-written option list would simply have gone on offering the old set.
- *
- * The jump labels are not translated on purpose — `D.S. al Coda` is Italian
- * on every edition in every country, and a reader looking for it is looking
- * for those letters.
- */
-const BARLINE_LABEL_KEY: Record<BarlineStyle, string> = {
-  double: 'inspector.barlineDouble',
-  final: 'inspector.barlineFinal',
-};
-
-import type { EditorStoreApi } from '@sudobility/music_lib';
-import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
+  The jump labels are not translated on purpose — `D.S. al Coda` is Italian on
+  every edition in every country, and a reader looking for it is looking for
+  those letters.
+*/
 import {
-  CLEFS,
-  FIELD_LABEL_CLASS,
+  BARLINE_OPTIONS,
   INHERIT_CLEF,
   NO_JUMP,
   NO_PICKUP,
+  REPEAT_JUMPS,
+  REPEAT_JUMP_LABEL,
   SINGLE_BARLINE,
-  TEXT_INPUT_CLASS,
-} from '@/components/inspector/shared';
+  formatEndingNumbers,
+  parseEndingNumbers,
+  pickupBeatOptions,
+  tempoAtBar,
+} from '@sudobility/music_types';
+import type { BarlineStyle, Clef, Measure, RepeatJump, Score } from '@sudobility/music_types';
+
+import { MixedCheckbox, MixedSelect } from '@/components/inspector/controls';
+import { FIELD_LABEL_CLASS, TEXT_INPUT_CLASS } from '@/components/inspector/shared';
 
 /**
  * The repeat barlines and volta of one bar.
@@ -98,15 +95,11 @@ import {
  */
 export function PickupField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const score = store((s) => s.score);
   if (!score) return null;
 
-  const beatTicks = beatDurationTicks(measure.timeSignature, score.ppq);
-  const fullBeats = Math.max(1, Math.round(measure.durationTicks / beatTicks));
-  const current = measure.pickup
-    ? String(Math.round(measure.durationTicks / beatTicks))
-    : NO_PICKUP;
+  const { current, beats } = pickupBeatOptions(measure, score.ppq);
 
   const apply = (value: string): void => {
     setPickup(store, value === NO_PICKUP ? null : Number(value));
@@ -122,9 +115,9 @@ export function PickupField({ store, measure }: { store: EditorStoreApi; measure
         options={[
           { value: NO_PICKUP, label: t('inspector.pickupNone') },
           // A pickup shorter than the bar; a full-length one is just a bar.
-          ...Array.from({ length: Math.max(1, fullBeats - 1) }, (_, i) => ({
-            value: String(i + 1),
-            label: t('inspector.pickupBeats', { count: i + 1 }),
+          ...beats.map((count) => ({
+            value: String(count),
+            label: t('inspector.pickupBeats', { count }),
           })),
         ]}
         onChange={apply}
@@ -144,7 +137,7 @@ export function PickupField({ store, measure }: { store: EditorStoreApi; measure
  */
 export function BarlineField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const score = store((s) => s.score);
   if (!score) return null;
 
@@ -162,10 +155,10 @@ export function BarlineField({ store, measure }: { store: EditorStoreApi; measur
         value={measure.barline ?? SINGLE_BARLINE}
         ariaLabel={t('inspector.barline')}
         disabled={isPlaying}
-        options={[
-          { value: SINGLE_BARLINE, label: t('inspector.barlineSingle') },
-          ...BARLINE_STYLES.map((value) => ({ value, label: t(BARLINE_LABEL_KEY[value]) })),
-        ]}
+        options={BARLINE_OPTIONS.map((option) => ({
+          value: option.value,
+          label: t(option.labelKey),
+        }))}
         onChange={apply}
       />
     </label>
@@ -183,7 +176,7 @@ export function BarlineField({ store, measure }: { store: EditorStoreApi; measur
  */
 export function NavigationFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const score = store((s) => s.score);
   if (!score) return null;
 
@@ -246,34 +239,32 @@ export function NavigationFields({ store, measure }: { store: EditorStoreApi; me
 
 export function MeasureClefField({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const score = store((s) => s.score);
 
   const track = score ? trackOfMeasure(score, measure.id) : null;
   if (!track) return null;
 
   const index = score ? (measureIndexOf(score, measure.id) ?? 0) : 0;
-  const inForce = effectiveClef(track, index);
-  const isFirst = index === 0;
+  // Bar 1 establishes the clef, so it offers no Inherit and shows the clef in
+  // force; later bars show their own change, or Inherit.
+  const { value, inForce, options } = measureClefOptions(track, index);
 
-  const apply = (value: string): void => {
-    setMeasureClef(store, track.id, index, value === INHERIT_CLEF ? undefined : (value as Clef));
+  const apply = (next: string): void => {
+    setClefAtMeasure(store, measure.id, next === INHERIT_CLEF ? undefined : (next as Clef));
   };
 
   return (
     <label className="flex flex-col gap-1">
       <span className={FIELD_LABEL_CLASS}>{t('inspector.measureClef')}</span>
       <MixedSelect
-        value={measure.clef ?? (isFirst ? inForce : INHERIT_CLEF)}
+        value={value as string}
         ariaLabel={t('inspector.measureClef')}
         disabled={isPlaying}
-        options={[
-          // Bar 1 establishes the clef, so there is nothing to inherit from.
-          ...(isFirst
-            ? []
-            : [{ value: INHERIT_CLEF, label: t('inspector.clefInherit', { clef: inForce }) }]),
-          ...CLEFS.map((c) => ({ value: c as string, label: c })),
-        ]}
+        options={options.map((option) => ({
+          value: option as string,
+          label: option === INHERIT_CLEF ? t('inspector.clefInherit', { clef: inForce }) : option,
+        }))}
         onChange={apply}
       />
     </label>
@@ -282,11 +273,11 @@ export function MeasureClefField({ store, measure }: { store: EditorStoreApi; me
 
 export function RepeatFields({ store, measure }: { store: EditorStoreApi; measure: Measure }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const [endingDraft, setEndingDraft] = useState('');
 
   useEffect(() => {
-    setEndingDraft((measure.endingNumbers ?? []).join(', '));
+    setEndingDraft(formatEndingNumbers(measure.endingNumbers));
   }, [measure.id, measure.endingNumbers]);
 
   const patch = (next: RepeatPatch): void => {
@@ -323,11 +314,7 @@ export function RepeatFields({ store, measure }: { store: EditorStoreApi; measur
           onBlur={() => {
             // "1, 2" is a bar played on both passes; anything unparseable
             // clears rather than storing a bracket nobody asked for.
-            const numbers = endingDraft
-              .split(',')
-              .map((part) => Number(part.trim()))
-              .filter((n) => Number.isInteger(n) && n > 0);
-            patch({ endingNumbers: numbers });
+            patch({ endingNumbers: parseEndingNumbers(endingDraft) });
           }}
           className={TEXT_INPUT_CLASS}
         />
@@ -357,32 +344,25 @@ export function MeasureTempoField({
   measure: Measure;
 }) {
   const { t } = useTranslation();
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
 
-  const ownEvent = score.tempoMap.find((e) => e.tick === measure.startTick);
-  const inForce = [...score.tempoMap]
-    .sort((a, b) => a.tick - b.tick)
-    .filter((e) => e.tick <= measure.startTick)
-    .at(-1);
-  const isFirst = score.tempoMap[0]?.id === ownEvent?.id;
+  const here = tempoAtBar(score, measure);
+  const shown = String(Math.round(here.bpm));
 
   const [draft, setDraft] = useState('');
   useEffect(() => {
-    setDraft(String(Math.round(inForce?.bpm ?? 120)));
-  }, [inForce?.bpm, measure.id]);
+    setDraft(shown);
+  }, [shown, measure.id]);
 
+  /*
+    `commitBarTempo` parses, rounds and clamps, edits the bar's own event by id
+    when it has one, and writes nothing for blank text or the tempo already in
+    force — so blurring an inherited tempo untouched no longer turns it into an
+    event of this bar's own. When nothing was written the draft goes back to
+    what the field showed.
+  */
   const commit = (): void => {
-    const bpm = Math.round(Number(draft));
-    if (!Number.isFinite(bpm) || bpm <= 0) {
-      setDraft(String(Math.round(inForce?.bpm ?? 120)));
-      return;
-    }
-    if (ownEvent && bpm === Math.round(ownEvent.bpm)) return;
-    setTempoAt(store, {
-      ...(ownEvent ? { tempoEventId: ownEvent.id } : {}),
-      tick: measure.startTick,
-      bpm,
-    });
+    if (!commitBarTempo(store, measure, draft)) setDraft(shown);
   };
 
   return (
@@ -399,19 +379,19 @@ export function MeasureTempoField({
           className={TEXT_INPUT_CLASS}
         />
       </label>
-      {ownEvent && !isFirst ? (
+      {here.ownEventId && !here.isStarting ? (
         <Button
           type="button"
           variant="ghost"
           disabled={isPlaying}
-          onClick={() => removeTempoAt(store, ownEvent.id)}
+          onClick={() => here.ownEventId && removeTempoAt(store, here.ownEventId)}
           className="self-start px-1 py-0.5 text-xs"
         >
           {t('editor.removeTempoChange')}
         </Button>
       ) : (
         <span className="text-xs text-theme-text-secondary">
-          {ownEvent ? t('inspector.tempoStarting') : t('inspector.tempoInherited')}
+          {here.ownEventId ? t('inspector.tempoStarting') : t('inspector.tempoInherited')}
         </span>
       )}
     </div>

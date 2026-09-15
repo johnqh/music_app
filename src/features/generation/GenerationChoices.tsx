@@ -12,65 +12,50 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { GenerationChoices as Choices, GenerationRecord } from '@sudobility/music_types';
-import { estimateGenerateScoreCredits } from '@sudobility/music_lib';
+import type { GenerationRecord } from '@sudobility/music_types';
+import {
+  generationChoiceLabelKey,
+  lockableChoiceRows,
+  lockableChoiceValue,
+  regenerateCreditEstimate,
+  type LockableChoice,
+} from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-
-/** The choices a user can lock, in the order they are shown. */
-const LOCKABLE = [
-  'groove',
-  'cycle',
-  'arcEntry',
-  'arcIntensity',
-  'moment',
-  'carrier',
-  'formShape',
-  'hook',
-  'lyric',
-] as const;
-type Lockable = (typeof LOCKABLE)[number];
 
 export type GenerationChoicesProps = {
   record: GenerationRecord;
   /** True while a job owns the project: nothing can be started then. */
   generating: boolean;
-  onGenerateAgain: (locks: Partial<Choices>) => void;
+  /**
+   * The choices the reader locked, in the order they are shown. The request
+   * itself is built by the caller through `regenerateWithLocks`, which is the
+   * one place that knows a carrier locks by index and that an earlier run's
+   * locks must not carry over — so this panel cannot send something the native
+   * one would not.
+   */
+  onGenerateAgain: (lockedKeys: LockableChoice[]) => void;
 };
 
 export function GenerationChoices({ record, generating, onGenerateAgain }: GenerationChoicesProps) {
   const { t } = useTranslation();
-  const [locked, setLocked] = useState<ReadonlySet<Lockable>>(new Set());
+  const [locked, setLocked] = useState<ReadonlySet<LockableChoice>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const { choices } = record;
 
-  const shown = (key: Lockable): string | null => {
-    if (key === 'carrier') return choices.carrierName;
-    const value = choices[key];
-    return typeof value === 'string' ? value : null;
-  };
-  const rows = LOCKABLE.filter((key) => shown(key) !== null);
+  // Which choices are lockable, in which order, and how each reads, are
+  // music_lib's — shared with the native panel.
+  const rows = lockableChoiceRows(record);
+  const shown = (key: LockableChoice): string | null => lockableChoiceValue(choices, key);
   // The same request again, so the same bill: its bars times its tracks.
-  const estimatedCredits = estimateGenerateScoreCredits(
-    record.request.durationMeasures,
-    record.request.tracks.length,
-  );
+  const estimatedCredits = regenerateCreditEstimate(record);
 
-  const toggle = (key: Lockable): void =>
+  const toggle = (key: LockableChoice): void =>
     setLocked((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-
-  const locks = (): Partial<Choices> => {
-    const out: Partial<Choices> = {};
-    for (const key of locked) {
-      if (key === 'carrier') out.carrier = choices.carrier;
-      else (out as Record<string, unknown>)[key] = choices[key];
-    }
-    return out;
-  };
 
   return (
     <section aria-labelledby="generation-choices-heading" className="flex flex-col gap-2">
@@ -86,11 +71,13 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
               className="mt-0.5"
               checked={locked.has(key)}
               disabled={generating}
-              aria-label={t('generationChoices.lock', { name: t(`generationChoices.${key}`) })}
+              aria-label={t('generationChoices.lock', { name: t(generationChoiceLabelKey(key)) })}
               onChange={() => toggle(key)}
             />
             <span className="min-w-0 flex-1 text-xs">
-              <span className="text-theme-text-secondary">{t(`generationChoices.${key}`)}: </span>
+              <span className="text-theme-text-secondary">
+                {t(generationChoiceLabelKey(key))}:{' '}
+              </span>
               <span className="text-theme-text-primary" title={shown(key) ?? undefined}>
                 {shown(key)}
               </span>
@@ -120,7 +107,7 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
         confirmLabel={t('generationChoices.confirm')}
         onConfirm={() => {
           setConfirming(false);
-          onGenerateAgain(locks());
+          onGenerateAgain(rows.filter((key) => locked.has(key)));
         }}
         onCancel={() => setConfirming(false)}
       />

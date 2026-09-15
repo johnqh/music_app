@@ -9,19 +9,16 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@sudobility/components';
-import {
-  computeLayout,
-  extractPart,
-  PAGE_MARGIN_MM,
-  paginate,
-  selectVisibleTrackIds,
-  usablePageHeight,
-  withRehearsalMarks,
-} from '@sudobility/music_lib';
+import { PAGE_MARGIN_MM, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { findTrack } from '@sudobility/music_lib';
 import type { PaperOrientation, PaperSize } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import { PRINT_WIDTH, printRenderOptions, printSystems } from '@sudobility/music_drawing';
+import {
+  ORIENTATION_OPTIONS,
+  PAPER_OPTIONS,
+  WHOLE_SCORE,
+  printPlan,
+} from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
 import '@/features/print/print.css';
 
@@ -29,27 +26,6 @@ export type PrintViewProps = {
   store: EditorStoreApi;
   onBack: () => void;
 };
-
-/** Sentinel for "everything": a Select cannot carry an empty value. */
-const WHOLE_SCORE = 'whole-score';
-
-/**
- * Paper sizes and orientations, with the CSS `size` keyword for each paper.
- *
- * `A4` stays a literal: it is an ISO designation, not a word. The other two are
- * translated — "Letter" and "Legal" are names a reader outside the US will not
- * recognise, and orientation is plain vocabulary.
- */
-const PAPERS: { value: PaperSize; label?: string; labelKey?: string; css: string }[] = [
-  { value: 'a4', label: 'A4', css: 'A4' },
-  { value: 'letter', labelKey: 'print.paperLetter', css: 'letter' },
-  { value: 'legal', labelKey: 'print.paperLegal', css: 'legal' },
-];
-
-const ORIENTATIONS: { value: PaperOrientation; labelKey: string }[] = [
-  { value: 'portrait', labelKey: 'print.portrait' },
-  { value: 'landscape', labelKey: 'print.landscape' },
-];
 
 export function PrintView({ store, onBack }: PrintViewProps) {
   const { t } = useTranslation();
@@ -59,51 +35,30 @@ export function PrintView({ store, onBack }: PrintViewProps) {
   const [paper, setPaper] = useState<PaperSize>('a4');
   const [orientation, setOrientation] = useState<PaperOrientation>('portrait');
 
-  const isSingleTrack = scope !== WHOLE_SCORE;
-  const trackIds = useMemo(
-    () => (isSingleTrack ? [scope] : visibleTrackIds),
-    [isSingleTrack, scope, visibleTrackIds],
-  );
-
   /**
-   * The score actually printed.
+   * Everything that decides what reaches paper — which score (a part written
+   * for its instrument, or the marked full score in concert pitch), which
+   * tracks, which systems go on which page and for whose page turns — is
+   * music_drawing's `printPlan`, because the native app prints the same
+   * document. This view only picks the options and draws the slices.
    *
-   * A single track goes through `extractPart`, which writes it for its
-   * instrument — a clarinet part reads a tone above what it sounds, with a key
-   * signature to match. The whole score does not: conductors read concert
-   * pitch, and the score is the one place every part must be comparable.
+   * The plan draws through `displayScore`, so a note under an `8va` prints
+   * where it is written. This view drew the stored score before, and printed a
+   * bracketed passage an octave high under its own bracket.
    */
-  const printedScore = useMemo(() => {
-    if (!score) return null;
-    // Marks go on both: a conductor reading the score needs the same letters
-    // the players have, which is the one thing a rehearsal mark is for.
-    // `extractPart` applies them itself, from the whole score.
-    return isSingleTrack ? extractPart(score, scope) : withRehearsalMarks(score);
-  }, [score, isSingleTrack, scope]);
-
   const plan = useMemo(
-    () => (printedScore ? computeLayout(printedScore, printRenderOptions(trackIds)) : null),
-    [printedScore, trackIds],
+    () => (score ? printPlan(score, { scope, visibleTrackIds, paper, orientation }) : null),
+    [score, scope, visibleTrackIds, paper, orientation],
   );
+  // `PrintSystem` takes a mutable array; the plan's is read-only by contract.
+  const trackIds = useMemo(() => (plan ? [...plan.trackIds] : []), [plan]);
 
-  const slices = useMemo(() => (plan ? printSystems(plan) : []), [plan]);
-
-  /**
-   * The part's own track, when printing one — the player whose rests decide
-   * where the turns go. A whole score passes nothing: some track is always
-   * playing, and a conductor turns at will.
-   */
-  const turnTrack = isSingleTrack ? printedScore?.tracks[0] : undefined;
-
-  const pages = useMemo(
-    () =>
-      plan ? paginate(plan, usablePageHeight(paper, orientation, PRINT_WIDTH), turnTrack) : [],
-    [plan, paper, orientation, turnTrack],
-  );
-
-  const scopeLabel = isSingleTrack
-    ? ((score ? findTrack(score, scope)?.name : null) ?? 'Whole score')
-    : 'Whole score';
+  const scopeLabel =
+    scope === WHOLE_SCORE
+      ? t('print.wholeScore')
+      : ((score ? findTrack(score, scope)?.name : null) ?? t('print.wholeScore'));
+  const paperOption = PAPER_OPTIONS.find((option) => option.value === paper);
+  const orientationOption = ORIENTATION_OPTIONS.find((option) => option.value === orientation);
 
   return (
     <div className="min-h-screen bg-white text-black">
@@ -112,7 +67,7 @@ export function PrintView({ store, onBack }: PrintViewProps) {
         come from PAGE_MARGIN_MM and the picker below; a second margin written
         into a stylesheet is how they silently drift apart.
       */}
-      <style>{`@page { size: ${PAPERS.find((p) => p.value === paper)?.css} ${orientation}; margin: ${PAGE_MARGIN_MM}mm; }`}</style>
+      <style>{`@page { size: ${paperOption?.css} ${orientation}; margin: ${PAGE_MARGIN_MM}mm; }`}</style>
       <div className="print-chrome flex flex-wrap items-center gap-3 border-b border-neutral-300 px-4 py-3">
         <Select value={scope} onValueChange={setScope}>
           <SelectTrigger aria-label={t('print.whatToPrint')} className="h-auto w-auto px-3 py-1.5">
@@ -130,17 +85,12 @@ export function PrintView({ store, onBack }: PrintViewProps) {
 
         <Select value={paper} onValueChange={(v) => setPaper(v as PaperSize)}>
           <SelectTrigger aria-label={t('print.paper')} className="h-auto w-auto px-3 py-1.5">
-            <span>
-              {(() => {
-                const found = PAPERS.find((option) => option.value === paper);
-                return found?.label ?? (found?.labelKey ? t(found.labelKey) : '');
-              })()}
-            </span>
+            <span>{paperOption ? t(paperOption.labelKey) : ''}</span>
           </SelectTrigger>
           <SelectContent>
-            {PAPERS.map((p) => (
+            {PAPER_OPTIONS.map((p) => (
               <SelectItem key={p.value} value={p.value}>
-                {p.label ?? t(p.labelKey!)}
+                {t(p.labelKey)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -148,15 +98,10 @@ export function PrintView({ store, onBack }: PrintViewProps) {
 
         <Select value={orientation} onValueChange={(v) => setOrientation(v as PaperOrientation)}>
           <SelectTrigger aria-label={t('print.orientation')} className="h-auto w-auto px-3 py-1.5">
-            <span>
-              {(() => {
-                const key = ORIENTATIONS.find((o) => o.value === orientation)?.labelKey;
-                return key ? t(key) : '';
-              })()}
-            </span>
+            <span>{orientationOption ? t(orientationOption.labelKey) : ''}</span>
           </SelectTrigger>
           <SelectContent>
-            {ORIENTATIONS.map((o) => (
+            {ORIENTATION_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {t(o.labelKey)}
               </SelectItem>
@@ -172,15 +117,15 @@ export function PrintView({ store, onBack }: PrintViewProps) {
         </Button>
       </div>
 
-      {printedScore && pages.length > 0 ? (
+      {plan && plan.pages.length > 0 ? (
         <div className="print-pages mx-auto max-w-[1000px] px-4 py-6">
-          {pages.map((page, pageIndex) => (
+          {plan.pages.map((page, pageIndex) => (
             <div key={pageIndex} data-testid={`print-page-${pageIndex}`} className="print-page">
               {page.systemIndices.map((systemIndex) => (
                 <PrintSystem
                   key={systemIndex}
-                  score={printedScore}
-                  slice={slices[systemIndex]}
+                  score={plan.score}
+                  slice={plan.slices[systemIndex]}
                   trackIds={trackIds}
                 />
               ))}

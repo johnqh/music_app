@@ -336,6 +336,70 @@ Do **not** touch the apps.
   allowed to read host globals lazily (otherwise keep in apps).
 - Toast sink injected through the store context so RN can render errors.
 
+### Wave 3 review (2026-09-15) — done, with fixes
+
+Verified from a clean rebuild in dependency order (music_types 1183, music_editing
+419, music_lib 299 tests) and against both apps (web 784, RN 134 vitest + 305 jest).
+The exported names differ from the short names above; use these:
+
+- New Project: `initialNewProjectDraft`, `reduceNewProjectDraft(draft, action, rng?)`,
+  `isNewProjectEntryLocked`, `canRemoveNewProjectEntry`, `newProjectDefaultTitleKey`,
+  `newProjectTempoRefused`, `newProjectDurationRefused`, `showNewProjectDuration`,
+  `showNewProjectLyrics`, `showNewProjectLyricsTheme`, `newProjectRequestDraft`,
+  `newProjectCreditEstimate`, `canCreateNewProject(draft, { submitting, outOfCredits })`,
+  `newProjectSubmission(draft, defaultTitle)`, `DEFAULT_GENERATION_VARIANT`.
+- Pickers: `labelledOptions(values, label, locale?, noneLabel?)`, `styleLabelKey`,
+  `moodLabelKey`, `complexityLabelKey`, `optionalToPicker`/`optionalFromPicker`.
+- Replace: **`REPLACE_PRESET_KEYS` + `replacePresetLabelKey(key)`** (locale
+  `replace.preset.<key>`; the English for each key is in the doc comment — add en and
+  zh to both apps), `defaultReplaceSubmission`, `buildReplaceSubmission`.
+- Generate Again: `LOCKABLE`, `lockableChoiceValue`, `lockableChoiceRows`,
+  `generationChoiceLabelKey`, `regenerateWithLocks(record, lockedKeys)`,
+  `regenerateCreditEstimate`.
+- MIDI import: `patchMidiImportOptions(opts, patch)` — the number fields take
+  **`parseNumericDraft(text)`** (null = cleared), never `Number(text)`; `canImportMidi`.
+- Credits: `isOutOfCredits` is music_lib's now.
+- Documents: `createDocumentStore`, `openProjectDocument`, `openFileDocument`,
+  `adoptOutsideScore`, `DocumentFileStorage`, `DocumentOrigin`; saving via
+  `createDocumentSaver`/`projectWrite`. **Opening does not move the shared caret**
+  (`resetPosition`, default false): the host restores each tab's caret when it comes
+  to the front.
+- Prefs: `DevicePrefs`, `PREFS_KEY`, `loadPrefs`/`savePrefs`, `bindDevicePrefs`,
+  `createDevicePrefsStore`, and **`mirrorDevicePrefs(prefsStore, documentStore)`** —
+  RN keeps prefs in one store and mirrors theme, developer mode and pitch display
+  into every open document store.
+- Toasts: `StoreContext.toasts` (`ToastSink`).
+- Copy: `createLibraryCopy(t)` + `installLibraryCopy`. Undo labels now have a
+  runtime list, `COMMAND_LABEL_KEYS` (music_editing).
+- `EDIT_MODE_OPTIONS` lives in music_editing's ui slice.
+- `SetScoreOptions.resetPosition` (music_editing).
+
+Found and fixed in review:
+
+- Undo history printed raw keys: the web locale lacked 11 `command.*` labels, RN
+  lacked 45 (RN's `keys-exist.test.ts` exempted `command.*` as "checked upstream";
+  nothing was). All 49 are in both apps, worded alike, and each app has a guard
+  over `COMMAND_LABEL_KEYS`.
+- Opening a document reset the front document's caret (see `resetPosition`).
+- A cleared MIDI split-point field would have become MIDI 0.
+- Replace presets were English sentences in the library.
+
+Decisions on the agents' open questions (web is the reference):
+
+- RN's New Project gains `variant: 'deepseek'`; RN's Replace defaults become the
+  web's (nothing preserved, moderate). Accepted.
+- An edit landing mid-save now leaves the web project `unsaved` (it was marked
+  clean). Intended.
+- `syncToServer` may send one extra metadata PUT if a file save was pending. Accepted.
+- Replace sends the style token rather than the preset phrase, as the web does. Left.
+- RN needs `generateScore.complexityName.*` before using `complexityLabelKey`.
+- `caretToBar`: remove from music_editing once both apps use `goToBarFromInput` (wave 5).
+- From 2B: Option-drag must only change the selection (web), and a cmd-click on
+  empty stave uses the canvas's `tickAt` (web) — fix `routeScorePress` /
+  `classifyPointerDown` in music_editing during 4A. Replace is locked while playing on
+  both. The issues list stays open when nothing was fixed (web). Project export
+  writes `.moo`.
+
 ---
 
 ## Wave 4 (after wave 3): adopt in the apps
@@ -373,7 +437,56 @@ with paper/orientation; keyboard via `keyboardKeys` and `litKeys`; published
 share URL; docs/community via shared rows; project file via
 `parseProjectFile` (reads web exports).
 
-### Wave 5: guards
+### Wave 4 review (2026-09-15) — done, with fixes
+
+Verified: music_editing 426, music_lib 300, web 826, RN 107 vitest + 359 jest; the
+Mac app driven live (open by link, play, lock while playing, switch tabs mid-play,
+Insert Note, autosave to the `.moo`, keyboard pref across a relaunch).
+
+Found and fixed in review:
+
+- **A binding could play another binding's score.** The published page (both apps)
+  loads the shared player while the editor's binding stays alive; the editor saw no
+  score change and Play played the published piece. `bindPlayer` now records which
+  score each player last loaded, reloads its own before playing, and mirrors the
+  transport and hidden tracks only while its score is the loaded one.
+- **Unbinding left music playing** under a screen that no longer showed it:
+  `unbind` pauses playback it owns.
+- **Switching RN tabs mid-playback** kept playing, left the old store locked as
+  "playing", and would have reported the pause over the restored caret.
+  `DocumentList` takes `leaveFront(document)`, called before the caret is banked;
+  the app pauses there if that document is playing.
+- **The RN playback cursor ran over the keyboard** (visible once the keyboard
+  started expanded): the pinned overlay now clips.
+- **RN document tabs were invisible to assistive technology** (no label, no
+  accessibility action): fixed, with a test.
+
+### Wave 5: guards and loose ends
+
+From the wave 4 agents and review, to do here:
+
+- Project file extension: `WRITABLE_EXPORT_FORMATS` and the docs `EXPORT_FORMATS` /
+  `IMPORT_FORMATS` still say `json`; both apps override to `.moo` by hand.
+- `insertNoteAtCaret` and `paste` read the stored edit mode; use
+  `selectEffectiveEditMode` in the library and delete both apps' write-back effect.
+- `changeVelocity`, `setFingering`, `setNotePitch` return `void`; decide on boolean
+  returns or drop the plan item.
+- `DYNAMIC_OPTIONS` asks for `dynamic.<member>` keys neither app defines.
+- `auditionVoiceFor(track)` does not exist; both keyboards pass program and
+  percussion inline.
+- Web: `store.language` is persisted but never applied (language comes from the URL).
+- Web editor has no way to open a `.moo` (imports live on the dashboard).
+- RN: a tab brought back to the front opens scrolled to the top, even when its
+  restored caret is off screen. Scroll to the caret (or keep the offset per tab).
+- RN: no File-menu item for project export (the macOS menu is native).
+- RN: the Note tab's bar/beat field is read-only and the Track tab lacks the
+  out-of-range count, both of which the web has.
+- music_codecs still exports the `safeFilename` aliases; remove once unused.
+- Remove `caretToBar` from music_editing (no callers remain).
+- The published page's `setScore` moves the shared caret to 0 (the editor's caret
+  is lost by visiting a published link).
+
+Guards:
 
 - `cross-app-parity.test.ts`: also fail when the same English lives under
   different keys in the two apps; rename to one key set.

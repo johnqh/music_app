@@ -7,18 +7,19 @@
  * Server-backed era: projects live in music_api; only device prefs (theme,
  * developer mode, view settings) persist locally via PrefsStorage.
  */
-import { Component, useEffect, useRef, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { applyDocumentTheme, type ColorSchemeMode, resolveColorScheme } from '@/app/theme';
+import { applyDocumentTheme, type ColorSchemeMode, useResolvedColorScheme } from '@/app/theme';
 import { AppRoutes } from '@/app/router';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider } from '@/app/AuthContext';
 import { useDocumentLanguage } from '@/hooks/useDocumentLanguage';
+import { useDocumentFontSize } from '@/hooks/useDocumentFontSize';
 import { BrowserRouter } from 'react-router-dom';
-import { loadPrefs, savePrefs, useAppStore } from '@sudobility/music_lib';
+import { bindDevicePrefs, useAppStore } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
 import type { EditorStoreApi } from '@sudobility/music_lib';
@@ -79,29 +80,19 @@ export type AppProps = {
 export function App({ store = useAppStore }: AppProps) {
   // Keeps <html lang> honest about what the page is actually rendering.
   useDocumentLanguage();
+  useDocumentFontSize(store);
   const themeMode = store((s) => s.themeMode);
-  const developerMode = store((s) => s.developerMode);
-  const pitchDisplay = store((s) => s.pitchDisplay);
 
   const [queryClient] = useState(() => new QueryClient());
 
   // Applies the resolved color scheme to the document (Tailwind `dark`
-  // class). When themeMode is 'system', also re-resolves and re-applies on
-  // every OS/browser scheme change so the app follows it live, without
-  // requiring a reload or a store update.
+  // class). In 'system' mode the scheme is observed, so an OS/browser flip is
+  // followed live without a reload or a store update — and by the canvases,
+  // which read the same hook, not only by the CSS.
+  const scheme = useResolvedColorScheme(themeMode);
   useEffect(() => {
-    applyDocumentTheme(resolveColorScheme(themeMode));
-    if (themeMode !== 'system') return;
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (): void => applyDocumentTheme(resolveColorScheme(themeMode));
-    media.addEventListener('change', handleChange);
-    return () => media.removeEventListener('change', handleChange);
-  }, [themeMode]);
-
-  // Guards the persist effect against writing this render's still-default
-  // values over stored prefs before the bootstrap load resolves.
-  const prefsLoaded = useRef(false);
+    applyDocumentTheme(scheme);
+  }, [scheme]);
 
   // e2e/dev test hook: exposes the live store on `window` for Playwright
   // (store-level assertions where no meaningful UI surface exists).
@@ -130,28 +121,18 @@ export function App({ store = useAppStore }: AppProps) {
     };
   }, [store]);
 
-  // Bootstrap device prefs once on mount.
+  /*
+    Device prefs — theme, developer mode, pitch display, the keyboard's
+    collapsed state, font size, language — loaded into the store on mount and
+    written back on change, by music_lib's `bindDevicePrefs`, shared with the
+    native app. It owns the rule this file used to state with a ref: nothing is
+    written until the load has landed, so the store's defaults never overwrite
+    what was stored before the read came back.
+  */
   useEffect(() => {
-    let cancelled = false;
-    const { prefsStorage } = getAppServices();
-    void Promise.resolve(loadPrefs(prefsStorage)).then((prefs) => {
-      if (cancelled) return;
-      if (prefs.themeMode) store.getState().setThemeMode(prefs.themeMode);
-      if (prefs.developerMode !== undefined) store.getState().setDeveloperMode(prefs.developerMode);
-      if (prefs.pitchDisplay) store.getState().setPitchDisplay(prefs.pitchDisplay);
-      prefsLoaded.current = true;
-    });
-    return () => {
-      cancelled = true;
-    };
+    const binding = bindDevicePrefs(store, getAppServices().prefsStorage);
+    return binding.unbind;
   }, [store]);
-
-  // Persist theme/developer-mode changes (fire-and-forget device prefs).
-  useEffect(() => {
-    if (!prefsLoaded.current) return;
-    const { prefsStorage } = getAppServices();
-    void savePrefs(prefsStorage, { themeMode, developerMode, pitchDisplay });
-  }, [themeMode, developerMode, pitchDisplay]);
 
   return (
     <ErrorBoundary>

@@ -15,13 +15,13 @@
  * The templates themselves come from music_lib — which instruments, clefs, keys
  * and bar counts a starter score has is a decision about the product, and two
  * apps read the same list. Only the words are the host's, through
- * `templateCopy()`.
+ * `libraryCopy.templates()`.
  */
 import { useTranslation } from 'react-i18next';
 import { Button, FormModal, Text, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { projectTemplates } from '@sudobility/music_lib';
-import { templateCopy } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 
 export type TemplatePickerDialogProps = {
   open: boolean;
@@ -52,7 +52,7 @@ export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePicker
           the card grid the project list uses.
         */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {projectTemplates(templateCopy()).map((template) => (
+          {projectTemplates(libraryCopy.templates()).map((template) => (
             <Button
               key={template.id}
               type="button"

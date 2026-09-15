@@ -7,7 +7,7 @@
  * is what keeps the dashboard and the editor agreeing about it — they raise
  * jobs from different code and both were reporting the 402 as a network error.
  */
-import { InsufficientCreditsError } from '@sudobility/music_client';
+import { classifyGenerationError } from '@sudobility/music_client';
 import { reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
@@ -23,7 +23,9 @@ export function reportGenerationError(
   err: unknown,
   { context, store = useAppStore }: ReportGenerationErrorOptions = {},
 ): boolean {
-  if (err instanceof InsufficientCreditsError) {
+  // Which refusals open the store is music_client's call, shared with the
+  // native app — a bare 402 counts as well as the typed error.
+  if (classifyGenerationError(err) === 'paywall') {
     store.getState().openDialog(PAYWALL_DIALOG);
     return true;
   }

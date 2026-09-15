@@ -16,8 +16,6 @@ import { ACCIDENTAL_OPTIONS } from '@sudobility/music_types';
 import type { Accidental } from '@sudobility/music_types';
 import { commonValue as sharedValue } from '@sudobility/music_types';
 
-export { CLEFS, PITCH_STEPS } from '@sudobility/music_types';
-
 /** Sentinel distinguishing "every selected object agrees" from "differing values" (spec §20's "mixed"). */
 export const MIXED = Symbol('mixed');
 
@@ -59,20 +57,18 @@ export const ACCIDENTAL_PICKER: Array<{ value: Accidental; label: string }> =
     label: ACCIDENTAL_SYMBOL[value],
   }));
 
-/*
-  The picker's entries are music_types', not this app's.
-
-  This list existed here, in music_app_rn's toolbar and in its Note tab, and the
-  three agreed only because nobody had added a fifth articulation yet. It is
-  mapped off the vocabulary beside the vocabulary now, so a new member reaches
-  every picker in both apps without anybody remembering to.
-*/
-export { ARTICULATION_OPTIONS, ORNAMENT_OPTIONS, NO_MARK } from '@sudobility/music_types';
-
 export const MIXED_VALUE = '__mixed__';
 
-/** "No marking here", distinct from a marking that happens to be quiet. */
-export const NO_DYNAMIC = '__none__';
+/*
+  Nothing else in the inspector's vocabulary is this panel's. The picker lists
+  (articulations, ornaments, dynamics, barlines, key modes) and the sentinels
+  that stand for an absence (no mark, a custom duration, inherit the clef, no
+  pickup, the single barline, no jump) are music_types', and the rules the
+  fields follow are music_editing's `inspector.ts` — the native property sheet
+  writes the same pickers, and this file used to re-export copies of them, with
+  a `NO_DYNAMIC` of its own that disagreed with the `NO_MARK` the library's
+  `DYNAMIC_OPTIONS` uses. Import those from `@sudobility/music_lib` directly.
+*/
 
 export const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
 
@@ -104,16 +100,3 @@ export function commonValue<T>(values: T[]): MixedOr<T> | null {
   const agreed = sharedValue(values);
   return agreed === null ? MIXED : agreed;
 }
-
-/*
-  The picker sentinels (a custom duration, inheriting the clef, no pickup, the
-  ordinary barline, no jump) are music_types' now — the native property sheet
-  needs the same values — and are re-exported so imports from here still work.
-*/
-export {
-  CUSTOM_DURATION,
-  INHERIT_CLEF,
-  NO_JUMP,
-  NO_PICKUP,
-  SINGLE_BARLINE,
-} from '@sudobility/music_lib';

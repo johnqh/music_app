@@ -40,8 +40,9 @@
  * design); every button, including the card actions, is the library `Button`.
  */
 import { reportGenerationError } from '@/features/credits/report-generation-error';
-import { templateCopy } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import i18n from '@/i18n';
 import {
@@ -58,18 +59,25 @@ import {
 import { EmptyState } from '@sudobility/building_blocks';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
-import { emptyScoreForRequest } from '@sudobility/music_lib';
-import { parseScore } from '@sudobility/music_types';
+import { DOCUMENT_EXTENSIONS, ProjectFileError, parseProjectFile } from '@sudobility/music_codecs';
+import {
+  createGeneratedProject,
+  musicQueryKeys,
+  useCancelProjectGeneration,
+  useDeleteProject,
+  useDuplicateProject,
+  useProjects,
+  useTranscriptionCapability,
+} from '@sudobility/music_client';
 import {
   playbackController,
   projectTemplates,
   reportError,
   useAppStore,
-  withGenerationVariant,
 } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
-import type { GenerateScoreRequest } from '@sudobility/music_types';
+import { useMusicHookContext } from '@/app/AuthContext';
 import { NewProjectDialog } from '@/features/projects/NewProjectDialog';
 import { TemplatePickerDialog } from '@/features/projects/TemplatePickerDialog';
 import type { NewProjectSubmission } from '@sudobility/music_lib';
@@ -96,7 +104,11 @@ function formatDate(iso: string): string {
   }
 }
 
-/** Reads the MusicClient + a token getter out of the app services (the store context owns the same client). */
+/**
+ * The MusicClient and a token, for the two calls that are not hooks: creating a
+ * generated project (a sequence with a rollback, see `createGeneratedProject`)
+ * and uploading a recording.
+ */
 async function clientAndToken() {
   const { musicClient } = getAppServices();
   const token = await getAppServices().auth.getToken();
@@ -104,9 +116,6 @@ async function clientAndToken() {
   if (!token) throw new Error(i18n.t('errors.mustSignIn'));
   return { client: musicClient, token };
 }
-
-/** How often the list refetches while any project is generating. Minutes of work, so seconds of latency cost nothing. */
-const GENERATION_POLL_MS = 3000;
 
 function resetOpenedProjectTransport(): void {
   playbackController.stop();
@@ -154,25 +163,13 @@ const IMPORT_LABEL_KEYS: Record<ImportKind, string> = {
 
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
   const { t } = useTranslation();
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('updatedAt');
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
-  const [audioImportOpen, setAudioImportOpen] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
-  /**
-   * Whether this deployment can transcribe audio at all.
-   *
-   * Probed when the dialog opens rather than discovered by failing: uploading a
-   * recording and only then being told the server never could is the worst
-   * order to learn it in. `null` while unknown, which leaves the option
-   * enabled — an unanswered probe should not disable a feature that may work.
-   */
-  const [canTranscribe, setCanTranscribe] = useState<boolean | null>(null);
   const [modImportOpen, setModImportOpen] = useState(false);
   const [modBusy, setModBusy] = useState(false);
   const [modError, setModError] = useState<string | null>(null);
@@ -183,71 +180,75 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
 
-  const refresh = useCallback(async (): Promise<void> => {
-    try {
-      const { client, token } = await clientAndToken();
-      const rows = await client.listProjects(token, { sort: sortBy });
-      setProjects(rows);
-    } catch (err) {
-      reportError(err, { context: t('errors.loadProjects'), store });
-    } finally {
-      setLoaded(true);
-    }
-  }, [sortBy, store, t]);
-
+  /*
+    The list is music_client's `useProjects`, shared with the native dashboard.
+    It polls while any row is still being worked on server-side and stops the
+    moment none is — a dashboard that refetched forever would keep a request
+    loop alive for the whole session, and one that never did would leave a
+    finished generation showing its badge until a reload.
+  */
+  const hookContext = useMusicHookContext();
+  const queryClient = useQueryClient();
+  const projectsQuery = useProjects(hookContext, { sort: sortBy }, { pollWhileGenerating: true });
+  const projects = projectsQuery.data ?? [];
+  const loaded = projectsQuery.isFetched;
+  const loadError = projectsQuery.error;
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (loadError) reportError(loadError, { context: t('errors.loadProjects'), store });
+  }, [loadError, store, t]);
 
-  /**
-   * Poll only while something is actually generating, and stop when nothing
-   * is — a dashboard that refetched forever would keep a request loop alive
-   * for the whole session.
-   */
-  const anyGenerating = projects.some((p) => p.status === 'generating');
-  useEffect(() => {
-    if (!anyGenerating) return;
-    const timer = setInterval(() => void refresh(), GENERATION_POLL_MS);
-    return () => clearInterval(timer);
-  }, [anyGenerating, refresh]);
+  /** Marks the list stale, for writes that did not go through a list hook. */
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: musicQueryKeys.projects.all }),
+    [queryClient],
+  );
+
+  const duplicateProject = useDuplicateProject(hookContext);
+  const deleteProject = useDeleteProject(hookContext);
+  const cancelProjectGeneration = useCancelProjectGeneration(hookContext);
+
+  /*
+    Whether this deployment can transcribe audio at all, probed while the
+    Import Audio dialog is open rather than discovered by failing: uploading a
+    recording and only then being told the server never could is the worst
+    order to learn it in. The context is withheld while the dialog is shut, so
+    each opening asks again (a deployment can gain or lose its credentials while
+    a tab stays open) and the dashboard itself asks nothing. `null` while
+    unknown, which leaves the option enabled.
+  */
+  const [audioImportOpen, setAudioImportOpen] = useState(false);
+  const { available: canTranscribe } = useTranscriptionCapability(
+    audioImportOpen ? hookContext : null,
+  );
 
   const cancelGeneration = async (projectId: string): Promise<void> => {
     try {
-      const { client, token } = await clientAndToken();
       // The job id is not on the summary; the project's running job is the
       // only one it can have, so the server resolves it from the project.
-      await client.cancelProjectGeneration(projectId, token);
-      await refresh();
+      await cancelProjectGeneration.mutateAsync(projectId);
     } catch (err) {
       reportError(err, { context: t('errors.cancelGeneration'), store });
     }
   };
 
-  /** Creates the project immediately, then starts a job against it: it shows up in this list with its badge from the first second rather than materialising minutes later. */
-  const startWholeScoreGeneration = async (request: GenerateScoreRequest): Promise<void> => {
+  /**
+   * Creates the project immediately, then starts a job against it: it shows up
+   * in this list with its badge from the first second rather than materialising
+   * minutes later. The sequence — and deleting the project again when the job
+   * is refused, so a user with no credits does not collect an empty row per
+   * attempt — is music_client's `createGeneratedProject`.
+   */
+  const startWholeScoreGeneration = async (
+    submission: Extract<NewProjectSubmission, { kind: 'generate' }>,
+  ): Promise<void> => {
     setCreatingProject(true);
     try {
       const { client, token } = await clientAndToken();
-      const project = await client.createProject(
-        // Not the prompt: prompts routinely begin "Create a ...", which makes
-        // a project list full of near-identical names that also collide with
-        // the page's own Create button.
-        { name: request.title?.trim() || 'Generated score', score: emptyScoreForRequest(request) },
-        token,
-      );
-      try {
-        await client.createJob({ projectId: project.id, kind: 'generate-score', request }, token);
-      } catch (jobErr) {
-        // The project exists only to hold the generation. If the job is
-        // refused — out of credits, over quota, another of this user's jobs
-        // already queued on it — leaving the empty shell behind litters the
-        // dashboard with "Generated score" rows that contain nothing. A user
-        // with no credits would collect one on every attempt.
-        await client.deleteProject(project.id, token).catch(() => {
-          // Best effort: the refusal is what the user needs to hear about.
-        });
-        throw jobErr;
-      }
+      // The dialog chooses the backend; the developer setting fills in when it
+      // did not.
+      await createGeneratedProject(client, token, submission, {
+        variant: store.getState().devSettings.generationVariant,
+      });
       setNewProjectOpen(false);
       await refresh();
     } catch (err) {
@@ -289,22 +290,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
    */
   const handleNewProject = async (submission: NewProjectSubmission): Promise<void> => {
     if (submission.kind === 'generate') {
-      /*
-        The dialog chooses the backend; this fills in when it did not.
-
-        It used to be attached here alone, from developer settings, on the
-        reasoning that the backend is a property of the machine rather than of
-        the music. Choosing per generation is what the picker in the dialog is
-        for, so a request that already names one keeps it.
-      */
-      await startWholeScoreGeneration(
-        submission.request.variant
-          ? submission.request
-          : withGenerationVariant(
-              submission.request,
-              store.getState().devSettings.generationVariant,
-            ),
-      );
+      await startWholeScoreGeneration(submission);
       return;
     }
     setCreatingProject(true);
@@ -345,24 +331,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     else {
       setAudioError(null);
       setAudioImportOpen(true);
-      // Probed per opening, not once per session: a deployment can gain or lose
-      // its credentials while a tab stays open.
-      void (async () => {
-        try {
-          const { client, token } = await clientAndToken();
-          setCanTranscribe((await client.getTranscriptionCapability(token)).available);
-        } catch {
-          // Left unknown rather than false: a failed probe says nothing about
-          // whether transcription works, and the POST reports its own 503
-          // clearly enough if it does not.
-          setCanTranscribe(null);
-        }
-      })();
     }
   };
 
   const handleCreateFromTemplate = async (templateId: string): Promise<void> => {
-    const template = projectTemplates(templateCopy()).find((tpl) => tpl.id === templateId);
+    const template = projectTemplates(libraryCopy.templates()).find((tpl) => tpl.id === templateId);
     if (!template) return;
     try {
       await store.getState().newProject({ name: template.name, score: template.build() });
@@ -376,12 +349,10 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
 
   const handleDuplicate = async (project: ProjectSummary): Promise<void> => {
     try {
-      const { client, token } = await clientAndToken();
       // Server-side: the score is copied inside the database. Downloading it
       // to upload it again moved the whole thing twice for a copy nobody here
       // is going to look at.
-      await client.duplicateProject(project.id, {}, token);
-      await refresh();
+      await duplicateProject.mutateAsync({ id: project.id });
     } catch (err) {
       reportError(err, { context: t('errors.duplicateProject'), store });
     }
@@ -392,9 +363,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     setPendingDelete(null);
     if (!project) return;
     try {
-      const { client, token } = await clientAndToken();
-      await client.deleteProject(project.id, token);
-      await refresh();
+      await deleteProject.mutateAsync(project.id);
     } catch (err) {
       reportError(err, { context: t('errors.deleteProject'), store });
     }
@@ -404,22 +373,32 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     setJsonError(null);
     setJsonBusy(true);
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as { name?: unknown; score?: unknown };
-      const score = parseScore(parsed.score);
-      const name =
-        typeof parsed.name === 'string' && parsed.name ? parsed.name : score.metadata.title;
+      /*
+        Either shape a project file comes in — the `.moo` both apps now write,
+        or this app's older `{ name, schemaVersion, score }` JSON export — read
+        by music_codecs, which also refuses a file from a newer build rather
+        than dropping what it cannot read. Signed in, an opened file becomes a
+        server project, as every other import does.
+      */
+      const { title, score } = parseProjectFile(await file.text());
       // `newProject` creates it and adopts what it just sent. Creating through
       // the client and then opening the result meant uploading the score and
       // immediately downloading the same bytes back.
-      await store.getState().newProject({ name, score });
+      await store.getState().newProject({ name: title, score });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       setJsonImportOpen(false);
-      await refresh();
+      void refresh();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
-      setJsonError(err instanceof Error ? err.message : 'That file is not a project export.');
+      // Worded here from the reason, not the codec's English message.
+      setJsonError(
+        err instanceof ProjectFileError
+          ? t(`dashboard.projectFileError.${err.reason}`)
+          : err instanceof Error
+            ? err.message
+            : t('dashboard.projectFileError.notAProject'),
+      );
       reportError(err, { context: t('errors.projectJsonImport'), store });
     } finally {
       setJsonBusy(false);
@@ -445,7 +424,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       setModImportOpen(false);
-      await refresh();
+      void refresh();
       if (id) onNavigate?.(`/project/${id}`);
     } catch (err) {
       setModError(
@@ -473,7 +452,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         const { client, token } = await clientAndToken();
         const saved = await client.transcribeAudio(file, file.name, token);
         setAudioImportOpen(false);
-        await refresh();
+        void refresh();
         onNavigate?.(`/project/${saved.id}`);
       } catch (err) {
         setAudioError(err instanceof Error ? err.message : 'That recording could not be sent.');
@@ -723,7 +702,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       <FileImportModal
         open={jsonImportOpen}
         title={t('dashboard.importProject')}
-        accept="application/json"
+        accept={[...DOCUMENT_EXTENSIONS.map((ext) => `.${ext}`), 'application/json'].join(',')}
         fileKind={t('dashboard.projectFileKind')}
         onFile={(file) => void handleImportJsonFile(file)}
         busy={jsonBusy}

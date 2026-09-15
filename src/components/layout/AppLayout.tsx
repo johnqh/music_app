@@ -47,7 +47,7 @@
  * skin -- the honest characterization is still "kept native", just with a
  * documented, checked reason rather than an assumed one.
  */
-import { selectionSummaryCopy } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
@@ -75,19 +75,27 @@ import {
   MENU_ITEM_CLASS,
   useMenu,
 } from '@/components/layout/app-bar-menu';
-import { safeFilename as midiSafeFilename } from '@sudobility/music_lib';
+import { regenerateWithLocks } from '@sudobility/music_lib';
 import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
-import { musicXmlSafeFilename } from '@sudobility/music_lib';
 import {
-  selectRegeneratedInRange,
-  prepareReplacement,
+  DOCUMENT_EXTENSION,
+  WRITABLE_EXPORT_FORMATS,
+  adoptOutsideScore,
+  exportFilename,
   exportScopeNeedsPrompt,
-  exportTargetScore,
   hiddenTrackCount,
+  planExport,
+  prepareReplacement,
+  repairIssuesOutcome,
+  selectRegeneratedInRange,
+  serializeProjectFile,
 } from '@sudobility/music_lib';
-import { renderEvents, renderSamples } from '@sudobility/music_player';
+import type { ExportFormatId, ExportPlan } from '@sudobility/music_lib';
+import { renderScoreAudio } from '@sudobility/music_player';
+import { useProjectSnapshots } from '@sudobility/music_client';
+import { publishedSnapshotUrl } from '@sudobility/music_types';
 import { SOUNDFONT_ASSETS } from '@/config/initialize';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -96,7 +104,6 @@ import type { ValidationIssue } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { repairAllIssues } from '@sudobility/music_lib';
-import type { Score } from '@sudobility/music_types';
 import { reportError } from '@sudobility/music_lib';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
@@ -111,14 +118,12 @@ import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { ShortcutHelpDialog } from '@/components/dialogs/ShortcutHelpDialog';
 import { ExportScopeDialog } from '@/components/dialogs/ExportScopeDialog';
-import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
 import { getAppServices } from '@/config/initialize';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
 import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
-import { snapshotTree } from '@sudobility/music_lib';
-import type { SnapshotSummary } from '@sudobility/music_types';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
+import { useMusicHookContext } from '@/app/AuthContext';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -145,6 +150,20 @@ const SAVE_STATE_CLASS: Record<string, string> = {
   saved: 'bg-success text-success-foreground',
   saving: 'bg-info text-info-foreground',
   unsaved: 'bg-warning text-warning-foreground',
+};
+
+/**
+ * What the toast says when a format fails to write. A record keyed by the
+ * format vocabulary, so a format added upstream fails to compile here rather
+ * than failing with no message.
+ */
+const EXPORT_ERROR_KEY: Record<ExportFormatId, string> = {
+  midi: 'errors.midiExport',
+  musicxml: 'errors.musicXmlExport',
+  xm: 'errors.moduleExport',
+  wav: 'errors.audioExport',
+  mp3: 'errors.audioExport',
+  project: 'errors.projectJsonExport',
 };
 
 // Kept hand-rolled: these sit on the primary-colored app-bar background;
@@ -232,150 +251,89 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const issuesMenu = useMenu<HTMLDivElement>();
   const projectMenu = useMenu<HTMLDivElement>();
 
-  // Snapshots go through `getAppServices().musicClient` directly, the way the
-  // dashboard and every export in this file already reach the backend. The
-  // app has no React Query provider around this subtree to hang hooks off.
-  const [snapshots, setSnapshots] = useState<SnapshotSummary[]>([]);
-  const [parentSnapshotId, setParentSnapshotId] = useState<string | null>(null);
+  /*
+    Snapshot history is music_client's `useProjectSnapshots`, shared with the
+    native app: listing, create (flushing first), publish, rename and open, each
+    rule of which is a bug somebody hit. What stays here is this app's half —
+    which store, how a score from outside is adopted, and when to look.
+
+    The context is the auth provider's (`useMusicHookContext`): its token is
+    read per request, never captured, since a token held from render goes stale
+    an hour into a session.
+  */
+  const hookContext = useMusicHookContext();
   const [createSnapshotOpen, setCreateSnapshotOpen] = useState(false);
   const [openSnapshotOpen, setOpenSnapshotOpen] = useState(false);
   const [managePublishedOpen, setManagePublishedOpen] = useState(false);
-  const [publisherName, setPublisherName] = useState<string | undefined>(undefined);
-
-  const refreshSnapshots = useCallback(async () => {
-    const projectId = store.getState().projectId;
-    if (!projectId) return;
-    const { musicClient, auth } = getAppServices();
-    const token = await auth.getToken();
-    if (!token) return;
-    setSnapshots(await musicClient.listSnapshots(projectId, token));
-    setPublisherName((await musicClient.lastPublisherName(token)).publisherName ?? undefined);
-    // The status endpoint carries `parentSnapshotId`. Reading the project for
-    // it fetched the entire score to learn one id — every time this panel
-    // opened, and after every snapshot taken.
-    const status = await musicClient.getProjectStatus(projectId, token);
-    setParentSnapshotId(status.parentSnapshotId);
-    // Creating or opening a snapshot writes the project row. Recording where
-    // the server stands keeps the generation poll from reading this client's
-    // own change as a foreign one and reloading over the top of it.
-    store.getState().noteServerVersion(status.updatedAt);
-  }, [store]);
-
-  const createSnapshot = useCallback(
-    async (name: string, publisher?: string, publicName?: string) => {
-      const projectId = store.getState().projectId;
-      if (!projectId) return;
-      const { musicClient, auth } = getAppServices();
-      const token = await auth.getToken();
-      if (!token) return;
-
-      // Push the live score first. `createSnapshot` copies the *server's*
-      // project row, and autosave is debounced — so without this a snapshot
-      // pins whatever the server last happened to receive rather than what is
-      // on screen, which for a freshly generated score is nothing at all.
-      //
-      // Through the autosaver rather than a PUT of its own: `saveNow` is a
-      // no-op when nothing is dirty, where a direct write re-uploaded the
-      // whole score every time somebody took a second snapshot of it.
-      await store.getState().saveNow();
-
-      const snapshot = await musicClient.createSnapshot(projectId, name, token);
-      setCreateSnapshotOpen(false);
-
-      if (publisher && publicName) {
-        const published = await musicClient.publishSnapshot(
-          snapshot.id,
-          { publisherName: publisher, publicName },
-          token,
-        );
-        const url = `${window.location.origin}/en/p/${published.publicId ?? ''}`;
-        store.getState().pushToast({ message: `Published: ${url}`, severity: 'success' });
-      }
-
-      await refreshSnapshots();
-    },
-    [store, refreshSnapshots],
-  );
-
   /**
-   * Renaming a publication is a re-publish: the server keeps the first
-   * `publicId`, so every link already shared keeps working. The publisher name
-   * travels unchanged — this dialog edits the title, not the attribution.
+   * Nothing is asked of the server until the project menu first opens: an
+   * editor nobody asks about its history should not fetch it on every load.
+   * Once asked, each opening re-reads, as the menu always did.
    */
-  const renamePublished = useCallback(
-    async (snapshotId: string, publicName: string) => {
-      const { musicClient, auth } = getAppServices();
-      const token = await auth.getToken();
-      if (!token) return;
-      const existing = snapshots.find((s) => s.id === snapshotId);
-      if (!existing?.publisherName) return;
-      await musicClient.publishSnapshot(
-        snapshotId,
-        { publisherName: existing.publisherName, publicName },
-        token,
-      );
-      await refreshSnapshots();
-    },
-    [snapshots, refreshSnapshots],
-  );
+  const [snapshotsWanted, setSnapshotsWanted] = useState(false);
+  const history = useProjectSnapshots(hookContext, snapshotsWanted ? projectId : null, {
+    // Through the autosaver rather than a PUT of its own: `saveNow` is a no-op
+    // when nothing is dirty, and without the flush a snapshot pins whatever the
+    // server last received rather than what is on screen — which for a freshly
+    // generated score is nothing at all.
+    flush: () => store.getState().saveNow(),
+    // A snapshot's score arrives around the edit lock, so the transport stops
+    // before it lands, and the new server stamp is recorded so the generation
+    // poll does not read this client's own write as somebody else's.
+    onAdopt: (adopted, project) =>
+      adoptOutsideScore(store, adopted, playbackController, {
+        serverUpdatedAt: project.updatedAt,
+      }),
+    noteServerVersion: (updatedAt) => store.getState().noteServerVersion(updatedAt),
+  });
+  const snapshots = history.snapshots ?? [];
 
-  const openSnapshot = useCallback(
-    async (snapshotId: string) => {
-      const { musicClient, auth } = getAppServices();
-      const token = await auth.getToken();
-      if (!token) return;
-      // The server replaces the live project and hands back the result, so the
-      // editor takes its score straight from the response rather than reloading.
-      const project = await musicClient.openSnapshot(snapshotId, token);
-      // Stopped *before* the score is adopted, for the same reason the
-      // generation reload above is: this write bypasses the edit lock, so the
-      // controller must not still be playing when the new score arrives.
-      playbackController.stop();
-      store.getState().setScore(project.score);
-      // This client made that change and is showing the result; say so, or the
-      // generation poll reads the new `updatedAt` as somebody else's write.
-      store.getState().noteServerVersion(project.updatedAt);
+  const createSnapshot = async (name: string, publisher?: string, publicName?: string) => {
+    try {
+      const snapshot = await history.create({
+        name,
+        ...(publisher && publicName ? { publish: { publisherName: publisher, publicName } } : {}),
+      });
+      setCreateSnapshotOpen(false);
+      if (snapshot?.publicId) {
+        store.getState().pushToast({
+          message: t('snapshot.publishedAt', {
+            url: publishedSnapshotUrl(window.location.origin, lang, snapshot.publicId),
+          }),
+          severity: 'success',
+        });
+      }
+    } catch (err) {
+      reportError(err, { context: t('errors.createSnapshot'), store });
+    }
+  };
+
+  const openSnapshot = async (snapshotId: string) => {
+    try {
+      await history.open(snapshotId);
       setOpenSnapshotOpen(false);
-      await refreshSnapshots();
-    },
-    [store, refreshSnapshots],
-  );
-  const [keyboardCollapsed, setKeyboardCollapsed] = useState(false);
+    } catch (err) {
+      reportError(err, { context: t('errors.openSnapshot'), store });
+    }
+  };
+
+  // A device pref, not component state: remembered across reloads by the
+  // binding `App.tsx` installs, and expanded until somebody collapses it.
+  const keyboardCollapsed = store((s) => s.keyboardCollapsed);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
   const hiddenCount = hiddenTrackCount(store);
   /**
    * The export waiting on the user's answer, or null when nothing is pending.
-   *
-   * Held as a callback rather than a "which format" tag so each handler keeps
-   * its own filename, mime type and error context in one place, instead of
-   * this dialog having to reconstruct them.
+   * Held as the format rather than a callback: `planExport` rebuilds everything
+   * else from it once the scope is known.
    */
-  const [pendingExport, setPendingExport] = useState<null | ((scope: ExportScope) => void)>(null);
+  const [pendingExport, setPendingExport] = useState<ExportFormatId | null>(null);
   const [pendingModule, setPendingModule] = useState<null | {
     format: WritableTrackerFormat;
     report: TrackerFitReport;
     write: () => Promise<void>;
   }>(null);
-
-  /**
-   * Runs `write` against the score the user asked for, asking first only when
-   * the two possible answers actually differ.
-   */
-  const withExportScope = (write: (target: Score) => Promise<void>): void => {
-    if (!score) return;
-    if (!exportScopeNeedsPrompt(store)) {
-      void write(score);
-      return;
-    }
-    // Stored via an updater that *returns* the callback: React would otherwise
-    // call a function passed to setState as an updater rather than store it.
-    setPendingExport(() => (scope: ExportScope) => {
-      setPendingExport(null);
-      const target = exportTargetScore(store, scope);
-      if (target) void write(target);
-    });
-  };
 
   const errorIssues = validationIssues.filter((i) => i.severity === 'error');
 
@@ -389,19 +347,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * reader can see.
    */
   const handleFixIssues = (): void => {
-    const { fixed, remaining } = repairAllIssues(store, t('editor.fixIssues'));
-    if (fixed === 0) {
-      store.getState().pushToast({ message: t('editor.fixedNothing'), severity: 'info' });
-      return;
-    }
-    store.getState().pushToast({
-      message:
-        remaining > 0
-          ? t('editor.fixedIssuesPartial', { count: fixed, remaining })
-          : t('editor.fixedIssues', { count: fixed }),
-      severity: 'success',
-    });
-    if (remaining === 0) issuesMenu.setOpen(false);
+    const outcome = repairIssuesOutcome(repairAllIssues(store, t('editor.fixIssues')));
+    store
+      .getState()
+      .pushToast({ message: t(outcome.messageKey, outcome.params), severity: outcome.severity });
+    if (outcome.close) issuesMenu.setOpen(false);
   };
 
   const commitTitle = (): void => {
@@ -412,112 +362,92 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   };
 
   /**
-   * Render the score offline and save it.
+   * Writes one planned export.
    *
-   * `renderEvents` decides what sounds (mute, solo, timing, per-track level and
-   * pan); `renderSamples` drives the same soundfont playback uses, so the file
-   * matches what you just heard.
+   * Which formats exist, their extensions and which score a scope means are
+   * music_editing's (`planExport`), shared with the native app. What stays here
+   * is what that package may not reach: the file name (music_codecs'
+   * keep-the-title rule), rendering audio (music_player), fitting a tracker
+   * module (music_lib) and the write (music_io).
    *
-   * The app orchestrates the two halves on purpose: music_player makes the
-   * sound and hands back PCM, music_io encodes and writes it. Neither platform
-   * package depends on the other, which is why music_io never holds a reference
-   * to a running synth.
+   * Audio renders through the soundfont playback uses, so the file is a
+   * recording of what was just heard; music_player hands back PCM and music_io
+   * encodes it, so neither platform package depends on the other.
+   *
+   * A tracker module's fit runs after the scope, because exporting visible
+   * tracks only may bring a score within a channel limit all tracks exceed —
+   * and a clean fit must not cost a click.
+   *
+   * The project file is music_codecs' `.moo` document — the shape the native
+   * app writes and reads — carrying the project's name as its title, so
+   * importing it back names the project what it was. The web's old
+   * `{ name, schemaVersion, score }` `.json` is still read on import.
    */
-  const handleExportAudio = (format: 'wav' | 'mp3'): void => {
-    withExportScope(async (target) => {
-      try {
-        const plan = renderEvents(target);
-        const audio = await renderSamples(SOUNDFONT_ASSETS)(plan);
-        await getAppServices().io.saveAudio(
-          audio.samples,
-          audio.sampleRate,
-          format,
-          `${midiSafeFilename(target.metadata.title)}.${format}`,
-        );
-      } catch (err) {
-        reportError(err, { context: `${format.toUpperCase()} export failed`, store });
+  const writeExport = async (plan: ExportPlan): Promise<void> => {
+    const { io } = getAppServices();
+    const filename = exportFilename(plan.title, plan.extension);
+    try {
+      switch (plan.route) {
+        case 'notation':
+          if (plan.format === 'midi') await io.saveMidi(plan.target, filename);
+          else await io.saveMusicXml(plan.target, filename);
+          return;
+        case 'audio': {
+          const audio = await renderScoreAudio(plan.target, SOUNDFONT_ASSETS);
+          await io.saveAudio(
+            audio.samples,
+            audio.sampleRate,
+            plan.format as 'wav' | 'mp3',
+            filename,
+          );
+          return;
+        }
+        case 'tracker': {
+          const format = plan.format as WritableTrackerFormat;
+          const { module, report } = scoreToTracker(plan.target, { format });
+          const write = async (): Promise<void> => {
+            await io.saveTracker(module, filename);
+          };
+          if (isCleanFit(report)) {
+            await write();
+            return;
+          }
+          setPendingModule({ format, report, write });
+          return;
+        }
+        case 'project': {
+          // The document's own extension rather than the plan's `json`: the
+          // project file is `.moo` on both apps now.
+          await io.fileExporter.save(
+            exportFilename(plan.title, DOCUMENT_EXTENSION),
+            serializeProjectFile({
+              title: store.getState().projectName || plan.title,
+              score: plan.target,
+            }),
+            'application/json',
+          );
+          return;
+        }
       }
-    });
-    exportMenu.setOpen(false);
+    } catch (err) {
+      reportError(err, { context: t(EXPORT_ERROR_KEY[plan.format]), store });
+    }
   };
 
   /**
-   * Export a tracker module.
-   *
-   * Scope runs first because the fit depends on it: exporting visible tracks
-   * only may bring a score within a channel limit that all tracks exceed.
+   * Exports `format`, asking which tracks first only when the two answers
+   * actually differ. A project file never asks: it is the document, and hiding
+   * a track is a view preference, not a reason to drop a part from it.
    */
-  const handleExportModule = (format: WritableTrackerFormat): void => {
-    withExportScope(async (target) => {
-      try {
-        const { module, report } = scoreToTracker(target, { format });
-        const write = async (): Promise<void> => {
-          await getAppServices().io.saveTracker(
-            module,
-            `${midiSafeFilename(target.metadata.title)}.${format}`,
-          );
-        };
-        // A clean fit must not cost a click.
-        if (isCleanFit(report)) {
-          await write();
-          return;
-        }
-        setPendingModule({ format, report, write });
-      } catch (err) {
-        reportError(err, { context: `${format.toUpperCase()} export failed`, store });
-      }
-    });
+  const handleExport = (format: ExportFormatId): void => {
     exportMenu.setOpen(false);
-  };
-
-  const handleExportMidi = (): void => {
-    withExportScope(async (target) => {
-      try {
-        await getAppServices().io.saveMidi(
-          target,
-          `${midiSafeFilename(target.metadata.title)}.mid`,
-        );
-      } catch (err) {
-        reportError(err, { context: t('errors.midiExport'), store });
-      }
-    });
-    exportMenu.setOpen(false);
-  };
-
-  const handleExportMusicXml = (): void => {
-    withExportScope(async (target) => {
-      try {
-        await getAppServices().io.saveMusicXml(
-          target,
-          `${musicXmlSafeFilename(target.metadata.title)}.musicxml`,
-        );
-      } catch (err) {
-        reportError(err, { context: t('errors.musicXmlExport'), store });
-      }
-    });
-    exportMenu.setOpen(false);
-  };
-
-  const handleExportProjectJson = async (): Promise<void> => {
-    const projectId = store.getState().projectId;
-    if (!projectId) return;
-    try {
-      const state = store.getState();
-      if (!state.score) return;
-      const payload = JSON.stringify(
-        { name: state.projectName, schemaVersion: 1, score: state.score },
-        null,
-        2,
-      );
-      await getAppServices().io.fileExporter.save(
-        `${projectName || 'project'}.json`,
-        payload,
-        'application/json',
-      );
-    } catch (err) {
-      reportError(err, { context: t('errors.projectJsonExport'), store });
+    const route = WRITABLE_EXPORT_FORMATS.find((f) => f.id === format)?.route;
+    if (route === 'project' || !exportScopeNeedsPrompt(store)) {
+      const plan = planExport(store, format, 'all');
+      if (plan) void writeExport(plan);
+      return;
     }
-    exportMenu.setOpen(false);
+    setPendingExport(format);
   };
 
   const navigateToIssue = (issue: ValidationIssue): void => {
@@ -644,7 +574,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 aria-expanded={projectMenu.open}
                 onClick={() => {
                   projectMenu.setOpen((v) => !v);
-                  void refreshSnapshots();
+                  setSnapshotsWanted(true);
+                  void history.refresh();
                 }}
                 className={ICON_BUTTON_CLASS}
               >
@@ -723,65 +654,21 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </Tooltip>
             {exportMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => handleExportAudio('wav')}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.audioWav')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => handleExportAudio('mp3')}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.audioMp3')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={handleExportMidi}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.midi')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={handleExportMusicXml}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.musicXml')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => handleExportModule('xm')}
-                  disabled={!score}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.xmModule')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  role="menuitem"
-                  onClick={() => void handleExportProjectJson()}
-                  className={MENU_ITEM_CLASS}
-                >
-                  {t('editor.projectJson')}
-                </Button>
+                {/* music_editing's format list, in its order, so the menu and
+                    the documentation's export table cannot disagree. */}
+                {WRITABLE_EXPORT_FORMATS.map((format) => (
+                  <Button
+                    key={format.id}
+                    type="button"
+                    variant="ghost"
+                    role="menuitem"
+                    onClick={() => handleExport(format.id)}
+                    disabled={!score}
+                    className={MENU_ITEM_CLASS}
+                  >
+                    {t(format.labelKey)}
+                  </Button>
+                ))}
               </div>
             )}
           </div>
@@ -958,13 +845,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                       ? {
                           record: lastGeneration,
                           generating: generation.generating,
-                          // The same request, with the locked choices kept and
-                          // everything else rolled again by the server.
-                          onGenerateAgain: (locks) =>
-                            void generation.start('generate-score', {
-                              ...lastGeneration.request,
-                              choices: locks,
-                            }),
+                          // The same request, with only the locked choices kept
+                          // and everything else rolled again by the server.
+                          onGenerateAgain: (lockedKeys) =>
+                            void generation.start(
+                              'generate-score',
+                              regenerateWithLocks(lastGeneration, lockedKeys),
+                            ),
                         }
                       : undefined
                   }
@@ -985,7 +872,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         <TransportBar
           store={store}
           keyboardCollapsed={keyboardCollapsed}
-          onToggleKeyboard={() => setKeyboardCollapsed((v) => !v)}
+          onToggleKeyboard={() => store.getState().setKeyboardCollapsed(!keyboardCollapsed)}
         />
 
         {/* Full-width piano keyboard: a sibling of the transport rather than a
@@ -1020,7 +907,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
       >
         <span className="text-xs text-theme-text-secondary">
-          {selectionSummaryLabel(selection, selectionSummaryCopy(), selectionRegenerated)}
+          {selectionSummaryLabel(selection, libraryCopy.selection(), selectionRegenerated)}
         </span>
         <div className="flex-1" />
         <div ref={issuesMenu.ref} className="relative">
@@ -1109,7 +996,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         open={createSnapshotOpen}
         snapshotCount={snapshots.length}
         projectName={projectName}
-        {...(publisherName ? { defaultPublisherName: publisherName } : {})}
+        {...(history.defaultPublisherName
+          ? { defaultPublisherName: history.defaultPublisherName }
+          : {})}
         onCreate={(name, publisher, publicName) => void createSnapshot(name, publisher, publicName)}
         onClose={() => setCreateSnapshotOpen(false)}
       />
@@ -1117,13 +1006,17 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <ManagePublishedDialog
         open={managePublishedOpen}
         snapshots={snapshots}
-        onRename={(id, publicName) => void renamePublished(id, publicName)}
+        onRename={(id, publicName) =>
+          void history.rename(id, publicName).catch((err: unknown) => {
+            reportError(err, { context: t('errors.renamePublished'), store });
+          })
+        }
         onClose={() => setManagePublishedOpen(false)}
       />
 
       <OpenSnapshotDialog
         open={openSnapshotOpen}
-        nodes={snapshotTree(snapshots, parentSnapshotId)}
+        nodes={history.nodes}
         onOpen={(id) => void openSnapshot(id)}
         onSnapshotFirst={() => {
           // The non-destructive escape: keep the work, then choose again.
@@ -1150,7 +1043,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <ExportScopeDialog
         open={pendingExport !== null}
         hiddenCount={hiddenCount}
-        onChoose={(scope) => pendingExport?.(scope)}
+        onChoose={(scope) => {
+          const format = pendingExport;
+          setPendingExport(null);
+          const plan = format ? planExport(store, format, scope) : null;
+          if (plan) void writeExport(plan);
+        }}
         onCancel={() => setPendingExport(null)}
       />
       {pendingModule && (

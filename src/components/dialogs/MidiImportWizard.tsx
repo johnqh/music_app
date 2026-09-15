@@ -54,9 +54,21 @@ import {
   SelectValue,
 } from '@sudobility/components';
 import type { MidiSummary } from '@sudobility/music_lib';
-import { defaultMidiImportOptions } from '@sudobility/music_lib';
-import type { MidiImportOptions } from '@sudobility/music_lib';
-import type { Clef, DurationName, NoteEvent } from '@sudobility/music_types';
+import {
+  canImportMidi,
+  defaultMidiImportOptions,
+  patchMidiImportOptions,
+} from '@sudobility/music_lib';
+import type { MidiImportOptions, MidiImportPatch } from '@sudobility/music_lib';
+import {
+  CLEFS,
+  MIDI_GRID_OPTIONS,
+  NO_MARK,
+  parseNumericDraft,
+  type Clef,
+  type DurationName,
+  type NoteEvent,
+} from '@sudobility/music_types';
 import { allNotes, importScore } from '@sudobility/music_lib';
 import { reportError } from '@sudobility/music_lib';
 import type { MidiImportResult } from '@sudobility/music_lib';
@@ -101,23 +113,11 @@ export type MidiImportWizardProps = {
   forceNewProject?: boolean;
 };
 
-const CLEF_OPTIONS: Clef[] = ['treble', 'bass', 'alto', 'tenor', 'percussion'];
-/** Keys, not labels: the text is resolved at render so it follows the language. */
-const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName | 'none'; labelKey: string }> = [
-  { value: 'none', labelKey: 'importMidi.gridNone' },
-  { value: 'whole', labelKey: 'importMidi.gridWhole' },
-  { value: 'half', labelKey: 'importMidi.gridHalf' },
-  { value: 'quarter', labelKey: 'importMidi.gridQuarter' },
-  { value: 'eighth', labelKey: 'importMidi.gridEighth' },
-  { value: 'sixteenth', labelKey: 'importMidi.gridSixteenth' },
-  { value: 'thirtysecond', labelKey: 'importMidi.gridThirtySecond' },
-];
-
 /** A short, human-readable preview of the first few notes (by start tick), e.g. "C4, E4, G4, C5, ...". */
-function firstNotesPreview(notes: NoteEvent[], limit = 12): string {
+function firstNotesPreview(notes: NoteEvent[], noNotes: string, limit = 12): string {
   const sorted = [...notes].sort((a, b) => a.startTick - b.startTick);
   const labels = sorted.slice(0, limit).map((n) => `${n.pitch.step}${n.pitch.octave}`);
-  if (labels.length === 0) return '(no notes)';
+  if (labels.length === 0) return noNotes;
   return labels.join(', ') + (sorted.length > limit ? ', ...' : '');
 }
 
@@ -128,6 +128,43 @@ async function readFileAsArrayBuffer(file: File): Promise<ArrayBuffer> {
 const SELECT_TRIGGER_CLASS = 'h-auto w-auto min-w-[8rem] px-2 py-1 text-sm';
 
 const TEXT_INPUT_CLASS = 'w-auto px-2 py-1 text-sm';
+
+/**
+ * A number field that holds what was typed until it is left.
+ *
+ * The options store a number, and what the field may commit is
+ * `patchMidiImportOptions`'s rule — but a field bound straight to that number
+ * cannot be emptied: clearing the split point to type a new one would snap
+ * straight back to the old value and append to it. So the text is a draft,
+ * each keystroke commits what `parseNumericDraft` makes of it (`null` while
+ * empty), and leaving the field shows what was actually stored.
+ */
+function NumberDraftInput({
+  value,
+  onCommit,
+  ...input
+}: {
+  value: number;
+  onCommit: (value: number | null) => void;
+  min?: number;
+  max?: number;
+  'aria-label': string;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <Input
+      type="number"
+      {...input}
+      value={draft ?? String(value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onCommit(parseNumericDraft(e.target.value));
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+}
 
 export function MidiImportWizard({
   open,
@@ -202,7 +239,7 @@ export function MidiImportWizard({
       const notes = allNotes(result.score);
       setPreview({
         noteCount: notes.length,
-        text: firstNotesPreview(notes),
+        text: firstNotesPreview(notes, t('importMidi.previewNone')),
         warnings: result.warnings,
       });
     } catch (err) {
@@ -246,25 +283,19 @@ export function MidiImportWizard({
     }
   };
 
-  const patchOptions = (patch: Partial<MidiImportOptions>): void => {
-    setOptions((prev) => (prev ? { ...prev, ...patch } : prev));
+  /*
+    Every change goes through `patchMidiImportOptions`, which owns the field
+    rules — the split point clamped to MIDI 0-127 with 0 kept as a note, the
+    minimum duration floored at 0 — shared with the native sheet.
+  */
+  const patchOptions = (patch: MidiImportPatch): void => {
+    setOptions((prev) => (prev ? patchMidiImportOptions(prev, patch) : prev));
   };
 
   const patchTrackSelection = (
     sourceIndex: number,
     patch: Partial<{ include: boolean; clef: Clef }>,
-  ): void => {
-    setOptions((prev) =>
-      prev
-        ? {
-            ...prev,
-            trackSelections: prev.trackSelections.map((sel) =>
-              sel.sourceIndex === sourceIndex ? { ...sel, ...patch } : sel,
-            ),
-          }
-        : prev,
-    );
-  };
+  ): void => patchOptions({ track: { sourceIndex, ...patch } });
 
   return (
     <>
@@ -278,7 +309,7 @@ export function MidiImportWizard({
         busy={busy}
         busyLabel={t('import.readingFile')}
         error={error}
-        canImport={Boolean(summary && options)}
+        canImport={Boolean(summary) && canImportMidi(options)}
         onImport={handleImportClick}
         onClose={handleClose}
         size="large"
@@ -290,8 +321,7 @@ export function MidiImportWizard({
               role="status"
               className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
             >
-              MIDI stores performance timing, not complete notation semantics -- imported notation
-              is an approximation. Review the settings below and preview before importing.
+              {t('importMidi.performanceTiming')}
             </div>
 
             <p className="text-sm font-medium text-theme-text-primary">
@@ -352,7 +382,7 @@ export function MidiImportWizard({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {CLEF_OPTIONS.map((clef) => (
+                              {CLEFS.map((clef) => (
                                 <SelectItem key={clef} value={clef}>
                                   {clef}
                                 </SelectItem>
@@ -373,9 +403,9 @@ export function MidiImportWizard({
                   {t('importMidi.quantizeGrid')}
                 </span>
                 <Select
-                  value={options.quantizeGrid ?? 'none'}
+                  value={options.quantizeGrid ?? NO_MARK}
                   onValueChange={(v) =>
-                    patchOptions({ quantizeGrid: v === 'none' ? null : (v as DurationName) })
+                    patchOptions({ quantizeGrid: v === NO_MARK ? null : (v as DurationName) })
                   }
                 >
                   <SelectTrigger
@@ -385,7 +415,7 @@ export function MidiImportWizard({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {QUANTIZE_GRID_OPTIONS.map((opt) => (
+                    {MIDI_GRID_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {t(opt.labelKey)}
                       </SelectItem>
@@ -404,14 +434,11 @@ export function MidiImportWizard({
                 <span className="text-xs text-theme-text-secondary">
                   {t('importMidi.minDurationShort')}
                 </span>
-                <Input
-                  type="number"
+                <NumberDraftInput
                   min={0}
                   aria-label={t('importMidi.minDuration')}
                   value={options.minDurationTicks}
-                  onChange={(e) =>
-                    patchOptions({ minDurationTicks: Math.max(0, Number(e.target.value) || 0) })
-                  }
+                  onCommit={(minDurationTicks) => patchOptions({ minDurationTicks })}
                   className={TEXT_INPUT_CLASS}
                 />
               </label>
@@ -452,13 +479,12 @@ export function MidiImportWizard({
                   <span className="text-xs text-theme-text-secondary">
                     {t('importMidi.splitPoint')}
                   </span>
-                  <Input
-                    type="number"
+                  <NumberDraftInput
                     min={0}
                     max={127}
                     aria-label={t('importMidi.splitPointLabel')}
                     value={options.splitPointMidi}
-                    onChange={(e) => patchOptions({ splitPointMidi: Number(e.target.value) || 60 })}
+                    onCommit={(splitPointMidi) => patchOptions({ splitPointMidi })}
                     className={TEXT_INPUT_CLASS}
                   />
                 </label>
@@ -485,7 +511,7 @@ export function MidiImportWizard({
             {preview && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-theme-text-primary">
-                  {preview.noteCount} notes after import.
+                  {t('importMidi.previewCount', { count: preview.noteCount })}
                 </p>
                 <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
                 {preview.warnings.map((w) => (

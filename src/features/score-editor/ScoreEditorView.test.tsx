@@ -67,7 +67,7 @@ function setTransport(store: EditorStoreApi, state: 'playing' | 'paused' | 'stop
   store.getState().setPlaybackState(state);
   getMusicPositionSource().setPlaying(state === 'playing');
 }
-import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
+import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 
 // The component's own light theme, not a stand-in: reference renders below
@@ -647,7 +647,13 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
   });
 
   it('uses instant ("auto") scroll behavior when the user prefers reduced motion', async () => {
-    const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
+    // A whole MediaQueryList, listeners included: the colour scheme subscribes
+    // to the same `matchMedia` to follow an OS flip.
+    const matchMediaSpy = vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    } as unknown as MediaQueryList);
     vi.stubGlobal('matchMedia', matchMediaSpy);
 
     const { store, box, tick } = playingOffScreen();
@@ -1416,6 +1422,71 @@ describe('drag a selected note to change its pitch', () => {
     expect((findEvent(store.getState().score!, notes[0].id) as NoteEvent).pitch).toEqual(
       notes[0].pitch,
     );
+  });
+});
+
+describe('following the OS colour scheme', () => {
+  it('redraws in the dark theme when the OS flips while the app is set to system', () => {
+    // VexFlow paints literal colours, so the Tailwind `dark` class on <html>
+    // following the OS is not enough: in system mode `themeMode` does not change
+    // when the OS does, and a theme resolved from it alone kept the old colours.
+    const listeners = new Set<() => void>();
+    const media = {
+      matches: false,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    };
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => media),
+    );
+    try {
+      const store = makeStore();
+      act(() => store.getState().setThemeMode('system'));
+      render(<ScoreEditorView store={store} />);
+      const caret = screen.getByTestId('playback-caret');
+      expect(caret).toHaveStyle({ backgroundColor: LIGHT_RENDER_THEME.caret });
+
+      act(() => {
+        media.matches = true;
+        for (const listener of listeners) listener();
+      });
+
+      expect(caret).toHaveStyle({ backgroundColor: DARK_RENDER_THEME.caret });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Option-press on a note starts a move', () => {
+  it('selects the pressed note and leaves the caret and the active track alone', () => {
+    // A move is about which notes, like a box select. Aiming the caret or
+    // switching the active track on the press would yank the playhead to
+    // wherever a drag happened to start — the web never did either.
+    const store = makeStore(twoTrackScore());
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const [first, second] = score.tracks;
+    // A treble note pressed while the bass is active: the bass part's whole
+    // notes hang on ledger lines below the stave, outside any bar's box.
+    const note = allNotes(score).find((n) => n.trackId === first.id && n.startTick > 0)!;
+    act(() => {
+      seekTo(0);
+      store.getState().setActiveTrack(second.id);
+    });
+    const box = referenceRender(score).idToBBox.get(note.id)!;
+
+    fireEvent.pointerDown(interactionSurface(), {
+      ...center(box),
+      button: 0,
+      pointerId: 1,
+      altKey: true,
+    });
+
+    expect(store.getState().selection.eventIds).toContain(note.id);
+    expect(getMusicPosition().reportedTick).toBe(0);
+    expect(store.getState().activeTrackId).toBe(second.id);
   });
 });
 

@@ -9,7 +9,7 @@
  * signature. All of those are fixed by the region being replaced, and a
  * disabled control that can never apply is worse than no control.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -25,7 +25,25 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_lib';
+import {
+  GENERATE_SCORE_COMPLEXITY_OPTIONS,
+  GENERATE_SCORE_MOOD_OPTIONS,
+  GENERATE_SCORE_STYLE_OPTIONS,
+  GENERATION_VARIANTS,
+  GENERATION_VARIANT_LABELS,
+  REPLACE_PRESET_KEYS,
+  buildReplaceSubmission,
+  complexityLabelKey,
+  defaultReplaceSubmission,
+  labelledOptions,
+  moodLabelKey,
+  optionalFromPicker,
+  optionalToPicker,
+  replacePresetLabelKey,
+  styleLabelKey,
+  type GenerateScoreComplexity,
+  type ReplaceDraft,
+} from '@sudobility/music_lib';
 import type { ReplaceScope, ReplaceSubmission, ReplacementRegion } from '@sudobility/music_lib';
 
 // `ReplaceSubmission` now lives in music_lib beside `prepareReplacement`,
@@ -59,32 +77,6 @@ const TITLE_KEYS: Record<ReplaceScope, string> = {
   track: 'replace.trackTitle',
 };
 
-/** Spec §12, verbatim — lifted from the retired RegenerationPanel. */
-const PRESET_INSTRUCTIONS: string[] = [
-  'Make this more dramatic',
-  'Simplify this passage',
-  'Add rhythmic variation',
-  'Make the melody more memorable',
-  'Create a stronger transition',
-  'Add harmonic tension',
-  'Resolve the phrase',
-  'Make this more upbeat',
-  'Make this darker',
-  'Create a variation while preserving the melody',
-  'Preserve rhythm but change harmony',
-  'Preserve harmony but change melody',
-  'Add accompaniment',
-  'Thin out the orchestration',
-];
-
-/** Matches `prompt-parse.ts`'s keywords; anything else is ignored by the model prompt. */
-const STYLE_OPTIONS = ['waltz', 'jazz', 'pop', 'cinematic', 'ambient', 'battle'];
-const MOOD_OPTIONS = ['gentle', 'dark', 'upbeat', 'dramatic', 'calm', 'energetic'];
-const COMPLEXITY_OPTIONS = ['simple', 'moderate', 'complex'] as const;
-
-/** Radix Select rejects an empty-string item value, so "no preference" needs a sentinel. */
-const NONE = '__none__';
-
 const SELECT_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
 
 /**
@@ -116,40 +108,61 @@ export function ReplaceMusicDialog({
   onSubmit,
   estimatedCredits = 0,
 }: ReplaceMusicDialogProps) {
-  const { t } = useTranslation();
-  const [instruction, setInstruction] = useState('');
+  const { t, i18n } = useTranslation();
+  /*
+    The form's defaults and what it submits are music_lib's
+    (`defaultReplaceSubmission`/`buildReplaceSubmission`), shared with the
+    native form — which had opened on different defaults, so the same
+    instruction over the same bars sent two different requests depending on
+    which device asked.
+  */
+  const [draft, setDraft] = useState<ReplaceDraft>(defaultReplaceSubmission);
   const [presetsOpen, setPresetsOpen] = useState(false);
-  const [style, setStyle] = useState(NONE);
-  const [mood, setMood] = useState(NONE);
-  const [complexity, setComplexity] = useState<string>('moderate');
-  // The same default the Generate dialog uses, and for the same reason: it is
-  // the backend the piece around this region was most likely written by.
-  const [variant, setVariant] = useState<string>('deepseek');
-  const [preserveBoundaryNotes, setPreserveBoundaryNotes] = useState(false);
-  const [preserveHarmony, setPreserveHarmony] = useState(false);
-  const [preserveRhythm, setPreserveRhythm] = useState(false);
-  const [preserveMelody, setPreserveMelody] = useState(false);
+  const patch = (next: Partial<ReplaceDraft>): void => setDraft((d) => ({ ...d, ...next }));
+  const setConstraint =
+    (key: keyof ReplaceDraft['constraints']) =>
+    (checked: boolean): void =>
+      setDraft((d) => ({ ...d, constraints: { ...d.constraints, [key]: checked } }));
 
   // Reopening for a different selection should not inherit the last one's
   // instruction, which would silently apply to music it was not written for.
   useEffect(() => {
     if (open) {
-      setInstruction('');
+      setDraft((d) => ({ ...d, instruction: '' }));
       setPresetsOpen(false);
     }
   }, [open, scope]);
 
+  /*
+    The whole style and mood vocabularies, translated and sorted, as New Project
+    offers them. This form used to carry its own six-of-each list in raw English
+    tokens (`cinematic`), stale beside the thirty-odd styles the server knows.
+  */
+  const styleOptions = useMemo(
+    () =>
+      labelledOptions(
+        GENERATE_SCORE_STYLE_OPTIONS,
+        (value) => t(styleLabelKey(value)),
+        i18n.language,
+        t('generateScore.noStyle'),
+      ),
+    [t, i18n.language],
+  );
+  const moodOptions = useMemo(
+    () =>
+      labelledOptions(
+        GENERATE_SCORE_MOOD_OPTIONS,
+        (value) => t(moodLabelKey(value)),
+        i18n.language,
+        t('generateScore.noMood'),
+      ),
+    [t, i18n.language],
+  );
+
+  const submission = buildReplaceSubmission(draft);
   const submit = (): void => {
-    const trimmed = instruction.trim();
-    if (trimmed.length === 0 || !region) return;
-    onSubmit({
-      instruction: trimmed,
-      ...(style !== NONE ? { style } : {}),
-      ...(mood !== NONE ? { mood } : {}),
-      complexity: complexity as ReplaceSubmission['complexity'],
-      variant,
-      constraints: { preserveBoundaryNotes, preserveHarmony, preserveRhythm, preserveMelody },
-    });
+    if (!submission || !region) return;
+    onSubmit(submission);
   };
 
   return (
@@ -165,7 +178,7 @@ export function ReplaceMusicDialog({
           label: t('replace.action'),
           onClick: submit,
           variant: 'primary',
-          disabled: !region || instruction.trim().length === 0,
+          disabled: !region || !submission,
         },
       ]}
     >
@@ -178,8 +191,7 @@ export function ReplaceMusicDialog({
               // non-contiguous selection is replaced as its bounding span.
               <span className="text-amber-700 dark:text-amber-400">
                 {' '}
-                {region.unselectedNoteCount} of them{' '}
-                {region.unselectedNoteCount === 1 ? 'is' : 'are'} not selected.
+                {t('replace.unselected', { count: region.unselectedNoteCount })}
               </span>
             )}
           </p>
@@ -193,10 +205,10 @@ export function ReplaceMusicDialog({
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-theme-text-secondary">{t('replace.instruction')}</span>
           <TextArea
-            value={instruction}
-            onChange={(v: string) => setInstruction(v)}
+            value={draft.instruction}
+            onChange={(v: string) => patch({ instruction: v })}
             rows={3}
-            textareaProps={{ 'aria-label': 'Instruction' }}
+            textareaProps={{ 'aria-label': t('replace.instruction') }}
           />
         </label>
 
@@ -219,19 +231,21 @@ export function ReplaceMusicDialog({
                 'absolute z-10 mt-1 max-h-56 w-64 overflow-y-auto rounded-md py-1 shadow-lg',
               )}
             >
-              {PRESET_INSTRUCTIONS.map((preset) => (
+              {/* In the reader's language: the chosen text is the instruction
+                  the model is asked, and the model reads Chinese as well. */}
+              {REPLACE_PRESET_KEYS.map((key) => (
                 <Button
-                  key={preset}
+                  key={key}
                   type="button"
                   role="menuitem"
                   variant="ghost"
                   onClick={() => {
-                    setInstruction(preset);
+                    patch({ instruction: t(replacePresetLabelKey(key)) });
                     setPresetsOpen(false);
                   }}
                   className="w-full justify-start px-3 py-1.5 text-left text-sm"
                 >
-                  {preset}
+                  {t(replacePresetLabelKey(key))}
                 </Button>
               ))}
             </div>
@@ -241,15 +255,17 @@ export function ReplaceMusicDialog({
         <div className="flex gap-2">
           <label className="flex flex-1 flex-col gap-1 text-sm">
             <span className="text-theme-text-secondary">{t('generateScore.style')}</span>
-            <Select value={style} onValueChange={setStyle}>
+            <Select
+              value={optionalToPicker(draft.style)}
+              onValueChange={(v) => patch({ style: optionalFromPicker(v) })}
+            >
               <SelectTrigger aria-label={t('generateScore.style')} className={SELECT_CLASS}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>{t('generateScore.noStyle')}</SelectItem>
-                {STYLE_OPTIONS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
+                {styleOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -257,15 +273,17 @@ export function ReplaceMusicDialog({
           </label>
           <label className="flex flex-1 flex-col gap-1 text-sm">
             <span className="text-theme-text-secondary">{t('generateScore.mood')}</span>
-            <Select value={mood} onValueChange={setMood}>
+            <Select
+              value={optionalToPicker(draft.mood)}
+              onValueChange={(v) => patch({ mood: optionalFromPicker(v) })}
+            >
               <SelectTrigger aria-label={t('generateScore.mood')} className={SELECT_CLASS}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>{t('generateScore.noMood')}</SelectItem>
-                {MOOD_OPTIONS.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
+                {moodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -275,14 +293,17 @@ export function ReplaceMusicDialog({
 
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-theme-text-secondary">{t('generateScore.complexity')}</span>
-          <Select value={complexity} onValueChange={setComplexity}>
+          <Select
+            value={draft.complexity}
+            onValueChange={(v) => patch({ complexity: v as GenerateScoreComplexity })}
+          >
             <SelectTrigger aria-label={t('generateScore.complexity')} className={SELECT_CLASS}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {COMPLEXITY_OPTIONS.map((c) => (
+              {GENERATE_SCORE_COMPLEXITY_OPTIONS.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {c}
+                  {t(complexityLabelKey(c))}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -291,7 +312,7 @@ export function ReplaceMusicDialog({
 
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-theme-text-secondary">{t('generateScore.model')}</span>
-          <Select value={variant} onValueChange={setVariant}>
+          <Select value={draft.variant} onValueChange={(v) => patch({ variant: v })}>
             <SelectTrigger aria-label={t('generateScore.model')} className={SELECT_CLASS}>
               <SelectValue />
             </SelectTrigger>
@@ -308,23 +329,23 @@ export function ReplaceMusicDialog({
         <div className="grid grid-cols-2 gap-2">
           <Checkbox
             label={t('replace.preserveBoundary')}
-            checked={preserveBoundaryNotes}
-            onChange={setPreserveBoundaryNotes}
+            checked={draft.constraints.preserveBoundaryNotes}
+            onChange={setConstraint('preserveBoundaryNotes')}
           />
           <Checkbox
             label={t('replace.preserveHarmony')}
-            checked={preserveHarmony}
-            onChange={setPreserveHarmony}
+            checked={draft.constraints.preserveHarmony}
+            onChange={setConstraint('preserveHarmony')}
           />
           <Checkbox
             label={t('replace.preserveRhythm')}
-            checked={preserveRhythm}
-            onChange={setPreserveRhythm}
+            checked={draft.constraints.preserveRhythm}
+            onChange={setConstraint('preserveRhythm')}
           />
           <Checkbox
             label={t('replace.preserveMelody')}
-            checked={preserveMelody}
-            onChange={setPreserveMelody}
+            checked={draft.constraints.preserveMelody}
+            onChange={setConstraint('preserveMelody')}
           />
         </div>
       </div>

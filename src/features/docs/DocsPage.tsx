@@ -19,7 +19,13 @@ import { Navigate, useParams } from 'react-router-dom';
 import { Heading, Section, Text } from '@sudobility/components';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
-import { DOCS_GROUPS, DOCS_TOPICS, docsTopic, type DocsGroup } from '@sudobility/music_editing';
+import {
+  DOCS_GROUPS,
+  DOCS_TOPICS,
+  docsGroupLabelKey,
+  docsTopic,
+  type DocsGroup,
+} from '@sudobility/music_editing';
 import { InstrumentReference } from './InstrumentReference';
 import { ShortcutReference } from './ShortcutReference';
 import { FormatReference } from './FormatReference';
@@ -42,7 +48,7 @@ function TopicList({ activeId }: { activeId: string }) {
               color="muted"
               className="uppercase tracking-wide"
             >
-              {t(`docs.group.${group}`)}
+              {t(docsGroupLabelKey(group))}
             </Text>
             {topics.map((topic) => {
               const isActive = topic.id === activeId;

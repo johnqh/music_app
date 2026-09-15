@@ -34,11 +34,20 @@ describe('reportGenerationError', () => {
     expect(store.getState().toasts.at(-1)?.message).toContain('Start generation');
   });
 
-  it('does not mistake an ordinary 402-shaped ApiError for the typed one', () => {
-    // The class is the contract, not the status: `mapError` in music_client is
-    // the single place a status becomes a kind of failure.
+  it('treats a bare 402 as the same refusal, and so does a copy of the class from another bundle', () => {
+    // music_client's `classifyGenerationError` decides this for both apps. A
+    // 402 that reached a caller as a plain `ApiError`, or an
+    // `InsufficientCreditsError` thrown by a second copy of the package (where
+    // `instanceof` is false), is still a refusal for want of credits — the
+    // paywall silently degrading into a toast was the failure it guards.
     const store = makeStore();
     reportGenerationError(new ApiError('Payment Required', 402), { store });
-    expect(store.getState().dialogs[PAYWALL_DIALOG]).toBeFalsy();
+    expect(store.getState().dialogs[PAYWALL_DIALOG]).toBe(true);
+
+    const other = makeStore();
+    const foreign = new Error('no credits');
+    foreign.name = 'InsufficientCreditsError';
+    reportGenerationError(foreign, { store: other });
+    expect(other.getState().dialogs[PAYWALL_DIALOG]).toBe(true);
   });
 });

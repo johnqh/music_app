@@ -1,18 +1,29 @@
 /**
- * Auth context (interim MUI-era wiring; Phase 3 swaps the UI to
- * @sudobility/auth-components but keeps this shape): exposes the current
- * user, the latest ID token (for React Query hook contexts), and the auth
- * actions. Sign-in is REQUIRED app-wide — `RequireAuth` gates everything.
+ * Auth context: exposes the current user, the hook context music_client's
+ * React Query hooks read (a token resolved per request, never captured), and
+ * the auth actions. Sign-in is REQUIRED app-wide — `RequireAuth` gates
+ * everything.
  */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { setConsumablesUserId } from '@sudobility/consumables_client';
-import { getAppServices, type AuthUser } from '@/config/initialize';
+import {
+  useSiteAdmin as useServerSiteAdmin,
+  type MusicHookContext,
+} from '@sudobility/music_client';
+import { getAppServices, musicHookContext, type AuthUser } from '@/config/initialize';
 
 export type AuthContextValue = {
   user: AuthUser | null;
-  /** Latest known ID token (refreshed on auth-state changes); null when signed out. */
-  token: string | null;
+  /**
+   * What every music_client hook is handed. The token is **asked for per
+   * request** (`getToken`), not held: a token captured when the context was
+   * built goes stale an hour into a session, and one read at start-up is null
+   * for a signed-in user until Firebase has restored the session. `userId` is
+   * `null` while signed out, which keeps every query idle, and keys per-account
+   * answers so one account's is never shown to the next.
+   */
+  hookContext: MusicHookContext;
   /** True until the first auth-state resolution arrives. */
   loading: boolean;
   /**
@@ -24,10 +35,10 @@ export type AuthContextValue = {
    * `POST /jobs` would have accepted. They sit at zero permanently, since
    * nothing ever grants or spends their credits.
    *
-   * Fetched once per signed-in user rather than polled: it comes from the
-   * deployment's `SITEADMIN_EMAILS` and cannot change underneath a session.
-   * `false` while it is in flight and if the request fails — the closed
-   * default, so a network problem never hands out free service.
+   * Asked through music_client's `useSiteAdmin`, keyed by the signed-in user,
+   * so the native app asks the same question the same way. `false` while it is
+   * in flight and if the request fails — the closed default, so a network
+   * problem never hands out free service.
    */
   siteAdmin: boolean;
   signInEmail: (email: string, password: string) => Promise<void>;
@@ -41,9 +52,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const services = getAppServices();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [siteAdmin, setSiteAdmin] = useState(false);
+  const userId = loading ? null : (user?.uid ?? null);
+  const hookContext = useMemo(() => musicHookContext(services, userId), [services, userId]);
+  const siteAdmin = useServerSiteAdmin(hookContext);
 
   useEffect(() => {
     const unsubscribe = services.auth.observe((nextUser) => {
@@ -59,24 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConsumablesUserId(nextUser?.uid, nextUser?.email ?? undefined).catch((err: unknown) => {
         console.error('[credits] could not follow the signed-in user', err);
       });
-      if (nextUser) {
-        // One chain with one catch at the end, so a *synchronous* throw inside
-        // the callback is caught as well as a rejected fetch. Failing to learn
-        // that somebody is an administrator costs them free service; an
-        // unhandled rejection here would break signing in.
-        void services.auth
-          .getToken()
-          .then(async (next) => {
-            setToken(next);
-            if (!next) return;
-            const me = await services.musicClient.getCurrentUser(next);
-            setSiteAdmin(me.siteAdmin);
-          })
-          .catch(() => setSiteAdmin(false));
-      } else {
-        setToken(null);
-        setSiteAdmin(false);
-      }
     });
     return unsubscribe;
   }, [services]);
@@ -84,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      token,
+      hookContext,
       loading,
       siteAdmin,
       signInEmail: services.auth.signInEmail,
@@ -92,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signInGoogle: services.auth.signInGoogle,
       signOut: services.auth.signOut,
     }),
-    [user, token, loading, siteAdmin, services],
+    [user, hookContext, loading, siteAdmin, services],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -123,4 +117,28 @@ export function useAuth(): AuthContextValue {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useSiteAdmin(): boolean {
   return useContext(AuthContext)?.siteAdmin === true;
+}
+
+/**
+ * The music_client hook context, tolerant of a missing provider.
+ *
+ * Inside `AuthProvider` it is the provider's, keyed by the signed-in user.
+ * Outside one — a component test rendering a page alone — it is built from the
+ * installed app services with no user id, which music_client reads as "assume
+ * signed in": the request runs and fails 401-shaped if there is no token. The
+ * same tolerance `useSiteAdmin` has, for the same reason: requiring the
+ * provider would make every test of every page wire one up.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useMusicHookContext(): MusicHookContext {
+  const fromProvider = useContext(AuthContext)?.hookContext;
+  const services = getAppServices();
+  const fallback = useMemo(() => {
+    // No user id at all, rather than a null one: null would mean "signed out"
+    // and keep every query idle.
+    const context: MusicHookContext = musicHookContext(services, null);
+    delete context.userId;
+    return context;
+  }, [services]);
+  return fromProvider ?? fallback;
 }

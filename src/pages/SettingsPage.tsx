@@ -8,8 +8,8 @@
  * `ThemeProvider`: the score renderer, the piano keyboard and the app menu all
  * read `themeMode` to choose their render palettes, and the store's values
  * (`light` | `dark` | `system`) are already exactly the library's `Theme`
- * enum, so this needs an adapter and no migration. Font size is new and has no
- * such consumers, so it lives in `useFontSize`.
+ * enum, so this needs an adapter and no migration. Font size is a device pref
+ * on the same store, persisted with the theme by `bindDevicePrefs`.
  */
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,7 @@ import { Card, CardContent, Section, Stack, Switch, Text } from '@sudobility/com
 import { GlobalSettingsPage, type SettingsSectionConfig } from '@sudobility/building_blocks';
 import { useAppStore } from '@sudobility/music_lib';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
-import { useFontSize, type FontSizePref } from '@/hooks/useFontSize';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi, FontSize } from '@sudobility/music_lib';
 
 export type SettingsPageProps = { store?: EditorStoreApi };
 
@@ -27,7 +26,7 @@ export default function SettingsPage({ store = useAppStore }: SettingsPageProps)
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
-  const { fontSize, setFontSize } = useFontSize();
+  const fontSize = store((s) => s.fontSize);
 
   // What belongs to this app rather than to every Sudobility app: how pitches
   // are spelled for transposing instruments, and the developer affordances.
@@ -89,7 +88,7 @@ export default function SettingsPage({ store = useAppStore }: SettingsPageProps)
         theme={themeMode}
         fontSize={fontSize}
         onThemeChange={(value) => store.getState().setThemeMode(value as typeof themeMode)}
-        onFontSizeChange={(value) => setFontSize(value as FontSizePref)}
+        onFontSizeChange={(value) => store.getState().setFontSize(value as FontSize)}
         additionalSections={additionalSections}
         // Both bridges namespace the library's own keys into this app's
         // bundle. Without the `settings.page.` prefix the library asked for

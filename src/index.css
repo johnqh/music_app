@@ -7,7 +7,7 @@
    generateThemeCSS(swissTheme) — same pattern as sudojo_app / sider_app.
    Everything below is app chrome only; colors come from the theme tokens. */
 
-/* Font size preference (see `useFontSize`). Scales the root, so every
+/* Font size preference (see `useDocumentFontSize`). Scales the root, so every
    rem-based size in the app follows; `data-` attribute rather than a
    `font-*` class, which would collide with Tailwind's font-weight utilities. */
 html[data-font-size='small'] {

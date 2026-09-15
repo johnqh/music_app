@@ -1,32 +1,68 @@
 /**
- * User-facing color scheme preference. `system` follows the OS/browser
- * `prefers-color-scheme` media query; `light`/`dark` are manual overrides.
+ * The colour scheme the app is drawn in, and how the browser is asked for it.
  *
- * The manual-override toggle UI is out of scope for this task; this type and
- * `resolveColorScheme` exist so the app shell can wire a settings toggle to
- * it later without changing the theme contract.
+ * The *rule* — `system` follows the device, `light`/`dark` override it — is
+ * music_editing's `resolveThemeMode`, shared with the native app, which asks
+ * its own device the same question. What stays here is the part only a browser
+ * can do: the `prefers-color-scheme` media query, and applying the answer to
+ * the document.
  */
-export type ColorSchemeMode = 'system' | 'light' | 'dark';
+import { useCallback, useSyncExternalStore } from 'react';
+import { resolveThemeMode } from '@sudobility/music_lib';
+import type { ThemeMode } from '@sudobility/music_lib';
+
+/** User-facing colour scheme preference: the store's `themeMode`. */
+export type ColorSchemeMode = ThemeMode;
 
 /** A concrete (non-`system`) color scheme, as applied to the document. */
-export type ResolvedColorScheme = 'light' | 'dark';
+export type ResolvedColorScheme = Exclude<ThemeMode, 'system'>;
 
 const PREFERS_DARK_QUERY = '(prefers-color-scheme: dark)';
 
-/** Reads the OS/browser color-scheme preference. Defaults to light when unavailable (e.g. SSR/tests). */
-export function getSystemColorScheme(): ResolvedColorScheme {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'light';
-  }
-  return window.matchMedia(PREFERS_DARK_QUERY).matches ? 'dark' : 'light';
+function prefersDarkQuery(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return null;
+  return window.matchMedia(PREFERS_DARK_QUERY);
 }
 
-/** Resolves a user preference (which may defer to the system) into a concrete `light`/`dark` scheme. */
+/** Reads the OS/browser color-scheme preference. Defaults to light when unavailable (e.g. SSR/tests). */
+export function getSystemColorScheme(): ResolvedColorScheme {
+  return prefersDarkQuery()?.matches ? 'dark' : 'light';
+}
+
+/**
+ * Resolves a user preference (which may defer to the system) into a concrete
+ * `light`/`dark` scheme, **once**. Anything rendered from the answer should use
+ * `useResolvedColorScheme` instead, or it will not follow the OS.
+ */
 export function resolveColorScheme(mode: ColorSchemeMode): ResolvedColorScheme {
-  if (mode === 'system') {
-    return getSystemColorScheme();
-  }
-  return mode;
+  return resolveThemeMode(mode, getSystemColorScheme() === 'dark');
+}
+
+/**
+ * The scheme to draw in, re-rendering when the OS flips while in `system` mode.
+ *
+ * The notation canvas and the piano keyboard paint literal colours from a
+ * render theme — VexFlow never reads CSS — so the Tailwind `dark` class on
+ * `<html>` following the OS is not enough on its own: a surface that resolved
+ * the scheme from `themeMode` alone kept drawing in the old one, because in
+ * system mode `themeMode` does not change when the OS does. Every surface
+ * reading this follows the flip, the document class included.
+ *
+ * `useSyncExternalStore` because the media query *is* an external store, and
+ * subscribing through it cannot tear between two readers mid-render.
+ */
+export function useResolvedColorScheme(mode: ColorSchemeMode): ResolvedColorScheme {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const media = mode === 'system' ? prefersDarkQuery() : null;
+      if (!media) return () => undefined;
+      media.addEventListener('change', onChange);
+      return () => media.removeEventListener('change', onChange);
+    },
+    [mode],
+  );
+  const get = (): ResolvedColorScheme => resolveColorScheme(mode);
+  return useSyncExternalStore(subscribe, get, get);
 }
 
 const PREFERS_REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';

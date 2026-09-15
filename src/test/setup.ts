@@ -4,9 +4,8 @@ import { resolve } from 'node:path';
 import '@/i18n';
 import { beforeEach } from 'vitest';
 import { resetMusicPosition } from '@sudobility/music_types';
-import { setEditingCopy, setLibraryMessages } from '@sudobility/music_lib';
-import { buildEditingCopy } from '@/features/score-editor/command-labels';
-import { libraryMessages } from '@/i18n/lib-copy';
+import { installLibraryCopy } from '@sudobility/music_lib';
+import { libraryCopy } from '@/i18n/library-copy';
 import '@testing-library/jest-dom/vitest';
 
 // Every language is fetched over HTTP from `public/locales/` at runtime (see
@@ -30,8 +29,7 @@ i18n.addResourceBundle(
 // every edit-validation toast is the empty string the library deliberately
 // starts with, and an assertion on that text fails for a reason that has
 // nothing to do with what it is testing.
-setEditingCopy(buildEditingCopy());
-setLibraryMessages(libraryMessages());
+installLibraryCopy(libraryCopy);
 
 // The caret is one shared position, not a store field, so it does not go away
 // when a test builds a fresh store. Left over from the previous test it is a

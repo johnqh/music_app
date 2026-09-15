@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { FormModal } from '@sudobility/components';
 import { LIVE_NODE_ID } from '@sudobility/music_lib';
 import type { TreeNode } from '@sudobility/music_lib';
+import { publishNamesProblem, suggestedPublicName } from '@sudobility/music_client';
 
 export type CreateSnapshotDialogProps = {
   open: boolean;
@@ -34,7 +35,7 @@ export function CreateSnapshotDialog({
   const { t } = useTranslation();
   // Global creation order, not per-branch: "Version 4" off "Version 2" reads
   // better than "Version 2.1.1".
-  const suggested = `Version ${snapshotCount + 1}`;
+  const suggested = t('snapshot.defaultName', { number: snapshotCount + 1 });
   const [name, setName] = useState(suggested);
   const [publish, setPublish] = useState(false);
   const [publisherName, setPublisherName] = useState(defaultPublisherName ?? '');
@@ -57,8 +58,9 @@ export function CreateSnapshotDialog({
   }, [open, suggested, defaultPublisherName]);
 
   const trimmed = name.trim();
-  const suggestedPublicName = [projectName.trim(), trimmed].filter((part) => part).join(' ');
-  const publicName = publicNameOverride ?? suggestedPublicName;
+  // music_client's rule, which the native sheet shares: project then snapshot
+  // name, a blank half dropped.
+  const publicName = publicNameOverride ?? suggestedPublicName(projectName, trimmed);
 
   return (
     <FormModal
@@ -78,9 +80,11 @@ export function CreateSnapshotDialog({
             const publisher = publisherName.trim();
             const title = publicName.trim();
             // Publishing without a name would put an unattributable row on a
-            // public page, so it is guarded exactly like a blank title.
-            if (publish && publisher.length === 0) return;
-            if (publish && title.length === 0) return;
+            // public page, and without a title an unnamed one — the same rule
+            // the snapshot hook refuses on, checked here so the dialog stays
+            // open instead of closing on a request that was never sent.
+            if (publish && publishNamesProblem({ publisherName: publisher, publicName: title }))
+              return;
             // The promise is the point of asking: publishing is what puts the
             // work in front of people who cannot check who wrote it.
             if (publish && !copyrightConfirmed) return;

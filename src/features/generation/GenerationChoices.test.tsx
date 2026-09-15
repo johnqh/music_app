@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GenerationRecord } from '@sudobility/music_types';
+import { regenerateWithLocks } from '@sudobility/music_lib';
 import { GenerationChoices } from './GenerationChoices';
 
 afterEach(cleanup);
@@ -43,7 +44,11 @@ describe('GenerationChoices', () => {
     fireEvent.click(checkboxes[0]); // groove
     fireEvent.click(screen.getByRole('button', { name: /keeping 1/i }));
     fireEvent.click(screen.getAllByRole('button', { name: /generate again/i }).at(-1)!);
-    expect(onGenerateAgain).toHaveBeenCalledWith({ groove: 'songo' });
+    expect(onGenerateAgain).toHaveBeenCalledWith(['groove']);
+    // And those keys, through the shared builder, pin exactly that choice.
+    expect(regenerateWithLocks(record, onGenerateAgain.mock.calls[0]![0]).choices).toEqual({
+      groove: 'songo',
+    });
   });
 });
 

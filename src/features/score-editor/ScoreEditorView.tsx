@@ -24,9 +24,10 @@
  * visible systems (O(visible)).
  *
  * `renderTheme` picks between `LIGHT_RENDER_THEME`/`DARK_RENDER_THEME`
- * (`render-theme.ts`) off `resolveColorScheme(themeMode)`.
+ * (`render-theme.ts`) off `useResolvedColorScheme(themeMode)`, which follows
+ * the OS while the app is set to system.
  */
-import { selectionSummaryCopy } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,16 +36,20 @@ import { useClipboardPrompts } from '@sudobility/music_editing';
 import {
   playbackController,
   selectActiveTrackId,
-  selectNotes,
-  selectionKind,
-  canPasteInto,
-  clearSelected,
   selectVisibleTrackIds,
+  routeScorePress,
+  selectForContextMenu,
+  startPointerGesture,
+  applyBoxSelection,
+  scoreContextMenuModel,
+  runScoreContextAction,
+  beginLyricEntry as beginLyricEntryAt,
+  goToBarFromInput,
 } from '@sudobility/music_lib';
 import type { BBox, RenderTheme } from '@sudobility/music_lib';
 import type { LayoutPlan } from '@sudobility/music_lib';
 import { isNoteEvent } from '@sudobility/music_types';
-import type { GenerateScoreRequest, Pitch } from '@sudobility/music_types';
+import type { GenerateScoreRequest, NoteEvent, Pitch } from '@sudobility/music_types';
 import {
   findEvent,
   selectionSummaryLabel,
@@ -54,7 +59,7 @@ import {
   // around it name that.
   displayScore as applyDisplayLenses,
 } from '@sudobility/music_lib';
-import { resolveColorScheme } from '@/app/theme';
+import { useResolvedColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import {
   buildGenerateTrackRequest,
@@ -66,19 +71,9 @@ import { resolveDrop } from '@sudobility/music_drawing';
 import type { DropTarget } from '@sudobility/music_drawing';
 import { useAppStore } from '@sudobility/music_lib';
 import {
-  caretToBar,
-  deleteSelected,
-  placeCaret,
-  selectAll,
-  selectMeasureRange,
-  selectToTick,
-  writeNoteAtPoint,
   relocateNotes,
   commitPitchDrag,
-  soundingPitchForDrawn,
   collisionForEditMode,
-  trackNotesInOrder,
-  noteIndexAtOrAfter,
   barCount,
 } from '@sudobility/music_lib';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
@@ -119,16 +114,6 @@ const DEFAULT_WIDTH = 900;
 const CONTAINER_MIN_HEIGHT = 400;
 /** Pixels of pointer movement before a pointerdown-drag counts as a box-select rather than a plain click. */
 const DRAG_THRESHOLD = 3;
-/**
- * Where the caret is.
- *
- * One shared position rather than a store field, so a click that moves it and
- * a playhead that advances it are the same number — see `IMusicPosition`.
- */
-function caretTick(): number {
-  return getMusicPosition().reportedTick;
-}
-
 /** The id of the measure `positionTick` currently falls in, read off the score's first track (every track shares the same measure grid — see `store/selectors.ts`'s `selectCurrentMeasureBeat`, same convention). */
 
 export function ScoreEditorView({
@@ -221,7 +206,6 @@ export function ScoreEditorView({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [generateTrackOpen, setGenerateTrackOpen] = useState(false);
   const [generateTrackPending, setGenerateTrackPending] = useState(false);
-  const [generateTrackError, setGenerateTrackError] = useState<string | null>(null);
 
   /**
    * Generates one track and appends it, matched to the score already open.
@@ -252,7 +236,12 @@ export function ScoreEditorView({
       if (!current || !onGenerateTrackJob) return;
 
       setGenerateTrackPending(true);
-      setGenerateTrackError(null);
+      /*
+        No catch: the job runner (`useProjectGeneration().start`) never throws —
+        it reports a refused start through its own error and paywall paths, which
+        the layout renders. The catch that used to sit here could not fire, and
+        its English fallback message was the one string it would have shown.
+      */
       try {
         // Built by music_lib, which takes everything the track has to agree
         // with — length, time signature, key, tempo — from the score itself.
@@ -260,8 +249,6 @@ export function ScoreEditorView({
           withGenerationVariant(buildGenerateTrackRequest(current, prompt, instrument), variant),
         );
         setGenerateTrackOpen(false);
-      } catch (err) {
-        setGenerateTrackError(err instanceof Error ? err.message : 'Generation failed');
       } finally {
         setGenerateTrackPending(false);
       }
@@ -288,9 +275,16 @@ export function ScoreEditorView({
   const autoscrollRafRef = useRef<number | null>(null);
   const autoscrollPointRef = useRef<{ x: number; y: number } | null>(null);
 
+  /*
+    The scheme is read through a hook that re-renders when the OS flips, not
+    resolved from `themeMode` once: VexFlow paints literal colours, and in
+    system mode `themeMode` does not change when the OS does — so the page went
+    dark around a sheet still drawn in light colours.
+  */
+  const colorScheme = useResolvedColorScheme(themeMode);
   const renderTheme: RenderTheme = useMemo(
-    () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
-    [themeMode],
+    () => (colorScheme === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
+    [colorScheme],
   );
 
   /**
@@ -654,116 +648,33 @@ export function ScoreEditorView({
       }
 
       // Every question about where the click landed goes to the canvas, in view
-      // coordinates; what the click *does* is decided here.
-      const state = store.getState();
-      const point = viewPointFromEvent(event);
-      if (!point || !state.score) return;
-      const rangeModifier = event.metaKey || event.ctrlKey;
-      // Gutter first, then the measure-number band, then a note, then a stave —
-      // the canvas's order, which is the order these gestures always had.
-      const hit = scoreCanvas.hitTest(point);
-
-      // ---- track gutter: left of everything else, so it wins first.
-      if (hit?.kind === 'trackGutter') {
-        // Not a timeline position, so the caret stays put.
-        state.setActiveTrack(hit.trackId);
-        state.selectTrack(hit.trackId);
-        return;
-      }
-
-      // ---- measure gutter: the one gesture that still selects measures,
-      // which is what keeps regeneration's "select bars 3-4" workflow alive
-      // now that a stave click sets the caret. Never moves the caret.
-      if (hit?.kind === 'measureNumber') {
-        /*
-          Shift extends from the bar clicked last, so "bars 3 to 12" is two
-          clicks rather than ten. Regeneration and Replace Measures both work
-          on a span, and picking one out was the slowest part of using them.
-
-          The anchor is the *first* bar of the current selection, so
-          extending twice from the same anchor grows and shrinks the range
-          rather than walking it — the behaviour of every list that does
-          this.
-        */
-        measureAnchorRef.current = selectMeasureRange(store, {
-          index: hit.measureIndex,
-          anchor: measureAnchorRef.current,
-          extend: event.shiftKey && !rangeModifier,
-          // Cmd+Shift means the same bar across every track, which is a
-          // different question from extending a span.
-          allTracks: rangeModifier && event.shiftKey,
-        });
-        return;
-      }
-
-      // ---- cmd-click: select from the caret to here. Deliberately does NOT
-      // move the caret, so the same anchor can be extended repeatedly.
-      if (rangeModifier) {
-        const clickedTick = scoreCanvas.tickAt(point);
-        if (clickedTick === null) return;
-        selectToTick(store, { tick: clickedTick, allTracks: event.shiftKey });
-        return;
-      }
-
-      // ---- click on a note.
-      if (hit?.kind === 'note') {
-        // Shift-click stays a pure additive toggle, exactly as before: it
-        // composes fine with cmd-click range (different modifier) and it is
-        // the only way to build a non-contiguous selection, so the caret
-        // rework has no reason to take it away. Deliberately does NOT move
-        // the caret or the active track — yanking the playhead on every
-        // toggle while assembling a selection would be hostile.
-        if (event.shiftKey) {
-          // The last of the box's ids: the one the single-id hit test always
-          // answered with, so a toggle on a chord flips the same note it did.
-          state.toggleEvent(hit.eventIds[hit.eventIds.length - 1]!);
-          return;
-        }
-        /*
-          Plain click: caret to the note's start, select the whole chord.
-
-          The whole chord, not one arbitrary member: every note in a chord
-          shares one bounding box, so "which note did you click" is not a
-          question the geometry can answer. Adding and removing individual
-          notes is the piano keyboard's job.
-
-          `selectNotes` does all three writes — selection, active track, caret —
-          because a caller doing them separately can get two of the three right.
-          It is shared with the React Native app, whose tap means the same
-          thing; this used to be written out here as well.
-        */
-        selectNotes(store, hit.eventIds);
-        return;
-      }
-
-      if (hit?.kind !== 'stave') return;
-
-      // ---- note input: a click on a stave writes a note there.
+      // coordinates — gutter first, then the measure-number band, then a note,
+      // then a stave. What the click *does* is music_editing's
+      // `routeScorePress`, shared with the native tap:
       //
-      // Only in the mode, because the caret is how everything else is aimed and
-      // the two gestures cannot share a click. Placed by going through the
-      // caret — seek, then insert at it — so target resolution, the edit lock
-      // and the caret advance are the same code the toolbar and the piano
-      // keyboard already use.
-      if (state.noteInput && hit.pitch) {
-        // `hit.pitch` is what is *drawn* there, and the drawing has been
-        // through the display lenses. Storing it raw wrote a note an octave
-        // out inside an `8va`, and a transposition out on a written-pitch
-        // part — silently, since the note then drew exactly where it was
-        // clicked and only sounded wrong. Inverting them is this view's job,
-        // because only it knows what was drawn; everything after is editing.
-        writeNoteAtPoint(store, {
-          tick: hit.tick,
-          trackId: hit.trackId,
-          pitch: soundingPitchForDrawn(state.score, hit.trackId, hit.tick, hit.pitch, pitchDisplay),
-        });
-        return;
-      }
-
-      // ---- plain click anywhere else inside a system: caret + active track.
-      // One call: the caret goes here, the track under the pointer becomes
-      // active, and the selection clears so the caret anchors the next range.
-      placeCaret(store, { tick: hit.tick, trackId: hit.trackId });
+      // - track gutter: active + selected, caret stays (not a timeline position);
+      // - bar number: select that bar; Shift extends from the anchor (so "bars 3
+      //   to 12" is two clicks), Cmd+Shift is the same bar on every track;
+      // - Cmd anywhere else: select from the caret to the point *without* moving
+      //   the caret, so one anchor extends repeatedly — to the canvas's `tickAt`
+      //   for the point, which answers between systems where a hit has none;
+      // - note: Shift toggles one note and leaves the caret; otherwise the whole
+      //   chord is selected (one bounding box holds every note at that tick) and
+      //   the caret aimed at it;
+      // - stave: in note input, write the *sounding* pitch there (the drawn one
+      //   has been through the display lenses); otherwise caret + active track,
+      //   and the selection clears so the caret anchors the next range.
+      const point = viewPointFromEvent(event);
+      if (!point || !store.getState().score) return;
+      measureAnchorRef.current = routeScorePress(store, scoreCanvas.hitTest(point), {
+        shift: event.shiftKey,
+        // Cmd on macOS, Ctrl elsewhere.
+        mod: event.metaKey || event.ctrlKey,
+        noteInput: store.getState().noteInput,
+        pitchDisplay,
+        anchor: measureAnchorRef.current,
+        pointTick: scoreCanvas.tickAt(point),
+      });
     },
     [store, scoreCanvas, viewPointFromEvent, pitchDisplay],
   );
@@ -783,30 +694,31 @@ export function ScoreEditorView({
    */
   const measureAnchorRef = useRef<number | null>(null);
   /**
-   * Lyric entry walks the *active track's* notes in tick order, starting at
-   * the one nearest the caret — so "start writing words here" means what it
-   * looks like.
+   * Lyric entry in progress: the *active track's* notes in tick order, as they
+   * were when entry began, and the note at or after the caret to start on — so
+   * "start writing words here" means what it looks like. `beginLyricEntry`
+   * (music_editing) decides both, and answers null with nothing to write under
+   * or while the transport plays.
    */
-  const [lyricStart, setLyricStart] = useState<number | null>(null);
-
-  const lyricNotes = useMemo(
-    () => (score && activeTrackId ? trackNotesInOrder(score, activeTrackId) : []),
-    [score, activeTrackId],
+  const [lyricEntry, setLyricEntry] = useState<{ notes: NoteEvent[]; startIndex: number } | null>(
+    null,
   );
 
   const beginLyricEntry = useCallback(() => {
-    if (lyricNotes.length === 0) return;
-    setLyricStart(noteIndexAtOrAfter(lyricNotes, caretTick()));
-  }, [lyricNotes]);
+    const entry = beginLyricEntryAt(store);
+    if (entry) setLyricEntry({ notes: entry.notes, startIndex: entry.startIndex });
+  }, [store]);
 
   /**
-   * Right-click selects what is under the pointer, then opens the menu on it.
+   * Right-click selects what is under the pointer, then opens the menu on it
+   * (`selectForContextMenu`, shared with the native long press).
    *
    * The menu names the object it acts on and Delete means three different edits
    * depending on which, so opening it over one thing while it targets another
    * is the one failure it must not have. Same hit test as an ordinary click —
    * track gutter, then measure gutter, then a note — so the two gestures cannot
-   * come to disagree about what is where.
+   * come to disagree about what is where. A bare stave selects nothing: the menu
+   * then acts on the selection already there.
    *
    * **A click inside an existing selection keeps it.** Right-clicking one of
    * four selected bars means "these four", not "this one"; narrowing to the
@@ -816,37 +728,12 @@ export function ScoreEditorView({
   const handleContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       event.preventDefault();
-      const state = store.getState();
       const point = viewPointFromEvent(event);
-      const hit = point ? scoreCanvas.hitTest(point) : null;
-
-      if (hit?.kind === 'trackGutter') {
-        if (!state.selection.trackIds.includes(hit.trackId)) {
-          state.setActiveTrack(hit.trackId);
-          state.selectTrack(hit.trackId);
-        }
-      } else if (hit?.kind === 'measureNumber') {
-        const already = state.score?.tracks.some((track) =>
-          track.measures.some(
-            (m) => m.index === hit.measureIndex && state.selection.measureIds.includes(m.id),
-          ),
-        );
-        if (!already)
-          measureAnchorRef.current = selectMeasureRange(store, {
-            index: hit.measureIndex,
-            anchor: null,
-            extend: false,
-            allTracks: false,
-          });
-      } else if (hit?.kind === 'note') {
-        // The whole chord, as an ordinary click does: one bounding box holds
-        // every note at that tick, so which one was clicked is not a question
-        // the geometry can answer.
-        if (!hit.eventIds.some((id) => state.selection.eventIds.includes(id))) {
-          selectNotes(store, hit.eventIds);
-        }
-      }
-
+      measureAnchorRef.current = selectForContextMenu(
+        store,
+        point ? scoreCanvas.hitTest(point) : null,
+        measureAnchorRef.current,
+      );
       setContextMenu({ x: event.clientX, y: event.clientY });
     },
     [store, scoreCanvas, viewPointFromEvent],
@@ -878,48 +765,39 @@ export function ScoreEditorView({
       const view = viewPointFromEvent(event);
       if (!point || !view) return;
 
-      const state = store.getState();
-      const hit = scoreCanvas.hitTest(view);
-      const noteHit = hit?.kind === 'note' ? hit : null;
+      /*
+        What the press starts is music_editing's (`startPointerGesture`, shared
+        with the native app):
 
-      // Option/Alt starts a move. Checked before the pitch-drag branch,
-      // because the same press on the same note would otherwise start a pitch
-      // drag — the modifier is the whole disambiguation.
-      if (event.altKey && noteHit) {
-        const hitId = noteHit.eventIds[noteHit.eventIds.length - 1]!;
-        const hitEvent = state.score ? findEvent(state.score, hitId) : null;
-        if (hitEvent && isNoteEvent(hitEvent)) {
-          // Works on any note: an explicit modifier leaves no ambiguity with
-          // box select, so requiring a prior selection would be friction for
-          // nothing.
-          if (!state.selection.eventIds.includes(hitId)) {
-            store.getState().setSelection({ eventIds: [hitId], measureIds: [], trackIds: [] });
-          }
-          noteDragRef.current = { anchorId: hitId, anchorTick: hitEvent.startTick };
-          setDropTargetBoth(null);
-          containerRef.current?.setPointerCapture?.(event.pointerId);
-          return;
-        }
-      }
-
-      // Exactly one note selected, and the press landed on it: this is a pitch
-      // drag, not a selection box. Requiring the note to be selected first is
-      // what keeps an ordinary click-and-drag on the staff a box select.
-      const onlySelected =
-        state.selection.eventIds.length === 1 ? state.selection.eventIds[0] : null;
-      if (onlySelected && noteHit?.eventIds.includes(onlySelected)) {
-        const hitEvent = state.score ? findEvent(state.score, onlySelected) : null;
-        // A rest has no pitch to drag.
-        if (hitEvent && isNoteEvent(hitEvent)) {
-          pitchDragRef.current = { eventId: onlySelected, pitch: hitEvent.pitch, startY: point.y };
-          setPitchDragSteps(0);
-          containerRef.current?.setPointerCapture?.(event.pointerId);
-          return;
-        }
-      }
-
-      dragStateRef.current = { start: point, moved: false, additive: event.shiftKey };
+        - Option/Alt on a note is a **move** — checked before the pitch drag,
+          because the same press on the same selected note would otherwise start
+          one; the modifier is the whole disambiguation. It works on any note
+          (an explicit modifier leaves no ambiguity with a box select) and, off
+          the selection, selects the pressed chord first — only the selection,
+          never the caret or the active track.
+        - A press on the *one* selected note is a **pitch drag**. Requiring it
+          to be selected first is what keeps an ordinary click-and-drag on the
+          staff a box select. A rest has no pitch to drag.
+        - Anything else is a **box**, additive with Shift; one that never
+          crosses DRAG_THRESHOLD stays a plain click.
+      */
+      const gesture = startPointerGesture(store, scoreCanvas.hitTest(view), {
+        alt: event.altKey,
+        shift: event.shiftKey,
+      });
       containerRef.current?.setPointerCapture?.(event.pointerId);
+
+      if (gesture.kind === 'move') {
+        noteDragRef.current = { anchorId: gesture.anchorId, anchorTick: gesture.anchorTick };
+        setDropTargetBoth(null);
+        return;
+      }
+      if (gesture.kind === 'pitchDrag') {
+        pitchDragRef.current = { eventId: gesture.eventId, pitch: gesture.pitch, startY: point.y };
+        setPitchDragSteps(0);
+        return;
+      }
+      dragStateRef.current = { start: point, moved: false, additive: gesture.additive };
     },
     // Deps are narrow on purpose: anything read in here that changes per frame
     // goes through a ref (`pitchDragRef`, `dropTargetRef`). Listing the rule's
@@ -1049,12 +927,9 @@ export function ScoreEditorView({
           // coordinates against the scroll as it is now, which is the scroll
           // the canvas holds.
           const start = { x: drag.start.x - box.scrollLeft, y: drag.start.y - box.scrollTop };
-          const hitIds = scoreCanvas.noteIdsInRect(start, view);
-          const state = store.getState();
-          const nextIds = drag.additive
-            ? Array.from(new Set([...state.selection.eventIds, ...hitIds]))
-            : hitIds;
-          state.setSelection({ eventIds: nextIds, measureIds: [], trackIds: [] });
+          // Replaces the selection, or joins it with Shift; leaves the caret
+          // and the active track alone — a box is about which notes.
+          applyBoxSelection(store, scoreCanvas.noteIdsInRect(start, view), drag.additive);
         }
       }
 
@@ -1134,39 +1009,37 @@ export function ScoreEditorView({
         <ScoreContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          kind={selectionKind(selection)}
-          count={
-            selectionKind(selection) === 'measures'
-              ? selection.measureIds.length
-              : selection.eventIds.length
-          }
-          canPaste={canPasteInto(selection, store.getState().clipboard)}
-          canEdit={store.getState().state !== 'playing'}
+          model={scoreContextMenuModel({
+            selection,
+            clipboard: store.getState().clipboard,
+            playing: store.getState().state === 'playing',
+            score,
+          })}
           onClose={() => setContextMenu(null)}
+          // Re-checked against the store as it is now, so an entry chosen after
+          // the transport started is refused rather than trusted to the flag.
+          // Cut and paste ask the same question the shortcuts do.
           onAction={(action) => {
-            const state = store.getState();
-            if (action === 'copy') state.copySelection();
-            else if (action === 'cut') clipboard.requestCut();
-            else if (action === 'paste') clipboard.requestPaste();
-            else if (action === 'clear') clearSelected(store);
-            else if (action === 'delete') deleteSelected(store);
-            else selectAll(store);
+            runScoreContextAction(store, action, {
+              requestCut: clipboard.requestCut,
+              requestPaste: clipboard.requestPaste,
+            });
           }}
         />
       ) : null}
-      {lyricStart !== null ? (
+      {lyricEntry !== null ? (
         <LyricEntryBar
           store={store}
-          notes={lyricNotes}
-          startIndex={lyricStart}
-          onClose={() => setLyricStart(null)}
+          notes={lyricEntry.notes}
+          startIndex={lyricEntry.startIndex}
+          onClose={() => setLyricEntry(null)}
         />
       ) : null}
       <GoToBarDialog
         open={goToBarOpen}
         barCount={barCount(score)}
         onClose={() => setGoToBarOpen(false)}
-        onGo={(bar) => caretToBar(store, bar)}
+        onGo={(text) => goToBarFromInput(store, text)}
       />
       <EditorToolbar
         store={store}
@@ -1176,16 +1049,12 @@ export function ScoreEditorView({
         onLayoutModeChange={setLayoutMode}
         inspectorOpen={inspectorOpen}
         onToggleInspector={onToggleInspector}
-        onGenerateTrack={() => {
-          setGenerateTrackError(null);
-          setGenerateTrackOpen(true);
-        }}
+        onGenerateTrack={() => setGenerateTrackOpen(true)}
       />
 
       <GenerateTrackDialog
         open={generateTrackOpen}
         pending={generateTrackPending}
-        error={generateTrackError}
         estimatedCredits={score ? estimateGenerateTrackCredits(score) : 0}
         onGenerate={(prompt, instrument, variant) =>
           void generateTrack(prompt, instrument, variant)
@@ -1225,7 +1094,11 @@ export function ScoreEditorView({
           data-testid="score-editor-canvas"
           role="application"
           aria-label={t('editor.scoreNotation', {
-            summary: selectionSummaryLabel(selection, selectionSummaryCopy(), selectionRegenerated),
+            summary: selectionSummaryLabel(
+              selection,
+              libraryCopy.selection(),
+              selectionRegenerated,
+            ),
           })}
           tabIndex={0}
           onClick={handleClick}

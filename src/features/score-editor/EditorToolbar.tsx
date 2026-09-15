@@ -39,7 +39,6 @@ import {
   ORNAMENT_OPTIONS,
 } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
-import { ticksFor } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import { selectSelectedNotes } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
@@ -96,31 +95,37 @@ import {
   OrnamentIcon,
 } from '@/components/icons/notation-icons';
 import {
-  addBlankTrack,
-  addMeasure,
-  deleteMeasureAtCaret,
   changeAccidental,
   changeArticulation,
   changeOrnament,
   chooseDuration,
   selectSelectedTrack,
   chooseEditMode,
-  canStackOnActiveTrack,
-  defaultInsertPitch,
-  insertNoteAtCaret,
+  insertDefaultNoteAtCaret,
   insertRestAtSelection,
-  quantizeSelection,
+  quantizeSelectionToGrid,
   zoomIn,
   zoomOut,
-  selectAll,
   changeBeam,
   toggleArpeggiate,
   toggleFermata,
-  toggleGlissando,
   toggleHairpin,
   toggleSlur,
   toggleTie,
+  selectToolbarAvailability,
+  selectEffectiveEditMode,
+  editModeHintKey,
+  voiceHintKey,
+  addTrackChoices,
+  runAddTrackChoice,
+  runMoreAction,
+  EDIT_MODE_OPTIONS,
+  EDITOR_MORE_ACTIONS,
+  EDITOR_VOICE_COUNT,
+  QUANTIZE_GRIDS,
+  QUANTIZE_GRID_SHORT,
 } from '@sudobility/music_lib';
+import type { EditorMoreAction, QuantizeGrid } from '@sudobility/music_lib';
 
 export type EditorToolbarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -193,18 +198,27 @@ const ACCIDENTAL_GLYPHS: Record<Accidental, NotationIcon> = {
 */
 
 /**
- * Quantize grid values, with the short label the trigger shows.
+ * The words each quantize grid is spelled out as in the menu.
  *
- * "1/16" rather than "thirtysecond": the full words made this the widest
- * control on the bar, for a setting that is read at a glance and changed
- * rarely. The menu still spells them out.
+ * The grids themselves, and the short "1/16" the trigger shows, are
+ * music_editing's (`QUANTIZE_GRIDS`, `QUANTIZE_GRID_SHORT`) — the native bar
+ * offers the same four. The short form rather than "thirtysecond" because the
+ * full words made this the widest control on the bar, for a setting read at a
+ * glance and changed rarely. A `Record`, so a fifth grid fails to compile here.
  */
-const QUANTIZE_GRID_OPTIONS: Array<{ value: DurationName; short: string; labelKey: string }> = [
-  { value: 'quarter', short: '1/4', labelKey: 'importMidi.gridQuarter' },
-  { value: 'eighth', short: '1/8', labelKey: 'importMidi.gridEighth' },
-  { value: 'sixteenth', short: '1/16', labelKey: 'importMidi.gridSixteenth' },
-  { value: 'thirtysecond', short: '1/32', labelKey: 'importMidi.gridThirtySecond' },
-];
+const QUANTIZE_GRID_LABEL_KEY: Record<QuantizeGrid, string> = {
+  quarter: 'importMidi.gridQuarter',
+  eighth: 'importMidi.gridEighth',
+  sixteenth: 'importMidi.gridSixteenth',
+  thirtysecond: 'importMidi.gridThirtySecond',
+};
+
+/** The glyph for each edit mode; the order, labels and hints are music_editing's. */
+const EDIT_MODE_GLYPHS: Record<EditMode, NotationIcon> = {
+  insert: InsertModeIcon,
+  replace: ReplaceModeIcon,
+  stack: ChordIcon,
+};
 
 /** A drawn notation glyph: sized by the caller, coloured by `currentColor`. */
 type NotationIcon = (props: { className?: string }) => ReactElement;
@@ -252,82 +266,41 @@ export function EditorToolbar({
   const pitchDisplay = store((s) => s.pitchDisplay);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrack = store(selectSelectedTrack);
-  // Asked through the track, because a drum track's program is a kit: Brush
-  // sits at 40, the Violin address, which is how the toolbar came to refuse a
-  // three-piece drum hit. The rule lives in music_lib; this only draws it.
-  const canStack = canStackOnActiveTrack(store);
+  /**
+   * Which controls can be used right now: music_editing's rules, shared with
+   * the native bar, so the two cannot disagree about when a glissando can be
+   * written.
+   *
+   * Content is refused while the transport plays (`score-slice`'s edit lock),
+   * and a control that invites a click and does nothing is worse than one
+   * plainly unavailable — so the selection-only controls are off with nothing
+   * selected, and every content control is off while playing. The duration
+   * control stays live then: it also arms the next note.
+   *
+   * Reference-stable while no answer changes, so this re-renders on a
+   * transition only — not one of the high-frequency reads that must stay out
+   * of a component's top level.
+   */
+  const available = store(selectToolbarAvailability);
+  /*
+    The mode a write will actually use. Stack on a part that cannot play a chord
+    reads as replace (asked through the *track*, because a drum track's program
+    is a kit: Brush sits at 40, the Violin address).
 
-  // A mode chosen before the track changed would otherwise refuse every edit,
-  // and that refusal only surfaces after you have already played something.
+    The stored mode is still corrected from an effect as well, because the
+    library's write path reads the stored `editMode` rather than the effective
+    one — without it a mode chosen before the track changed would refuse every
+    edit, a refusal that only surfaces after something has been played.
+  */
+  const effectiveEditMode = store(selectEffectiveEditMode);
   useEffect(() => {
-    if (editMode === 'stack' && !canStack) chooseEditMode(store, 'replace');
-  }, [editMode, canStack, store]);
+    if (effectiveEditMode !== editMode) chooseEditMode(store, effectiveEditMode);
+  }, [editMode, effectiveEditMode, store]);
 
-  const editModeOptions: Array<{
-    value: EditMode;
-    Icon: NotationIcon;
-    label: string;
-    hint: string;
-  }> = [
-    {
-      value: 'insert',
-      Icon: InsertModeIcon,
-      label: t('editor.insertMode'),
-      hint: t('editor.insertModeHint'),
-    },
-    {
-      value: 'replace',
-      Icon: ReplaceModeIcon,
-      label: t('editor.replaceMode'),
-      hint: t('editor.replaceModeHint'),
-    },
-    {
-      value: 'stack',
-      Icon: ChordIcon,
-      label: t('editor.stackMode'),
-      hint: canStack
-        ? t('editor.stackModeHint')
-        : t('editor.stackModeUnavailable', {
-            instrument: activeTrack?.instrumentName ?? t('editor.thisInstrument'),
-          }),
-    },
-  ];
-  /**
-   * Content editing is refused while the transport plays (`score-slice`'s edit
-   * lock), so the controls that would dispatch a content command say so rather
-   * than looking live and doing nothing.
-   *
-   * A boolean, so this re-renders on a transport transition only — not one of
-   * the high-frequency reads that must stay out of a component's top level.
-   *
-   * Deliberately still enabled: Copy, which only reads the selection, and the
-   * duration buttons, which also set the default insert duration and are
-   * therefore useful with nothing selected.
-   */
-  const isPlaying = store((s) => s.state === 'playing');
   const zoom = store((s) => s.zoom);
-  const hasScore = score !== null;
-  const canEdit = hasScore && !isPlaying;
-
-  /**
-   * Whether anything is selected.
-   *
-   * Eleven controls here act on the selection and quietly return when it is
-   * empty — accidentals, articulation, tie, quantize, delete, copy, cut. They
-   * were all merely `!hasScore`, so with a score open they looked available
-   * and did nothing when clicked. A control that invites a click and gives no
-   * feedback is worse than one that is plainly unavailable.
-   */
-  const selection = store((s) => s.selection);
-  const hasSelection = selection.eventIds.length > 0 || selection.measureIds.length > 0;
-  /**
-   * Paste follows the clipboard, the way Copy and Cut follow the selection.
-   * It used to stay live whether or not anything had been copied, so it was the
-   * one control on the bar that could look ready and do nothing.
-   */
   const noteInput = store((s) => s.noteInput);
 
-  const [quantizeGrid, setQuantizeGrid] = useState<DurationName>('sixteenth');
+  const [quantizeGrid, setQuantizeGrid] = useState<QuantizeGrid>('sixteenth');
   const [articulationOpen, setArticulationOpen] = useState(false);
   const articulationRef = useRef<HTMLDivElement | null>(null);
 
@@ -356,12 +329,10 @@ export function EditorToolbar({
   };
 
   const handleMoreAction = (value: string): void => {
-    if (value === 'select-all') selectAll(store);
-    else if (value === 'add-measure') addMeasure(store);
-    else if (value === 'delete-measure') deleteMeasureAtCaret(store);
-    else if (value === 'go-to-bar') onGoToBar?.();
-    else if (value === 'enter-lyrics') onEnterLyrics?.();
-    else if (value === 'glissando') toggleGlissando(store);
+    runMoreAction(store, value as EditorMoreAction, {
+      goToBar: onGoToBar,
+      enterLyrics: onEnterLyrics,
+    });
   };
 
   const handleAccidentalSelect = (value: string): void => {
@@ -376,8 +347,9 @@ export function EditorToolbar({
     changeOrnament(store, value === NO_MARK ? undefined : (value as Ornament));
   };
 
+  /** Writes the default pitch at the caret and steps past it, so a second press continues the line. */
   const handleInsertNote = (): void => {
-    insertNoteAtCaret(store, defaultInsertPitch(store));
+    insertDefaultNoteAtCaret(store);
   };
 
   const handleInsertRest = (): void => {
@@ -385,16 +357,11 @@ export function EditorToolbar({
   };
 
   const handleQuantizeGridChange = (value: string): void => {
-    setQuantizeGrid(value as DurationName);
+    setQuantizeGrid(value as QuantizeGrid);
   };
 
   const handleQuantize = (): void => {
-    if (!score) return;
-    quantizeSelection(store, {
-      grid: ticksFor(quantizeGrid, score.ppq),
-      quantizeStarts: true,
-      quantizeDurations: true,
-    });
+    void quantizeSelectionToGrid(store, quantizeGrid);
   };
 
   const handleZoomIn = (): void => store.getState().setZoom(zoomIn(zoom));
@@ -424,18 +391,16 @@ export function EditorToolbar({
           <TrackVisibilitySelect store={store} />
           <Select
             value=""
-            onValueChange={(value) => {
-              if (value === 'blank') {
-                addBlankTrack(store);
-              } else if (value === 'generate') {
-                onGenerateTrack?.();
-              }
-            }}
+            onValueChange={(value) =>
+              runAddTrackChoice(store, value as 'blank' | 'generate', {
+                generateTrack: onGenerateTrack,
+              })
+            }
           >
             <Tooltip placement="bottom" content={t('editor.addTrack')}>
               <SelectTrigger
                 aria-label={t('editor.addTrack')}
-                disabled={!score || isPlaying}
+                disabled={!available.addTrack}
                 // Not the square icon class: this trigger carries the library's
                 // own dropdown chevron beside the plus, and that chevron is
                 // 16px by default — the one glyph in either bar that was not
@@ -446,8 +411,13 @@ export function EditorToolbar({
               </SelectTrigger>
             </Tooltip>
             <SelectContent>
-              <SelectItem value="blank">{t('editor.blankTrack')}</SelectItem>
-              <SelectItem value="generate">{t('editor.generateTrack')}</SelectItem>
+              {/* Generate is disabled rather than dropped with no host to send it
+                  to, so the menu keeps its shape. */}
+              {addTrackChoices({ canGenerate: onGenerateTrack !== undefined }).map((choice) => (
+                <SelectItem key={choice.value} value={choice.value} disabled={choice.disabled}>
+                  {t(choice.labelKey)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -476,7 +446,7 @@ export function EditorToolbar({
           >
             <SelectTrigger
               aria-label={t('editor.noteDuration')}
-              disabled={!hasScore}
+              disabled={!available.noteDuration}
               className={cn(TEXT_CONTROL_CLASS, 'w-[74px] justify-between [&_svg]:size-[18px]')}
             >
               {durationShown.kind === 'mixed' ? (
@@ -511,7 +481,7 @@ export function EditorToolbar({
               variant="ghost"
               aria-label={t('editor.dotted')}
               aria-pressed={durationParts(snapGrid).modifier === 'dotted'}
-              disabled={!hasScore}
+              disabled={!available.dotted}
               onClick={() => handleDurationClick(withModifier(snapGrid, 'dotted'))}
               className={TOGGLE_BUTTON_CLASS}
             >
@@ -524,7 +494,7 @@ export function EditorToolbar({
               variant="ghost"
               aria-label={t('editor.triplet')}
               aria-pressed={durationParts(snapGrid).modifier === 'triplet'}
-              disabled={!hasScore}
+              disabled={!available.triplet}
               onClick={() => handleDurationClick(withModifier(snapGrid, 'triplet'))}
               className={TOGGLE_BUTTON_CLASS}
             >
@@ -543,7 +513,7 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content={t('editor.accidentalHint')}>
             <SelectTrigger
               aria-label={t('editor.accidental')}
-              disabled={!canEdit || !hasSelection}
+              disabled={!available.accidental}
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               <SharpIcon className={ICON_GLYPH_CLASS} />
@@ -581,7 +551,7 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content={t('editor.articulationHint')}>
             <SelectTrigger
               aria-label={t('editor.articulation')}
-              disabled={!canEdit || !hasSelection}
+              disabled={!available.articulation}
               className={cn(ICON_BUTTON_CLASS, '[&>svg:last-child]:hidden [&_svg]:size-[18px]')}
             >
               <ArticulationIcon className={ICON_GLYPH_CLASS} />
@@ -605,7 +575,7 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content={t('editor.ornamentHint')}>
             <SelectTrigger
               aria-label={t('editor.ornament')}
-              disabled={!canEdit || !hasSelection}
+              disabled={!available.ornament}
               className={cn(ICON_BUTTON_CLASS, '[&>svg:last-child]:hidden [&_svg]:size-[18px]')}
             >
               <OrnamentIcon className={ICON_GLYPH_CLASS} />
@@ -626,7 +596,7 @@ export function EditorToolbar({
             variant="ghost"
             size="icon"
             aria-label={t('editor.toggleTie')}
-            disabled={!canEdit || !hasSelection}
+            disabled={!available.tie}
             onClick={() => toggleTie(store, 'tieStart')}
             className={ICON_BUTTON_CLASS}
           >
@@ -637,28 +607,37 @@ export function EditorToolbar({
         <VerticalDivider />
 
         <div role="group" aria-label={t('editor.editMode')} className="flex items-center gap-0.5">
-          {editModeOptions.map((option) => (
-            <Tooltip placement="bottom" key={option.value} content={option.hint}>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label={option.label}
-                aria-pressed={editMode === option.value}
-                disabled={!hasScore || (option.value === 'stack' && !canStack)}
-                onClick={() => chooseEditMode(store, option.value)}
-                className={TOGGLE_BUTTON_CLASS}
+          {EDIT_MODE_OPTIONS.map((option) => {
+            const Glyph = EDIT_MODE_GLYPHS[option.value];
+            return (
+              <Tooltip
+                placement="bottom"
+                key={option.value}
+                content={t(editModeHintKey(option.value, available.stackMode), {
+                  instrument: activeTrack?.instrumentName ?? t('editor.thisInstrument'),
+                })}
               >
-                <option.Icon className={ICON_GLYPH_CLASS} />
-              </Button>
-            </Tooltip>
-          ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={t(option.labelKey)}
+                  aria-pressed={effectiveEditMode === option.value}
+                  disabled={!available[`${option.value}Mode`]}
+                  onClick={() => chooseEditMode(store, option.value)}
+                  className={TOGGLE_BUTTON_CLASS}
+                >
+                  <Glyph className={ICON_GLYPH_CLASS} />
+                </Button>
+              </Tooltip>
+            );
+          })}
         </div>
         <Tooltip placement="bottom" content={t('editor.insertNoteHint')}>
           <Button
             type="button"
             variant="outline"
             aria-label={t('editor.insertNote')}
-            disabled={!canEdit}
+            disabled={!available.insertNote}
             onClick={handleInsertNote}
             className={ICON_BUTTON_CLASS}
           >
@@ -680,7 +659,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.slur')}
-            disabled={!canEdit || selection.eventIds.length < 2}
+            disabled={!available.slur}
             onClick={() => toggleSlur(store)}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -699,7 +678,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.crescendo')}
-            disabled={!canEdit || selection.eventIds.length < 2}
+            disabled={!available.crescendo}
             onClick={() => toggleHairpin(store, 'crescendo')}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -712,7 +691,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.diminuendo')}
-            disabled={!canEdit || selection.eventIds.length < 2}
+            disabled={!available.diminuendo}
             onClick={() => toggleHairpin(store, 'diminuendo')}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -727,7 +706,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.arpeggiate')}
-            disabled={!canEdit || selection.eventIds.length === 0}
+            disabled={!available.arpeggiate}
             onClick={() => toggleArpeggiate(store)}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -747,7 +726,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.beamBreak')}
-            disabled={!canEdit || selection.eventIds.length === 0}
+            disabled={!available.beamBreak}
             onClick={() => changeBeam(store, 'break')}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -760,7 +739,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.beamNone')}
-            disabled={!canEdit || selection.eventIds.length === 0}
+            disabled={!available.beamNone}
             onClick={() => changeBeam(store, 'none')}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -778,7 +757,7 @@ export function EditorToolbar({
             type="button"
             variant="ghost"
             aria-label={t('editor.fermata')}
-            disabled={!canEdit || selection.eventIds.length === 0}
+            disabled={!available.fermata}
             onClick={() => toggleFermata(store)}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -792,7 +771,7 @@ export function EditorToolbar({
             variant="ghost"
             aria-label={t('editor.noteInput')}
             aria-pressed={noteInput}
-            disabled={!canEdit}
+            disabled={!available.noteInput}
             onClick={() => store.getState().setNoteInput(!noteInput)}
             className={TOGGLE_BUTTON_CLASS}
           >
@@ -805,7 +784,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label={t('editor.insertRest')}
-            disabled={!canEdit}
+            disabled={!available.insertRest}
             onClick={handleInsertRest}
             className={ICON_BUTTON_CLASS}
           >
@@ -829,21 +808,19 @@ export function EditorToolbar({
           <Select value={quantizeGrid} onValueChange={handleQuantizeGridChange}>
             <SelectTrigger
               aria-label={t('editor.quantizeGrid')}
+              disabled={!available.quantizeGrid}
               // The trigger's own chevron is 16px by default; this brings it in
               // line with every other icon on the bar.
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               {/* The short form, not `SelectValue`: the trigger is read at a
                 glance and was the widest control on the bar. */}
-              <span>
-                {QUANTIZE_GRID_OPTIONS.find((option) => option.value === quantizeGrid)?.short ??
-                  quantizeGrid}
-              </span>
+              <span>{QUANTIZE_GRID_SHORT[quantizeGrid]}</span>
             </SelectTrigger>
             <SelectContent>
-              {QUANTIZE_GRID_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {t(option.labelKey)}
+              {QUANTIZE_GRIDS.map((grid) => (
+                <SelectItem key={grid} value={grid}>
+                  {t(QUANTIZE_GRID_LABEL_KEY[grid])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -854,7 +831,7 @@ export function EditorToolbar({
             type="button"
             variant="outline"
             aria-label={t('editor.quantize')}
-            disabled={!canEdit || !hasSelection}
+            disabled={!available.quantize}
             onClick={handleQuantize}
             className={ICON_BUTTON_CLASS}
           >
@@ -866,27 +843,18 @@ export function EditorToolbar({
 
         <VerticalDivider />
 
-        {/* Two voices is where the notation actually needs them — stems up
-          against stems down on one stave. More than two is real notation too,
-          but nothing else in the editor distinguishes voices yet, so offering
-          four would be offering somewhere to lose notes. */}
+        {/* How many voices is music_editing's `EDITOR_VOICE_COUNT` (two: stems
+          up against stems down on one stave). The hints used to be English
+          literals here, which no parity test could see. */}
         <div role="group" aria-label={t('editor.voice')} className="flex items-center gap-0.5">
-          {[0, 1].map((index) => (
-            <Tooltip
-              placement="bottom"
-              key={index}
-              content={
-                index === 0
-                  ? 'Voice 1 — the main line on this stave'
-                  : 'Voice 2 — a second, independent line on the same stave'
-              }
-            >
+          {Array.from({ length: EDITOR_VOICE_COUNT }, (_, index) => (
+            <Tooltip placement="bottom" key={index} content={t(voiceHintKey(index))}>
               <Button
                 type="button"
                 variant="ghost"
                 aria-label={t('editor.voiceNumber', { number: index + 1 })}
                 aria-pressed={activeVoiceIndex === index}
-                disabled={!hasScore}
+                disabled={!available.voice}
                 onClick={() => store.getState().setActiveVoice(index)}
                 className={TOGGLE_BUTTON_CLASS}
               >
@@ -905,30 +873,31 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content={t('editor.moreActions')}>
             <SelectTrigger
               aria-label={t('editor.moreActions')}
-              disabled={!hasScore}
+              disabled={!available.moreActions}
               className={cn(TEXT_CONTROL_CLASS, '[&_svg]:size-[18px]')}
             >
               <EllipsisHorizontalIcon className={ICON_GLYPH_CLASS} />
             </SelectTrigger>
           </Tooltip>
           <SelectContent>
-            <SelectItem value="select-all">{t('editor.selectAllNotes')}</SelectItem>
-            <SelectItem value="add-measure">{t('editor.addMeasure')}</SelectItem>
-            <SelectItem value="delete-measure">{t('editor.deleteMeasure')}</SelectItem>
-            <SelectItem value="go-to-bar">{t('editor.goToBar')}</SelectItem>
-            <SelectItem value="enter-lyrics">{t('editor.enterLyrics')}</SelectItem>
             {/*
-              A slide is a span, like the slur, so it needs two notes — and it
-              is here rather than on the bar for the reason everything in this
-              menu is: it is a mark somebody reaches for occasionally, and the
-              bar is already the widest thing in the editor. The native app has
-              always offered it in its own More menu; the web had it in the
-              inspector and on Shift+G alone, so the same product answered
-              "where is glissando?" two different ways.
+              The entries and their order are music_editing's, shared with the
+              native More menu, and each is disabled exactly when its control
+              would be: a slide needs two notes, and bars and lyrics are content,
+              so they lock while the transport plays. Glissando is here rather
+              than on the bar for the reason everything in this menu is — a mark
+              reached for occasionally, on a bar already the widest thing in the
+              editor.
             */}
-            <SelectItem value="glissando" disabled={!canEdit || selection.eventIds.length < 2}>
-              {t('editor.glissando')}
-            </SelectItem>
+            {EDITOR_MORE_ACTIONS.map((action) => (
+              <SelectItem
+                key={action.value}
+                value={action.value}
+                disabled={!available[action.control]}
+              >
+                {t(action.labelKey)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 

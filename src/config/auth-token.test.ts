@@ -7,7 +7,11 @@
  * restored the session.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { AuthenticatedNetworkClient, readFirebaseToken } from '@/config/initialize';
+import {
+  AuthenticatedNetworkClient,
+  musicHookContext,
+  readFirebaseToken,
+} from '@/config/initialize';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -79,5 +83,29 @@ describe('AuthenticatedNetworkClient', () => {
 
     await client.get('/balance');
     expect(get.mock.calls[0][1].headers.Authorization).toBeUndefined();
+  });
+});
+
+/*
+ * music_client's hooks take a `getToken` rather than a token, for exactly the
+ * reason above: a token captured when the context is built is null for a
+ * signed-in user until the session is restored, and stale an hour later.
+ */
+describe('musicHookContext', () => {
+  it('asks the auth layer for the token each time, never a captured one', async () => {
+    let current: string | null = null;
+    const services = {
+      networkClient: {} as never,
+      baseUrl: 'http://api.test',
+      auth: { getToken: vi.fn(async () => current) },
+    };
+    const ctx = musicHookContext(services, 'user-1');
+
+    expect(ctx.baseUrl).toBe('http://api.test');
+    expect(ctx.userId).toBe('user-1');
+    expect(ctx.token).toBeUndefined();
+    await expect(ctx.getToken!()).resolves.toBeNull();
+    current = 'restored';
+    await expect(ctx.getToken!()).resolves.toBe('restored');
   });
 });

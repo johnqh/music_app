@@ -1,4 +1,4 @@
-import { commandLabel } from '@/features/score-editor/command-labels';
+import { commandLabel } from '@sudobility/music_lib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, render, screen, within } from '@testing-library/react';
@@ -8,6 +8,7 @@ import { twinkleScore } from '@sudobility/music_lib';
 import { allNotes, findEvent } from '@sudobility/music_lib';
 import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
+import { getMusicPosition } from '@sudobility/music_types';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 
@@ -216,6 +217,19 @@ describe('EditorToolbar', () => {
 
     expect(store.getState().score).not.toBe(before);
     expect(store.getState().canUndo).toBe(true);
+  });
+
+  it('insert note steps the caret past what it wrote, so a second press continues the line', async () => {
+    // A product decision both apps share: the web bar used to leave the caret
+    // on the note, so pressing Insert Note twice stacked the second onto the
+    // first instead of writing the next note of the line.
+    const store = makeStore();
+    renderToolbar(store);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Insert note' }));
+
+    expect(getMusicPosition().reportedTick).toBe(store.getState().score!.ppq);
   });
 
   it('insert rest deletes the selected note', async () => {
@@ -502,6 +516,29 @@ describe('the overflow menu', () => {
 
     await userEvent.click(screen.getByLabelText('More actions'));
     expect(await screen.findByRole('option', { name: 'Glissando' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+});
+
+describe('the overflow menu while playing', () => {
+  it('locks the entries that change content, and keeps the ones that only read', async () => {
+    // Lyrics, bars and a slide are all content, and the transport refuses every
+    // one of them while it plays — an entry that opens an entry bar whose every
+    // keystroke is then refused invites typing into nothing.
+    const store = makeStore();
+    act(() => store.getState().setPlaybackState('playing'));
+    renderToolbar(store);
+
+    await userEvent.click(screen.getByLabelText('More actions'));
+    for (const name of ['Add bar', 'Delete bar at caret', 'Enter lyrics']) {
+      expect(await screen.findByRole('option', { name }), name).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    }
+    expect(screen.getByRole('option', { name: 'Select all notes' })).not.toHaveAttribute(
       'aria-disabled',
       'true',
     );

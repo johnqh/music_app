@@ -7,22 +7,15 @@
  * `basis` field in front of a reader, which is the thing worth knowing: a
  * compass somebody checked and a compass nobody checked look identical
  * everywhere else.
+ *
+ * The rows — the filter and every formatted cell — are music_types'
+ * `gmInstrumentRows`, shared with the native app's reference; only the table
+ * and the words for `unlimited` and each basis are this page's.
  */
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input, Text } from '@sudobility/components';
-import {
-  GM_CATALOGUE,
-  GM_FAMILY_LABELS,
-  midiToPitch,
-  UNLIMITED_POLYPHONY,
-} from '@sudobility/music_lib';
-
-function noteName(midi: number): string {
-  const pitch = midiToPitch(midi);
-  const accidental = pitch.accidental === 1 ? '♯' : pitch.accidental === -1 ? '♭' : '';
-  return `${pitch.step}${accidental}${pitch.octave}`;
-}
+import { gmInstrumentRows } from '@sudobility/music_types';
 
 const BASIS_TONE: Record<string, string> = {
   measured: 'text-theme-success',
@@ -36,16 +29,7 @@ export function InstrumentReference() {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
 
-  const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return GM_CATALOGUE.filter(
-      (spec) =>
-        needle.length === 0 ||
-        spec.name.toLowerCase().includes(needle) ||
-        String(spec.program) === needle ||
-        spec.family.includes(needle),
-    );
-  }, [query]);
+  const rows = useMemo(() => gmInstrumentRows(query), [query]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -72,31 +56,19 @@ export function InstrumentReference() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((spec) => (
-              <tr key={spec.program} className="border-b border-theme-border/40">
+            {rows.map((row) => (
+              <tr key={row.program} className="border-b border-theme-border/40">
                 <td className="py-1.5 pr-3 tabular-nums text-theme-text-secondary">
-                  {spec.program}
+                  {row.program}
                 </td>
-                <td className="py-1.5 pr-3">{spec.name}</td>
-                <td className="py-1.5 pr-3 text-theme-text-secondary">
-                  {GM_FAMILY_LABELS[spec.family]}
-                </td>
+                <td className="py-1.5 pr-3">{row.name}</td>
+                <td className="py-1.5 pr-3 text-theme-text-secondary">{row.familyLabel}</td>
+                <td className="py-1.5 pr-3 tabular-nums">{row.range}</td>
                 <td className="py-1.5 pr-3 tabular-nums">
-                  {noteName(spec.range.min)}–{noteName(spec.range.max)}
+                  {row.polyphony ?? t('docs.instruments.polyUnlimited')}
                 </td>
-                <td className="py-1.5 pr-3 tabular-nums">
-                  {spec.maxPolyphony === UNLIMITED_POLYPHONY
-                    ? t('docs.instruments.polyUnlimited')
-                    : spec.maxPolyphony}
-                </td>
-                <td className="py-1.5 pr-3 tabular-nums">
-                  {spec.writtenTransposition === 0
-                    ? '—'
-                    : `${spec.writtenTransposition > 0 ? '+' : ''}${spec.writtenTransposition}`}
-                </td>
-                <td className={`py-1.5 ${BASIS_TONE[spec.basis] ?? ''}`}>
-                  {t(`docs.instruments.basis.${spec.basis}`)}
-                </td>
+                <td className="py-1.5 pr-3 tabular-nums">{row.transposition}</td>
+                <td className={`py-1.5 ${BASIS_TONE[row.basis] ?? ''}`}>{t(row.basisKey)}</td>
               </tr>
             ))}
           </tbody>

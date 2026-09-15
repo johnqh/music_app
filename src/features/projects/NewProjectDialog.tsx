@@ -47,7 +47,7 @@
  * through `textareaProps={{ 'aria-label': ... }}`, since `TextArea` has no
  * top-level `aria-label` prop); the Style/Mood/Complexity/Key/Mode/Time-
  * signature `<select>`s become the library's Radix-backed `Select`
- * (Style/Mood need a non-empty sentinel value, `NONE_VALUE`, for their "No
+ * (Style/Mood need a non-empty sentinel value, `NO_MARK`, for their "No
  * style"/"No mood" option -- Radix `Select.Item` rejects an empty-string
  * value); Measures/Tempo become the library `Input`; the Presets
  * trigger/menuitem buttons and Generate/Cancel become the library `Button`
@@ -70,13 +70,12 @@
  * element that actually carries `role="progressbar"`, so there's no way to
  * keep the required "Generating" accessible name on a library swap.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
 import { useScorePresets } from '@sudobility/music_client';
-import { getAppServices } from '@/config/initialize';
-import { useSiteAdmin } from '@/app/AuthContext';
+import { useMusicHookContext, useSiteAdmin } from '@/app/AuthContext';
 import type { ChangeEvent, ReactNode } from 'react';
 import type * as React from 'react';
 import {
@@ -94,39 +93,40 @@ import {
   cn,
 } from '@sudobility/components';
 import {
-  barsForSeconds,
-  formatDuration,
-  parseDuration,
-  secondsForBars,
-  DEFAULT_GENERATE_SCORE_MEASURES,
   DEFAULT_INSTRUMENT_VALUE,
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
   GENERATE_SCORE_STYLE_OPTIONS,
-  DEFAULT_VOCAL_INSTRUMENT_VALUE,
-  hasVocalInstrument,
-  sortOptionsByLabel,
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
-  withGenerationVariant,
-  GENERATE_SCORE_STYLE_PRESETS,
-  styleRoster,
-  type StyleTier,
-  styleKey,
-  styleTempo,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
-  buildGenerateScoreRequest,
-  buildNewProjectScore,
-  canBuildGenerateScoreRequest,
-  canBuildNewProjectScore,
-  estimateGenerateScoreCredits,
+  canCreateNewProject,
+  canRemoveNewProjectEntry,
+  complexityLabelKey,
   firstMelodyInstrumentEntryId,
-  type InstrumentValueEntry,
-  generateScoreTrackForInstrumentValue,
+  initialNewProjectDraft,
   instrumentLabelFor,
+  isNewProjectEntryLocked,
+  isOutOfCredits,
+  labelledOptions,
+  moodLabelKey,
+  newProjectCreditEstimate,
+  newProjectDefaultTitleKey,
+  newProjectDurationRefused,
+  newProjectSubmission,
+  newProjectTempoRefused,
+  optionalFromPicker,
+  optionalToPicker,
+  reduceNewProjectDraft,
+  showNewProjectDuration,
+  showNewProjectLyrics,
+  showNewProjectLyricsTheme,
+  styleLabelKey,
   type GenerateScoreComplexity,
   type KeySignature,
+  type NewProjectDraftAction,
+  type NewProjectFormDraft,
   type NewProjectSubmission,
 } from '@sudobility/music_lib';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
@@ -146,18 +146,6 @@ export type NewProjectDialogProps = {
   submitting?: boolean;
 };
 
-/**
- * One chosen instrument. `id` survives reordering and repeats of the same
- * value. The shape is `InstrumentValueEntry` from music_lib, which
- * `firstMelodyInstrumentEntryId` reads — aliased rather than redeclared, since
- * two identical declarations are how the two come apart.
- */
-/**
- * An ensemble row, and which of the style's tiers put it there. Rows added by
- * hand carry no tier, so a second kit added on purpose is always removable.
- */
-type EnsembleEntry = InstrumentValueEntry & { tier?: StyleTier };
-
 /*
   The preset briefs are the server's list and this app's words.
 
@@ -171,9 +159,6 @@ type EnsembleEntry = InstrumentValueEntry & { tier?: StyleTier };
   It used to be eight hardcoded prompts that had nothing to do with the chosen
   style, so picking Reggae still offered a waltz.
 */
-
-/** Sentinel for Style/Mood's "no selection" option: Radix `Select.Item` rejects an empty-string `value` (it's reserved to mean "cleared"). */
-const NONE_VALUE = '__none__';
 
 const SELECT_TRIGGER_CLASS = 'h-auto w-full justify-between px-2 py-1.5 text-sm';
 
@@ -287,6 +272,18 @@ function LabeledInput({
   );
 }
 
+/**
+ * The shared reducer with its randomness left at the default. `useReducer`
+ * passes exactly two arguments, and `reduceNewProjectDraft`'s optional third
+ * (the `rng` a test pins) does not fit React's reducer type as it stands.
+ */
+function reduceDraft(
+  draft: NewProjectFormDraft,
+  action: NewProjectDraftAction,
+): NewProjectFormDraft {
+  return reduceNewProjectDraft(draft, action);
+}
+
 export function NewProjectDialog({
   open,
   onClose,
@@ -294,222 +291,44 @@ export function NewProjectDialog({
   submitting = false,
 }: NewProjectDialogProps) {
   const { t, i18n } = useTranslation();
-  const [title, setTitle] = useState('');
   /*
-    Whether a model writes the music.
-
-    Off by default: this is New Project, and a blank score with the right
-    instruments is the ordinary way to start one. On, the form is exactly the
-    Generate dialog it grew out of.
-
-    Flipping it never clears anything. Somebody who types a prompt, turns this
-    off and turns it back on gets their prompt back — losing typed text to a
-    toggle is not worth the tidiness.
+    The whole form is one draft, and every rule that changes it is music_lib's
+    (`reduceNewProjectDraft`): choosing a style fills the roster, tempo, bars
+    and key; turning generation on adds a singer and off takes back exactly that
+    one, tracked by entry id inside the draft rather than in a ref beside it;
+    bars, tempo, meter and duration keep each other in step. The native sheet
+    runs the same reducer, which is what stopped the two forms disagreeing about
+    what a salsa is. This component only draws the draft and dispatches.
   */
-  const [generateForMe, setGenerateForMe] = useState(false);
-  /*
-    Words under the sung notes. On by default, because somebody who has just
-    been given a singer is writing a song — but a switch rather than an
-    inference, since a voice program held as a wordless "ooh" pad is a
-    different piece of music and there is no way to tell the two apart from the
-    roster alone. Only reaches the wire when somebody can sing them, which
-    `buildGenerateScoreRequest` enforces.
-  */
-  const [lyrics, setLyrics] = useState(true);
-  /*
-    What the words are about, when that is not what the piece is about.
-
-    A separate field because they are separate questions: the prompt describes
-    the music, and the words over it can be about coming home without the music
-    brief being about coming home. Blank means "the same as the piece", which is
-    what the lyric always followed — so leaving it alone changes nothing.
-  */
-  const [lyricsTheme, setLyricsTheme] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [style, setStyle] = useState('');
-  const [mood, setMood] = useState('');
-  const [complexity, setComplexity] = useState<GenerateScoreComplexity>('moderate');
-  // An ordered list, not a set: `classifyTrackRole` gives the melody to the
-  // first treble-clef track, so which instrument comes first is a musical
-  // decision and has to be visible and controllable. Ids allow the same
-  // instrument twice — two violins is a real ensemble.
-  const [ensemble, setEnsemble] = useState<EnsembleEntry[]>(() => [
-    { id: 0, value: DEFAULT_INSTRUMENT_VALUE },
-  ]);
-  const [nextEntryId, setNextEntryId] = useState(1);
-  /*
-    The singer this dialog added, so turning the toggle back off removes that
-    one and not whichever voice happens to be at the top of the list. A ref
-    rather than state: it is read inside handlers and must never cause a render.
-  */
-  const autoVocalId = useRef<number | null>(null);
+  const [draft, dispatch] = useReducer(reduceDraft, undefined, initialNewProjectDraft);
+  const { generating, style } = draft;
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
-  const [measures, setMeasures] = useState(String(DEFAULT_GENERATE_SCORE_MEASURES));
-  /*
-    Which backend writes the music.
 
-    DeepSeek by default because it is the one whose output people preferred in
-    listening: measured side by side on the same briefs, its country and metal
-    came back more recognisably in their genre and markedly less over-written
-    than the frontier model's, which produced denser, busier parts for the same
-    request.
-
-    Chosen HERE rather than in developer settings because it is a property of
-    the piece being commissioned, not of the machine doing the commissioning —
-    and because someone comparing two backends wants to choose per generation
-    rather than open a settings dialog between them.
-  */
-  const [variant, setVariant] = useState<string>('deepseek');
-  const [tempo, setTempo] = useState('');
-  const [keyFifths, setKeyFifths] = useState(0);
-  const [keyMode, setKeyMode] = useState<KeySignature['mode']>('major');
-  const [timeSigPreset, setTimeSigPreset] = useState('4/4');
-  /*
-    The Duration field's text. Bars are the value; this is what is typed, kept
-    apart so "1:" mid-edit is not rewritten under the cursor. Every change to
-    bars, tempo or meter refreshes it; typing it sets the bars.
-  */
-  const [durationText, setDurationText] = useState(() =>
-    formatDuration(secondsForBars(DEFAULT_GENERATE_SCORE_MEASURES, '')),
-  );
-  const refreshDuration = (bars: string, tempoText: string, meter: string): void => {
-    const count = Number(bars);
-    if (Number.isInteger(count) && count > 0) {
-      setDurationText(
-        formatDuration(
-          secondsForBars(count, tempoText, GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[meter]),
-        ),
-      );
-    }
-  };
-  const changeMeasures = (next: string): void => {
-    setMeasures(next);
-    refreshDuration(next, tempo, timeSigPreset);
-  };
-  const changeTempo = (next: string): void => {
-    setTempo(next);
-    refreshDuration(measures, next, timeSigPreset);
-  };
-  const changeTimeSig = (next: string): void => {
-    setTimeSigPreset(next);
-    refreshDuration(measures, tempo, next);
-  };
-  const changeDuration = (next: string): void => {
-    setDurationText(next);
-    const seconds = parseDuration(next);
-    if (seconds !== null)
-      setMeasures(
-        String(
-          barsForSeconds(seconds, tempo, GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset]),
-        ),
-      );
-  };
-
-  /*
-    Choosing a style fills the form with the ordinary shape of that genre.
-
-    Reggae is an electric guitar, an organ, a bass and a kit at 78bpm; picking
-    the word and then being handed a lone piano at 120 is the generator asking
-    the reader to already know the answer. `GENERATE_SCORE_STYLE_PRESETS` in
-    music_lib is where the shape lives — both apps fill from it, so a genre
-    means the same ensemble on a phone as on the web.
-
-    It **overwrites**, deliberately. A preset that skipped fields the reader had
-    touched would leave a half-country, half-whatever-was-there-before ensemble
-    that matches no genre and that nobody chose. Everything it sets stays
-    editable; this is a starting point, not a lock.
-
-    Clearing the style back to "No style" leaves the form alone: that is the
-    reader saying they want no genre, not that they want the defaults back.
-  */
-  const applyStyle = (next: string) => {
-    setStyle(next);
-    const preset = next ? GENERATE_SCORE_STYLE_PRESETS[next] : undefined;
-    if (!preset) return;
-    /*
-      The style's roster in tiers, from `styleRoster` — shared with the React
-      Native sheet. Essential instruments are always there and cannot be
-      removed while generating, preferred ones are added and removable, and a
-      couple of optional ones are drawn fresh each time so two goes at one
-      style are not the same band. The singer is a preferred track in a song
-      style, and only while the model writes the music.
-
-      A style overwrites the whole roster deliberately: a preset that kept
-      whatever was there before would be half one genre and half another.
-    */
-    const roster = styleRoster(next, { voice: generateForMe });
-    const entries: EnsembleEntry[] = roster.map((entry, index) => ({
-      id: index,
-      value: entry.value,
-      tier: entry.tier,
-    }));
-    // The singer the style added is the one turning generation off takes back.
-    autoVocalId.current = entries.find((entry) => hasVocalInstrument([entry.value]))?.id ?? null;
-    setEnsemble(entries);
-    setNextEntryId(entries.length);
-    /*
-      The tempo, and a different one each time — with the bar count that goes
-      with it.
-
-      Both used to come straight off the preset, so every salsa ever generated
-      ran at exactly 190bpm for exactly 168 bars. `styleTempo` picks inside the
-      genre's own range and recomputes the bars, because the bar count is
-      derived from the tempo: at a faster speed the same count is a shorter
-      song.
-    */
-    const pace = styleTempo(next);
-    const nextTempo = String(pace?.tempo ?? preset.tempo);
-    const nextMeasures = String(pace?.measures ?? preset.measures);
-    setTempo(nextTempo);
-    setMeasures(nextMeasures);
-    setTimeSigPreset(preset.timeSignature);
-    refreshDuration(nextMeasures, nextTempo, preset.timeSignature);
-    /*
-      The key, and a different one each time.
-
-      This used to set the MODE alone, so the tonic stayed at whatever the
-      field was initialised to — 0 — and every score this app generated came
-      back in C. Measured across every stored project: `fifths` was 0 without
-      exception. Two genres in one key, played by rosters that overlap by
-      design, sound like each other however different their rhythms are.
-
-      Chosen from the keys the genre is actually played in, and set into the
-      field rather than sent invisibly, so it can be read and overridden before
-      anything is generated — the same reasoning as the guest instrument, which
-      lands in the editable roster above.
-    */
-    const key = styleKey(next);
-    if (key) {
-      setKeyFifths(key.fifths);
-      setKeyMode(key.mode);
-    } else if (preset.mode) {
-      setKeyMode(preset.mode);
-    }
-  };
   /*
     The vocabularies in the order they are read, not the order they were
     written. Thirty-three styles in declaration order — waltz, jazz, pop,
     cinematic, ambient — is a list nobody can find "reggae" in. Sorted on the
-    translated label rather than the key, because `electroSwing` is not what is
-    on screen, and under the active language, because the labels a Chinese
-    reader scans are Chinese. `sortOptionsByLabel` is shared with the native
-    app, which draws the same two pickers.
+    translated label under the active language, with "No style" pinned above
+    rather than sorted in among them; `labelledOptions` is shared with the
+    native app, which draws the same two pickers.
   */
   const styleOptions = useMemo(
     () =>
-      sortOptionsByLabel(
+      labelledOptions(
         GENERATE_SCORE_STYLE_OPTIONS,
-        (value) => t(`generateScore.styleName.${value}`),
+        (value) => t(styleLabelKey(value)),
         i18n.language,
+        t('generateScore.noStyle'),
       ),
     [t, i18n.language],
   );
   const moodOptions = useMemo(
     () =>
-      sortOptionsByLabel(
+      labelledOptions(
         GENERATE_SCORE_MOOD_OPTIONS,
-        (value) => t(`generateScore.moodName.${value}`),
+        (value) => t(moodLabelKey(value)),
         i18n.language,
+        t('generateScore.noMood'),
       ),
     [t, i18n.language],
   );
@@ -522,10 +341,7 @@ export function NewProjectDialog({
     arrives: a server one version ahead of this app would otherwise print a
     brief's id at the reader, which is worse than showing one fewer brief.
   */
-  const { data: presetKeys } = useScorePresets(
-    { ...getAppServices(), token: null },
-    style || undefined,
-  );
+  const { data: presetKeys } = useScorePresets(useMusicHookContext(), style || undefined);
   const presets = (presetKeys ?? [])
     .filter((key) => i18n.exists(`generateScore.preset.${key}`))
     .map((key) => t(`generateScore.preset.${key}`));
@@ -542,151 +358,38 @@ export function NewProjectDialog({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [presetOpen]);
 
-  /*
-    What the project is called when nothing was typed.
-
-    Two names rather than one, because the two modes produce different things
-    and a reader can tell them apart in a list at a glance. It is the
-    placeholder *and* the fallback: a placeholder showing a name you do not get
-    is a label for a value that never existed.
-  */
-  const defaultTitle = t(
-    generateForMe ? 'newProject.defaultTitleGenerated' : 'newProject.defaultTitle',
-  );
-
-  const durationMeasures = Number(measures);
-  const instrumentValues = ensemble.map((entry) => entry.value);
-  const tracks = instrumentValues.map(generateScoreTrackForInstrumentValue);
+  // The placeholder *and* the fallback name — see `newProjectDefaultTitleKey`.
+  const defaultTitle = t(newProjectDefaultTitleKey(draft));
 
   const { balance } = useBalance();
   /**
-   * Bars times instruments: what the request asks for, and what the server
-   * bills. A four-bar quartet costs about four times a four-bar solo to
-   * produce, so an estimate from the bar count alone would understate every
-   * wide score four-fold.
-   *
-   * The charge counts what the model actually *produced*, which agrees whenever
-   * generation returns the requested length and is otherwise smaller — so this
-   * is never exceeded. Hence "about", and never a re-quote afterwards.
+   * Bars times instruments: what the server bills, and "about" because the
+   * charge counts what the model actually produced, which is never more.
    */
-  const estimatedCredits = estimateGenerateScoreCredits(durationMeasures, tracks.length);
+  const estimatedCredits = newProjectCreditEstimate(draft);
   /**
-   * Refused only at zero or below, matching `POST /jobs`.
-   *
-   * Deliberately not `estimatedCredits > balance`: a job may overdraw once by
-   * design, and a stricter rule here would refuse work the API would accept.
-   *
-   * A site administrator is never refused, for the same reason: the server
-   * charges them nothing and checks no balance, so gating them here would
-   * refuse work it would have accepted — and they sit at zero permanently,
-   * because nothing ever grants or spends their credits.
+   * Refused only at zero or below, matching `POST /jobs`, and never for a site
+   * administrator, whom the server charges nothing — see `isOutOfCredits`.
    */
   const siteAdmin = useSiteAdmin();
-  const outOfCredits = !siteAdmin && balance !== null && balance <= 0;
-  const generationDraft = {
-    title,
-    prompt,
-    durationMeasures,
-    instrumentValues,
-    complexity,
-    timeSignature: GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset],
-    keySignature: { fifths: keyFifths, mode: keyMode },
-    style,
-    mood,
-    tempoText: tempo,
-    lyrics,
-    lyricsTheme,
-  };
-
-  /*
-    One rule per mode, both from music_lib, so the form cannot offer a Create
-    the builder would then refuse. `outOfCredits` gates generation only — a
-    blank project costs nothing, and refusing it would refuse work the server
-    never charges for.
-  */
-  const canCreate =
-    !submitting &&
-    (generateForMe
-      ? !outOfCredits && canBuildGenerateScoreRequest(generationDraft)
-      : canBuildNewProjectScore(generationDraft));
-  // Blank is fine — no tempo is sent. Anything else that is not a positive
-  // number is what stops Generate, so say so rather than just greying it out.
-  const tempoRefused = tempo.trim() !== '' && !(Number(tempo) > 0);
-
-  /*
-    Turning the model on gives the roster somebody to sing, because a song needs
-    one and the form otherwise opens on a piano solo — leaving the reader to
-    know that a voice is filed under Ensemble before they can ask for a song.
-    Turning it off takes back exactly what was given: a voice the reader chose
-    themselves is theirs.
-  */
-  const toggleGenerateForMe = (next: boolean): void => {
-    setGenerateForMe(next);
-    if (next) {
-      if (hasVocalInstrument(instrumentValues)) return;
-      const id = nextEntryId;
-      autoVocalId.current = id;
-      setEnsemble((prev) => [{ id, value: DEFAULT_VOCAL_INSTRUMENT_VALUE }, ...prev]);
-      setNextEntryId((value) => value + 1);
-      return;
-    }
-    const id = autoVocalId.current;
-    if (id === null) return;
-    autoVocalId.current = null;
-    setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
-  };
-
-  const addInstrument = (): void => {
-    setEnsemble((prev) => [...prev, { id: nextEntryId, value: picker }]);
-    setNextEntryId((id) => id + 1);
-  };
-
-  // The floor is one: a score with no tracks is not a score, and `canGenerate`
-  // would refuse it anyway — better to disable the last remove than to let the
-  // form reach a state it cannot submit from.
-  /** An essential instrument of the chosen style, which generation cannot do without. */
-  const isLocked = (entry: EnsembleEntry): boolean =>
-    generateForMe && style !== '' && entry.tier === 'essential';
-
-  const removeInstrument = (id: number): void => {
-    if (ensemble.some((entry) => entry.id === id && isLocked(entry))) return;
-    // Removed by hand, so the toggle has nothing left to take back.
-    if (autoVocalId.current === id) autoVocalId.current = null;
-    setEnsemble((prev) => (prev.length <= 1 ? prev : prev.filter((entry) => entry.id !== id)));
-  };
+  const outOfCredits = isOutOfCredits(balance, siteAdmin);
+  const canCreate = canCreateNewProject(draft, { submitting, outOfCredits });
+  const tempoRefused = newProjectTempoRefused(draft);
+  const showLyrics = showNewProjectLyrics(draft);
+  const showLyricsTheme = showNewProjectLyricsTheme(draft);
 
   /** The first non-percussion track, which is the one the melody lands on. */
-  const melodyEntryId = firstMelodyInstrumentEntryId(ensemble);
+  const melodyEntryId = firstMelodyInstrumentEntryId(draft.ensemble);
 
   const handlePresetSelect = (text: string): void => {
-    setPrompt(text);
+    dispatch({ type: 'setPrompt', prompt: text });
     setPresetOpen(false);
   };
 
   const handleCreate = (): void => {
     if (!canCreate) return;
-    if (generateForMe) {
-      /*
-        The default title reaches the *request*, not the draft.
-
-        `buildNewProjectScore` reads the same draft and writes the title into
-        the score's own metadata, where blank has always meant "Untitled" — the
-        score's title and the project's name are different things, and only the
-        second is what this default is for.
-      */
-      const request = buildGenerateScoreRequest({
-        ...generationDraft,
-        title: title.trim() || defaultTitle,
-      });
-      if (!request) return;
-      onSubmit({ kind: 'generate', request: withGenerationVariant(request, variant) });
-      return;
-    }
-    const score = buildNewProjectScore(generationDraft);
-    if (!score) return;
-    // The score's title and the project's name are different things: the score
-    // says "Untitled", and a row in a list needs something a reader can pick out.
-    onSubmit({ kind: 'blank', title: title.trim() || defaultTitle, score });
+    const submission = newProjectSubmission(draft, defaultTitle);
+    if (submission) onSubmit(submission);
   };
 
   return (
@@ -709,7 +412,7 @@ export function NewProjectDialog({
       ]}
     >
       <div className="flex flex-col gap-4">
-        <CollapsibleReveal shown={generateForMe}>
+        <CollapsibleReveal shown={generating}>
           {outOfCredits ? (
             <p className="text-sm text-theme-text-secondary">
               {t('generate.outOfCreditsBefore')}{' '}
@@ -732,8 +435,10 @@ export function NewProjectDialog({
         <label className="flex flex-col gap-1">
           <span className="text-xs text-theme-text-secondary">{t('generateScore.titleField')}</span>
           <Input
-            value={title}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+            value={draft.title}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              dispatch({ type: 'setTitle', title: e.target.value })
+            }
             placeholder={defaultTitle}
             aria-label={t('generateScore.titleField')}
             className="px-2 py-1.5 text-sm"
@@ -746,8 +451,8 @@ export function NewProjectDialog({
             and appears with it; everything below stays in both modes. */}
         <label className="flex items-center gap-3">
           <Switch
-            checked={generateForMe}
-            onCheckedChange={toggleGenerateForMe}
+            checked={generating}
+            onCheckedChange={(next) => dispatch({ type: 'setGenerating', generating: next })}
             aria-label={t('newProject.generateForMe')}
           />
           <span className="flex flex-col">
@@ -758,11 +463,7 @@ export function NewProjectDialog({
           </span>
         </label>
 
-        <CollapsibleReveal
-          shown={generateForMe}
-          role="group"
-          aria-label={t('newProject.aiSettings')}
-        >
+        <CollapsibleReveal shown={generating} role="group" aria-label={t('newProject.aiSettings')}>
           {/* The caption sits above the whole row rather than above the prompt
               alone, so the Presets button starts at the top of the prompt box
               instead of a caption's height above it. Its accessible name comes
@@ -772,8 +473,8 @@ export function NewProjectDialog({
             <div className="flex items-start gap-2">
               <div className="flex-1">
                 <TextArea
-                  value={prompt}
-                  onChange={setPrompt}
+                  value={draft.prompt}
+                  onChange={(text) => dispatch({ type: 'setPrompt', prompt: text })}
                   rows={3}
                   textareaProps={{ 'aria-label': 'Prompt' }}
                 />
@@ -825,8 +526,8 @@ export function NewProjectDialog({
 
           <div className="flex gap-2">
             <Select
-              value={style === '' ? NONE_VALUE : style}
-              onValueChange={(v) => applyStyle(v === NONE_VALUE ? '' : v)}
+              value={optionalToPicker(style)}
+              onValueChange={(v) => dispatch({ type: 'applyStyle', style: optionalFromPicker(v) })}
             >
               <SelectTrigger
                 aria-label={t('generateScore.style')}
@@ -835,17 +536,16 @@ export function NewProjectDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE_VALUE}>{t('generateScore.noStyle')}</SelectItem>
-                {styleOptions.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {t(`generateScore.styleName.${s}`)}
+                {styleOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select
-              value={mood === '' ? NONE_VALUE : mood}
-              onValueChange={(v) => setMood(v === NONE_VALUE ? '' : v)}
+              value={optionalToPicker(draft.mood)}
+              onValueChange={(v) => dispatch({ type: 'setMood', mood: optionalFromPicker(v) })}
             >
               <SelectTrigger
                 aria-label={t('generateScore.mood')}
@@ -854,17 +554,18 @@ export function NewProjectDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE_VALUE}>{t('generateScore.noMood')}</SelectItem>
-                {moodOptions.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {t(`generateScore.moodName.${m}`)}
+                {moodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select
-              value={complexity}
-              onValueChange={(v) => setComplexity(v as GenerateScoreComplexity)}
+              value={draft.complexity}
+              onValueChange={(v) =>
+                dispatch({ type: 'setComplexity', complexity: v as GenerateScoreComplexity })
+              }
             >
               <SelectTrigger
                 aria-label={t('generateScore.complexity')}
@@ -875,12 +576,15 @@ export function NewProjectDialog({
               <SelectContent>
                 {GENERATE_SCORE_COMPLEXITY_OPTIONS.map((c) => (
                   <SelectItem key={c} value={c}>
-                    {t(`generateScore.complexityName.${c}`)}
+                    {t(complexityLabelKey(c))}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={variant} onValueChange={setVariant}>
+            <Select
+              value={draft.variant}
+              onValueChange={(v) => dispatch({ type: 'setVariant', variant: v })}
+            >
               <SelectTrigger
                 aria-label={t('generateScore.model')}
                 className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
@@ -900,11 +604,11 @@ export function NewProjectDialog({
           {/* Only where somebody can sing them: syllables under a bass line are
               not a lyric. The request omits the field entirely otherwise, which
               music_lib enforces rather than trusting this to stay in step. */}
-          {hasVocalInstrument(instrumentValues) ? (
+          {showLyrics ? (
             <label className="flex items-center gap-3">
               <Switch
-                checked={lyrics}
-                onCheckedChange={setLyrics}
+                checked={draft.lyrics}
+                onCheckedChange={(next) => dispatch({ type: 'setLyrics', lyrics: next })}
                 aria-label={t('newProject.writeLyrics')}
               />
               <span className="flex flex-col">
@@ -922,16 +626,18 @@ export function NewProjectDialog({
               nobody asked for is the disagreement this field was once left out
               to avoid, and music_lib drops it from the request on the same
               rule rather than trusting this to stay in step. */}
-          {hasVocalInstrument(instrumentValues) && lyrics ? (
+          {showLyricsTheme ? (
             <label className="flex flex-col gap-1">
               <span className="text-xs text-theme-text-secondary">
                 {t('newProject.lyricsTheme')}
               </span>
               <Input
-                value={lyricsTheme}
+                value={draft.lyricsTheme}
                 placeholder={t('newProject.lyricsThemePlaceholder')}
                 aria-label={t('newProject.lyricsTheme')}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setLyricsTheme(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  dispatch({ type: 'setLyricsTheme', lyricsTheme: e.target.value })
+                }
                 className={TEXT_INPUT_CLASS}
               />
             </label>
@@ -959,7 +665,11 @@ export function NewProjectDialog({
                 <InstrumentSelectItems />
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" onClick={addInstrument}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => dispatch({ type: 'addInstrument', value: picker })}
+            >
               {t('common.add')}
             </Button>
           </div>
@@ -968,12 +678,12 @@ export function NewProjectDialog({
               the one the melody is written for, so it is labelled rather than
               left to be inferred from position. */}
           <ol className="flex flex-col gap-1">
-            {ensemble.map((entry, index) => (
+            {draft.ensemble.map((entry, index) => (
               <li key={entry.id} className="flex items-center justify-between gap-2">
                 <Text size="sm">
                   {index + 1}. {instrumentLabelFor(entry.value)}
                   {entry.id === melodyEntryId ? ` ${t('generateScore.melody')}` : ''}
-                  {isLocked(entry) ? ` ${t('generateScore.essential')}` : ''}
+                  {isNewProjectEntryLocked(draft, entry) ? ` ${t('generateScore.essential')}` : ''}
                 </Text>
                 <Button
                   type="button"
@@ -982,8 +692,8 @@ export function NewProjectDialog({
                   aria-label={t('generateScore.removeInstrument', {
                     instrument: instrumentLabelFor(entry.value),
                   })}
-                  disabled={ensemble.length <= 1 || isLocked(entry)}
-                  onClick={() => removeInstrument(entry.id)}
+                  disabled={!canRemoveNewProjectEntry(draft, entry)}
+                  onClick={() => dispatch({ type: 'removeInstrument', id: entry.id })}
                 >
                   {t('common.remove')}
                 </Button>
@@ -995,29 +705,29 @@ export function NewProjectDialog({
         <div className="flex gap-2">
           <LabeledInput
             label={t('generateScore.measures')}
-            value={measures}
-            onChange={changeMeasures}
+            value={draft.measuresText}
+            onChange={(text) => dispatch({ type: 'setBars', text })}
             min={1}
           />
           {/* Not while words are being written: a song's length is its form,
               and the lyric follows verses and choruses rather than a clock. */}
-          {generateForMe && hasVocalInstrument(instrumentValues) && lyrics ? null : (
+          {showNewProjectDuration(draft) ? (
             <LabeledInput
               label={t('generateScore.duration')}
               type="text"
-              value={durationText}
-              onChange={changeDuration}
+              value={draft.durationText}
+              onChange={(text) => dispatch({ type: 'setDuration', text })}
               // Tidy what was typed ("45" -> "0:45") to what the bars now play.
-              onBlur={() => refreshDuration(measures, tempo, timeSigPreset)}
-              {...(parseDuration(durationText) === null
+              onBlur={() => dispatch({ type: 'tidyDuration' })}
+              {...(newProjectDurationRefused(draft)
                 ? { hint: t('generateScore.durationInvalid') }
                 : {})}
             />
-          )}
+          ) : null}
           <LabeledInput
             label={t('generateScore.tempo')}
-            value={tempo}
-            onChange={changeTempo}
+            value={draft.tempoText}
+            onChange={(text) => dispatch({ type: 'setTempo', text })}
             min={1}
             // Left blank the tempo is simply not sent; typed wrong it blocks
             // Generate, and a disabled button with no reason is the trap this
@@ -1027,7 +737,10 @@ export function NewProjectDialog({
         </div>
 
         <div className="flex gap-2">
-          <Select value={String(keyFifths)} onValueChange={(v) => setKeyFifths(Number(v))}>
+          <Select
+            value={String(draft.keySignature.fifths)}
+            onValueChange={(v) => dispatch({ type: 'setKey', fifths: Number(v) })}
+          >
             <SelectTrigger
               aria-label={t('generateScore.key')}
               className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
@@ -1042,7 +755,10 @@ export function NewProjectDialog({
               ))}
             </SelectContent>
           </Select>
-          <Select value={keyMode} onValueChange={(v) => setKeyMode(v as KeySignature['mode'])}>
+          <Select
+            value={draft.keySignature.mode}
+            onValueChange={(v) => dispatch({ type: 'setMode', mode: v as KeySignature['mode'] })}
+          >
             <SelectTrigger
               aria-label={t('generateScore.mode')}
               className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}
@@ -1055,7 +771,10 @@ export function NewProjectDialog({
               <SelectItem value="minor">{t('key.minor')}</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={timeSigPreset} onValueChange={changeTimeSig}>
+          <Select
+            value={draft.meter}
+            onValueChange={(meter) => dispatch({ type: 'setMeter', meter })}
+          >
             <SelectTrigger
               aria-label={t('generateScore.timeSignature')}
               className={cn(SELECT_TRIGGER_CLASS, 'flex-1')}

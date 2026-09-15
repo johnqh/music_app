@@ -48,10 +48,16 @@ import {
   Tooltip,
   cn,
 } from '@sudobility/components';
-import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
-import { playbackController } from '@sudobility/music_lib';
+import {
+  PLAYBACK_SPEEDS,
+  TempoMap,
+  formatTimecode,
+  synthLoadPercent,
+  transportExtent,
+} from '@sudobility/music_types';
+import { commitOpeningTempoText, openingTempoBpm, playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
-import { barBeatForTick, formatBarBeat, setOpeningTempo } from '@sudobility/music_lib';
+import { barBeatForTick, formatBarBeat } from '@sudobility/music_lib';
 import { usePlaybackPosition, usePlaybackReadout } from '@/features/score-editor/usePlayback';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
@@ -81,9 +87,6 @@ export type TransportBarProps = {
   onToggleKeyboard?: () => void;
 };
 
-/** Spec §22: "Speeds: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x." */
-const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-
 /** Icon-only transport controls, all at the bar's shared control height. */
 const ICON_BUTTON_CLASS = ICON_CONTROL_CLASS;
 
@@ -92,16 +95,6 @@ const TOGGLE_BUTTON_CLASS = cn(
   ICON_CONTROL_CLASS,
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
-
-/** `M:SS.d` (minutes, zero-padded seconds, tenths) — tenths update ~3x/sec during playback, making the actual playback rate visible against a wall clock. */
-function formatTimecode(seconds: number): string {
-  const clamped = Math.max(0, seconds);
-  const minutes = Math.floor(clamped / 60);
-  const rest = clamped - minutes * 60;
-  const whole = Math.floor(rest);
-  const tenths = Math.floor((rest - whole) * 10);
-  return `${minutes}:${String(whole).padStart(2, '0')}.${tenths}`;
-}
 
 /**
  * The three position-driven readouts, each isolated as its own subscriber.
@@ -140,19 +133,24 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
     );
   }
 
-  const percent = load.fraction === null ? null : Math.round(load.fraction * 100);
+  // Whole, and only while downloading: the synth digesting the font reports no
+  // fraction, and a percentage through that half would claim progress the
+  // engine has not made. The rule is music_types', shared with the native bar.
+  const percent = synthLoadPercent(load);
   return (
     <div
       role="status"
       aria-live="polite"
       className="flex items-center gap-2 whitespace-nowrap text-xs text-theme-text-secondary"
     >
-      <span>Preparing instruments{percent === null ? '' : ` ${percent}%`}</span>
+      <span>
+        {percent === null ? t('transport.preparingUnknown') : t('transport.preparing', { percent })}
+      </span>
       <div
         // Determinate while downloading; the synth digesting the font reports
         // nothing, so that half is a moving bar rather than a false percentage.
         role="progressbar"
-        aria-label={t('transport.preparing')}
+        aria-label={t('transport.preparingUnknown')}
         {...(percent === null
           ? {}
           : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
@@ -190,10 +188,10 @@ function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScor
   const playbackState = store((s) => s.state);
   const preparing = store((s) => s.synthLoad.status === 'loading');
   const label = preparing
-    ? t('transport.preparing')
+    ? t('transport.preparingUnknown')
     : playbackState === 'playing'
-      ? t('player.pause')
-      : t('player.play');
+      ? t('transport.pause')
+      : t('transport.play');
 
   return (
     <Tooltip content={label}>
@@ -358,13 +356,15 @@ export function TransportBar({
   // Rounded for display as well as on commit: a score can arrive carrying a
   // fractional tempo from a MIDI file or a detected one from audio import, and
   // "119.87421 BPM" in the transport is noise, not precision.
-  const currentBpm = Math.round(score?.tempoMap[0]?.bpm ?? 120);
-  const maxTick = useMemo(() => (score ? Math.max(1, scoreEndTick(score)) : 1), [score]);
+  const currentBpm = openingTempoBpm(score);
+  // To the end of the *longest* track, floored at one tick — music_types' rule,
+  // which the native bar used to get wrong by measuring the first track only.
+  const { maxTick, totalSeconds } = useMemo(() => transportExtent(score), [score]);
   // Score-time seconds via the same TempoMap the playback engine schedules
-  // with, so this readout advances exactly 1 second per wall-clock second at
-  // 1x speed — a live check that playback runs at the score's real tempo.
+  // with, so the elapsed readout advances exactly 1 second per wall-clock
+  // second at 1x speed — a live check that playback runs at the score's real
+  // tempo.
   const tempoMap = useMemo(() => (score ? new TempoMap(score.tempoMap, score.ppq) : null), [score]);
-  const totalSeconds = tempoMap ? tempoMap.ticksToSeconds(maxTick) : 0;
 
   const [tempoDraft, setTempoDraft] = useState('');
   const [editingTempo, setEditingTempo] = useState(false);
@@ -377,10 +377,12 @@ export function TransportBar({
 
   const commitTempo = (): void => {
     setEditingTempo(false);
-    // Whole numbers only. The field is a number input, so a stepper or a paste
-    // can put "104.5" in it, and a tempo the transport rounds for display but
-    // stores unrounded reads back differently the next time it is opened.
-    setOpeningTempo(store, Math.round(Number(tempoDraft)));
+    // The field's rule, shared with the native bar: blank is no change, the
+    // rest is rounded (a stepper or a paste can put "104.5" here, and a tempo
+    // shown rounded but stored unrounded reads back differently next time) and
+    // bounded to the tempos the validator accepts, and the tempo already there
+    // is not an undo entry. `Number(draft)` made an emptied field tempo 0.
+    commitOpeningTempoText(store, tempoDraft);
   };
 
   const handleTempoKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -557,7 +559,7 @@ export function TransportBar({
             apply at all: Radix's default `item-aligned` positioning ignores it.
           */}
           <SelectContent position="popper" side="top" sideOffset={4} className="relative">
-            {SPEED_OPTIONS.map((speed) => (
+            {PLAYBACK_SPEEDS.map((speed) => (
               <SelectItem key={speed} value={String(speed)}>
                 {speed}x
               </SelectItem>
@@ -567,7 +569,7 @@ export function TransportBar({
       </Tooltip>
 
       <div className="flex w-[120px] items-center gap-2">
-        <span className="text-sm text-foreground">Vol</span>
+        <span className="text-sm text-foreground">{t('transport.volume')}</span>
         <LevelSlider
           label={t('transport.masterVolume')}
           value={volumeDraft}

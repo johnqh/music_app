@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@sudobility/components';
+import { parseNumericDraft } from '@sudobility/music_types';
 import { PanSlider, VolumeSlider } from '@/features/tracks/mixer-controls';
 import { FIELD_LABEL_CLASS, MIXED, MIXED_VALUE, SELECT_CLASS, TEXT_INPUT_CLASS } from './shared';
 import type { MixedOr } from './shared';
@@ -102,9 +103,11 @@ export function MixedNumberField({
     setDraft(value === MIXED || value === null ? '' : String(value));
   }, [value]);
 
+  // Blank is "no change", never 0 — `Number('')` being 0 is how an emptied
+  // velocity field once wrote silence. Bounding is the command's job.
   const commit = (): void => {
-    const parsed = Number(draft);
-    if (draft.trim() !== '' && Number.isFinite(parsed)) onCommit(parsed);
+    const parsed = parseNumericDraft(draft);
+    if (parsed !== null) onCommit(parsed);
   };
 
   return (

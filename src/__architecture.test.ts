@@ -30,11 +30,9 @@ const ALLOWED_NON_UI = new Set([
   'src/config/initialize.ts',
   // i18n wiring and the copy the library's warnings are phrased in.
   'src/i18n.ts',
-  'src/i18n/lib-copy.ts',
+  'src/i18n/library-copy.ts',
   // Theme application: reads and writes the document, so it is UI.
   'src/app/theme.ts',
-  // Command labels are UI copy, keyed by the commands they name.
-  'src/features/score-editor/command-labels.ts',
   // The formats named on the documentation page, with the copy key that
   // describes each. What the app can actually read and write lives in
   // music_io; this is the list a reader is shown.
@@ -53,7 +51,6 @@ const ALLOWED_NON_UI = new Set([
   // replays what music_drawing's `ScoreCanvas` hands it — and it is the part
   // that cannot live in a platform-free package, because it touches the DOM.
   'src/features/score-editor/web-canvas-surface.ts',
-  'src/features/piano-keyboard/playing-pitches.ts',
   // The inspector's shared vocabulary: the MIXED sentinel and the class names
   // that keep a column of controls the same height. Presentation, not logic.
   'src/components/inspector/shared.ts',

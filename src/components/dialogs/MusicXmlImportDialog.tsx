@@ -14,7 +14,7 @@
  * a `<label>`, so it can't reproduce that association without extra
  * plumbing for no behavioral benefit.
  */
-import { musicXmlWarnings } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoBox, Stack, Text } from '@sudobility/components';
@@ -56,7 +56,8 @@ export function MusicXmlImportDialog({
 }: MusicXmlImportDialogProps) {
   const { t } = useTranslation();
   const service = musicXmlService ?? {
-    import: (text: string) => getAppServices().io.openMusicXml(text, musicXmlWarnings()),
+    import: (text: string) =>
+      getAppServices().io.openMusicXml(text, libraryCopy.musicXmlWarnings()),
   };
 
   const [fileName, setFileName] = useState<string | null>(null);

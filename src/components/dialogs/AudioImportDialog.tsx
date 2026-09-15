@@ -13,6 +13,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AUDIO_IMPORT_EXTENSIONS, AUDIO_MIME, isLongAudio } from '@sudobility/music_io';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 
 export type AudioImportDialogProps = {
@@ -29,13 +30,19 @@ export type AudioImportDialogProps = {
 };
 
 /**
- * Longer than this and the dialog says so before uploading.
- *
- * A warning rather than a choice: trimming would mean decoding the audio here,
- * which is the one thing that would put a codec back in this bundle. The server
- * enforces its own maximum and refuses anything past it.
+ * What the picker offers: music_io's list, which the native picker offers too,
+ * by extension and by MIME type. Warned about past `isLongAudio` rather than
+ * refused — trimming would mean decoding the audio here, which is the one thing
+ * that would put a codec back in this bundle, and the server enforces its own
+ * maximum.
  */
-const LONG_AUDIO_BYTES = 12 * 1024 * 1024;
+const ACCEPT = [
+  ...AUDIO_IMPORT_EXTENSIONS.map((ext) => `.${ext}`),
+  ...new Set(Object.values(AUDIO_MIME)),
+].join(',');
+
+/** The formats as a reader names them, for the description. */
+const FORMAT_NAMES = AUDIO_IMPORT_EXTENSIONS.map((ext) => ext.toUpperCase()).join(', ');
 
 /** Roughly, from the file size — no decoding, so this cannot be exact. */
 function roughMinutes(bytes: number): number {
@@ -54,13 +61,13 @@ export function AudioImportDialog({
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
 
-  const long = file !== null && file.size > LONG_AUDIO_BYTES;
+  const long = file !== null && isLongAudio(file.size);
 
   return (
     <FileImportModal
       open={open}
       title={t('importAudio.title')}
-      accept=".wav,.mp3,.mpa,audio/wav,audio/mpeg"
+      accept={ACCEPT}
       fileKind={t('importAudio.fileKind')}
       fileName={file?.name ?? null}
       onFile={setFile}
@@ -75,14 +82,7 @@ export function AudioImportDialog({
         setFile(null);
         onClose();
       }}
-      description={
-        <>
-          Turns a recording into a project, split into parts — vocals, drums, bass, guitar, piano
-          and the rest, each on its own track. It runs on the server and takes a few minutes, so the
-          project appears straight away and fills itself in when it is done. Expect a sketch to
-          edit, not a copy of the record. WAV, MP3 and MPA.
-        </>
-      }
+      description={t('importAudio.description', { formats: FORMAT_NAMES })}
     >
       {!canTranscribe && (
         <p role="status" className="text-sm text-theme-text-secondary">

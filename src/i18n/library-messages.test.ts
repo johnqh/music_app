@@ -15,7 +15,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { libraryMessages } from './lib-copy';
+import { libraryCopy } from './library-copy';
+
+const libraryMessages = () => libraryCopy.library();
 
 function localeBlock(lang: string): Record<string, string> {
   const json = JSON.parse(readFileSync(`public/locales/${lang}/app.json`, 'utf8')) as {

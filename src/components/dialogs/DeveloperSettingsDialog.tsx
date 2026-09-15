@@ -29,7 +29,7 @@ import { variants } from '@sudobility/design';
 import { createEmptyScore } from '@sudobility/music_lib';
 import type { Clef } from '@sudobility/music_types';
 import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_types';
-import { reportError } from '@sudobility/music_lib';
+import { LEGACY_FONT_SIZE_KEY, PREFS_KEY, reportError } from '@sudobility/music_lib';
 import { useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -89,7 +89,12 @@ export function DeveloperSettingsDialog({
   const handleResetDatabase = async (): Promise<void> => {
     setConfirmingReset(false);
     try {
-      window.localStorage.removeItem('scoresmith.prefs.v1');
+      // The key is music_lib's, which owns the prefs format; a copy of the
+      // string here would stop clearing anything the day that one moved. The
+      // font size's old key goes too, or `loadPrefs` would read it back as a
+      // fallback and the reset would leave that one preference standing.
+      window.localStorage.removeItem(PREFS_KEY);
+      window.localStorage.removeItem(LEGACY_FONT_SIZE_KEY);
       setResetDone(true);
     } catch (error) {
       reportError(error, { context: t('errors.resetDatabase'), store });

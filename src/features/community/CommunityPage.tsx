@@ -18,7 +18,7 @@ import { Card, Heading, SearchInput, Section, Stack, Text } from '@sudobility/co
 import { EmptyState } from '@sudobility/building_blocks';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 import type { CommunityItem } from '@sudobility/music_types';
-import { filterCommunity } from '@sudobility/music_types';
+import { communityItemTitle, communityListState } from '@sudobility/music_types';
 import { getAppServices } from '@/config/initialize';
 
 export function CommunityPage() {
@@ -44,11 +44,13 @@ export function CommunityPage() {
   }, []);
 
   /*
-    The predicate is music_types' — both apps show this list, and a filter that
-    differed between them would mean the same search found different music
-    depending on which app you ran it in.
+    Which state to draw, and the rows to draw in it, are music_types' — both
+    apps show this list, and a filter that differed between them would mean
+    the same search found different music depending on which app you ran it
+    in. The three empty states stay distinct there too: a failed load, a
+    community with nothing in it, and a search that matched nothing.
   */
-  const visible = useMemo(() => filterCommunity(items ?? [], query), [items, query]);
+  const list = useMemo(() => communityListState(items, query, failed), [items, query, failed]);
 
   return (
     <Section spacing="xl" className="mx-auto max-w-3xl">
@@ -70,12 +72,12 @@ export function CommunityPage() {
         inputProps={{ 'aria-label': t('community.searchLabel'), type: 'search' }}
       />
 
-      {failed && (
+      {list.kind === 'failed' && (
         <Text as="p" size="sm" color="muted" className="mt-6">
           {t('community.loadFailed')}
         </Text>
       )}
-      {items && items.length === 0 && (
+      {list.kind === 'empty' && (
         <div className="mt-6">
           <EmptyState
             message={t('community.empty')}
@@ -86,7 +88,7 @@ export function CommunityPage() {
       )}
       {/* Distinct from the empty community above: a search that matches nothing
           must not read as "nobody has shared anything". */}
-      {items && items.length > 0 && visible.length === 0 && (
+      {list.kind === 'noMatch' && (
         <div className="mt-6">
           <EmptyState
             message={t('community.noMatch', { query })}
@@ -97,11 +99,13 @@ export function CommunityPage() {
       )}
 
       <Stack direction="vertical" spacing="sm" className="mt-6">
-        {visible.map((item) => (
+        {list.visible.map((item) => (
           <LocalizedLink key={item.publicId} to={`/p/${item.publicId}`}>
             <Card variant="bordered" padding="sm" className="hover:bg-theme-hover-bg">
               <div className="flex items-baseline justify-between gap-3">
-                <Text weight="medium">{item.publicName}</Text>
+                {/* The snapshot's own name when the public title is blank: a row
+                    published before public titles existed is not untitled. */}
+                <Text weight="medium">{communityItemTitle(item)}</Text>
                 <Text size="sm" color="muted">
                   {t('community.sharedBy', { name: item.publisherName })} ·{' '}
                   {new Date(item.createdAt).toLocaleDateString()}

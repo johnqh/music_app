@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  CanvasScoreRenderer,
   computeLayout,
   createAppStore,
   PAGE_MARGIN_MM,
@@ -227,6 +228,51 @@ describe('print-only derivations', () => {
     await user.click(screen.getByRole('option', { name: store.getState().score!.tracks[0].name }));
 
     expect(drawnText(container)).toContain(CUE_SOURCE_NAME);
+  });
+
+  it('draws notes under an octave bracket where they are written', () => {
+    // The model stores sounding pitch; an `8va` note is written an octave
+    // below it. The print view drew the stored score, so a bracketed passage
+    // printed an octave high under its own bracket.
+    const store = createAppStore({ context: testStoreContext() });
+    const base = twoTrackScore();
+    const first = base.tracks[0].measures[0].voices[0].events.find((e) => 'pitch' in e)!;
+    store.getState().setScore({
+      ...base,
+      tracks: base.tracks.map((t, i) =>
+        i !== 0
+          ? t
+          : {
+              ...t,
+              measures: t.measures.map((m, j) =>
+                j !== 0
+                  ? m
+                  : {
+                      ...m,
+                      voices: m.voices.map((v, k) =>
+                        k !== 0
+                          ? v
+                          : {
+                              ...v,
+                              events: v.events.map((e) =>
+                                e.id === first.id
+                                  ? { ...e, ottavaStart: '8va', ottavaStop: true }
+                                  : e,
+                              ),
+                            },
+                      ),
+                    },
+              ),
+            },
+      ),
+    } as never);
+    const render_ = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<PrintView store={store} onBack={() => {}} />);
+    const drawn = render_.mock.calls[0]![0] as ReturnType<typeof twoTrackScore>;
+    const drawnFirst = drawn.tracks[0].measures[0].voices[0].events.find((e) => e.id === first.id);
+    const stored = (first as { pitch: { octave: number } }).pitch.octave;
+    expect((drawnFirst as { pitch: { octave: number } }).pitch.octave).toBe(stored - 1);
+    render_.mockRestore();
   });
 
   it('leaves the score in the store unmarked', () => {

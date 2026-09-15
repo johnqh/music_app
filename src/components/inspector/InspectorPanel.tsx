@@ -44,7 +44,7 @@
  */
 import { GenerationChoices } from '@/features/generation/GenerationChoices';
 import type { GenerationChoicesProps } from '@/features/generation/GenerationChoices';
-import { commandLabel } from '@/features/score-editor/command-labels';
+import { commandLabel } from '@sudobility/music_lib';
 import { outOfRangeNoteIds } from '@sudobility/music_drawing';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
 import {
@@ -63,14 +63,9 @@ import {
 } from '@/components/inspector/controls';
 import {
   ACCIDENTAL_PICKER,
-  ARTICULATION_OPTIONS,
-  CLEFS,
-  CUSTOM_DURATION,
   FIELD_HEIGHT_CLASS,
   FIELD_LABEL_CLASS,
   MIXED,
-  NO_DYNAMIC,
-  PITCH_STEPS,
   TEXT_INPUT_CLASS,
   commonValue,
 } from '@/components/inspector/shared';
@@ -94,30 +89,52 @@ import type {
   Dynamic,
   Clef,
   KeySignature,
+  KeySignatureOption,
   NoteEvent,
   Pitch,
   PitchStep,
   DurationName,
   TimeSignature,
 } from '@sudobility/music_types';
-import { DYNAMICS, isNoteEvent, midiToPitch, pitchToString } from '@sudobility/music_types';
 import {
+  ARTICULATION_OPTIONS,
+  CLEFS,
+  CUSTOM_DURATION,
+  DYNAMIC_OPTIONS,
+  KEY_MODE_OPTIONS,
+  MAX_OCTAVE,
+  MAX_TIME_SIG_NUMERATOR,
+  MIN_OCTAVE,
+  NO_MARK,
+  PITCH_STEPS,
+  TIME_SIG_DENOMINATOR_OPTIONS,
+  barNumberAt,
+  durationFieldState,
+  instrumentPickerFor,
+  isNoteEvent,
+  isPercussionTrack,
+  midiToPitch,
+  pitchToString,
+} from '@sudobility/music_types';
+import {
+  INSPECTOR_TABS,
+  INSPECTOR_TAB_LABEL_KEY,
+  canReplace,
+  defaultInspectorTab,
   findEvent,
   findMeasure,
   findTrack,
   replacementRegion,
   estimateReplacementCredits,
   selectActiveTrackId,
-  isPercussionTrack,
+  selectEditLocked,
   durationLabel,
-  durationNameForTicks,
   keySignatureOptions,
+  noteTextFieldsVisible,
   DURATION_NAMES,
-  INSTRUMENT_OPTIONS,
-  KIT_OPTIONS,
-  kitOptionValue,
   selectSelectedTrack,
 } from '@sudobility/music_lib';
+import type { InspectorTab } from '@sudobility/music_lib';
 import type { TrackMixPatch } from '@sudobility/music_lib';
 import {
   changeAccidental as dispatchAccidental,
@@ -164,9 +181,9 @@ export type InspectorPanelProps = {
 /**
  * The Replace button each tab carries, plus its modal.
  *
- * Disabled when `replacementRegion` returns null — nothing selected for that
- * scope — which is the single source of truth for "is there anything to
- * replace", shared with the region the job will actually use.
+ * Disabled unless `canReplace` says so: there is a region to replace for that
+ * scope (`replacementRegion`, the same region the job will use) and the
+ * transport is not playing, since the result is written into the score.
  */
 function ReplaceButton({
   store,
@@ -183,6 +200,7 @@ function ReplaceButton({
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const activeTrackId = store(selectActiveTrackId);
+  const available = store((s) => canReplace(s, scope));
 
   const region = score ? replacementRegion(score, selection, activeTrackId, scope) : null;
   const trackLabel =
@@ -195,7 +213,7 @@ function ReplaceButton({
       <Button
         type="button"
         variant="outline"
-        disabled={region === null}
+        disabled={!available}
         onClick={() => setOpen(true)}
         className="w-full px-3 py-1.5 text-sm"
       >
@@ -217,8 +235,6 @@ function ReplaceButton({
   );
 }
 
-type InspectorTab = 'score' | 'note' | 'measure' | 'track';
-
 type TabProps = {
   store: EditorStoreApi;
   onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
@@ -229,8 +245,14 @@ function NoteTab({ store, onReplace }: TabProps) {
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const pitchDisplay = store((s) => s.pitchDisplay);
-  // Content is immutable while the transport plays; these write notes.
-  const isPlayingNow = store((s) => s.state === 'playing');
+  /*
+    Content is immutable while the transport plays, and every field on this tab
+    writes notes — so the whole tab locks, not only the text fields (decision 4
+    of the parity plan; the native Note tab does the same). The store refuses
+    the edits regardless; a field that looks live and then does nothing is the
+    worse half of that.
+  */
+  const locked = store(selectEditLocked);
 
   if (!score)
     return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
@@ -248,11 +270,11 @@ function NoteTab({ store, onReplace }: TabProps) {
   const step = commonValue(notes.map((n) => shown(n).step));
   const accidentalStr = commonValue(notes.map((n) => String(shown(n).accidental)));
   const octave = commonValue(notes.map((n) => shown(n).octave));
-  const durationTicks = commonValue(notes.map((n) => n.durationTicks));
+  const duration = durationFieldState(notes, score.ppq);
   const startTick = commonValue(notes.map((n) => n.startTick));
   const velocity = commonValue(notes.map((n) => n.velocity));
-  const articulation = commonValue(notes.map((n) => n.articulation ?? 'none'));
-  const dynamic = commonValue(notes.map((n) => n.dynamic ?? NO_DYNAMIC));
+  const articulation = commonValue(notes.map((n) => n.articulation ?? NO_MARK));
+  const dynamic = commonValue(notes.map((n) => n.dynamic ?? NO_MARK));
   const trackName = commonValue(notes.map((n) => findTrack(score, n.trackId)?.name ?? '?'));
   const tieStart = commonValue(notes.map((n) => n.tieStart ?? false));
   const tieStop = commonValue(notes.map((n) => n.tieStop ?? false));
@@ -280,19 +302,24 @@ function NoteTab({ store, onReplace }: TabProps) {
       <div className="flex gap-2">
         <MixedSelect
           value={step}
-          ariaLabel="Pitch step"
+          ariaLabel={t('inspector.pitchStep')}
+          disabled={locked}
           options={PITCH_STEPS.map((s) => ({ value: s, label: s }))}
           onChange={(value) => applyPitchPatch({ step: value })}
         />
         <MixedSelect
           value={accidentalStr}
-          ariaLabel="Accidental"
+          ariaLabel={t('editor.accidental')}
+          disabled={locked}
           options={ACCIDENTAL_PICKER.map((a) => ({ value: String(a.value), label: a.label }))}
           onChange={(value) => dispatchAccidental(store, Number(value) as Accidental)}
         />
         <MixedNumberField
           label={t('inspector.octave')}
           value={octave}
+          min={MIN_OCTAVE}
+          max={MAX_OCTAVE}
+          disabled={locked}
           onCommit={(v) => applyPitchPatch({ octave: v })}
         />
       </div>
@@ -302,28 +329,31 @@ function NoteTab({ store, onReplace }: TabProps) {
         "480" is not what the reader is looking at. `durationNameForTicks`
         answers null for a length no single notehead spells — a tie join or an
         import can produce one — and the picker says so rather than relabelling
-        it as the nearest name.
+        it as the nearest name. `durationFieldState` keeps a selection that
+        agrees on such a length ("custom") apart from one that disagrees
+        ("mixed").
       */}
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>{t('inspector.duration')}</span>
         <MixedSelect
           value={
-            durationTicks === MIXED
-              ? MIXED
-              : durationTicks === null
-                ? null
-                : (durationNameForTicks(durationTicks, score.ppq) ?? CUSTOM_DURATION)
+            duration === null
+              ? null
+              : duration.kind === 'mixed'
+                ? MIXED
+                : duration.kind === 'custom'
+                  ? CUSTOM_DURATION
+                  : duration.name
           }
           ariaLabel={t('inspector.duration')}
+          disabled={locked}
           options={[
             ...DURATION_NAMES.map((name) => ({ value: name, label: durationLabel(name) })),
-            ...(durationTicks !== MIXED &&
-            durationTicks !== null &&
-            durationNameForTicks(durationTicks, score.ppq) === null
+            ...(duration?.kind === 'custom'
               ? [
                   {
                     value: CUSTOM_DURATION,
-                    label: t('inspector.customDuration', { ticks: durationTicks }),
+                    label: t('inspector.customDuration', { ticks: duration.ticks }),
                   },
                 ]
               : []),
@@ -345,6 +375,7 @@ function NoteTab({ store, onReplace }: TabProps) {
         <BarBeatField
           score={score}
           tick={startTick}
+          disabled={locked}
           onCommit={(tick) => moveNoteToTick(store, notes[0].id, tick)}
         />
       ) : null}
@@ -354,16 +385,19 @@ function NoteTab({ store, onReplace }: TabProps) {
         value={velocity}
         min={0}
         max={127}
-        onCommit={(v) => dispatchVelocity(store, Math.max(0, Math.min(127, Math.round(v))))}
+        disabled={locked}
+        // `changeVelocity` rounds and clamps to 0-127 itself.
+        onCommit={(v) => dispatchVelocity(store, v)}
       />
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>{t('inspector.articulation')}</span>
         <MixedSelect
           value={articulation}
-          ariaLabel="Articulation"
+          ariaLabel={t('inspector.articulation')}
+          disabled={locked}
           options={ARTICULATION_OPTIONS.map((a) => ({ value: a.value, label: t(a.labelKey) }))}
-          onChange={(value) => dispatchArticulation(store, value === 'none' ? undefined : value)}
+          onChange={(value) => dispatchArticulation(store, value === NO_MARK ? undefined : value)}
         />
       </label>
 
@@ -377,12 +411,16 @@ function NoteTab({ store, onReplace }: TabProps) {
         <MixedSelect
           value={dynamic}
           ariaLabel={t('inspector.dynamic')}
-          options={[
-            { value: NO_DYNAMIC, label: t('inspector.noDynamic') },
-            ...DYNAMICS.map((d) => ({ value: d, label: d })),
-          ]}
+          disabled={locked}
+          // A marking is written the same in every language — `pp` is `pp` —
+          // so only the "no dynamic" entry is translated; the native sheet
+          // labels the list the same way.
+          options={DYNAMIC_OPTIONS.map((option) => ({
+            value: option.value,
+            label: option.value === NO_MARK ? t(option.labelKey) : option.value,
+          }))}
           onChange={(value) =>
-            setDynamic(store, noteIds, value === NO_DYNAMIC ? undefined : (value as Dynamic))
+            setDynamic(store, noteIds, value === NO_MARK ? undefined : (value as Dynamic))
           }
         />
         <span className="text-xs text-theme-text-secondary">{t('inspector.dynamicHint')}</span>
@@ -409,6 +447,7 @@ function NoteTab({ store, onReplace }: TabProps) {
           notes.map((n) => voiceNumberOf(score, n)),
         )}
         min={1}
+        disabled={locked}
         onCommit={(v) => setVoice(store, noteIds, Math.round(v) - 1)}
       />
 
@@ -417,12 +456,14 @@ function NoteTab({ store, onReplace }: TabProps) {
           label={t('inspector.tieStart')}
           checked={tieStart === true}
           indeterminate={tieStart === MIXED}
+          disabled={locked}
           onChange={() => dispatchToggleTie(store, 'tieStart')}
         />
         <MixedCheckbox
           label={t('inspector.tieStop')}
           checked={tieStop === true}
           indeterminate={tieStop === MIXED}
+          disabled={locked}
           onChange={() => dispatchToggleTie(store, 'tieStop')}
         />
       </div>
@@ -433,13 +474,15 @@ function NoteTab({ store, onReplace }: TabProps) {
         than behind a mode — and it is a free text box, because a player's
         vocabulary is wider than any list a picker could offer.
       */}
-      {notes.length === 1 ? (
-        <ChordSymbolField store={store} note={notes[0]} disabled={isPlayingNow} />
+      {noteTextFieldsVisible(notes) ? (
+        <ChordSymbolField store={store} note={notes[0]} disabled={locked} />
       ) : null}
 
-      {/* The finger, per note — in a chord each notehead has its own. */}
-      {notes.length === 1 ? (
-        <FingeringField store={store} note={notes[0]} disabled={isPlayingNow} />
+      {/* The finger, per note — in a chord each notehead has its own. A draft
+          seeded from the first of several notes would overwrite the rest on
+          blur, which is why both text fields need exactly one. */}
+      {noteTextFieldsVisible(notes) ? (
+        <FingeringField store={store} note={notes[0]} disabled={locked} />
       ) : null}
 
       {/*
@@ -456,7 +499,7 @@ function NoteTab({ store, onReplace }: TabProps) {
               type="button"
               variant="ghost"
               size="sm"
-              disabled={isPlayingNow || notes.length < 2}
+              disabled={locked || notes.length < 2}
               onClick={() => toggleOttava(store, kind)}
             >
               {kind}
@@ -466,7 +509,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             type="button"
             variant="ghost"
             size="sm"
-            disabled={isPlayingNow || notes.length < 2}
+            disabled={locked || notes.length < 2}
             onClick={() => toggleGlissando(store)}
           >
             {t('inspector.glissando')}
@@ -486,7 +529,7 @@ function NoteTab({ store, onReplace }: TabProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={isPlayingNow}
+            disabled={locked}
             onClick={() => toGraceNote(store, notes[0].id)}
             className="w-full px-3 py-1.5 text-sm"
           >
@@ -496,7 +539,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             <Button
               type="button"
               variant="ghost"
-              disabled={isPlayingNow}
+              disabled={locked}
               onClick={() => clearGraceNotes(store, [notes[0].id])}
               className="w-full px-3 py-1 text-xs"
             >
@@ -520,6 +563,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
+  const locked = store(selectEditLocked);
 
   if (!score)
     return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
@@ -538,7 +582,17 @@ function MeasureTab({ store, onReplace }: TabProps) {
 
   const timeSig = commonValue(measures.map((m) => m.timeSignature));
   const keySig = commonValue(measures.map((m) => m.keySignature));
-  const indices = measures.map((m) => m.index + 1);
+  /*
+    The number a player reads, not `index + 1`: a pickup is not counted, so on a
+    score that opens with one every bar after it is one lower than its position.
+    The canvas gutter, "go to bar" and MusicXML export all go through
+    `barNumberAt`; a heading that did not was the one place bar 2 was called
+    bar 3. A pickup has no number and is named as what it is.
+  */
+  const firstTrack = score.tracks[0]?.measures ?? [];
+  const numbers = measures
+    .map((m) => barNumberAt(firstTrack, m.index))
+    .filter((n): n is number => n !== null);
 
   const applyTimeSignature = (timeSignature: TimeSignature): void => {
     setTimeSignature(store, selection.measureIds, timeSignature);
@@ -550,12 +604,14 @@ function MeasureTab({ store, onReplace }: TabProps) {
   return (
     <div className="flex flex-col gap-4 p-2">
       <p className="text-sm font-semibold text-theme-text-primary">
-        {measures.length > 1
-          ? t('inspector.measureRange', {
-              from: Math.min(...indices),
-              to: Math.max(...indices),
-            })
-          : t('inspector.measureNumber', { number: indices[0] })}
+        {numbers.length === 0
+          ? t('inspector.pickup')
+          : measures.length > 1 && numbers.length > 1
+            ? t('inspector.measureRange', {
+                from: Math.min(...numbers),
+                to: Math.max(...numbers),
+              })
+            : t('inspector.measureNumber', { number: numbers[0] })}
       </p>
 
       <div className="flex gap-2">
@@ -563,24 +619,39 @@ function MeasureTab({ store, onReplace }: TabProps) {
           label={t('inspector.timeSigNumerator')}
           value={timeSig === MIXED ? MIXED : (timeSig?.numerator ?? null)}
           min={1}
+          max={MAX_TIME_SIG_NUMERATOR}
+          disabled={locked}
           onCommit={(v) =>
             applyTimeSignature({
-              numerator: Math.max(1, Math.round(v)),
+              numerator: Math.min(MAX_TIME_SIG_NUMERATOR, Math.max(1, Math.round(v))),
               denominator: timeSig !== MIXED ? (timeSig?.denominator ?? 4) : 4,
             })
           }
         />
-        <MixedNumberField
-          label={t('inspector.timeSigDenominator')}
-          value={timeSig === MIXED ? MIXED : (timeSig?.denominator ?? null)}
-          min={1}
-          onCommit={(v) =>
-            applyTimeSignature({
-              numerator: timeSig !== MIXED ? (timeSig?.numerator ?? 4) : 4,
-              denominator: Math.max(1, Math.round(v)),
-            })
-          }
-        />
+        {/*
+          A picker, not a number: a denominator is one of a handful of note
+          values, and there is no nearest one to snap a typed 3 to —
+          `setTimeSignature` refuses it, so a free field would look live and
+          then do nothing.
+        */}
+        <label className="flex flex-1 flex-col gap-1">
+          <span className={FIELD_LABEL_CLASS}>{t('inspector.timeSigDenominator')}</span>
+          <MixedSelect
+            value={timeSig === MIXED ? MIXED : timeSig ? String(timeSig.denominator) : null}
+            ariaLabel={t('inspector.timeSigDenominator')}
+            disabled={locked}
+            options={TIME_SIG_DENOMINATOR_OPTIONS.map((d) => ({
+              value: String(d),
+              label: String(d),
+            }))}
+            onChange={(value) =>
+              applyTimeSignature({
+                numerator: timeSig !== MIXED ? (timeSig?.numerator ?? 4) : 4,
+                denominator: Number(value),
+              })
+            }
+          />
+        </label>
       </div>
 
       <div className="flex gap-2">
@@ -592,8 +663,12 @@ function MeasureTab({ store, onReplace }: TabProps) {
         <MixedSelect
           value={keySig === MIXED ? MIXED : keySig ? String(keySig.fifths) : null}
           ariaLabel={t('inspector.key')}
+          disabled={locked}
           options={keySignatureOptions(keySig !== MIXED ? (keySig?.mode ?? 'major') : 'major').map(
-            (option) => ({ value: String(option.fifths), label: option.label }),
+            (option) => ({
+              value: String(option.fifths),
+              label: keyOptionLabel(t, option, keySig),
+            }),
           )}
           onChange={(value) =>
             applyKeySignature({
@@ -604,11 +679,12 @@ function MeasureTab({ store, onReplace }: TabProps) {
         />
         <MixedSelect
           value={keySig === MIXED ? MIXED : (keySig?.mode ?? null)}
-          ariaLabel="Key mode"
-          options={[
-            { value: 'major', label: 'major' },
-            { value: 'minor', label: 'minor' },
-          ]}
+          ariaLabel={t('inspector.keyMode')}
+          disabled={locked}
+          options={KEY_MODE_OPTIONS.map((option) => ({
+            value: option.value,
+            label: t(option.labelKey),
+          }))}
           onChange={(value) =>
             applyKeySignature({
               fifths: keySig !== MIXED ? (keySig?.fifths ?? 0) : 0,
@@ -696,7 +772,7 @@ function TrackTab({ store, onReplace }: TabProps) {
    * they reach the engine live through `applyMix`. Mixing while listening is
    * the point.
    */
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
   const canDelete = store((s) => s.canDeleteTrack());
   const [pendingDelete, setPendingDelete] = useState(false);
 
@@ -740,6 +816,9 @@ function TrackTab({ store, onReplace }: TabProps) {
       });
   };
 
+  const picker = instrumentPickerFor(track);
+
+  // `setTrackMix` clamps and snaps onto the mixer's step itself.
   const mix = (patch: TrackMixPatch): void => {
     store.getState().setTrackMix(track.id, patch, commandLabel('changeTrackProps'));
   };
@@ -755,9 +834,12 @@ function TrackTab({ store, onReplace }: TabProps) {
           disabled={isPlaying}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setNameDraft(e.target.value)}
           onBlur={() => {
-            if (nameDraft.trim() === track.name) return;
-            store.getState().renameTrack(track.id, nameDraft, commandLabel('changeTrackProps'));
-            setNameDraft(track.name);
+            // `renameTrack` trims, refuses a blank name and skips an unchanged
+            // one; whatever it declines, the field goes back to the name held.
+            if (
+              !store.getState().renameTrack(track.id, nameDraft, commandLabel('changeTrackProps'))
+            )
+              setNameDraft(track.name);
           }}
           aria-label={t('inspector.name')}
           className={TEXT_INPUT_CLASS}
@@ -771,33 +853,24 @@ function TrackTab({ store, onReplace }: TabProps) {
           {/*
             A picker, never a text field, and two lists rather than one: a
             percussion track's program addresses a *kit*, so the melodic
-            catalogue would name the wrong thing. Which list is showing is the
-            only difference here — `setTrackInstrument` takes the value either
-            one produces and resolves it.
+            catalogue would name the wrong thing. `instrumentPickerFor` says
+            which list, value and title — shared with the native sheet — and
+            `setTrackInstrument` takes the value either one produces.
           */}
-          {isPercussionTrack(track) ? (
-            <SheetSelector
-              title={t('inspector.drumKit')}
-              aria-label={t('inspector.kitOf', { name: track.name })}
-              disabled={isPlaying}
-              options={KIT_OPTIONS}
-              value={kitOptionValue(track.midiProgram)}
-              onChange={chooseInstrument}
-              size="large"
-              className={`${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`}
-            />
-          ) : (
-            <SheetSelector
-              title={t('generate.instrument')}
-              aria-label={t('generate.instrument')}
-              disabled={isPlaying}
-              options={INSTRUMENT_OPTIONS}
-              value={String(track.midiProgram)}
-              onChange={chooseInstrument}
-              size="large"
-              className={`${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`}
-            />
-          )}
+          <SheetSelector
+            title={t(picker.titleKey)}
+            aria-label={
+              isPercussionTrack(track)
+                ? t('inspector.kitOf', { name: track.name })
+                : t('generate.instrument')
+            }
+            disabled={isPlaying}
+            options={[...picker.options]}
+            value={picker.value}
+            onChange={chooseInstrument}
+            size="large"
+            className={`${FIELD_HEIGHT_CLASS} w-full justify-between px-2 py-1.5 text-sm`}
+          />
         </div>
       </label>
 
@@ -824,7 +897,7 @@ function TrackTab({ store, onReplace }: TabProps) {
         <span className={FIELD_LABEL_CLASS}>{t('importMidi.colClef')}</span>
         <MixedSelect
           value={track.clef}
-          ariaLabel="Track clef"
+          ariaLabel={t('inspector.trackClef')}
           disabled={isPlaying}
           options={CLEFS.map((c) => ({ value: c, label: c }))}
           onChange={(value) =>
@@ -919,7 +992,7 @@ function ScoreTab({
 }) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
-  const isPlaying = store((s) => s.state === 'playing');
+  const isPlaying = store(selectEditLocked);
 
   const [title, setTitle] = useState(score?.metadata.title ?? '');
   const [composer, setComposer] = useState(score?.metadata.composer ?? '');
@@ -932,9 +1005,11 @@ function ScoreTab({
   if (!score)
     return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
 
-  const commit = (patch: { title?: string; composer?: string }): void => {
+  // `setScoreMetadata` trims, refuses a blank title and skips a field that has
+  // not changed, answering whether it wrote. Whatever it declines, the draft
+  // goes back to what the score holds.
+  const commit = (patch: { title?: string; composer?: string }): boolean =>
     store.getState().setScoreMetadata(patch, commandLabel('changeMetadata'));
-  };
 
   return (
     <div className="flex flex-col gap-4 p-2">
@@ -948,9 +1023,7 @@ function ScoreTab({
           aria-label={t('inspector.scoreTitle')}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
           onBlur={() => {
-            if (title.trim() === score.metadata.title) return;
-            commit({ title });
-            setTitle(score.metadata.title);
+            if (!commit({ title })) setTitle(score.metadata.title);
           }}
           className={TEXT_INPUT_CLASS}
         />
@@ -964,8 +1037,7 @@ function ScoreTab({
           aria-label={t('inspector.composer')}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setComposer(e.target.value)}
           onBlur={() => {
-            if (composer.trim() === (score.metadata.composer ?? '')) return;
-            commit({ composer });
+            if (!commit({ composer })) setComposer(score.metadata.composer ?? '');
           }}
           className={TEXT_INPUT_CLASS}
         />
@@ -978,31 +1050,31 @@ function ScoreTab({
   );
 }
 
-/** Which tab a fresh selection should default to: notes take priority, then measures, then tracks. */
-function defaultTabFor(selection: {
-  eventIds: string[];
-  measureIds: string[];
-  trackIds: string[];
-}): InspectorTab {
-  if (selection.eventIds.length > 0) return 'note';
-  if (selection.measureIds.length > 0) return 'measure';
-  if (selection.trackIds.length > 0) return 'track';
-  // Nothing selected: the track tab always has content, where the others are
-  // an empty-state message.
-  return 'track';
-}
-
 /**
- * Track first: it is the only tab that always has something to show — there is
- * always an active track, where a note or measure tab is empty until you select
- * one — and it is now the only place tracks are edited at all.
+ * A key picker entry, in the reader's language.
+ *
+ * `keySignatureOptions` answers the tonic and the count apart because "major",
+ * "minor" and "2 sharps" are words a translator owns; its own `label` is the
+ * English sentence this panel used to print straight into a Chinese build. The
+ * tonic is a note name and reads the same everywhere.
  */
-const TABS: Array<{ value: InspectorTab; labelKey: string }> = [
-  { value: 'score', labelKey: 'inspector.score' },
-  { value: 'track', labelKey: 'inspector.track' },
-  { value: 'note', labelKey: 'inspector.note' },
-  { value: 'measure', labelKey: 'inspector.measure' },
-];
+function keyOptionLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  option: KeySignatureOption,
+  keySig: KeySignature | typeof MIXED | null,
+): string {
+  const mode = keySig !== MIXED ? (keySig?.mode ?? 'major') : 'major';
+  const accidentals =
+    option.accidentalKind === 'none'
+      ? t('inspector.keyNoAccidentals')
+      : t(option.accidentalKind === 'sharp' ? 'inspector.keySharps' : 'inspector.keyFlats', {
+          count: option.accidentalCount,
+        });
+  return t(mode === 'minor' ? 'inspector.keyOptionMinor' : 'inspector.keyOptionMajor', {
+    tonic: option.tonic,
+    accidentals,
+  });
+}
 
 export function InspectorPanel({
   store = useAppStore,
@@ -1011,13 +1083,13 @@ export function InspectorPanel({
 }: InspectorPanelProps) {
   const { t } = useTranslation();
   const selection = store((s) => s.selection);
-  const [tab, setTab] = useState<InspectorTab>(() => defaultTabFor(selection));
+  const [tab, setTab] = useState<InspectorTab>(() => defaultInspectorTab(selection));
 
   // Re-derive the default tab whenever the selection's *kind* changes (a
   // fresh note/measure/track click), without fighting the user's own tab
   // clicks in between (only runs off `selection`, not `tab`).
   useEffect(() => {
-    setTab(defaultTabFor(selection));
+    setTab(defaultInspectorTab(selection));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection.eventIds, selection.measureIds, selection.trackIds]);
 
@@ -1044,9 +1116,11 @@ export function InspectorPanel({
           <ToggleGroup
             role="tablist"
             size="sm"
-            options={TABS.map((tab_) => ({
-              value: tab_.value,
-              label: t(tab_.labelKey),
+            // Score, Track, Note, Bar — music_editing's order, so a reader moving
+            // between the apps finds each tab in the same place.
+            options={INSPECTOR_TABS.map((value) => ({
+              value,
+              label: t(INSPECTOR_TAB_LABEL_KEY[value]),
             }))}
             value={tab}
             onChange={(value) => setTab(value as InspectorTab)}

@@ -13,22 +13,48 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
-import type { SelectionKind } from '@sudobility/music_lib';
+import { scoreContextMenuModel } from '@sudobility/music_lib';
+import type { ClipboardData } from '@sudobility/music_lib';
+import type { ScoreSelection } from '@sudobility/music_types';
 
-function open(overrides: Partial<React.ComponentProps<typeof ScoreContextMenu>> = {}) {
+/*
+  The rules — which entries are live, what the header says — are
+  music_editing's `scoreContextMenuModel`, tested there. These render the
+  model, so what is pinned here is that the menu draws what it is handed.
+*/
+const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+const noteSelection = (n: number): ScoreSelection => ({
+  eventIds: ids('n', n),
+  measureIds: [],
+  trackIds: [],
+});
+const selections: Record<string, (n: number) => ScoreSelection> = {
+  track: () => ({ eventIds: [], measureIds: [], trackIds: ['t0'] }),
+  measures: (n) => ({ eventIds: [], measureIds: ids('m', n), trackIds: [] }),
+  notes: noteSelection,
+};
+const NOTES_CLIPBOARD: ClipboardData = { kind: 'notes', events: [], anchorTick: 0 };
+
+function open(
+  input: {
+    selection?: ScoreSelection;
+    clipboard?: ClipboardData | null;
+    playing?: boolean;
+  } = {},
+) {
   const onAction = vi.fn();
   const onClose = vi.fn();
   render(
     <ScoreContextMenu
       x={10}
       y={10}
-      kind="notes"
-      count={1}
-      canPaste={false}
-      canEdit
+      model={scoreContextMenuModel({
+        selection: input.selection ?? noteSelection(1),
+        clipboard: input.clipboard ?? null,
+        playing: input.playing ?? false,
+      })}
       onAction={onAction}
       onClose={onClose}
-      {...overrides}
     />,
   );
   return { onAction, onClose };
@@ -37,20 +63,20 @@ function open(overrides: Partial<React.ComponentProps<typeof ScoreContextMenu>> 
 const item = (name: string) => screen.getByRole('menuitem', { name });
 
 describe('the subject header', () => {
-  it.each<[SelectionKind, number, string]>([
+  it.each<[string, number, string]>([
     ['track', 1, 'Track'],
     ['measures', 1, 'Bar'],
     ['measures', 4, 'Bars'],
     ['notes', 1, 'Note'],
     ['notes', 3, 'Notes'],
   ])('names %s (%i) as "%s"', (kind, count, label) => {
-    open({ kind, count });
+    open({ selection: selections[kind](count) });
     expect(screen.getByText(label)).toBeInTheDocument();
   });
 
   it('says nothing when nothing is selected', () => {
     // A header with no subject would be a label for an empty statement.
-    open({ kind: null, count: 0 });
+    open({ selection: noteSelection(0) });
     expect(screen.queryByText('Track')).not.toBeInTheDocument();
     expect(screen.queryByText('Notes')).not.toBeInTheDocument();
   });
@@ -74,7 +100,7 @@ describe('the entries', () => {
   });
 
   it('disables everything that acts on a selection when there is none', () => {
-    open({ kind: null, count: 0 });
+    open({ selection: noteSelection(0) });
     for (const name of ['Copy', 'Cut', 'Clear', 'Delete selection'])
       expect(item(name), name).toBeDisabled();
     // Select all needs no selection, by definition.
@@ -83,7 +109,7 @@ describe('the entries', () => {
 
   it('keeps Copy live while the transport plays, and nothing else', () => {
     // Copy only reads. The same exemption the edit lock makes everywhere else.
-    open({ canEdit: false });
+    open({ playing: true });
     expect(item('Copy')).toBeEnabled();
     for (const name of ['Cut', 'Clear', 'Delete selection'])
       expect(item(name), name).toBeDisabled();
@@ -92,12 +118,12 @@ describe('the entries', () => {
   it('offers Paste only when the clipboard holds the same kind of thing', () => {
     // `canPasteInto` is the rule; this is the menu obeying it. Pasting a track
     // over a run of notes has no meaning anybody could predict.
-    open({ canPaste: false });
+    open({ clipboard: null });
     expect(item('Paste')).toBeDisabled();
   });
 
   it('enables Paste when the kinds match', () => {
-    open({ canPaste: true });
+    open({ clipboard: NOTES_CLIPBOARD });
     expect(item('Paste')).toBeEnabled();
   });
 });

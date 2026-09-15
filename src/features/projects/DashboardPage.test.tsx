@@ -4,8 +4,8 @@
  * flows, navigation callbacks. App services are installed via the shared
  * test wiring so the component's getAppServices() reads resolve to fakes.
  */
-import { templateCopy as TEST_TEMPLATE_COPY_FN } from '@/i18n/lib-copy';
-const TEST_TEMPLATE_COPY = TEST_TEMPLATE_COPY_FN();
+import { libraryCopy } from '@/i18n/library-copy';
+const TEST_TEMPLATE_COPY = libraryCopy.templates();
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,6 +16,9 @@ import {
   projectTemplates,
   type TestStoreContext,
 } from '@sudobility/music_lib';
+import { serializeProjectFile } from '@sudobility/music_codecs';
+import { InsufficientCreditsError } from '@sudobility/music_client';
+import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { withQueryClient } from '@/test/query';
@@ -92,7 +95,7 @@ describe('DashboardPage', () => {
       'Import MusicXML',
       'Import Audio',
       'Import MOD',
-      'Import project JSON',
+      'Import project file',
     ]) {
       expect(screen.getByRole('option', { name: label }), label).toBeInTheDocument();
     }
@@ -108,7 +111,7 @@ describe('DashboardPage', () => {
 
     for (const [item, title] of [
       ['Import MOD', 'Import module'],
-      ['Import project JSON', 'Import project JSON'],
+      ['Import project file', 'Import project file'],
       ['Import Audio', 'Import audio'],
     ] as const) {
       await chooseImport(user, item);
@@ -147,6 +150,64 @@ describe('DashboardPage', () => {
     await chooseImport(user, 'Import MOD');
     const mod = (await screen.findByLabelText('module file input')) as HTMLInputElement;
     expect(mod.accept).toContain('.mod');
+  });
+
+  /*
+    A project file comes in two shapes: the `.moo` both apps now write, and this
+    app's older `{ name, schemaVersion, score }` export. Each app used to read
+    only its own, so a project saved on one could not be opened on the other.
+  */
+  it.each([
+    [
+      'a .moo document',
+      'Wedding March.moo',
+      () =>
+        serializeProjectFile({
+          title: 'Wedding March',
+          score: createEmptyScore({ title: 'Score title' }),
+        }),
+    ],
+    [
+      "the web's older JSON export",
+      'export.json',
+      () =>
+        JSON.stringify({
+          name: 'Wedding March',
+          schemaVersion: 1,
+          score: createEmptyScore({ title: 'Score title' }),
+        }),
+    ],
+  ])('opens %s as a new project named from the file', async (_label, fileName, text) => {
+    const { store } = setup();
+    const onNavigate = vi.fn();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
+    const user = userEvent.setup();
+
+    await chooseImport(user, 'Import project file');
+    const input = (await screen.findByLabelText('project file input')) as HTMLInputElement;
+    expect(input.accept).toContain('.moo');
+    await user.upload(input, new File([text()], fileName, { type: 'application/json' }));
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalled());
+    expect(store.getState().projectName).toBe('Wedding March');
+  });
+
+  it('says why a project file from a newer build is refused, rather than dropping what it cannot read', async () => {
+    const { store } = setup();
+    render(withQueryClient(<DashboardPage store={store} />));
+    const user = userEvent.setup();
+
+    await chooseImport(user, 'Import project file');
+    const input = (await screen.findByLabelText('project file input')) as HTMLInputElement;
+    const future = JSON.stringify({
+      version: 99,
+      title: 'Later',
+      score: createEmptyScore({ title: 'Later' }),
+    });
+    await user.upload(input, new File([future], 'later.moo'));
+
+    expect(await screen.findByText(/saved by a newer version of Moosiac/)).toBeInTheDocument();
+    expect(store.getState().projectId).toBeNull();
   });
 
   it('keeps search and sort in one group, so they cannot wrap apart', () => {
@@ -391,5 +452,38 @@ describe('DashboardPage generation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(await screen.findByText('Generating…')).toBeVisible();
+  });
+});
+describe('DashboardPage: a refused generation', () => {
+  it('opens the store and leaves no empty project behind when the job is refused for credits', async () => {
+    const { store, context } = setup();
+    context.fakeClient.createJob = vi.fn().mockRejectedValue(new InsufficientCreditsError());
+    render(withQueryClient(<DashboardPage store={store} />));
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Project' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Generate for me' }));
+    await userEvent.type(screen.getByLabelText('Prompt'), 'a gentle waltz');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(store.getState().dialogs[PAYWALL_DIALOG]).toBe(true));
+    expect(await context.fakeClient.listProjects('tok')).toEqual([]);
+  });
+});
+
+describe('DashboardPage: polling', () => {
+  it('picks up a finished generation without a reload', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'generating');
+    render(withQueryClient(<DashboardPage store={store} />));
+    expect(await screen.findByText('Generating…')).toBeVisible();
+
+    context.fakeClient.setProjectStatus(project.id, 'ready');
+    await waitFor(() => expect(screen.queryByText('Generating…')).not.toBeInTheDocument(), {
+      timeout: 5000,
+    });
   });
 });

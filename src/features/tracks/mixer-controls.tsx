@@ -33,14 +33,15 @@
  */
 import { cn } from '@sudobility/components';
 /*
-  `panReadout` is music_types', not this app's. It was three lines here and
+  `panReadout` is music_types', not this app's, and so are `volumeReadout` and
+  the two clamps beside it. It was three lines here and
   three identical lines in music_app_rn once the native property sheet gained
   the same row — which is the moment a display conversion stops being a detail
   of one panel and becomes a fact both apps have to agree on. It sits with the
   other "say a stored value the way a musician says it" conversions in
   `music-vocabulary.ts`.
 */
-import { panReadout } from '@sudobility/music_types';
+import { clampPan, clampVolume, panReadout, volumeReadout } from '@sudobility/music_types';
 /*
   The shell, the groove and the level are shared with the transport bar now.
   They were defined here because this is where the shared `Slider` was first
@@ -110,14 +111,13 @@ export type MixerSliderProps = {
 
 /** 0 to 1, filled from the left, on a groove that shows the whole range. */
 export function VolumeSlider({ label, rowLabel, value, disabled, onChange }: MixerSliderProps) {
-  const clamped = Math.min(1, Math.max(0, value));
-  const percent = Math.round(clamped * 100);
+  const clamped = clampVolume(value);
 
   return (
     <div className={ROW_CLASS}>
       <span className={ROW_LABEL_CLASS}>{rowLabel}</span>
       <LevelSlider label={label} value={clamped} onChange={onChange} disabled={disabled} />
-      <span className={ROW_READOUT_CLASS}>{percent}%</span>
+      <span className={ROW_READOUT_CLASS}>{volumeReadout(clamped)}</span>
       <span className={ROW_ACTION_CLASS} aria-hidden />
     </div>
   );
@@ -140,7 +140,7 @@ export function PanSlider({
   onReset,
   resetLabel = 'Center pan',
 }: PanSliderProps) {
-  const clamped = Math.min(1, Math.max(-1, value));
+  const clamped = clampPan(value);
   // Half-widths either side of centre, so the fill grows out of the middle.
   const width = Math.abs(clamped) * 50;
   const left = clamped < 0 ? 50 - width : 50;

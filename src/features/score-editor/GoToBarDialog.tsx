@@ -7,8 +7,10 @@
  * anchor — starts at the caret, so being unable to put it somewhere by name
  * makes all of them slower on exactly the scores where it matters most.
  *
- * Bars are numbered from 1, matching the numbers drawn in the gutter and the
- * status bar's readout — not the zero-based index the score stores.
+ * Bars are numbered as the gutter draws them — not the zero-based index the
+ * score stores, and not `index + 1` either, since a pickup has no number. The
+ * dialog hands over the text as typed and `goToBarFromInput` (music_editing,
+ * shared with the native prompt) decides what it names.
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,8 +21,8 @@ export type GoToBarDialogProps = {
   /** How many bars there are, so the prompt can say the range. */
   barCount: number;
   onClose: () => void;
-  /** Returns false when the bar does not exist, which keeps the dialog open. */
-  onGo: (bar: number) => boolean;
+  /** Given the text as typed. Returns false when it names no bar, which keeps the dialog open. */
+  onGo: (text: string) => boolean;
 };
 
 export function GoToBarDialog({ open, barCount, onClose, onGo }: GoToBarDialogProps) {
@@ -36,8 +38,7 @@ export function GoToBarDialog({ open, barCount, onClose, onGo }: GoToBarDialogPr
   }, [open]);
 
   const submit = (): void => {
-    const bar = Number(value);
-    if (!Number.isFinite(bar) || !onGo(Math.round(bar))) {
+    if (!onGo(value)) {
       setError(true);
       return;
     }

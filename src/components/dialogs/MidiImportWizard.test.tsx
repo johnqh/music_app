@@ -8,7 +8,7 @@ import { exportMidi } from '@sudobility/music_lib';
 import { analyzeMidi } from '@sudobility/music_lib';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi, MidiImportOptions, MidiImportResult } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {
@@ -173,6 +173,65 @@ describe('MidiImportWizard', () => {
       expect(screen.getByText('MIDI import failed: corrupt track data')).toBeInTheDocument(),
     );
     expect(store.getState().projectId).toBeNull();
+  });
+});
+
+describe('MidiImportWizard: the option fields', () => {
+  function spyService() {
+    return {
+      analyze: (buffer: ArrayBuffer) => Promise.resolve(analyzeMidi(buffer)),
+      import: vi.fn<(buffer: ArrayBuffer, options: MidiImportOptions) => Promise<MidiImportResult>>(
+        async () => ({ score: twinkleScore(), warnings: [] }),
+      ),
+    };
+  }
+
+  async function loaded(service: ReturnType<typeof spyService>) {
+    render(<MidiImportWizard open onClose={vi.fn()} store={makeStore()} midiService={service} />);
+    const user = userEvent.setup();
+    await chooseFile(user, fixtureMidiFile());
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
+    );
+    return user;
+  }
+
+  /*
+    The split point was written `Number(text) || 60`, which reads note 0 as
+    falsy and quietly moves the split to middle C. A split at the lowest note
+    is a strange request, not an absent one.
+  */
+  it('keeps a split point of 0 rather than moving it to middle C', async () => {
+    const service = spyService();
+    const user = await loaded(service);
+    await user.click(screen.getByRole('checkbox', { name: 'Piano staff split' }));
+    const field = screen.getByLabelText('Split point (MIDI note number)');
+    await user.clear(field);
+    await user.type(field, '0');
+    await user.click(screen.getByRole('button', { name: 'Preview import' }));
+    await waitFor(() => expect(service.import).toHaveBeenCalled());
+    expect(service.import.mock.calls.at(-1)![1]).toMatchObject({ splitPointMidi: 0 });
+  });
+
+  it('clamps a split point past the top of the MIDI range', async () => {
+    const service = spyService();
+    const user = await loaded(service);
+    await user.click(screen.getByRole('checkbox', { name: 'Piano staff split' }));
+    const field = screen.getByLabelText('Split point (MIDI note number)');
+    await user.clear(field);
+    await user.type(field, '200');
+    await user.click(screen.getByRole('button', { name: 'Preview import' }));
+    await waitFor(() => expect(service.import).toHaveBeenCalled());
+    expect(service.import.mock.calls.at(-1)![1]).toMatchObject({ splitPointMidi: 127 });
+  });
+
+  it('offers no Import once every track is excluded', async () => {
+    // Importing nothing builds an empty score, which is not what anybody means.
+    await loaded(spyService());
+    const user = userEvent.setup();
+    for (const box of screen.getAllByRole('checkbox', { name: /Include track:/ }))
+      await user.click(box);
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
   });
 });
 

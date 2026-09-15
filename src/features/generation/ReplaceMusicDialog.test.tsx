@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReplacementRegion } from '@sudobility/music_lib';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
@@ -210,6 +210,27 @@ describe('ReplaceMusicDialog', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Simplify this passage' }));
 
     expect(screen.getByLabelText('Instruction')).toHaveValue('Simplify this passage');
+  });
+
+  it('offers every style by its translated name, and sends the style token', async () => {
+    // It used to carry a private list of six styles shown as raw tokens, stale
+    // beside the vocabulary New Project offers — reggae was not on it at all.
+    const onSubmit = vi.fn();
+    render(
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+    await userEvent.type(screen.getByLabelText('Instruction'), 'x');
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Reggae' }));
+    expect(screen.getByLabelText('Complexity')).toHaveTextContent('Moderate');
+    await userEvent.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(onSubmit.mock.calls[0][0].style).toBe('reggae');
   });
 
   it('offers no candidate-count field', () => {

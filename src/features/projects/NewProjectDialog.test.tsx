@@ -39,6 +39,7 @@ vi.mock('@sudobility/music_client', () => ({
 const useSiteAdmin = vi.fn(() => false);
 vi.mock('@/app/AuthContext', () => ({
   useSiteAdmin: () => useSiteAdmin() as unknown,
+  useMusicHookContext: () => ({ networkClient: {}, baseUrl: 'http://test.local' }),
 }));
 
 function open(balance: number, siteAdmin = false, onSubmit = vi.fn()) {

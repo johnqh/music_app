@@ -61,7 +61,18 @@
     "setPickup": "Set the pickup bar",
     "setChordSymbol": "Change chord symbol",
     "changeRepeats": "Change repeats",
-    "changeBeam": "Change beaming"
+    "changeBeam": "Change beaming",
+    "setFingering": "Change fingering",
+    "changeBarline": "Change barline",
+    "changeMeasureClef": "Change clef at bar",
+    "changeNavigation": "Change navigation marks",
+    "changeOrnament": "Change ornament",
+    "toggleArpeggiate": "Arpeggiate",
+    "toggleGlissando": "Glissando",
+    "toggleOttava": "Octave bracket",
+    "toggleFermata": "Fermata",
+    "toggleHairpin": "Hairpin",
+    "toggleSlur": "Slur"
   },
   "common": {
     "clearSearch": "Clear search",
@@ -128,7 +139,7 @@
     "importMusicXml": "Import MusicXML",
     "importAudio": "Import Audio",
     "importModule": "Import MOD",
-    "importProject": "Import project JSON",
+    "importProject": "Import project file",
     "templates": "Templates",
     "yourProjects": "Your projects",
     "emptyNoProjects": "No projects yet. Create one, or import a MIDI/MusicXML/project file to get started.",
@@ -139,6 +150,12 @@
     "moduleFileKind": "module file",
     "decodingModule": "Decoding the module…",
     "moduleDescription": "Opens a tracker module (.MOD, .DSM, .S3M, .XM, .IT, .MPTM) as a new project. Notes are grouped by instrument rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of bars.",
+    "projectFileError": {
+      "invalidJson": "That file is not a project: it could not be read as JSON.",
+      "notAProject": "That file is not a Moosiac project.",
+      "newerVersion": "That project was saved by a newer version of Moosiac. Update the app to open it.",
+      "invalidScore": "The score in that project could not be read."
+    },
     "projectFileKind": "project file",
     "readingProject": "Reading the project…",
     "projectDescription": "Opens a project exported from this app as a new project. The one already open is untouched.",
@@ -635,6 +652,7 @@
     "accidental": "Accidental",
     "accidentalHint": "Set the accidental on the selected notes",
     "activeTrackHint": "Active track, and which tracks are shown",
+    "visibleTracks": "Visible tracks",
     "addMeasure": "Add bar",
     "addTrack": "Add Track",
     "arpeggiate": "Arpeggiate",
@@ -747,7 +765,7 @@
     "pitchDisplayHint": "Show each player's written pitch, or what the score sounds",
     "pitchWrittenShort": "Wrt",
     "print": "Print…",
-    "projectJson": "Project JSON",
+    "projectJson": "Project file (.moo)",
     "projectMenu": "Project menu",
     "projectTitle": "Project title",
     "quantize": "Quantize",
@@ -809,6 +827,8 @@
     "validationProblem": "This edit produced a validation problem: {{detail}}",
     "voice": "Voice",
     "voiceNumber": "Voice {{number}}",
+    "voice1Hint": "Voice 1 — the main line on this stave",
+    "voice2Hint": "Voice 2 — a second, independent line on the same stave",
     "xmModule": "XM Module",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
@@ -852,9 +872,13 @@
     "moduleImport": "Module import failed",
     "musicXmlExport": "MusicXML export failed",
     "musicXmlImport": "MusicXML import failed",
-    "projectJsonExport": "Project JSON export failed",
-    "projectJsonImport": "Project JSON import failed",
-    "mustSignIn": "You must be signed in."
+    "projectJsonExport": "Project export failed",
+    "projectJsonImport": "Project file import failed",
+    "mustSignIn": "You must be signed in.",
+    "audioExport": "Audio export failed",
+    "createSnapshot": "Failed to create snapshot",
+    "openSnapshot": "Failed to open snapshot",
+    "renamePublished": "Failed to rename the published snapshot"
   },
   "exportScope": {
     "title": "Export hidden tracks?",
@@ -1042,6 +1066,7 @@
     "chooseFileEllipsis": "Choose {{kind}}…"
   },
   "importAudio": {
+    "description": "Turns a recording into a project, split into parts — vocals, drums, bass, guitar, piano and the rest, each on its own track. It runs on the server and takes a few minutes, so the project appears straight away and fills itself in when it is done. Expect a sketch to edit, not a copy of the record. {{formats}}.",
     "title": "Import audio",
     "fileKind": "audio file",
     "sending": "Sending the recording…",
@@ -1077,6 +1102,10 @@
     "splitPointLabel": "Split point (MIDI note number)",
     "detectKey": "Detect key",
     "preview": "Preview",
+    "performanceTiming": "MIDI stores performance timing, not complete notation semantics -- imported notation is an approximation. Review the settings below and preview before importing.",
+    "previewCount_one": "{{count}} note after import.",
+    "previewCount_other": "{{count}} notes after import.",
+    "previewNone": "(no notes)",
     "previewImport": "Preview import",
     "minDurationShort": "Min. note duration (ticks)",
     "pianoSplit": "Piano staff split",
@@ -1112,6 +1141,16 @@
     "outOfRange_one": "{{count}} note is outside this instrument's range of {{low}}-{{high}} and cannot be played on it.",
     "outOfRange_other": "{{count}} notes are outside this instrument's range of {{low}}-{{high}} and cannot be played on it.",
     "key": "Key",
+    "keyMode": "Key mode",
+    "keyOptionMajor": "{{tonic}} major — {{accidentals}}",
+    "keyOptionMinor": "{{tonic}} minor — {{accidentals}}",
+    "keySharps": "{{count}} sharp",
+    "keySharps_other": "{{count}} sharps",
+    "keyFlats": "{{count}} flat",
+    "keyFlats_other": "{{count}} flats",
+    "keyNoAccidentals": "no sharps or flats",
+    "pitchStep": "Pitch step",
+    "trackClef": "Track clef",
     "kitOf": "Drum kit: {{name}}",
     "makeGraceNote": "Make grace note of the next",
     "mute": "Mute",
@@ -1233,10 +1272,6 @@
     "generatingNotes": "Generating notes…",
     "openingProject": "Opening project…"
   },
-  "player": {
-    "play": "Play",
-    "pause": "Pause"
-  },
   "print": {
     "whatToPrint": "What to print",
     "wholeScore": "Whole score",
@@ -1245,6 +1280,7 @@
     "action": "Print",
     "backToEditor": "Back to editor",
     "nothingToPrint": "There is nothing to print yet.",
+    "paperA4": "A4",
     "paperLetter": "Letter",
     "paperLegal": "Legal",
     "portrait": "Portrait",
@@ -1267,10 +1303,28 @@
     "preserveHarmony": "Preserve harmony",
     "preserveMelody": "Preserve melody",
     "preserveRhythm": "Preserve rhythm",
+    "preset": {
+      "moreDramatic": "Make this more dramatic",
+      "simplify": "Simplify this passage",
+      "rhythmicVariation": "Add rhythmic variation",
+      "memorableMelody": "Make the melody more memorable",
+      "strongerTransition": "Create a stronger transition",
+      "harmonicTension": "Add harmonic tension",
+      "resolvePhrase": "Resolve the phrase",
+      "moreUpbeat": "Make this more upbeat",
+      "darker": "Make this darker",
+      "variationKeepMelody": "Create a variation while preserving the melody",
+      "keepRhythmChangeHarmony": "Preserve rhythm but change harmony",
+      "keepHarmonyChangeMelody": "Preserve harmony but change melody",
+      "addAccompaniment": "Add accompaniment",
+      "thinOrchestration": "Thin out the orchestration"
+    },
     "presetInstructions": "Preset instructions",
     "summary_one": "Replaces {{count}} note on {{where}}.",
     "summary_other": "Replaces {{count}} notes on {{where}}.",
-    "trackTitle": "Replace track"
+    "trackTitle": "Replace track",
+    "unselected_one": "{{count}} of them is not selected.",
+    "unselected_other": "{{count}} of them are not selected."
   },
   "resources": {
     "title": "Resources",
@@ -1446,7 +1500,9 @@
     "copyrightWarning": "Only publish music you created. Publishing puts it on a public page anyone can open.",
     "copyrightConfirm": "I hold the full copyright to this work and everything it quotes.",
     "managePublishedTitle": "Published snapshots",
-    "nonePublished": "Nothing from this project is published yet."
+    "nonePublished": "Nothing from this project is published yet.",
+    "publishedAt": "Published: {{url}}",
+    "defaultName": "Version {{number}}"
   },
   "tagline": "AI-assisted sheet music composition",
   "templates": {
@@ -1514,7 +1570,11 @@
     "quantisedNotes_other": "{{count}} notes moved slightly to land on the row grid."
   },
   "transport": {
-    "preparing": "Preparing instruments",
+    "preparing": "Preparing instruments {{percent}}%",
+    "preparingUnknown": "Preparing instruments",
+    "play": "Play",
+    "pause": "Pause",
+    "volume": "Vol",
     "loadFailed": "Instruments failed to load",
     "measureBeat": "Current bar and beat",
     "scrub": "Drag to scrub through the score",

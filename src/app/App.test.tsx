@@ -113,6 +113,44 @@ describe('App', () => {
     });
   });
 
+  /*
+   * One binding persists every device pref now (music_lib's `bindDevicePrefs`),
+   * shared with the native app. The web used to write three of them from an
+   * effect here, keep the font size under a key of its own, and not remember
+   * the keyboard at all — it came back expanded on every visit.
+   */
+  it('persists the keyboard and the font size with the other device prefs', async () => {
+    const { store, context } = setup();
+    render(<App store={store} />);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
+      ).toBeInTheDocument(),
+    );
+    act(() => {
+      store.getState().setKeyboardCollapsed(true);
+      store.getState().setFontSize('large');
+    });
+    await waitFor(async () => {
+      const prefs = await loadPrefs(context.storage!);
+      expect(prefs.keyboardCollapsed).toBe(true);
+      expect(prefs.fontSize).toBe('large');
+    });
+  });
+
+  it('bootstraps a remembered keyboard and font size', async () => {
+    const { store, context } = setup();
+    await savePrefs(context.storage!, { keyboardCollapsed: true, fontSize: 'small' });
+    render(<App store={store} />);
+    await waitFor(() => expect(store.getState().keyboardCollapsed).toBe(true));
+    expect(store.getState().fontSize).toBe('small');
+    // Applied at start-up, not only once the settings page has been opened —
+    // the only place the size used to be applied from.
+    await waitFor(() =>
+      expect(document.documentElement.getAttribute('data-font-size')).toBe('small'),
+    );
+  });
+
   it('flushes a dirty project on pagehide', async () => {
     const { store } = setup();
     await store.getState().newProject({ name: 'Flush Me' });

@@ -1,5 +1,5 @@
 import { Profiler } from 'react';
-import { commandLabel } from '@/features/score-editor/command-labels';
+import { commandLabel } from '@sudobility/music_lib';
 import {
   getMusicPosition,
   getMusicPositionSource,
@@ -156,6 +156,12 @@ describe('PianoKeyboardView', () => {
       expect(e0.getAttribute('aria-disabled')).toBe('true');
       expect(e0.style.backgroundColor).not.toBe(key(container, 40).style.backgroundColor);
       expect(key(container, 40).getAttribute('aria-disabled')).toBeNull();
+      // The black keys too. They used to be drawn the same near-black whether
+      // or not the instrument could play them, so the playable span was only
+      // visible along the white keys.
+      const fSharp0 = key(container, 18);
+      expect(fSharp0.getAttribute('aria-disabled')).toBe('true');
+      expect(fSharp0.style.backgroundColor).not.toBe(key(container, 30).style.backgroundColor);
 
       vi.mocked(playbackController.noteOn).mockClear();
       const before = store.getState().score;

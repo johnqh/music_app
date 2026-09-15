@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getMusicPositionSource } from '@sudobility/music_types';
+import { MAX_BPM, getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@sudobility/music_lib';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -247,6 +247,43 @@ describe('TransportBar: tempo edit', () => {
     await user.type(input, '999{Escape}');
 
     expect(store.getState().score!.tempoMap[0].bpm).toBe(120);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  /*
+   * The field's rule is music_editing's `commitOpeningTempoText`, shared with
+   * the native bar: blank is no change, anything else is rounded and bounded,
+   * and a value already there is not an undo entry. The web used to hand
+   * `Math.round(Number(draft))` straight to `setOpeningTempo` — so an emptied
+   * field became tempo 0 (refused only by accident), "9999" was stored and
+   * then flagged by the validator, and re-committing the same tempo filled
+   * the undo history with edits that changed nothing.
+   */
+  async function commitTyped(store: PlaybackStoreApi, text: string) {
+    renderBar(store);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Tempo (BPM)' }));
+    const input = screen.getByRole('spinbutton', { name: 'Tempo (BPM)' });
+    await user.clear(input);
+    await user.type(input, `${text}{Enter}`);
+  }
+
+  it('an emptied field changes nothing', async () => {
+    const store = makeStore();
+    await commitTyped(store, '');
+    expect(store.getState().score!.tempoMap[0].bpm).toBe(120);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('bounds an out-of-range tempo instead of storing it', async () => {
+    const store = makeStore();
+    await commitTyped(store, '9999');
+    expect(store.getState().score!.tempoMap[0].bpm).toBe(MAX_BPM);
+  });
+
+  it('re-committing the tempo already there is not an undo entry', async () => {
+    const store = makeStore();
+    await commitTyped(store, '120');
     expect(store.getState().canUndo).toBe(false);
   });
 });

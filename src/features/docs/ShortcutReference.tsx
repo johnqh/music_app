@@ -7,7 +7,12 @@
  */
 import { useTranslation } from 'react-i18next';
 import { Heading } from '@sudobility/components';
-import { SHORTCUTS, SHORTCUT_GROUPS, type ShortcutGroup } from '@sudobility/music_editing';
+import {
+  SHORTCUTS,
+  SHORTCUT_GROUPS,
+  shortcutGroupLabelKey,
+  type ShortcutGroup,
+} from '@sudobility/music_editing';
 
 export function ShortcutReference() {
   const { t } = useTranslation();
@@ -19,7 +24,7 @@ export function ShortcutReference() {
         return (
           <div key={group}>
             <Heading level={4} className="mb-2 text-base">
-              {t(`docs.shortcuts.group.${group}`)}
+              {t(shortcutGroupLabelKey(group))}
             </Heading>
             <table className="w-full text-sm">
               <tbody>

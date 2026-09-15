@@ -1,4 +1,4 @@
-import { commandLabel } from '@/features/score-editor/command-labels';
+import { commandLabel } from '@sudobility/music_lib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testStoreContext, decodeMidi, decodeTracker } from '@sudobility/music_lib';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -8,6 +8,9 @@ import { threeTrackScore, twinkleScore, midiToPitch } from '@sudobility/music_li
 import { allNotes } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { addMeasureCommand, changeVelocityCommand } from '@sudobility/music_lib';
+import { parseProjectFile, playbackController } from '@sudobility/music_lib';
+import type { NetworkClient } from '@sudobility/types';
+import type { ReactElement } from 'react';
 
 // AppLayout renders ScoreEditorView (useEditorShortcuts -> playbackController)
 // and TransportBar, both of which reach the app-wide playbackController
@@ -46,7 +49,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
-import { getAppServices } from '@/config/initialize';
+import { getAppServices, setAppServices } from '@/config/initialize';
+import { withQueryClient } from '@/test/query';
 
 // AppLayout mounts the import dialogs even while they are closed, and those
 // build their import service from the composition root, so the harness has to
@@ -75,10 +79,18 @@ async function makeStoreWithProject(score: Score = twinkleScore()): Promise<Edit
 
 afterEach(async () => {});
 
+/**
+ * Snapshot history reaches the server through music_client's hooks, and a hook
+ * needs the React Query client `App.tsx` provides in production.
+ */
+function renderLayout(ui: ReactElement) {
+  return render(withQueryClient(ui));
+}
+
 describe('AppLayout', () => {
   it('renders the project title and a save-state chip', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     expect(screen.getByLabelText('Edit project title')).toHaveTextContent('My Song');
     expect(screen.getByLabelText(/Save state:/)).toBeInTheDocument();
@@ -86,7 +98,7 @@ describe('AppLayout', () => {
 
   it('editing the project title dispatches renameProject', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Edit project title'));
@@ -100,7 +112,7 @@ describe('AppLayout', () => {
 
   it('Undo is disabled with no history and enabled (with the command label as its tooltip) after an edit', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
@@ -115,7 +127,7 @@ describe('AppLayout', () => {
 
   it('the status bar shows a selection summary that updates with the selection', async () => {
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     expect(screen.getByText('No selection')).toBeInTheDocument();
 
@@ -153,7 +165,7 @@ describe('AppLayout', () => {
     store.getState().setScore(invalidScore, { resetHistory: false });
     expect(store.getState().validationIssues.length).toBeGreaterThan(0);
 
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     const issuesButton = screen.getByRole('button', { name: 'Validation issues' });
@@ -205,7 +217,7 @@ describe('AppLayout', () => {
     store.getState().setScore(duplicated, { resetHistory: false });
     expect(store.getState().validationIssues.length).toBeGreaterThan(0);
 
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Validation issues' }));
@@ -223,7 +235,7 @@ describe('AppLayout', () => {
     // as a seventh file format.
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();
-    render(<AppLayout store={store} onNavigate={onNavigate} />);
+    renderLayout(<AppLayout store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Export menu'));
@@ -238,7 +250,7 @@ describe('AppLayout', () => {
   it('"Back to dashboard" calls onNavigate("/projects")', async () => {
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();
-    render(<AppLayout store={store} onNavigate={onNavigate} />);
+    renderLayout(<AppLayout store={store} onNavigate={onNavigate} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByLabelText('Back to dashboard'));
@@ -255,13 +267,13 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
   }
 
   it('renders the notation and the keyboard at once', () => {
-    render(<AppLayout store={makeStore()} />);
+    renderLayout(<AppLayout store={makeStore()} />);
     expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
   });
 
   it('has no view-mode toggle anywhere', () => {
-    render(<AppLayout store={makeStore()} />);
+    renderLayout(<AppLayout store={makeStore()} />);
     expect(screen.queryByRole('group', { name: 'Editor view' })).not.toBeInTheDocument();
   });
 
@@ -273,7 +285,7 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
       `compareDocumentPosition` rather than a snapshot: what is being pinned is
       the order, not the markup around it.
     */
-    render(<AppLayout store={makeStore()} />);
+    renderLayout(<AppLayout store={makeStore()} />);
     const transport = screen.getByRole('toolbar', { name: 'Playback transport' });
     const keyboard = screen.getByRole('img', { name: /Piano keyboard/ });
 
@@ -282,8 +294,28 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
     ).toBeTruthy();
   });
 
+  it('starts with the keyboard expanded and remembers the collapse as a device pref', async () => {
+    // The collapse used to be component state, so it came back expanded on
+    // every reload whatever the reader had chosen. It is a device pref now, in
+    // the store `bindDevicePrefs` persists, and it defaults to expanded.
+    const store = makeStore();
+    expect(store.getState().keyboardCollapsed).toBe(false);
+    renderLayout(<AppLayout store={store} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Hide keyboard' }));
+    expect(store.getState().keyboardCollapsed).toBe(true);
+  });
+
+  it('opens with the keyboard collapsed when that was remembered', () => {
+    const store = makeStore();
+    act(() => store.getState().setKeyboardCollapsed(true));
+    renderLayout(<AppLayout store={store} />);
+    expect(screen.queryByRole('img', { name: /Piano keyboard/ })).not.toBeInTheDocument();
+  });
+
   it('collapses and re-expands the keyboard panel', async () => {
-    render(<AppLayout store={makeStore()} />);
+    renderLayout(<AppLayout store={makeStore()} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Hide keyboard' }));
@@ -298,7 +330,7 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
   it('announces a regenerated selection in the status bar', () => {
     const store = makeStore();
     const noteId = allNotes(store.getState().score!)[0].id;
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     act(() => {
       store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
@@ -313,7 +345,7 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
   it('drops the ", regenerated" suffix once the selection changes', () => {
     const store = makeStore();
     const [first, second] = allNotes(store.getState().score!);
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
     act(() => {
       store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
       store.setState({ selectionRegenerated: true });
@@ -353,7 +385,7 @@ describe('AppLayout export scope', () => {
     // file is decoded back to prove it is a real module rather than bytes.
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'XM Module' }));
@@ -398,7 +430,7 @@ describe('AppLayout export scope', () => {
       ),
     };
     const store = await makeStoreWithProject(lossy);
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'XM Module' }));
@@ -415,7 +447,7 @@ describe('AppLayout export scope', () => {
   it('exports without asking when nothing is hidden', async () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
@@ -429,7 +461,7 @@ describe('AppLayout export scope', () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
     act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
@@ -446,7 +478,7 @@ describe('AppLayout export scope', () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
     act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
@@ -460,7 +492,7 @@ describe('AppLayout export scope', () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
     act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
@@ -474,7 +506,7 @@ describe('AppLayout export scope', () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
     act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
     await user.click(screen.getByRole('menuitem', { name: 'MusicXML' }));
@@ -482,17 +514,56 @@ describe('AppLayout export scope', () => {
     expect(await screen.findByText('Export hidden tracks?')).toBeInTheDocument();
   });
 
-  it('does not ask for Project JSON, which is the project rather than a view of it', async () => {
+  it('does not ask for the project file, which is the project rather than a view of it', async () => {
     const user = userEvent.setup();
     const store = await makeStoreWithProject(threeTrackScore());
     act(() => store.getState().setVisibleTracks([store.getState().score!.tracks[0].id]));
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     await openExportMenu(user);
-    await user.click(screen.getByRole('menuitem', { name: 'Project JSON' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Project file (.moo)' }));
 
     expect(screen.queryByText('Export hidden tracks?')).toBeNull();
     await waitFor(() => expect(savedFiles()).toHaveLength(1));
+  });
+
+  it('writes the project as a .moo document the native app can open', async () => {
+    // The web wrote `{ name, schemaVersion, score }` as `.json`, which the
+    // native app could not read. Both apps now write music_codecs' document,
+    // and name it after the score's title like every other export.
+    const user = userEvent.setup();
+    const base = threeTrackScore();
+    const store = await makeStoreWithProject({
+      ...base,
+      metadata: { ...base.metadata, title: 'Wedding March' },
+    });
+    renderLayout(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Project file (.moo)' }));
+
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+    const saved = savedFiles()[0];
+    expect(saved.name).toBe('Wedding March.moo');
+    const file = parseProjectFile(saved.data as string);
+    expect(file.title).toBe('My Song');
+    expect(file.score.tracks).toHaveLength(3);
+  });
+
+  it('keeps the title in an exported file name, replacing only reserved characters', async () => {
+    const user = userEvent.setup();
+    const base = threeTrackScore();
+    const store = await makeStoreWithProject({
+      ...base,
+      metadata: { ...base.metadata, title: 'AC/DC: 月光' },
+    });
+    renderLayout(<AppLayout store={store} />);
+
+    await openExportMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'MIDI' }));
+
+    await waitFor(() => expect(savedFiles()).toHaveLength(1));
+    expect(savedFiles()[0].name).toBe('AC-DC- 月光.mid');
   });
 });
 
@@ -529,7 +600,53 @@ describe('AppLayout — snapshots', () => {
     client.listSnapshots = vi.fn(async () => []);
     client.lastPublisherName = vi.fn(async () => ({ publisherName: null }));
     client.createSnapshot = createSnapshot;
+    routeNetworkToClient(client);
     return { createSnapshot, storedMeasureCountAtSnapshot: () => measuresAtSnapshot };
+  }
+
+  /**
+   * The snapshot hooks build their own `MusicClient` over the services'
+   * `NetworkClient`, so the seam a test reaches is the network. Each route
+   * forwards to the in-memory client, which is what keeps "what did the server
+   * hold when the snapshot was taken" answerable from its stored rows.
+   */
+  function routeNetworkToClient(client: Record<string, unknown>): void {
+    const call = (name: string, ...args: unknown[]) =>
+      (client[name] as (...a: unknown[]) => Promise<unknown>)(...args);
+    const routes: Array<
+      [string, RegExp, (m: RegExpMatchArray, body: Record<string, string>) => Promise<unknown>]
+    > = [
+      ['GET', /^\/snapshots\/publisher-name$/, () => call('lastPublisherName', 'test-token')],
+      ['GET', /^\/projects\/([^/]+)\/snapshots$/, (m) => call('listSnapshots', m[1], 'test-token')],
+      ['GET', /^\/projects\/([^/]+)\/status$/, (m) => call('getProjectStatus', m[1], 'test-token')],
+      [
+        'POST',
+        /^\/projects\/([^/]+)\/snapshots$/,
+        (m, body) => call('createSnapshot', m[1], body.name, 'test-token'),
+      ],
+      ['POST', /^\/snapshots\/([^/]+)\/open$/, (m) => call('openSnapshot', m[1], 'test-token')],
+    ];
+    const networkClient = {
+      request: async (url: string, options?: { method?: string; body?: string }) => {
+        const path = decodeURIComponent(url.replace(/^.*\/api\/v1/, ''));
+        const method = options?.method ?? 'GET';
+        for (const [verb, pattern, handler] of routes) {
+          const match = verb === method ? path.match(pattern) : null;
+          if (!match) continue;
+          const body = options?.body ? (JSON.parse(options.body) as Record<string, string>) : {};
+          const data = await handler(match, body);
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            data: { success: true, data },
+          };
+        }
+        return { ok: false, status: 500, statusText: 'Error', headers: {}, data: null };
+      },
+    } as unknown as NetworkClient;
+    setAppServices({ ...getAppServices(), networkClient });
   }
 
   it('flushes the live score before pinning it', async () => {
@@ -539,7 +656,7 @@ describe('AppLayout — snapshots', () => {
     await store.getState().newProject({ name: 'Snap', score: twinkleScore() });
     const stubs = stubSnapshotClient(context, () => store.getState().projectId!);
 
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     // An edit still inside the autosave debounce window: the server has not
     // seen it, and a snapshot taken now would pin the music without it.
@@ -564,7 +681,7 @@ describe('AppLayout — snapshots', () => {
     const store = createAppStore({ context });
     await store.getState().newProject({ name: 'Snap', score: twinkleScore() });
     const stubs = stubSnapshotClient(context, () => store.getState().projectId!);
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     const writesBefore = context.fakeClient.updateCalls;
     await user.click(screen.getByRole('button', { name: 'Project menu' }));
@@ -573,6 +690,52 @@ describe('AppLayout — snapshots', () => {
 
     await waitFor(() => expect(stubs.createSnapshot).toHaveBeenCalled());
     expect(context.fakeClient.updateCalls).toBe(writesBefore);
+  });
+
+  it('opens a snapshot by adopting its score, with the transport stopped first', async () => {
+    // A snapshot's score arrives from outside, around the edit lock, so the
+    // transport must stop before it lands or the player keeps playing the old
+    // score out of its queue.
+    const user = userEvent.setup();
+    const context = installTestAppServices();
+    const store = createAppStore({ context });
+    await store.getState().newProject({ name: 'Snap', score: twinkleScore() });
+    const client = context.client as unknown as Record<string, unknown>;
+    const pinned = threeTrackScore();
+    client.listSnapshots = vi.fn(async () => [
+      {
+        id: 's1',
+        projectId: store.getState().projectId!,
+        parentId: null,
+        name: 'Version 1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    client.lastPublisherName = vi.fn(async () => ({ publisherName: null }));
+    const stop = vi.mocked(playbackController.stop);
+    stop.mockClear();
+    let stoppedBeforeAdopting = false;
+    client.openSnapshot = vi.fn(async () => {
+      stop.mockImplementationOnce(() => {
+        stoppedBeforeAdopting = store.getState().score !== pinned;
+      });
+      return {
+        ...context.fakeClient.storedRecord(store.getState().projectId!)!,
+        score: pinned,
+        updatedAt: '2030-01-01T00:00:00.000Z',
+      };
+    });
+    routeNetworkToClient(client);
+    renderLayout(<AppLayout store={store} />);
+
+    await user.click(screen.getByRole('button', { name: 'Project menu' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Open snapshot…' }));
+    await user.click(await screen.findByRole('button', { name: 'Version 1' }));
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+
+    await waitFor(() => expect(store.getState().score).toBe(pinned));
+    expect(stop).toHaveBeenCalled();
+    expect(stoppedBeforeAdopting).toBe(true);
   });
 });
 
@@ -591,7 +754,7 @@ describe('the generating overlay covers the whole editing area', () => {
     } as unknown as ReturnType<typeof useProjectGeneration>);
 
     const store = await makeStoreWithProject();
-    render(<AppLayout store={store} />);
+    renderLayout(<AppLayout store={store} />);
 
     const overlay = screen.getByTestId('generating-overlay');
     // `absolute inset-0` covers its offset parent, so "what does it cover" is

@@ -9,7 +9,7 @@ import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
 import { createMusicIo } from '@sudobility/music_io/mocks';
 import { initializeMusicPlayer, resetMusicPlayer } from '@sudobility/music_player/core';
 import { MockMusicPlayer } from '@sudobility/music_player/mocks';
-import type { NetworkClient } from '@sudobility/types';
+import { fakeMusicNetwork } from '@/test/fake-music-network';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
 
 const TEST_USER: AuthUser = {
@@ -46,7 +46,9 @@ export function installTestAppServices(
 
   const services: AppServices = {
     io,
-    networkClient: {} as NetworkClient,
+    // Routed to the same fake client, so a hook that builds its own
+    // `MusicClient` from this reads the projects the test seeded.
+    networkClient: fakeMusicNetwork(context.client!),
     musicClient: context.client!,
     baseUrl: 'http://test.local',
     prefsStorage: context.storage!,

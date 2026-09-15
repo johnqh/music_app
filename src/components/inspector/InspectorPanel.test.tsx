@@ -18,6 +18,7 @@ import {
   toGraceNoteCommand,
 } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
+import { MAX_BPM } from '@sudobility/music_types';
 import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import type { EditorStoreApi } from '@sudobility/music_lib';
@@ -862,5 +863,141 @@ describe('the navigation fields', () => {
       expect(store.getState().score!.tracks[0].measures[0].segno).toBe(true);
     });
     expect(store.getState().score!.tracks[1].measures[0].segno).toBe(true);
+  });
+});
+
+describe('InspectorPanel: the edit lock on the Note tab', () => {
+  it('disables every note field while the transport plays', () => {
+    // Decision 4 of the parity plan: both apps lock the whole Note tab while
+    // playing. The store refuses the edits anyway; a field that looks live and
+    // then does nothing is the worse half of that.
+    const store = makeStore();
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    act(() => {
+      store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+      store.setState({ state: 'playing' });
+    });
+    render(<InspectorPanel store={store} />);
+
+    expect(screen.getByRole('combobox', { name: 'Pitch step' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Accidental' })).toBeDisabled();
+    expect(screen.getByLabelText('Octave')).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Duration' })).toBeDisabled();
+    expect(screen.getByLabelText('Velocity')).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Articulation' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Dynamic' })).toBeDisabled();
+    expect(screen.getByLabelText('Voice')).toBeDisabled();
+    expect(screen.getByLabelText('Bar')).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Tie start' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Replace Notes' })).toBeDisabled();
+  });
+});
+
+describe('the bar tempo field', () => {
+  async function openMeasure(store: EditorStoreApi, index: number) {
+    const user = userEvent.setup();
+    const measure = store.getState().score!.tracks[0].measures[index];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
+    return { user, measure };
+  }
+
+  it('writes nothing when an inherited tempo is left as it was', async () => {
+    // The field shows the tempo in force; blurring it untouched must not turn
+    // an inherited tempo into an event of this bar's own, or an undo entry.
+    const store = makeStore();
+    const before = store.getState().score!.tempoMap.length;
+    const { user } = await openMeasure(store, 1);
+
+    await user.click(screen.getByLabelText('Tempo here (BPM)'));
+    await user.tab();
+
+    expect(store.getState().score!.tempoMap).toHaveLength(before);
+  });
+
+  it('writes nothing when the field is emptied', async () => {
+    const store = makeStore();
+    const before = store.getState().score!.tempoMap;
+    const { user } = await openMeasure(store, 1);
+
+    await user.clear(screen.getByLabelText('Tempo here (BPM)'));
+    await user.tab();
+
+    expect(store.getState().score!.tempoMap).toEqual(before);
+    expect(screen.getByLabelText('Tempo here (BPM)')).not.toHaveValue('');
+  });
+
+  it('clamps a typed tempo to what the score can store', async () => {
+    const store = makeStore();
+    const { user, measure } = await openMeasure(store, 1);
+
+    await user.clear(screen.getByLabelText('Tempo here (BPM)'));
+    await user.type(screen.getByLabelText('Tempo here (BPM)'), '9999');
+    await user.tab();
+
+    const event = store.getState().score!.tempoMap.find((e) => e.tick === measure.startTick);
+    expect(event?.bpm).toBe(MAX_BPM);
+  });
+});
+
+describe('the bar heading', () => {
+  it('numbers bars the way a player does, skipping a pickup', async () => {
+    // A pickup is not counted, so the bar after it is bar 1 — the same 33 that
+    // "go to bar 33" and the canvas gutter mean.
+    const user = userEvent.setup();
+    const store = makeStore();
+    act(() => {
+      store.getState().dispatchCommand(setPickupCommand(1, 'Pickup'));
+    });
+    const measure = store.getState().score!.tracks[0].measures[1];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
+
+    expect(screen.getByText('Bar 1')).toBeInTheDocument();
+  });
+});
+
+describe('the time signature fields', () => {
+  it('offers the denominators as a picker, since there is no nearest one to a typed 3', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const measure = store.getState().score!.tracks[0].measures[1];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Time sig. denominator' }));
+    expect(screen.queryByRole('option', { name: '3' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: '8' }));
+
+    await waitFor(() => {
+      expect(store.getState().score!.tracks[0].measures[1].timeSignature.denominator).toBe(8);
+    });
+  });
+
+  it('names each key in words the locale owns', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const measure = store.getState().score!.tracks[0].measures[0];
+    act(() => {
+      store.getState().setSelection({ eventIds: [], measureIds: [measure.id], trackIds: [] });
+    });
+    render(<InspectorPanel store={store} />);
+    await user.click(screen.getByRole('tab', { name: 'Bar' }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Key' }));
+    expect(await screen.findByRole('option', { name: 'D major — 2 sharps' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'F major — 1 flat' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'C major — no sharps or flats' }),
+    ).toBeInTheDocument();
   });
 });

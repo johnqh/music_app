@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore, testStoreContext } from '@sudobility/music_lib';
+import { PREFS_KEY, createAppStore, testStoreContext } from '@sudobility/music_lib';
 
 vi.mock('@sudobility/music_lib', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
@@ -56,13 +56,13 @@ describe('DeveloperSettingsDialog', () => {
 
   it('clears stored device prefs via the confirm flow', async () => {
     const store = makeStore();
-    window.localStorage.setItem('scoresmith.prefs.v1', JSON.stringify({ themeMode: 'dark' }));
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ themeMode: 'dark' }));
     render(<DeveloperSettingsDialog open onClose={() => undefined} store={store} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Reset local database' }));
     await user.click(screen.getByRole('button', { name: 'Reset' }));
-    await waitFor(() => expect(window.localStorage.getItem('scoresmith.prefs.v1')).toBeNull());
+    await waitFor(() => expect(window.localStorage.getItem(PREFS_KEY)).toBeNull());
   });
 
   it('every interactive control has an accessible name', () => {

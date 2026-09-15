@@ -32,16 +32,15 @@ import {
 import { configureTheme } from '@sudobility/design';
 import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
 import { MusicClient } from '@sudobility/music_client';
+import type { MusicHookContext } from '@sudobility/music_client';
 import {
   initializeAppStore,
-  setEditingCopy,
-  setLibraryMessages,
+  installLibraryCopy,
   setErrorLogging,
   type PrefsStorage,
   type StoreContext,
 } from '@sudobility/music_lib';
-import { buildEditingCopy } from '@/features/score-editor/command-labels';
-import { libraryMessages } from '@/i18n/lib-copy';
+import { libraryCopy } from '@/i18n/library-copy';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';
 import { CONSTANTS } from '@/config/constants';
@@ -363,16 +362,12 @@ export function initializeApp(): AppServices {
 
   // Editing lives in music_lib so a second app cannot reimplement it
   // differently, but an edit still has to be *named* — in the undo history, and
-  // in the toast an edit that breaks a measure raises. The library holds no
-  // strings in any language, so the words come from here, the same way
-  // `setLibraryMessages` and `setErrorLogging` do.
-  setEditingCopy(buildEditingCopy());
-
-  // The other half of the same contract: the strings music_lib raises from
-  // places with no call site left to carry them. It had never been wired at
-  // all, so every one of them — the failed-autosave toast among them — showed
-  // as an empty string.
-  setLibraryMessages(libraryMessages());
+  // in the toast an edit that breaks a measure raises — and the library raises
+  // messages from places with no call site left to carry them (a failed
+  // autosave). The libraries hold no strings in any language, so the words come
+  // from here; which key each one reads is music_lib's, shared with the native
+  // app.
+  installLibraryCopy(libraryCopy);
 
   // The player comes first: music_lib's playback adapter resolves it from its
   // singleton on first use, and nothing else here may touch playback before it
@@ -450,6 +445,30 @@ export function initializeApp(): AppServices {
     io,
   };
   return services;
+}
+
+/**
+ * What music_client's react-query hooks are handed.
+ *
+ * `getToken` is the auth layer's own function, awaited per request — never a
+ * token read when the context was built, which is null for a signed-in user
+ * until Firebase restores the session and stale an hour into one. `userId` is
+ * who is signed in (null for nobody), which is what keeps a query idle while
+ * signed out and keys per-account answers so one account's never shows to the
+ * next; the caller passes it from the auth state it already renders from.
+ */
+export function musicHookContext(
+  services: Pick<AppServices, 'networkClient' | 'baseUrl'> & {
+    auth: Pick<AuthBackend, 'getToken'>;
+  },
+  userId: string | null,
+): MusicHookContext {
+  return {
+    networkClient: services.networkClient,
+    baseUrl: services.baseUrl,
+    getToken: () => services.auth.getToken(),
+    userId,
+  };
 }
 
 export function getAppServices(): AppServices {

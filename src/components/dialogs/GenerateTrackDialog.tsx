@@ -16,7 +16,6 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FormModal,
-  InfoBox,
   Select,
   SelectContent,
   SelectItem,
@@ -27,6 +26,7 @@ import {
   TextArea,
 } from '@sudobility/components';
 import {
+  DEFAULT_GENERATION_VARIANT,
   DEFAULT_INSTRUMENT_VALUE,
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
@@ -38,7 +38,6 @@ import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectIt
 export type GenerateTrackDialogProps = {
   open: boolean;
   pending: boolean;
-  error?: string | null;
   onGenerate: (prompt: string, instrument: InstrumentChoice, variant: string) => void;
   onClose: () => void;
   /** Bars times one track: what the server bills for the new part. */
@@ -48,7 +47,6 @@ export type GenerateTrackDialogProps = {
 export function GenerateTrackDialog({
   open,
   pending,
-  error,
   estimatedCredits = 0,
   onGenerate,
   onClose,
@@ -56,10 +54,11 @@ export function GenerateTrackDialog({
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [value, setValue] = useState(DEFAULT_INSTRUMENT_VALUE);
-  // The same default the Generate and Replace dialogs use. Not remembered
-  // across openings on purpose: it is a per-call choice, and the setting that
-  // does persist is the developer one behind it.
-  const [variant, setVariant] = useState<string>('deepseek');
+  // The same default the New Project and Replace forms open on, from the one
+  // constant all three read. Not remembered across openings on purpose: it is a
+  // per-call choice, and the setting that does persist is the developer one
+  // behind it.
+  const [variant, setVariant] = useState<string>(DEFAULT_GENERATION_VARIANT);
 
   useEffect(() => {
     if (open) setPrompt('');
@@ -132,12 +131,6 @@ export function GenerateTrackDialog({
           <Text as="p" size="xs" color="muted">
             {t('generate.estimate', { count: estimatedCredits })}
           </Text>
-        )}
-
-        {error && (
-          <InfoBox variant="danger" size="sm">
-            {error}
-          </InfoBox>
         )}
       </Stack>
     </FormModal>

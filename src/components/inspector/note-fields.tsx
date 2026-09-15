@@ -13,6 +13,7 @@ import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Input } from '@sudobility/components';
 import { barBeatForTick, setChordSymbol, tickForBarBeat } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
+import { formatBeatForField, parseNumericDraft } from '@sudobility/music_types';
 import { setFingering } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import {
@@ -48,10 +49,12 @@ export function BarBeatField({
   score,
   tick,
   onCommit,
+  disabled,
 }: {
   score: Score;
   tick: number;
   onCommit: (tick: number) => void;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const position = barBeatForTick(score, tick);
@@ -59,23 +62,25 @@ export function BarBeatField({
   // change, and `position` is a fresh object every render.
   const bar = position?.bar ?? null;
   // Two decimals is enough for any grid the editor offers, and trailing zeroes
-  // on a whole beat read as noise.
-  const beat = position ? Math.round(position.beat * 100) / 100 : null;
+  // on a whole beat read as noise — music_types' rule, shared with the native
+  // property sheet.
+  const beat = position ? formatBeatForField(position.beat) : null;
 
   const [barDraft, setBarDraft] = useState('');
   const [beatDraft, setBeatDraft] = useState('');
 
   useEffect(() => {
     setBarDraft(bar === null ? '' : String(bar));
-    setBeatDraft(beat === null ? '' : String(beat));
+    setBeatDraft(beat ?? '');
   }, [bar, beat]);
 
   if (!position) return null;
 
   const commit = (bar: string, beat: string): void => {
-    const barNumber = Number(bar);
-    const beatNumber = Number(beat);
-    if (!Number.isFinite(barNumber) || !Number.isFinite(beatNumber)) return;
+    // A cleared field is "no change", never bar 0 — `Number('')` is 0.
+    const barNumber = parseNumericDraft(bar);
+    const beatNumber = parseNumericDraft(beat);
+    if (barNumber === null || beatNumber === null) return;
     const next = tickForBarBeat(score, barNumber, beatNumber);
     if (next !== null && next !== tick) onCommit(next);
   };
@@ -88,6 +93,7 @@ export function BarBeatField({
           value={barDraft}
           inputMode="numeric"
           aria-label={t('inspector.bar')}
+          disabled={disabled}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setBarDraft(e.target.value)}
           onBlur={() => commit(barDraft, beatDraft)}
           className={TEXT_INPUT_CLASS}
@@ -99,6 +105,7 @@ export function BarBeatField({
           value={beatDraft}
           inputMode="decimal"
           aria-label={t('inspector.beat')}
+          disabled={disabled}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setBeatDraft(e.target.value)}
           onBlur={() => commit(barDraft, beatDraft)}
           className={TEXT_INPUT_CLASS}
@@ -140,10 +147,10 @@ export function FingeringField({
     setDraft(note.fingering ?? '');
   }, [note.id, note.fingering]);
 
+  // `setFingering` trims, treats blank as clearing, and skips a value the note
+  // already carries — so there is nothing to decide here.
   const commit = (): void => {
-    const next = draft.trim();
-    if (next === (note.fingering ?? '')) return;
-    setFingering(store, next === '' ? undefined : next);
+    setFingering(store, draft);
   };
 
   return (

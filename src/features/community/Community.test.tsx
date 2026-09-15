@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { getMusicPlayer } from '@sudobility/music_player/core';
+import type { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { twinkleScore } from '@sudobility/music_lib';
@@ -86,14 +88,38 @@ describe('PublishedView', () => {
     expect(await screen.findByRole('button', { name: /play/i })).toBeEnabled();
   });
 
-  it('shows a Share button carrying the URL', async () => {
+  it('plays the published score, not the score open in the editor', async () => {
+    // It used to press the app-wide transport, which is bound to the app-wide
+    // store: a visitor with a project open heard *that* project, and one with
+    // none heard nothing at all (or, as here with no app store, threw).
+    const player = getMusicPlayer() as MockMusicPlayer;
+    const user = userEvent.setup();
+    renderPublished();
+    await waitFor(() => expect(player.loadedScore).toBe(score));
+    await user.click(await screen.findByRole('button', { name: /play/i }));
+    expect(player.calls).toContain('play');
+    expect(player.loadedScore).toBe(score);
+    // The button follows the transport the player reports, not a local guess.
+    player.emitTransport('playing');
+    expect(await screen.findByRole('button', { name: /pause/i })).toBeVisible();
+  });
+
+  it('stops the transport when the page is left', async () => {
+    const player = getMusicPlayer() as MockMusicPlayer;
+    const view = renderPublished();
+    await waitFor(() => expect(player.loadedScore).toBe(score));
+    view.unmount();
+    expect(player.calls).toContain('stop');
+  });
+
+  it('shows a Share button carrying the shareable address', async () => {
     const user = userEvent.setup();
     renderPublished();
     await screen.findByText('My Song Version 1');
     await user.click(screen.getByRole('button', { name: /share/i }));
-    expect(
-      screen.getByText(new RegExp(window.location.href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))),
-    ).toBeVisible();
+    // The route's own address, built the way the native app builds it — not
+    // whatever query string or trailing path the visitor arrived with.
+    expect(screen.getByText(`${window.location.origin}/en/p/pub_x`)).toBeVisible();
   });
 
   it('says so when the link is no longer shared', async () => {

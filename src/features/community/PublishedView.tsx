@@ -2,30 +2,37 @@
  * A published snapshot, viewable and playable by anyone.
  *
  * **Read-only by construction, not by a flag.** The score is drawn with the
- * print renderer, which has no interaction surface at all — there is no editor
- * store bound to the page, so there is nothing here that could change the
- * music even if somebody wanted it to.
+ * print renderer, which has no interaction surface at all — there is nothing
+ * here that could change the music even if somebody wanted it to.
  *
  * Its store is isolated (`createAppStore`, not the app singleton) so opening a
- * shared link never disturbs the visitor's own open project.
+ * shared link never disturbs the visitor's own open project — **and so is its
+ * transport.** Play used to press `playbackController`, the app-wide adapter,
+ * which is bound to the app-wide store: a visitor with a project open heard
+ * that project instead of the one on the page, and a signed-out visitor, whose
+ * app store holds no score, heard nothing. The page now binds the player to its
+ * own store with music_editing's `bindPlayer` — the same binder the app-wide
+ * adapter is a shell over — and lets go of it when the page is left.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@sudobility/components';
-import { computeLayout, createAppStore, playbackController } from '@sudobility/music_lib';
+import { bindPlayer, computeLayout, createAppStore } from '@sudobility/music_lib';
+import type { PlayerBinding } from '@sudobility/music_lib';
+import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { PublishedSnapshot } from '@sudobility/music_types';
+import { publishedSnapshotUrl } from '@sudobility/music_types';
 import { getAppServices } from '@/config/initialize';
 import { printRenderOptions, printSystems } from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
 
 export function PublishedView() {
   const { t } = useTranslation();
-  const { publicId = '' } = useParams();
+  const { publicId = '', lang = 'en' } = useParams();
   const [snapshot, setSnapshot] = useState<PublishedSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [playing, setPlaying] = useState(false);
 
   const store = useMemo(() => {
     const { musicClient, auth, prefsStorage } = getAppServices();
@@ -33,6 +40,25 @@ export function PublishedView() {
       context: { client: musicClient, getToken: () => auth.getToken(), storage: prefsStorage },
     });
   }, []);
+
+  const playing = store((s) => s.state === 'playing');
+
+  /**
+   * The page's own transport. Bound for as long as the page is mounted; the
+   * store's score arriving is what loads the player, so binding before the
+   * fetch lands is fine. Stopped on the way out — a visitor who leaves the page
+   * should not go on hearing it.
+   */
+  const [binding, setBinding] = useState<PlayerBinding | null>(null);
+  useEffect(() => {
+    const player = getMusicPlayer();
+    const bound = bindPlayer(player, store);
+    setBinding(bound);
+    return () => {
+      bound.stop();
+      bound.unbind();
+    };
+  }, [store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,19 +103,18 @@ export function PublishedView() {
         <Button
           type="button"
           variant="primary"
-          disabled={!snapshot}
-          onClick={() => {
-            playbackController.togglePlay();
-            setPlaying((v) => !v);
-          }}
+          disabled={!snapshot || !binding}
+          onClick={() => void binding?.togglePlay()}
         >
-          {playing ? t('player.pause') : t('player.play')}
+          {playing ? t('transport.pause') : t('transport.play')}
         </Button>
         <Button type="button" variant="ghost" onClick={() => setShareOpen((v) => !v)}>
           {t('published.share')}
         </Button>
         {shareOpen && (
-          <code className="rounded bg-neutral-100 px-2 py-1 text-xs">{window.location.href}</code>
+          <code className="rounded bg-neutral-100 px-2 py-1 text-xs">
+            {publishedSnapshotUrl(window.location.origin, lang, publicId)}
+          </code>
         )}
       </div>
 

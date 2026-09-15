@@ -14,6 +14,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   findTrack,
+  litKeys,
   playbackController,
   selectActiveTrackId,
   useAppStore,
@@ -21,6 +22,7 @@ import {
   pitchToMidi,
   selectSelectedNotes,
 } from '@sudobility/music_lib';
+import type { SoundingNote, UUID } from '@sudobility/music_lib';
 // `chordSelection` for what the keys should *look* like; `playKeyGroup` for
 // what pressing them does. Only the first is this component's business.
 import {
@@ -31,25 +33,14 @@ import {
   releaseKey as releaseGroupKey,
 } from '@sudobility/music_lib';
 import type { KeyGroup } from '@sudobility/music_lib';
+import type { RenderTheme } from '@sudobility/music_drawing';
 import { getAppServices } from '@/config/initialize';
 import { usePlayingPitches } from '@/features/score-editor/usePlayback';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
-import { resolveColorScheme } from '@/app/theme';
-import type { KeyNaming, PianoKey } from '@sudobility/music_drawing';
-import {
-  LABEL_ROW_HEIGHT,
-  MIN_WHITE_KEY_WIDTH,
-  FULL_RANGE,
-  computeKeys,
-  keyboardLabelSemitones,
-  relabelKeys,
-  keyboardWidth,
-  KEYBOARD_OUT_OF_RANGE_WHITE,
-  snapToWhiteKeys,
-  trackKeyboardSpan,
-  whiteKeyCount,
-} from '@sudobility/music_drawing';
+import { useResolvedColorScheme } from '@/app/theme';
+import type { PianoKey } from '@sudobility/music_drawing';
+import { keyboardKeyFill, keyboardKeys } from '@sudobility/music_drawing';
 
 /**
  * One key. `React.memo` on primitive props matters here: a note boundary
@@ -59,7 +50,6 @@ import {
  */
 const PianoKeyDiv = memo(function PianoKeyDiv({
   midi,
-  isBlack,
   x,
   width,
   height,
@@ -68,16 +58,15 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   labelTop,
   outOfRange,
   isLit,
-  litColor,
   isSelected,
-  selectedColor,
+  fill,
   onPress,
   onRelease,
 }: PianoKey & {
   isLit: boolean;
-  litColor: string;
   isSelected: boolean;
-  selectedColor: string;
+  /** The key's colour, from `keyboardKeyFill` — a string, so `memo` still compares a primitive. */
+  fill: string;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
 }) {
@@ -121,17 +110,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         top: 0,
         width,
         height,
-        // Sounding wins over selected: it is the more transient signal, and a
-        // key that is both should show what is happening now.
-        backgroundColor: isLit
-          ? litColor
-          : isSelected
-            ? selectedColor
-            : isBlack
-              ? '#1f1f23'
-              : outOfRange
-                ? KEYBOARD_OUT_OF_RANGE_WHITE
-                : '#fbfbfd',
+        backgroundColor: fill,
         border: '1px solid rgba(0,0,0,0.45)',
         borderTop: 'none',
         borderRadius: '0 0 3px 3px',
@@ -175,20 +154,17 @@ export type PianoKeyboardViewProps = {
   collapsed?: boolean;
 };
 
-/** Room below the keys for the C labels. */
-const LABEL_GUTTER = 14;
 /** Used when the panel isn't measurable (jsdom reports 0), so tests get real geometry. */
 const FALLBACK_WIDTH = 1000;
 const FALLBACK_KEY_HEIGHT = 96;
 
 type KeyRowProps = {
   store: EditorStoreApi;
-  keys: ReturnType<typeof computeKeys>;
+  keys: PianoKey[];
   activeTrackId: string | null;
   heldKeys: ReadonlySet<number>;
   selectedMidis: ReadonlySet<number>;
-  litColor: string;
-  selectedColor: string;
+  theme: RenderTheme;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
 };
@@ -204,16 +180,13 @@ type KeyRowProps = {
  * caret animates on. The keys themselves are already `memo`'d on primitives,
  * so only the one or two that actually change do any work.
  */
-const NOT_PLAYING: ReadonlySet<number> = new Set();
-
 const PianoKeyRow = memo(function PianoKeyRow({
   store,
   keys,
   activeTrackId,
   heldKeys,
   selectedMidis,
-  litColor,
-  selectedColor,
+  theme,
   onPress,
   onRelease,
 }: KeyRowProps) {
@@ -222,30 +195,53 @@ const PianoKeyRow = memo(function PianoKeyRow({
   const playing = usePlayingPitches(activeTrackId);
   const playbackState = store((s) => s.state);
 
-  /**
-   * Gated on `playbackState`, not just on the set being non-empty: the engine
-   * clears sounding notes on `stop()` but not on `pause()`, so without the gate
-   * a pause would leave whatever was mid-chord stuck lit.
-   */
-  const lit = playbackState === 'playing' ? playing : NOT_PLAYING;
+  /*
+    What is drawn pressed is music_editing's `litKeys`, shared with the native
+    keyboard: the active track's sounding pitches **only while playing** — the
+    engine clears sounding notes on `stop()` but not on `pause()`, so without
+    the gate a paused chord stayed lit — plus the keys a finger holds.
+
+    Fed from `usePlayingPitches` rather than the raw sounding notes, and
+    memoized on it. The rule wants notes, but reading the notes here would hand
+    it a new array on every report from every track and rebuild the set each
+    time; the kept set only changes identity when one of this track's keys
+    does, so the lit set below does too, and a note starting on another part
+    still renders nothing.
+  */
+  const lit = useMemo(
+    () => litKeys(asSounding(playing, activeTrackId), activeTrackId, playbackState, heldKeys),
+    [playing, activeTrackId, playbackState, heldKeys],
+  );
 
   return (
     <>
-      {keys.map((key) => (
-        <PianoKeyDiv
-          key={key.midi}
-          {...key}
-          isLit={lit.has(key.midi) || heldKeys.has(key.midi)}
-          litColor={litColor}
-          isSelected={selectedMidis.has(key.midi)}
-          selectedColor={selectedColor}
-          onPress={onPress}
-          onRelease={onRelease}
-        />
-      ))}
+      {keys.map((key) => {
+        const isLit = lit.has(key.midi);
+        const isSelected = selectedMidis.has(key.midi);
+        return (
+          <PianoKeyDiv
+            key={key.midi}
+            {...key}
+            isLit={isLit}
+            isSelected={isSelected}
+            // Sounding over selected over the out-of-range dimming — black keys
+            // included, which the web used to draw the same near-black whether
+            // or not the instrument could play them.
+            fill={keyboardKeyFill(key, { lit: isLit, selected: isSelected }, theme)}
+            onPress={onPress}
+            onRelease={onRelease}
+          />
+        );
+      })}
     </>
   );
 });
+
+/** The kept pitch set, in the shape `litKeys` reads: already this track's. */
+function asSounding(pitches: ReadonlySet<number>, trackId: UUID | null): SoundingNote[] {
+  if (!trackId) return [];
+  return [...pitches].map((midi) => ({ noteId: '', trackId, midi }));
+}
 
 export function PianoKeyboardView({
   store = useAppStore,
@@ -261,10 +257,10 @@ export function PianoKeyboardView({
   */
   const pitchDisplay = store((s) => s.pitchDisplay);
 
-  const theme = useMemo(
-    () => (resolveColorScheme(themeMode) === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME),
-    [themeMode],
-  );
+  // Observed rather than resolved once: in system mode an OS flip does not
+  // change `themeMode`, and the key fills are literal colours CSS cannot reach.
+  const scheme = useResolvedColorScheme(themeMode);
+  const theme = scheme === 'dark' ? DARK_RENDER_THEME : LIGHT_RENDER_THEME;
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ width: FALLBACK_WIDTH, height: FALLBACK_KEY_HEIGHT });
@@ -293,46 +289,54 @@ export function PianoKeyboardView({
 
   const activeTrack = activeTrackId && score ? findTrack(score, activeTrackId) : null;
 
-  /**
-   * The keyboard spans the active track's instrument, not always all 88 keys —
-   * a piccolo part should not present three octaves that will never sound. It
-   * follows a track change and an instrument change alike, because both move
-   * `midiProgram`.
-   *
-   * Widened to whole keys first: a keyboard whose outermost key is black has
-   * nothing for that key to hang off, so it would float.
-   */
-  /**
-   * The two fields every instrument lookup here depends on, pulled out as
-   * primitives.
-   *
-   * Deliberate: memoizing on the track object would recompute the whole key
-   * geometry on any score edit, since a new score means a new track object.
-   * These two are what actually decide it — and both are needed, because
-   * `midiProgram` means a drum kit or an instrument depending on the clef.
-   */
-  const trackProgram = activeTrack?.midiProgram;
-  const trackClef = activeTrack?.clef;
-
   /*
-    The instrument's compass, widened to reach every note the track holds, with
-    the keys outside the compass marked — `trackKeyboardSpan`, shared with the
-    native app. An import can hold notes the instrument cannot play (a
-    sub-octave bass layer), and a keyboard stopped at the compass lit nothing
-    for them. Through the track, not the program alone: on a percussion track
-    `midiProgram` is a drum kit.
+    The keys, their size, their names and where the labels go — one call,
+    `keyboardKeys` in music_drawing, shared with the native keyboard. It folds
+    in what this view used to compose from five helpers:
+
+    - the range: the active track's instrument, not always all 88 keys (a
+      piccolo part should not present three octaves that will never sound),
+      widened to reach every note the track holds — an import can hold notes
+      the instrument cannot play, and a keyboard stopped at the compass lit
+      nothing for them — and snapped to whole white keys, since a black key at
+      either end has nothing to hang off. Keys outside the compass are marked.
+      Through the track, not the program alone: on a percussion track
+      `midiProgram` is a drum kit;
+    - the naming: a drum track's keys are drums, every one labelled on two
+      rows, since a drum name cannot be inferred from a landmark the way a pitch
+      name can;
+    - the label gutter, taken out of the measured height — not baked in at
+      measure time, where a drum track's taller gutter overflowed a container
+      that clips vertically and cut the black keys' names off;
+    - the lettering of a transposing part read in written pitch. Only the names
+      move: the midi numbers stay sounding, because that is what the store
+      holds, what the audition plays, what lights and what note entry writes.
+      On a B-flat trumpet the key that reads C4 is the sounding B-flat 3 the
+      player writes as C;
+    - the width of *this* range, which is what the scrolling box is sized to.
 
     Recomputed when the track changes, which a note edit does; it walks the
     track's notes once, which is nothing next to drawing the keys.
   */
-  const span = useMemo(
+  const keyboard = useMemo(
     () =>
-      activeTrack
-        ? trackKeyboardSpan(activeTrack)
-        : { range: snapToWhiteKeys(FULL_RANGE), playable: null },
-    [activeTrack],
+      keyboardKeys({
+        width: box.width,
+        height: box.height,
+        track: activeTrack,
+        pitchDisplay,
+      }),
+    [box.width, box.height, activeTrack, pitchDisplay],
   );
-  const range = span.range;
+  const { playable, keys } = keyboard;
+
+  /**
+   * The two fields the audition depends on, pulled out as primitives, so the
+   * press handler is not rebuilt on every score edit. Both are needed, because
+   * `midiProgram` means a drum kit or an instrument depending on the clef.
+   */
+  const trackProgram = activeTrack?.midiProgram;
+  const trackClef = activeTrack?.clef;
 
   /**
    * The chord being played: which keys, which are still down, and when it began.
@@ -371,7 +375,7 @@ export function PianoKeyboardView({
     (midi: number) => {
       // Out of the instrument's compass: neither sounded nor written. The
       // drawn key is inert already; this is the MIDI keyboard's route in.
-      if (span.playable && !midiIsInRange(midi, span.playable)) return;
+      if (playable && !midiIsInRange(midi, playable)) return;
       groupRef.current = pressGroupKey(groupRef.current, midi, performance.now());
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
@@ -381,7 +385,7 @@ export function PianoKeyboardView({
       // pitched instrument for a note that plays back as a drum.
       playbackController.noteOn(midi, trackProgram ?? 0, trackClef === 'percussion');
     },
-    [trackProgram, trackClef, span.playable],
+    [trackProgram, trackClef, playable],
   );
 
   const releaseKey = useCallback(
@@ -429,46 +433,6 @@ export function PianoKeyboardView({
     });
   }, [pressKey, releaseKey]);
 
-  const whiteKeyWidth = Math.max(MIN_WHITE_KEY_WIDTH, box.width / whiteKeyCount(range));
-  /**
-   * A drum track's keys are drums, so they are named as drums — and every one
-   * of them is labelled, since a drum name cannot be inferred from a landmark
-   * the way a pitch name can.
-   */
-  const naming: KeyNaming = trackClef === 'percussion' ? 'percussion' : 'pitch';
-  /** Two rows of labels for a kit — the blacks are named too, and need their own line. */
-  const labelGutter = naming === 'percussion' ? LABEL_ROW_HEIGHT * 2 : LABEL_GUTTER;
-  /** What is left for the keys themselves once the labels have their rows. */
-  const keyHeight = Math.max(1, box.height - labelGutter);
-  /**
-   * How far the LETTERING moves for this track, given what the staff shows.
-   *
-   * Zero everywhere except a transposing instrument read in written pitch, and
-   * `relabelKeys` returns the identical array at zero — so a piano keyboard
-   * re-reconciles nothing.
-   *
-   * Only the names move. The midi numbers stay sounding, because that is what
-   * the store holds, what the audition plays, what lights during playback and
-   * what note entry writes; converting those here would fix the label by
-   * breaking the note. On a B-flat trumpet the key that reads C4 is the
-   * sounding B-flat 3 the player writes as C — press it and C4 appears on the
-   * staff, which is what a reader comparing the two surfaces expects.
-   */
-  const labelSemitones = keyboardLabelSemitones(
-    trackProgram === undefined || trackClef === undefined
-      ? null
-      : { clef: trackClef, midiProgram: trackProgram },
-    pitchDisplay,
-  );
-  const keys = useMemo(
-    () =>
-      relabelKeys(
-        computeKeys(whiteKeyWidth, keyHeight, range, naming, span.playable),
-        labelSemitones,
-      ),
-    [whiteKeyWidth, keyHeight, range, naming, labelSemitones, span.playable],
-  );
-
   // Nothing at all when collapsed. The control that brings it back lives on the
   // transport bar, so no part of this has to stay on screen to remain reachable
   // — which is what the header row it replaced was for.
@@ -484,7 +448,7 @@ export function PianoKeyboardView({
           role="img"
           aria-label={t('editor.pianoKeyboard')}
           className="relative"
-          style={{ width: keyboardWidth(whiteKeyWidth, range), height: box.height }}
+          style={{ width: keyboard.width, height: box.height }}
         >
           <PianoKeyRow
             store={store}
@@ -492,8 +456,7 @@ export function PianoKeyboardView({
             activeTrackId={activeTrackId}
             heldKeys={heldKeys}
             selectedMidis={selectedMidis}
-            litColor={theme.notePlaying}
-            selectedColor={theme.noteSelected}
+            theme={theme}
             onPress={pressKey}
             onRelease={releaseKey}
           />

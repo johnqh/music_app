@@ -9,7 +9,12 @@
  */
 import { CheckableSelect, Tooltip, cn } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
-import { selectActiveTrackId, selectVisibleTrackIds, useAppStore } from '@sudobility/music_lib';
+import {
+  selectActiveTrackId,
+  selectVisibleTrackIds,
+  trackPickerVisible,
+  useAppStore,
+} from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
@@ -22,16 +27,16 @@ export function TrackVisibilitySelect({ store = useAppStore }: TrackVisibilitySe
   const tracks = store((s) => s.score?.tracks);
   const visibleTrackIds = store(selectVisibleTrackIds);
   const activeTrackId = store(selectActiveTrackId);
-
   // With fewer than two tracks there is nothing to choose between and nothing
-  // that could be hidden, so the control would be a permanently-disabled no-op
-  // taking up toolbar width.
-  if (!tracks || tracks.length < 2 || !activeTrackId) return null;
+  // that could be hidden. The rule is music_editing's, shared with the native bar.
+  const visible = store(trackPickerVisible);
+
+  if (!visible || !tracks || !activeTrackId) return null;
 
   return (
     <Tooltip placement="bottom" content={t('editor.activeTrackHint')}>
       <CheckableSelect
-        ariaLabel="Visible tracks"
+        ariaLabel={t('editor.visibleTracks')}
         options={tracks.map((track) => ({ value: track.id, label: track.name }))}
         value={activeTrackId}
         onChange={(trackId) => store.getState().setActiveTrack(trackId)}
