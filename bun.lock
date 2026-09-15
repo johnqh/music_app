@@ -19,7 +19,7 @@
         "@sudobility/music_client": "^0.4.62",
         "@sudobility/music_editing": "^0.0.19",
         "@sudobility/music_io": "^0.9.41",
-        "@sudobility/music_lib": "^1.9.39",
+        "@sudobility/music_lib": "^1.9.41",
         "@sudobility/music_player": "^0.1.26",
         "@sudobility/music_types": "^0.13.25",
         "@sudobility/seo_lib": "^0.0.38",
@@ -434,13 +434,13 @@
 
     "@sudobility/music_codecs": ["@sudobility/music_codecs@0.2.26", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.25" } }, "sha512-Slxz8aVoACdPiRGNvgviqs0fT8xCbCMkwfm6UGvwQE/m8xBMNhAmQrEWqyrC8rV6nmfnmicJJaEv4rC+3c2zFA=="],
 
-    "@sudobility/music_drawing": ["@sudobility/music_drawing@0.0.33", "", { "dependencies": { "vexflow": "^4.2.5" }, "peerDependencies": { "@sudobility/music_types": "^0.13.24" } }, "sha512-f/u01wm+ILDaKt6rSp/fet5OzCWW/qTF6P2EF4+Q5iKWVa8ue7SZlLDxqbpUS5UXY4Kx+j8o/Bn3bgmXcmbwaQ=="],
+    "@sudobility/music_drawing": ["@sudobility/music_drawing@0.0.34", "", { "dependencies": { "vexflow": "^4.2.5" }, "peerDependencies": { "@sudobility/music_types": "^0.13.25" } }, "sha512-cKSL+7Bmxp6tbA94kNAcopGc1Dgr8ksw4NSBaz1ahRY1JBzwuo0ystccT2762sHBwPLHgbAEEzJwH6Sr/MWhWA=="],
 
     "@sudobility/music_editing": ["@sudobility/music_editing@0.0.19", "", { "dependencies": { "immer": "^11.1.18" }, "peerDependencies": { "@sudobility/music_types": "^0.13.25", "react": ">=18", "zustand": ">=5" } }, "sha512-R0T1x8tCFcPGOqJlclBiHs+asQN2l1esw3JfZeCYnGBRT68rzecoxUUTaaIVY6T71bc3xxuMhj4/J5u4pP73Pg=="],
 
     "@sudobility/music_io": ["@sudobility/music_io@0.9.41", "", { "dependencies": { "@breezystack/lamejs": "^1.2.7", "@sudobility/music_codecs": "^0.2.1" }, "peerDependencies": { "@sudobility/music_types": "^0.13.25", "fast-xml-parser": ">=5.0.0", "react-native-fs": ">=2.20.0", "react-native-share": ">=10.0.0" }, "optionalPeers": ["fast-xml-parser", "react-native-fs", "react-native-share"] }, "sha512-yLkAyJlN80EZGVS5OpzfBfxK/RXb2Ljk1CAVnFysNsqDkIVPfFFtfb0lOKrnq+QzAb03oqqFeaPtUs7E91IFvQ=="],
 
-    "@sudobility/music_lib": ["@sudobility/music_lib@1.9.39", "", { "dependencies": { "@sudobility/music_codecs": "^0.2.25", "@sudobility/music_drawing": "^0.0.33", "@sudobility/music_player": "^0.1.0", "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.61", "@sudobility/music_editing": "^0.0.18", "@sudobility/music_types": "^0.13.24", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-U+m66935FSvmSCPQbTlxWfvXDev8OjaM3az3Nhbl6PE4xDQFl/Zt+bCohAaTAHYfPmZkchtgW0rG/K8qyPrCpQ=="],
+    "@sudobility/music_lib": ["@sudobility/music_lib@1.9.41", "", { "dependencies": { "@sudobility/music_codecs": "^0.2.26", "@sudobility/music_drawing": "^0.0.34", "@sudobility/music_player": "^0.1.26", "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" }, "peerDependencies": { "@sudobility/music_client": "^0.4.62", "@sudobility/music_editing": "^0.0.19", "@sudobility/music_types": "^0.13.25", "@tanstack/react-query": ">=5", "react": ">=18", "zustand": ">=5" } }, "sha512-669RKM0WQz48KuS/pIhEHEtUt5um9doWYZXquXVfuolUdoHZS6do2TMPhZzV0JORbkfzszR9bfbxsVnTe8NPmw=="],
 
     "@sudobility/music_player": ["@sudobility/music_player@0.1.26", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.25", "js-synthesizer": "^1.13.0", "react-native-audio-api": ">=0.13.0" }, "optionalPeers": ["js-synthesizer", "react-native-audio-api"] }, "sha512-nqtqFYmKBvRLxDzEhoIxK47IV/+vZMW+5DmDcJVrdxVHp8ehRH34yzySuVz6Yh0w05hdl4PBeLSkgk9nS3722g=="],
 
@@ -1103,10 +1103,6 @@
     "@babel/helper-compilation-targets/lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
-
-    "@sudobility/music_lib/@sudobility/music_codecs": ["@sudobility/music_codecs@0.2.25", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.24" } }, "sha512-pHpA8B0FiCyNlg/lSqg1msrBgWSsXZEQnUvsto5U4cG54tdBIoJHA4xsNZcdBIm2QRfB/mClfp1H/g7XcCc1lg=="],
-
-    "@sudobility/music_lib/@sudobility/music_player": ["@sudobility/music_player@0.1.25", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.24", "js-synthesizer": "^1.13.0", "react-native-audio-api": ">=0.13.0" }, "optionalPeers": ["js-synthesizer", "react-native-audio-api"] }, "sha512-Y01lIpRPy5TjttXESyUq+hjgprq8duVqpN9i+pnrKsrce3TFCSAzrDOuDgNWLo/Sdt6MwCs0iad1IFXPaa4reQ=="],
 
     "@testing-library/dom/dom-accessibility-api": ["dom-accessibility-api@0.5.16", "", {}, "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg=="],
 
