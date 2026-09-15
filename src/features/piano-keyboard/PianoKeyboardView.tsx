@@ -16,8 +16,8 @@ import {
   findTrack,
   playbackController,
   selectActiveTrackId,
-  trackKeyboardRange,
   useAppStore,
+  midiIsInRange,
   pitchToMidi,
   selectSelectedNotes,
 } from '@sudobility/music_lib';
@@ -46,7 +46,9 @@ import {
   keyboardLabelSemitones,
   relabelKeys,
   keyboardWidth,
+  KEYBOARD_OUT_OF_RANGE_WHITE,
   snapToWhiteKeys,
+  trackKeyboardSpan,
   whiteKeyCount,
 } from '@sudobility/music_drawing';
 
@@ -65,6 +67,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   label,
   name,
   labelTop,
+  outOfRange,
   isLit,
   litColor,
   isSelected,
@@ -90,8 +93,12 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
       // should be what it sounds — which on a drum track is a drum, not a
       // pitch. `name` carries whichever applies.
       aria-label={name}
+      // Drawn because the track holds notes here, but the instrument cannot
+      // play it — so it neither sounds nor writes.
+      aria-disabled={outOfRange || undefined}
       onPointerDown={(event) => {
         event.preventDefault();
+        if (outOfRange) return;
         // Capture keeps the release on this key when a finger slides off it,
         // but it is an enhancement, not a precondition for sounding the note.
         // `?.` only guards the method being absent; it still throws for a
@@ -105,10 +112,10 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         }
         onPress(midi);
       }}
-      onPointerUp={() => onRelease(midi)}
+      onPointerUp={outOfRange ? undefined : () => onRelease(midi)}
       // A pointer that leaves the key still has to release it, or the note
       // sustains forever and the tap never gets written.
-      onPointerCancel={() => onRelease(midi)}
+      onPointerCancel={outOfRange ? undefined : () => onRelease(midi)}
       style={{
         position: 'absolute',
         left: x,
@@ -123,7 +130,9 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
             ? selectedColor
             : isBlack
               ? '#1f1f23'
-              : '#fbfbfd',
+              : outOfRange
+                ? KEYBOARD_OUT_OF_RANGE_WHITE
+                : '#fbfbfd',
         border: '1px solid rgba(0,0,0,0.45)',
         borderTop: 'none',
         borderRadius: '0 0 3px 3px',
@@ -133,7 +142,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         // metaphor for a struck key.
         transform: isLit ? 'translateY(2px)' : undefined,
         boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
-        cursor: 'pointer',
+        cursor: outOfRange ? 'default' : 'pointer',
         touchAction: 'none',
       }}
     >
@@ -309,14 +318,25 @@ export function PianoKeyboardView({
   const trackProgram = activeTrack?.midiProgram;
   const trackClef = activeTrack?.clef;
 
-  const range = useMemo(() => {
-    // Through the track, not the program alone: on a percussion track
-    // `midiProgram` is a drum kit, so reading it as an instrument showed a
-    // piano's compass for a kit — keys that could not sound a drum, and the
-    // drums that do sound (35-81) partly off the end.
-    if (trackProgram === undefined || trackClef === undefined) return snapToWhiteKeys(FULL_RANGE);
-    return snapToWhiteKeys(trackKeyboardRange({ clef: trackClef, midiProgram: trackProgram }));
-  }, [trackProgram, trackClef]);
+  /*
+    The instrument's compass, widened to reach every note the track holds, with
+    the keys outside the compass marked — `trackKeyboardSpan`, shared with the
+    native app. An import can hold notes the instrument cannot play (a
+    sub-octave bass layer), and a keyboard stopped at the compass lit nothing
+    for them. Through the track, not the program alone: on a percussion track
+    `midiProgram` is a drum kit.
+
+    Recomputed when the track changes, which a note edit does; it walks the
+    track's notes once, which is nothing next to drawing the keys.
+  */
+  const span = useMemo(
+    () =>
+      activeTrack
+        ? trackKeyboardSpan(activeTrack)
+        : { range: snapToWhiteKeys(FULL_RANGE), playable: null },
+    [activeTrack],
+  );
+  const range = span.range;
 
   /**
    * The chord being played: which keys, which are still down, and when it began.
@@ -353,6 +373,9 @@ export function PianoKeyboardView({
 
   const pressKey = useCallback(
     (midi: number) => {
+      // Out of the instrument's compass: neither sounded nor written. The
+      // drawn key is inert already; this is the MIDI keyboard's route in.
+      if (span.playable && !midiIsInRange(midi, span.playable)) return;
       groupRef.current = pressGroupKey(groupRef.current, midi, performance.now());
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
@@ -362,7 +385,7 @@ export function PianoKeyboardView({
       // pitched instrument for a note that plays back as a drum.
       playbackController.noteOn(midi, trackProgram ?? 0, trackClef === 'percussion');
     },
-    [trackProgram, trackClef],
+    [trackProgram, trackClef, span.playable],
   );
 
   const releaseKey = useCallback(
@@ -442,8 +465,12 @@ export function PianoKeyboardView({
     pitchDisplay,
   );
   const keys = useMemo(
-    () => relabelKeys(computeKeys(whiteKeyWidth, keyHeight, range, naming), labelSemitones),
-    [whiteKeyWidth, keyHeight, range, naming, labelSemitones],
+    () =>
+      relabelKeys(
+        computeKeys(whiteKeyWidth, keyHeight, range, naming, span.playable),
+        labelSemitones,
+      ),
+    [whiteKeyWidth, keyHeight, range, naming, labelSemitones, span.playable],
   );
 
   // Nothing at all when collapsed. The control that brings it back lives on the
@@ -461,7 +488,7 @@ export function PianoKeyboardView({
           role="img"
           aria-label={t('editor.pianoKeyboard')}
           className="relative"
-          style={{ width: keyboardWidth(whiteKeyWidth), height: box.height }}
+          style={{ width: keyboardWidth(whiteKeyWidth, range), height: box.height }}
         >
           <PianoKeyRow
             store={store}

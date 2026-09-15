@@ -94,7 +94,10 @@ import {
   cn,
 } from '@sudobility/components';
 import {
-  DEFAULT_BPM,
+  barsForSeconds,
+  formatDuration,
+  parseDuration,
+  secondsForBars,
   DEFAULT_GENERATE_SCORE_MEASURES,
   DEFAULT_INSTRUMENT_VALUE,
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
@@ -247,45 +250,6 @@ function CollapsibleReveal({
   );
 }
 
-/**
- * How long a number of bars plays, and back again.
- *
- * The Duration field is the Bars field read in seconds: somebody cutting music
- * to a video knows how long the clip is, not how many bars that makes. Bars
- * stay what the request carries; this only converts between the two at the
- * tempo and meter in the form. A blank tempo is the server's default, which is
- * what the piece will actually play at. The tempo counts quarter notes, so a
- * bar of 6/8 is three of them.
- */
-function secondsForBars(bars: number, tempoText: string, timeSigPreset: string): number {
-  const bpm = Number(tempoText) > 0 ? Number(tempoText) : DEFAULT_BPM;
-  const ts = GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset] ?? {
-    numerator: 4,
-    denominator: 4,
-  };
-  return (bars * ((ts.numerator * 4) / ts.denominator) * 60) / bpm;
-}
-
-function barsForSeconds(seconds: number, tempoText: string, timeSigPreset: string): number {
-  return Math.max(1, Math.round(seconds / secondsForBars(1, tempoText, timeSigPreset)));
-}
-
-/** Seconds as `m:ss`. */
-function formatDuration(seconds: number): string {
-  const whole = Math.max(0, Math.round(seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
-}
-
-/** `"45"`, `"0:45"` or `"1:05"` as seconds; null for anything else. */
-function parseDuration(text: string): number | null {
-  const match = /^(?:(\d+):)?(\d+)$/.exec(text.trim());
-  if (!match) return null;
-  const seconds = Number(match[2]);
-  if (match[1] !== undefined && seconds >= 60) return null;
-  const total = Number(match[1] ?? 0) * 60 + seconds;
-  return total > 0 ? total : null;
-}
-
 function LabeledInput({
   label,
   value,
@@ -406,12 +370,16 @@ export function NewProjectDialog({
     bars, tempo or meter refreshes it; typing it sets the bars.
   */
   const [durationText, setDurationText] = useState(() =>
-    formatDuration(secondsForBars(DEFAULT_GENERATE_SCORE_MEASURES, '', '4/4')),
+    formatDuration(secondsForBars(DEFAULT_GENERATE_SCORE_MEASURES, '')),
   );
   const refreshDuration = (bars: string, tempoText: string, meter: string): void => {
     const count = Number(bars);
     if (Number.isInteger(count) && count > 0) {
-      setDurationText(formatDuration(secondsForBars(count, tempoText, meter)));
+      setDurationText(
+        formatDuration(
+          secondsForBars(count, tempoText, GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[meter]),
+        ),
+      );
     }
   };
   const changeMeasures = (next: string): void => {
@@ -429,7 +397,12 @@ export function NewProjectDialog({
   const changeDuration = (next: string): void => {
     setDurationText(next);
     const seconds = parseDuration(next);
-    if (seconds !== null) setMeasures(String(barsForSeconds(seconds, tempo, timeSigPreset)));
+    if (seconds !== null)
+      setMeasures(
+        String(
+          barsForSeconds(seconds, tempo, GENERATE_SCORE_TIME_SIGNATURE_OPTIONS[timeSigPreset]),
+        ),
+      );
   };
 
   /*

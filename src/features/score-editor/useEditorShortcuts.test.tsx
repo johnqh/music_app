@@ -5,7 +5,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@sudobility/music_lib';
 import { twinkleScore } from '@sudobility/music_lib';
-import { allNotes, findEvent } from '@sudobility/music_lib';
+import { pitchToMidi, allNotes, findEvent } from '@sudobility/music_lib';
 import type { NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
@@ -191,20 +191,24 @@ describe('useEditorShortcuts', () => {
     expect(findEvent(store.getState().score!, noteId)).not.toBeNull();
   });
 
-  it('invalid edit (out-of-range transpose) shows an error toast', async () => {
+  it('refuses a transpose past the instrument, with a warning, and keeps the note', async () => {
     const store = makeStore();
     const note = allNotes(store.getState().score!)[0] as NoteEvent; // C4, midi 60
     store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
     render(<Harness store={store} />);
     const user = userEvent.setup();
 
-    // 6 octave-downs = -72 semitones; 60 - 72 = -12, below MIDI 0 -> INVALID_PITCH_RANGE.
+    // Octave-downs from C4 on a piano: C3, C2, C1 are playable; C0 is below
+    // its A0 and is refused — a person cannot write a note the instrument has
+    // no key for, whichever route they take.
     for (let i = 0; i < 6; i += 1) {
       await user.keyboard('{Shift>}{ArrowDown}{/Shift}');
     }
 
-    const errorToasts = store.getState().toasts.filter((t) => t.severity === 'error');
-    expect(errorToasts.length).toBeGreaterThan(0);
+    const warnings = store.getState().toasts.filter((t) => t.severity === 'warning');
+    expect(warnings.length).toBeGreaterThan(0);
+    const kept = allNotes(store.getState().score!).find((n) => n.id === note.id) as NoteEvent;
+    expect(pitchToMidi(kept.pitch)).toBe(24);
   });
 
   describe('note entry', () => {

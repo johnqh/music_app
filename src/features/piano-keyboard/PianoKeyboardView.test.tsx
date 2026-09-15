@@ -117,19 +117,68 @@ describe('PianoKeyboardView', () => {
       expect(keys.length).toBeGreaterThan(0);
     });
 
+    /*
+      An import can hold notes the instrument cannot play — an imported
+      sub-octave bass layer reaches E0 on a bass whose lowest string is E1. The
+      keyboard widens to show them, but those keys are pale and inert: a person
+      can import such a note, not play one in.
+    */
+    it('shows imported notes below the compass on pale keys that do not play', () => {
+      const score = twinkleScore();
+      const track = score.tracks[0]!;
+      const [first] = allNotes(score);
+      const lowBass: Score = {
+        ...score,
+        tracks: [
+          {
+            ...track,
+            midiProgram: 37, // Slap Bass 2: E1 (28) upward
+            clef: 'bass',
+            measures: track.measures.map((measure) => ({
+              ...measure,
+              voices: measure.voices.map((voice) => ({
+                ...voice,
+                events: voice.events.map((event) =>
+                  event.id === first!.id
+                    ? { ...event, pitch: { step: 'E', octave: 0, accidental: 0 } }
+                    : event,
+                ),
+              })),
+            })),
+          },
+        ],
+      } as Score;
+      const store = makeStore(lowBass);
+      const { container } = render(<PianoKeyboardView store={store} />);
+
+      const e0 = key(container, 16);
+      expect(e0.getAttribute('aria-disabled')).toBe('true');
+      expect(e0.style.backgroundColor).not.toBe(key(container, 40).style.backgroundColor);
+      expect(key(container, 40).getAttribute('aria-disabled')).toBeNull();
+
+      vi.mocked(playbackController.noteOn).mockClear();
+      const before = store.getState().score;
+      fireEvent.pointerDown(e0, { pointerId: 1 });
+      fireEvent.pointerUp(e0, { pointerId: 1 });
+      expect(vi.mocked(playbackController.noteOn)).not.toHaveBeenCalled();
+      expect(store.getState().score).toBe(before);
+    });
+
     it('follows an instrument change on the same track', () => {
       const store = makeStore();
       const { container } = render(<PianoKeyboardView store={store} />);
 
+      // The PLAYABLE keys: the keyboard also shows the track's own notes,
+      // greyed and inert where the instrument cannot reach them.
+      const playable = () =>
+        [...container.querySelectorAll('[data-testid^="piano-key-"]:not([aria-disabled])')].map(
+          (el) => Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
+        );
       setProgram(store, 58); // Tuba — low
-      const low = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
-        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
-      );
+      const low = playable();
 
       setProgram(store, 72); // Piccolo — high
-      const high = [...container.querySelectorAll('[data-testid^="piano-key-"]')].map((el) =>
-        Number(el.getAttribute('data-testid')!.replace('piano-key-', '')),
-      );
+      const high = playable();
 
       expect(Math.min(...high)).toBeGreaterThan(Math.max(...low));
     });

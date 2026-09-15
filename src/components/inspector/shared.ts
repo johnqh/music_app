@@ -71,13 +71,6 @@ export { ARTICULATION_OPTIONS, ORNAMENT_OPTIONS, NO_MARK } from '@sudobility/mus
 
 export const MIXED_VALUE = '__mixed__';
 
-/**
- * Stands for a length no single note value spells — a tie join or an import can
- * leave one. Shown so the picker states what the note actually is instead of
- * relabelling it as the nearest name, and inert when chosen.
- */
-export const CUSTOM_DURATION = '__custom__';
-
 /** "No marking here", distinct from a marking that happens to be quiet. */
 export const NO_DYNAMIC = '__none__';
 
@@ -93,18 +86,6 @@ export const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
  * the same rule the toolbars follow with `CONTROL_HEIGHT_CLASS`.
  */
 export const FIELD_HEIGHT_CLASS = 'h-9';
-
-/** Radix rejects an empty item value, so "inherit" travels under a sentinel. */
-export const INHERIT_CLEF = 'inherit';
-
-/** Same Radix constraint as the clef sentinel: "no pickup" needs a value. */
-export const NO_PICKUP = 'none';
-
-/** The ordinary barline is the absence of a style, and Radix needs a value. */
-export const SINGLE_BARLINE = 'single';
-
-/** Radix again: "no jump" needs a value of its own. */
-export const NO_JUMP = 'none';
 
 export const TEXT_INPUT_CLASS = `${FIELD_HEIGHT_CLASS} w-full px-2 py-1.5 text-sm`;
 
@@ -123,3 +104,16 @@ export function commonValue<T>(values: T[]): MixedOr<T> | null {
   const agreed = sharedValue(values);
   return agreed === null ? MIXED : agreed;
 }
+
+/*
+  The picker sentinels (a custom duration, inheriting the clef, no pickup, the
+  ordinary barline, no jump) are music_types' now — the native property sheet
+  needs the same values — and are re-exported so imports from here still work.
+*/
+export {
+  CUSTOM_DURATION,
+  INHERIT_CLEF,
+  NO_JUMP,
+  NO_PICKUP,
+  SINGLE_BARLINE,
+} from '@sudobility/music_lib';

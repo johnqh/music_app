@@ -30,7 +30,13 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
     ...actual,
     // A real bus: the caret and the colour repaint both subscribe to it, and
     // these tests drive it directly in place of the old store field.
-    playbackController: { togglePlay: vi.fn(), seek: vi.fn(), bus: new actual.PlaybackBus() },
+    playbackController: {
+      togglePlay: vi.fn(),
+      seek: vi.fn(),
+      // The canvas reports how long lit notes take to draw; the player takes it.
+      setSoundingRenderDelay: vi.fn(),
+      bus: new actual.PlaybackBus(),
+    },
   };
 });
 
@@ -46,6 +52,20 @@ import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
  */
 function seekTo(tick: number): void {
   getMusicPositionSource().moveTo(tick);
+}
+
+/**
+ * The transport changing state, as the player reports it.
+ *
+ * Two writes, because the app has two readers: the store's `state` is what the
+ * toolbar and the edit lock read, and the shared position's `isPlaying` is what
+ * the playback binding moves the caret and follows the music by. The player
+ * writes both from one engine callback; a test that set only the store would be
+ * a transport the canvas never heard start.
+ */
+function setTransport(store: EditorStoreApi, state: 'playing' | 'paused' | 'stopped'): void {
+  store.getState().setPlaybackState(state);
+  getMusicPositionSource().setPlaying(state === 'playing');
 }
 import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import type { EditorStoreApi } from '@sudobility/music_lib';
@@ -556,6 +576,9 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     const box = view.getByTestId('score-editor-scroll');
     Object.defineProperty(box, 'clientHeight', { value: 200, configurable: true });
     Object.defineProperty(box, 'scrollTop', { value: 0, configurable: true, writable: true });
+    // The canvas reads the view's size from the scroll box's events, as in a
+    // browser; jsdom has no layout to fire one.
+    fireEvent.scroll(box);
     const plan = computeLayout(store.getState().score!, {
       zoom: 1,
       layoutMode: 'page',
@@ -568,30 +591,30 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     return { store, box, tick, view };
   }
 
-  it('scrolls the scroll box to the active measure when it is not already on screen', () => {
+  it('scrolls the scroll box to the active measure when it is not already on screen', async () => {
     const { store, box, tick } = playingOffScreen();
     const scrollToSpy = mockScrollTo(box);
 
-    act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(tick));
+    await act(async () => setTransport(store, 'playing'));
+    await act(async () => seekTo(tick));
 
     expect(scrollToSpy).toHaveBeenCalled();
   });
 
-  it('does not re-scroll for position changes within the same measure', () => {
+  it('does not re-scroll for position changes within the same measure', async () => {
     const { store, box, tick } = playingOffScreen();
     const scrollToSpy = mockScrollTo(box);
 
-    act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(tick));
+    await act(async () => setTransport(store, 'playing'));
+    await act(async () => seekTo(tick));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
 
     // A small tick advance that's still within the same measure.
-    act(() => seekTo(tick + 10));
+    await act(async () => seekTo(tick + 10));
     expect(scrollToSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the reader's vertical scroll instead of snapping back to track 1", () => {
+  it("keeps the reader's vertical scroll instead of snapping back to track 1", async () => {
     // The whole point of the change: following playback used to scroll to the
     // top of the new system, throwing whatever track the reader was watching
     // off the top of the viewport on every wrap.
@@ -615,7 +638,7 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     });
     const scrollToSpy = mockScrollTo(scrollBox);
 
-    act(() => store.getState().setPlaybackState('playing'));
+    await act(async () => setTransport(store, 'playing'));
 
     // Nothing to do: the music is in the system the reader is already looking
     // at, and any scrollTo here would cancel a smooth scroll still in flight.
@@ -623,15 +646,15 @@ describe('ScoreEditorView: playback auto-scroll (spec §7 item 13)', () => {
     expect(insideFirstSystem).toBeGreaterThan(0);
   });
 
-  it('uses instant ("auto") scroll behavior when the user prefers reduced motion', () => {
+  it('uses instant ("auto") scroll behavior when the user prefers reduced motion', async () => {
     const matchMediaSpy = vi.fn().mockReturnValue({ matches: true } as MediaQueryList);
     vi.stubGlobal('matchMedia', matchMediaSpy);
 
     const { store, box, tick } = playingOffScreen();
     const scrollToSpy = mockScrollTo(box);
 
-    act(() => store.getState().setPlaybackState('playing'));
-    act(() => seekTo(tick));
+    await act(async () => setTransport(store, 'playing'));
+    await act(async () => seekTo(tick));
 
     expect(scrollToSpy).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }));
     vi.unstubAllGlobals();
@@ -721,22 +744,22 @@ describe('playback caret and click-to-seek', () => {
     vi.unstubAllGlobals();
   });
 
-  it('moves the caret as positionTick advances', () => {
+  it('moves the caret as positionTick advances', async () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const before = getByTestId('playback-caret').style.transform;
 
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => seekTo(m1.startTick + Math.round(m1.durationTicks / 2)));
+    await act(async () => seekTo(m1.startTick + Math.round(m1.durationTicks / 2)));
 
     expect(getByTestId('playback-caret').style.transform).not.toBe(before);
   });
 
-  it('never animates a layout property', () => {
+  it('never animates a layout property', async () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => seekTo(m1.startTick));
+    await act(async () => seekTo(m1.startTick));
 
     // `left`/`top` stay pinned at the origin; all motion is in the transform.
     const caret = getByTestId('playback-caret');
@@ -752,9 +775,9 @@ describe('playback caret and click-to-seek', () => {
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
 
-    act(() => {
+    await act(async () => {
       seekTo(m1.startTick);
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     const atAnchor = getByTestId('playback-caret').style.transform;
 
@@ -770,12 +793,12 @@ describe('playback caret and click-to-seek', () => {
     const store = makeStore();
     const { getByTestId } = render(<ScoreEditorView store={store} />);
     const m1 = store.getState().score!.tracks[0].measures[1];
-    act(() => {
+    await act(async () => {
       seekTo(m1.startTick);
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
 
-    act(() => store.getState().setPlaybackState('paused'));
+    await act(async () => setTransport(store, 'paused'));
     const atPause = getByTestId('playback-caret').style.transform;
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 120));
@@ -1507,7 +1530,7 @@ describe('written-pitch display', () => {
 });
 
 describe('ScoreEditorView: following playback never cancels its own smooth scroll', () => {
-  it('issues no scrollTo for a measure that needs no move', () => {
+  it('issues no scrollTo for a measure that needs no move', async () => {
     // The bug: every measure produced a scrollTo, even one naming the position
     // the box was already at. `behavior: 'smooth'` means such a call aborts the
     // animation still running from the previous measure and strands it partway,
@@ -1523,11 +1546,14 @@ describe('ScoreEditorView: following playback never cancels its own smooth scrol
     Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true, writable: true });
     const scrollTo = vi.fn();
     Object.defineProperty(box, 'scrollTo', { value: scrollTo, configurable: true, writable: true });
+    // The canvas learns the view's size and scroll from the scroll box's own
+    // events, as it does in a browser; jsdom has no layout to fire one.
+    fireEvent.scroll(box);
 
-    act(() => store.getState().setPlaybackState('playing'));
+    await act(async () => setTransport(store, 'playing'));
     const measures = store.getState().score!.tracks[0].measures;
     for (let i = 0; i < 10; i++) {
-      act(() => seekTo(measures[i].startTick + 1));
+      await act(async () => seekTo(measures[i].startTick + 1));
     }
 
     expect(scrollTo).not.toHaveBeenCalled();

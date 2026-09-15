@@ -606,7 +606,9 @@ export function TransportBar({
             aria-label={keyboardCollapsed ? t('editor.showKeyboard') : t('editor.hideKeyboard')}
             aria-pressed={!keyboardCollapsed}
             onClick={onToggleKeyboard}
-            className={ICON_BUTTON_CLASS}
+            // An on/off switch, drawn like loop and the metronome: red while
+            // the keyboard is showing.
+            className={TOGGLE_BUTTON_CLASS}
           >
             <PianoKeysIcon className={ICON_GLYPH_CLASS} />
           </Button>

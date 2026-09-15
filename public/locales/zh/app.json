@@ -811,7 +811,24 @@
     "voiceNumber": "声部 {{number}}",
     "xmModule": "XM 模块",
     "zoomIn": "放大",
-    "zoomOut": "缩小"
+    "zoomOut": "缩小",
+    "outOfRange": {
+      "above": "{{pitch}} 高于{{instrument}}的音域（{{low}}–{{high}}），{{action}}",
+      "below": "{{pitch}} 低于{{instrument}}的音域（{{low}}–{{high}}），{{action}}"
+    },
+    "refused": {
+      "addNote": "因此未添加。",
+      "addChord": "因此未添加这个和弦。",
+      "changeNote": "因此未更改该音符。",
+      "changeAccidental": "因此未更改变音记号。",
+      "moveNote": "因此未移动该音符。",
+      "moveNotes": "因此未移动这些音符。",
+      "transpose": "因此未进行移调。",
+      "paste": "因此未粘贴任何内容。"
+    },
+    "polyphonyOne": "{{instrument}}一次只能演奏一个音，{{action}}",
+    "polyphonyMany": "{{instrument}}最多同时演奏 {{limit}} 个音，{{action}}",
+    "unknownInstrument": "该乐器"
   },
   "error": {
     "crashed": "出现错误，{{appName}} 无法继续运行。",

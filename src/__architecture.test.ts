@@ -48,6 +48,11 @@ const ALLOWED_NON_UI = new Set([
   // that follows. Canvas geometry — anything that reasons about the drawn
   // score — belongs to music_drawing instead; see CLAUDE.md.
   'src/features/score-editor/autoscroll.ts',
+  // The browser's `ScoreCanvasSurface`: a 2D context, a caret <div> moved by
+  // requestAnimationFrame, and a scroll box. It computes no geometry — it
+  // replays what music_drawing's `ScoreCanvas` hands it — and it is the part
+  // that cannot live in a platform-free package, because it touches the DOM.
+  'src/features/score-editor/web-canvas-surface.ts',
   'src/features/piano-keyboard/playing-pitches.ts',
   // The inspector's shared vocabulary: the MIXED sentinel and the class names
   // that keep a column of controls the same height. Presentation, not logic.

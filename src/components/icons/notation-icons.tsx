@@ -626,50 +626,56 @@ export function SunMoonIcon(props: GlyphProps) {
 }
 
 /**
- * The piano-keyboard toggle: white, black, white.
+ * The piano-keyboard toggle: three white keys with two black keys between them.
  *
- * Drawn rather than borrowed because the general sets have no piano, and the
- * nearest stand-in — three identical filled bars — reads as three black keys,
- * which is not a shape a keyboard ever makes. The outer two are outlines and the
- * middle one is filled, which is the smallest arrangement that says "keyboard"
- * rather than "columns": a black key only ever sits *between* two whites.
+ * Drawn rather than borrowed because the general sets have no piano. The whites
+ * are one outlined frame split by two dividers, and the blacks are filled and
+ * straddle those dividers — so each divider only shows *below* its black key,
+ * which is how a real keyboard looks from above. The blacks stop two thirds of
+ * the way down; a black key as long as the whites reads as a column chart.
  *
- * The stroke is what makes the outer keys read as white rather than as gaps, so
- * they are drawn as rects with `fill="none"` — the glyph inherits `currentColor`
- * for both, so it follows the theme like every other icon here.
+ * Everything inherits `currentColor`, so it follows the theme like every other
+ * icon here.
  */
+const KEY_LEFT = 3;
+const KEY_RIGHT = 21;
 const KEY_TOP = 5;
 const KEY_BOTTOM = 19;
-const KEY_W = 5.2;
-const KEY_GAP = 0.6;
-/** The white keys sit either side of centre; the black one is centred on it. */
-const KEY_MID_X = 12 - KEY_W / 2;
+const WHITE_KEY_W = (KEY_RIGHT - KEY_LEFT) / 3;
+const BLACK_KEY_W = 3.6;
+/** Black keys end two thirds of the way down the whites. */
+const BLACK_KEY_BOTTOM = Math.round((KEY_TOP + ((KEY_BOTTOM - KEY_TOP) * 2) / 3) * 100) / 100;
+/** The two boundaries between the three whites, where the blacks sit. */
+const KEY_DIVIDERS = [KEY_LEFT + WHITE_KEY_W, KEY_LEFT + WHITE_KEY_W * 2];
 
 export function PianoKeysIcon(props: GlyphProps) {
-  const height = KEY_BOTTOM - KEY_TOP;
   return (
     <Glyph {...props}>
       <rect
-        x={KEY_MID_X - KEY_W - KEY_GAP}
+        x={KEY_LEFT}
         y={KEY_TOP}
-        width={KEY_W}
-        height={height}
-        rx={0.9}
+        width={KEY_RIGHT - KEY_LEFT}
+        height={KEY_BOTTOM - KEY_TOP}
+        rx={1}
         fill="none"
         stroke="currentColor"
         strokeWidth={1.6}
       />
-      <rect x={KEY_MID_X} y={KEY_TOP} width={KEY_W} height={height} rx={0.9} />
-      <rect
-        x={KEY_MID_X + KEY_W + KEY_GAP}
-        y={KEY_TOP}
-        width={KEY_W}
-        height={height}
-        rx={0.9}
+      <path
+        d={KEY_DIVIDERS.map((x) => `M${x} ${BLACK_KEY_BOTTOM} V${KEY_BOTTOM}`).join(' ')}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.6}
+        strokeWidth={1.4}
       />
+      {KEY_DIVIDERS.map((x) => (
+        <rect
+          key={x}
+          x={x - BLACK_KEY_W / 2}
+          y={KEY_TOP}
+          width={BLACK_KEY_W}
+          height={BLACK_KEY_BOTTOM - KEY_TOP}
+        />
+      ))}
     </Glyph>
   );
 }

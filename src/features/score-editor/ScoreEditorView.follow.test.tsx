@@ -9,7 +9,7 @@
  * scroll box, and asserts on what it actually asks the box to do.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { render, act, fireEvent } from '@testing-library/react';
 import {
   createAppStore,
   computeLayout,
@@ -18,10 +18,11 @@ import {
   resetMusicPosition,
   testStoreContext,
 } from '@sudobility/music_lib';
+import { getMusicPositionSource } from '@sudobility/music_types';
 import type { Score } from '@sudobility/music_types';
-import { PlaybackCaret } from './PlaybackCaret';
+import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
+import { ScoreEditorView } from './ScoreEditorView';
 import { installTestAppServices } from '@/test/app-services';
-import { useRef } from 'react';
 
 /*
   The same stub the AppLayout suite uses: a real `PlaybackBus` so position
@@ -74,40 +75,58 @@ function longScore(): Score {
   return { ...base, tracks: [{ ...track, measures }] };
 }
 
+/** What the editor lays out with in jsdom once the box reports 900px wide. */
 const OPTS = {
   zoom: 1,
   layoutMode: 'page' as const,
   width: 900,
-  viewport: { top: 0, bottom: 400 },
+  theme: LIGHT_RENDER_THEME,
 };
 
-function Harness({
-  store,
-  score,
-  plan,
-}: {
-  store: ReturnType<typeof createAppStore>;
-  score: Score;
-  plan: ReturnType<typeof computeLayout>;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  return (
-    <div>
-      <div ref={ref} data-testid="scrollbox" />
-      <PlaybackCaret
-        store={store}
-        plan={plan}
-        score={score}
-        zoom={1}
-        color="#f00"
-        layoutMode="page"
-        scrollBoxRef={ref}
-      />
-    </div>
-  );
+type AppStore = ReturnType<typeof createAppStore>;
+
+/**
+ * The transport changing state, as the player writes it: the store for the
+ * toolbar and the edit lock, the shared position for everything that follows
+ * the music — the playback binding among them.
+ */
+function setTransport(store: AppStore, state: 'playing' | 'stopped'): void {
+  store.getState().setPlaybackState(state);
+  getMusicPositionSource().setPlaying(state === 'playing');
 }
 
-describe('PlaybackCaret follows playback across the end of the score', () => {
+/**
+ * The editor over a stub scroll box: a 900x300 view whose `scrollTop` is a
+ * plain number. `scrollTo` is supplied per test, and every scroll it makes
+ * fires the box's `scroll` event, as a browser does — that event is how the
+ * canvas learns where the view is.
+ */
+function renderEditor(
+  store: AppStore,
+  scrollTo: (opts: { top: number; behavior?: string }, current: number) => number,
+) {
+  const view = render(<ScoreEditorView store={store} />);
+  const box = view.getByTestId('score-editor-scroll');
+  Object.defineProperty(box, 'clientHeight', { value: 300, configurable: true });
+  Object.defineProperty(box, 'clientWidth', { value: 900, configurable: true });
+  let scrollTop = 0;
+  Object.defineProperty(box, 'scrollTop', {
+    get: () => scrollTop,
+    set: (v: number) => {
+      scrollTop = v;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true });
+  box.scrollTo = ((opts: { top: number; behavior?: string }) => {
+    scrollTop = scrollTo(opts, scrollTop);
+    fireEvent.scroll(box);
+  }) as never;
+  fireEvent.scroll(box);
+  return { box, scrollTop: () => scrollTop };
+}
+
+describe('the editor follows playback across the end of the score', () => {
   beforeEach(() => {
     installTestAppServices();
     // The playhead is a singleton, and the bus reads its reported tick through
@@ -118,28 +137,14 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
 
   it('scrolls again on the play after the score has run to the end', async () => {
     const score = longScore();
-    const plan = computeLayout(score, { ...OPTS, theme: undefined as never });
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(score, { resetHistory: true });
 
     const scrollTo = vi.fn();
-    const { getByTestId } = render(<Harness store={store} score={score} plan={plan} />);
-    const box = getByTestId('scrollbox');
-    Object.defineProperty(box, 'clientHeight', { value: 300, configurable: true });
-    Object.defineProperty(box, 'clientWidth', { value: 900, configurable: true });
-    let scrollTop = 0;
-    Object.defineProperty(box, 'scrollTop', {
-      get: () => scrollTop,
-      set: (v: number) => {
-        scrollTop = v;
-      },
-      configurable: true,
-    });
-    Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true });
-    box.scrollTo = ((opts: { top: number }) => {
+    renderEditor(store, (opts) => {
       scrollTo(opts);
-      scrollTop = opts.top;
-    }) as never;
+      return opts.top;
+    });
 
     const ticksPerMeasure = score.tracks[0].measures[0].durationTicks;
     const measureCount = score.tracks[0].measures.length;
@@ -152,7 +157,7 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
     };
 
     await act(async () => {
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     await playThrough();
     const firstPass = scrollTo.mock.calls.length;
@@ -161,12 +166,12 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
     // End of playback, exactly as the engine reports it: position home, then stopped.
     await act(async () => {
       playbackController.bus.publishPosition(0);
-      store.getState().setPlaybackState('stopped');
+      setTransport(store, 'stopped');
     });
 
     scrollTo.mockClear();
     await act(async () => {
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     await playThrough();
 
@@ -186,34 +191,18 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
   */
   it('brings the sheet back to the music when replaying after the end', async () => {
     const score = longScore();
-    const plan = computeLayout(score, { ...OPTS, theme: undefined as never });
+    const plan = computeLayout(score, OPTS);
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(score, { resetHistory: true });
 
-    const { getByTestId } = render(<Harness store={store} score={score} plan={plan} />);
-    const box = getByTestId('scrollbox');
     const VIEWPORT = 300;
-    Object.defineProperty(box, 'clientHeight', { value: VIEWPORT, configurable: true });
-    Object.defineProperty(box, 'clientWidth', { value: 900, configurable: true });
-    let scrollTop = 0;
-    Object.defineProperty(box, 'scrollTop', {
-      get: () => scrollTop,
-      set: (v: number) => {
-        scrollTop = v;
-      },
-      configurable: true,
-    });
-    Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true });
     // An animated scroll covers ground gradually; an instant one lands.
     const SMOOTH_STEP = 60;
-    box.scrollTo = ((opts: { top: number; behavior?: string }) => {
-      if (opts.behavior === 'smooth') {
-        const delta = opts.top - scrollTop;
-        scrollTop += Math.sign(delta) * Math.min(Math.abs(delta), SMOOTH_STEP);
-      } else {
-        scrollTop = opts.top;
-      }
-    }) as never;
+    const editor = renderEditor(store, (opts, current) => {
+      if (opts.behavior !== 'smooth') return opts.top;
+      const delta = opts.top - current;
+      return current + Math.sign(delta) * Math.min(Math.abs(delta), SMOOTH_STEP);
+    });
 
     const ticksPerMeasure = score.tracks[0].measures[0].durationTicks;
     const measures = score.tracks[0].measures;
@@ -226,25 +215,25 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
     };
 
     await act(async () => {
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     await play(0, measures.length);
-    expect(scrollTop).toBeGreaterThan(VIEWPORT);
+    expect(editor.scrollTop()).toBeGreaterThan(VIEWPORT);
 
     // Exactly what the engine does at the end: home the position, then stop.
     await act(async () => {
       playbackController.bus.publishPosition(0);
-      store.getState().setPlaybackState('stopped');
+      setTransport(store, 'stopped');
     });
 
     await act(async () => {
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     await play(0, 3);
 
     // The music is in the first system, so the first system must be on screen.
     const firstSystem = plan.systems[0];
-    expect(scrollTop).toBeLessThanOrEqual(firstSystem.yBottom);
+    expect(editor.scrollTop()).toBeLessThanOrEqual(firstSystem.yBottom);
   });
 
   /*
@@ -255,26 +244,11 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
   */
   it('follows the playhead when the scrubber moves it off screen while stopped', async () => {
     const score = longScore();
-    const plan = computeLayout(score, { ...OPTS, theme: undefined as never });
+    const plan = computeLayout(score, OPTS);
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(score, { resetHistory: true });
 
-    const { getByTestId } = render(<Harness store={store} score={score} plan={plan} />);
-    const box = getByTestId('scrollbox');
-    Object.defineProperty(box, 'clientHeight', { value: 300, configurable: true });
-    Object.defineProperty(box, 'clientWidth', { value: 900, configurable: true });
-    let scrollTop = 0;
-    Object.defineProperty(box, 'scrollTop', {
-      get: () => scrollTop,
-      set: (v: number) => {
-        scrollTop = v;
-      },
-      configurable: true,
-    });
-    Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true });
-    box.scrollTo = ((opts: { top: number }) => {
-      scrollTop = opts.top;
-    }) as never;
+    const editor = renderEditor(store, (opts) => opts.top);
 
     // The transport never starts: this is somebody dragging the slider.
     expect(store.getState().state).not.toBe('playing');
@@ -286,8 +260,8 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
     });
 
     const lastSystem = plan.systems[plan.systems.length - 1];
-    expect(scrollTop).toBeGreaterThan(0);
-    expect(scrollTop + 300).toBeGreaterThanOrEqual(lastSystem.yTop);
+    expect(editor.scrollTop()).toBeGreaterThan(0);
+    expect(editor.scrollTop() + 300).toBeGreaterThanOrEqual(lastSystem.yTop);
   });
 
   /*
@@ -297,44 +271,28 @@ describe('PlaybackCaret follows playback across the end of the score', () => {
   */
   it('stays put when the transport stops and homes the playhead', async () => {
     const score = longScore();
-    const plan = computeLayout(score, { ...OPTS, theme: undefined as never });
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(score, { resetHistory: true });
 
-    const { getByTestId } = render(<Harness store={store} score={score} plan={plan} />);
-    const box = getByTestId('scrollbox');
-    Object.defineProperty(box, 'clientHeight', { value: 300, configurable: true });
-    Object.defineProperty(box, 'clientWidth', { value: 900, configurable: true });
-    let scrollTop = 0;
-    Object.defineProperty(box, 'scrollTop', {
-      get: () => scrollTop,
-      set: (v: number) => {
-        scrollTop = v;
-      },
-      configurable: true,
-    });
-    Object.defineProperty(box, 'scrollLeft', { value: 0, configurable: true });
-    box.scrollTo = ((opts: { top: number }) => {
-      scrollTop = opts.top;
-    }) as never;
+    const editor = renderEditor(store, (opts) => opts.top);
 
     const measures = score.tracks[0].measures;
     // Separately, as they arrive in life: the transport starts, then reports
     // come in. Batching both into one update hides which of them scrolled.
     await act(async () => {
-      store.getState().setPlaybackState('playing');
+      setTransport(store, 'playing');
     });
     await act(async () => {
       playbackController.bus.publishPosition(measures[measures.length - 1].startTick);
     });
-    const whereTheReaderWas = scrollTop;
+    const whereTheReaderWas = editor.scrollTop();
     expect(whereTheReaderWas).toBeGreaterThan(0);
 
     await act(async () => {
       playbackController.bus.publishPosition(0);
-      store.getState().setPlaybackState('stopped');
+      setTransport(store, 'stopped');
     });
 
-    expect(scrollTop).toBe(whereTheReaderWas);
+    expect(editor.scrollTop()).toBe(whereTheReaderWas);
   });
 });

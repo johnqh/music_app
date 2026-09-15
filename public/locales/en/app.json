@@ -811,7 +811,24 @@
     "voiceNumber": "Voice {{number}}",
     "xmModule": "XM Module",
     "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out"
+    "zoomOut": "Zoom out",
+    "outOfRange": {
+      "above": "{{pitch}} is above {{instrument}}'s range ({{low}}–{{high}}), {{action}}",
+      "below": "{{pitch}} is below {{instrument}}'s range ({{low}}–{{high}}), {{action}}"
+    },
+    "refused": {
+      "addNote": "so it was not added.",
+      "addChord": "so this chord was not added.",
+      "changeNote": "so the note was not changed.",
+      "changeAccidental": "so the accidental was not changed.",
+      "moveNote": "so the note was not moved.",
+      "moveNotes": "so the notes were not moved.",
+      "transpose": "so nothing was transposed.",
+      "paste": "so nothing was pasted."
+    },
+    "polyphonyOne": "{{instrument}} plays one note at a time, {{action}}",
+    "polyphonyMany": "{{instrument}} plays at most {{limit}} notes at once, {{action}}",
+    "unknownInstrument": "This instrument"
   },
   "error": {
     "crashed": "Something went wrong and {{appName}} couldn’t continue.",
