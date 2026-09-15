@@ -27,13 +27,12 @@ import {
   EMPTY_GROUP,
   chordSelection,
   playKeyGroup,
-  playingPitchesForTrack,
   pressKey as pressGroupKey,
   releaseKey as releaseGroupKey,
 } from '@sudobility/music_lib';
 import type { KeyGroup } from '@sudobility/music_lib';
 import { getAppServices } from '@/config/initialize';
-import { useSoundingNotes } from '@/features/score-editor/usePlayback';
+import { usePlayingPitches } from '@/features/score-editor/usePlayback';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { resolveColorScheme } from '@/app/theme';
@@ -195,8 +194,8 @@ type KeyRowProps = {
 };
 
 /**
- * The keys, and the ONLY part of the keyboard that subscribes to
- * `activeNoteIds`.
+ * The keys, and the ONLY part of the keyboard that subscribes to the sounding
+ * notes.
  *
  * Same rule the playback caret and the transport readouts follow: the store
  * reports sounding notes on every note-on and note-off, and reading that in
@@ -205,6 +204,8 @@ type KeyRowProps = {
  * caret animates on. The keys themselves are already `memo`'d on primitives,
  * so only the one or two that actually change do any work.
  */
+const NOT_PLAYING: ReadonlySet<number> = new Set();
+
 const PianoKeyRow = memo(function PianoKeyRow({
   store,
   keys,
@@ -216,22 +217,17 @@ const PianoKeyRow = memo(function PianoKeyRow({
   onPress,
   onRelease,
 }: KeyRowProps) {
-  const sounding = useSoundingNotes();
+  // The same set until one of this track's keys changes, so a note starting on
+  // another part renders nothing here.
+  const playing = usePlayingPitches(activeTrackId);
   const playbackState = store((s) => s.state);
 
   /**
    * Gated on `playbackState`, not just on the set being non-empty: the engine
    * clears sounding notes on `stop()` but not on `pause()`, so without the gate
    * a pause would leave whatever was mid-chord stuck lit.
-   *
-   * The notes arrive with their track and pitch already resolved, so this is a
-   * filter. It used to call `findEvent` per sounding note — a linear scan of
-   * every track, measure and voice in the score, twenty times a second.
    */
-  const lit = useMemo(() => {
-    if (playbackState !== 'playing') return new Set<number>();
-    return playingPitchesForTrack(sounding, activeTrackId);
-  }, [playbackState, sounding, activeTrackId]);
+  const lit = playbackState === 'playing' ? playing : NOT_PLAYING;
 
   return (
     <>

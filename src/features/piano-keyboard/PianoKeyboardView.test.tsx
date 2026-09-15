@@ -1,3 +1,4 @@
+import { Profiler } from 'react';
 import { commandLabel } from '@/features/score-editor/command-labels';
 import {
   getMusicPosition,
@@ -343,6 +344,28 @@ describe('PianoKeyboardView', () => {
     play(store, [asSounding(other)]);
 
     expect(key(container, pitchToMidi(other.pitch)).dataset.playing).toBe('false');
+  });
+
+  it('does not render at all for a note sounding on another track', () => {
+    // The bus reports every track's notes, and on a dense multi-track score
+    // most of them are not the keyboard's: each used to re-render the keys.
+    const store = makeStore(twoTrackScore());
+    const score = store.getState().score!;
+    act(() => store.getState().setActiveTrack(score.tracks[0].id));
+    const commits = vi.fn();
+    render(
+      <Profiler id="keyboard" onRender={commits}>
+        <PianoKeyboardView store={store} />
+      </Profiler>,
+    );
+    const mine = allNotes(score).find((n) => n.trackId === score.tracks[0].id)!;
+    const other = allNotes(score).find((n) => n.trackId === score.tracks[1].id)!;
+    play(store, [asSounding(mine)]);
+    commits.mockClear();
+
+    act(() => playbackController.bus.publishSounding([asSounding(mine), asSounding(other)]));
+
+    expect(commits).not.toHaveBeenCalled();
   });
 
   it('goes dark on pause even while notes are still reported as sounding', () => {

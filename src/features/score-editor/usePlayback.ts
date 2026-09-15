@@ -16,9 +16,8 @@
  * exactly as `store((s) => s.positionTick)` used to. The difference is that it
  * is now a deliberate act rather than an ordinary-looking one.
  */
-import { useCallback, useSyncExternalStore } from 'react';
-import { playbackController } from '@sudobility/music_lib';
-import type { SoundingNote } from '@sudobility/music_types';
+import { useCallback, useRef, useSyncExternalStore } from 'react';
+import { playbackController, playingPitchesForTrack, samePitchSet } from '@sudobility/music_lib';
 
 /** The playhead, as the engine last reported it. ~30Hz while playing, silent otherwise. */
 export function usePlaybackPosition(): number {
@@ -31,18 +30,47 @@ export function usePlaybackPosition(): number {
 }
 
 /**
- * The notes currently sounding, with their track and pitch already resolved.
+ * Text derived from the playhead, re-rendering only when the text changes.
  *
- * Resolved by the scheduler, which knew them when it queued the notes. Reading
- * only ids meant every consumer searched the whole score to get them back:
- * `playingPitchesForTrack` was an O(score) scan per sounding note, twenty times
- * a second.
+ * Position reports arrive thirty times a second, and a readout shows far less
+ * than that: a bar and beat changes a few times a second and a timecode ten.
+ * `useSyncExternalStore` compares snapshots, so handing it the *formatted* text
+ * rather than the tick lets React skip every report that would print the same
+ * thing. `format` is read at render, so a new score or tempo applies at once.
  */
-export function useSoundingNotes(): readonly SoundingNote[] {
+export function usePlaybackReadout(format: (tick: number) => string): string {
+  const subscribe = useCallback(
+    (onChange: () => void) => playbackController.bus.onPosition(onChange),
+    [],
+  );
+  const get = () => format(playbackController.bus.positionTick);
+  return useSyncExternalStore(subscribe, get, get);
+}
+
+/**
+ * The keys the active track is sounding, kept as the same set until one of
+ * them changes.
+ *
+ * The bus reports on every note of every track, and a keyboard shows one: read
+ * as the raw sounding notes, the whole row of keys re-rendered for notes it
+ * does not show — on a dense multi-track score, most of them. `samePitchSet`
+ * decides whether anything this keyboard draws moved.
+ *
+ * The notes arrive with their track and pitch already resolved by the
+ * scheduler, so this is a filter rather than a search of the score.
+ */
+export function usePlayingPitches(activeTrackId: string | null): ReadonlySet<number> {
   const subscribe = useCallback(
     (onChange: () => void) => playbackController.bus.onSounding(onChange),
     [],
   );
-  const get = useCallback(() => playbackController.bus.sounding, []);
+  const kept = useRef<ReadonlySet<number>>(NO_PITCHES);
+  const get = useCallback(() => {
+    const next = playingPitchesForTrack(playbackController.bus.sounding, activeTrackId);
+    if (!samePitchSet(next, kept.current)) kept.current = next;
+    return kept.current;
+  }, [activeTrackId]);
   return useSyncExternalStore(subscribe, get, get);
 }
+
+const NO_PITCHES: ReadonlySet<number> = new Set();

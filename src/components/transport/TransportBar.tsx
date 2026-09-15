@@ -52,7 +52,7 @@ import { scoreEndTick, TempoMap } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
 import type { PlaybackStoreApi } from '@sudobility/music_lib';
 import { barBeatForTick, formatBarBeat, setOpeningTempo } from '@sudobility/music_lib';
-import { usePlaybackPosition } from '@/features/score-editor/usePlayback';
+import { usePlaybackPosition, usePlaybackReadout } from '@/features/score-editor/usePlayback';
 import { useAppStore } from '@sudobility/music_lib';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
 import {
@@ -226,7 +226,6 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
   // Its own position subscriber, like every other readout that follows the
   // music: the position is not in the store, so reading it here is what keeps
   // a value changing thirty times a second from waking the whole tree.
-  const positionTick = usePlaybackPosition();
   const score = store((s) => s.score);
   /*
     `barBeatForTick`, not the `measureBeatAt` that used to live in
@@ -234,7 +233,9 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
     counts a pickup, so on a score with an anacrusis this readout said one bar
     and the inspector — and "go to bar N" — said another.
   */
-  const measureBeat = score ? barBeatForTick(score, positionTick) : null;
+  const readout = usePlaybackReadout((tick) =>
+    formatBarBeat(score ? barBeatForTick(score, tick) : null),
+  );
   return (
     <Tooltip content={t('transport.measureBeat')}>
       <span
@@ -244,7 +245,7 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
         // centred text shuffled on every beat even once the fraction was gone.
         className="min-w-[40px] text-center text-sm tabular-nums text-theme-text-primary"
       >
-        {formatBarBeat(measureBeat)}
+        {readout}
       </span>
     </Tooltip>
   );
@@ -323,8 +324,9 @@ function Timecode({
   totalSeconds: number;
 }) {
   const { t } = useTranslation();
-  const positionTick = usePlaybackPosition();
-  const positionSeconds = tempoMap ? tempoMap.ticksToSeconds(Math.min(positionTick, maxTick)) : 0;
+  const elapsed = usePlaybackReadout((tick) =>
+    formatTimecode(tempoMap ? tempoMap.ticksToSeconds(Math.min(tick, maxTick)) : 0),
+  );
   return (
     <Tooltip content={t('transport.elapsed')}>
       <span
@@ -332,7 +334,7 @@ function Timecode({
         aria-label={t('transport.time')}
         className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
       >
-        {formatTimecode(positionSeconds)} / {formatTimecode(totalSeconds)}
+        {elapsed} / {formatTimecode(totalSeconds)}
       </span>
     </Tooltip>
   );

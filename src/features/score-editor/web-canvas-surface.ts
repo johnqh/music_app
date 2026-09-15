@@ -14,7 +14,11 @@
  *
  * - **paint** renders with one long-lived `CanvasScoreRenderer` into the score
  *   canvas's 2D context. Long-lived because its column cache is what makes a
- *   repaint of the same window cheap.
+ *   repaint of the same window cheap. It paints in two layers
+ *   (`createLayeredPaint`): everything but the active track's notes goes to an
+ *   offscreen canvas kept until something other than the lit notes changes,
+ *   and each frame copies that in and draws the active track over it — so a
+ *   change of lit notes during playback draws one track, not the window.
  * - **showCursor** moves the caret `<div>` along the path it is given. The
  *   div is an absolutely positioned child of the scroll box, so it lives in
  *   content coordinates and scrolls with the sheet; it is moved by `transform`
@@ -26,6 +30,7 @@
  */
 import {
   CanvasScoreRenderer,
+  createLayeredPaint,
   cursorTickAt,
   cursorVisible,
   cursorXAt,
@@ -65,6 +70,27 @@ export function createWebCanvasSurface({
   scrollBox,
 }: WebCanvasSurfaceOptions): WebCanvasSurface {
   const renderer = new CanvasScoreRenderer();
+  const layeredPaint = createLayeredPaint<HTMLCanvasElement>(renderer, {
+    record(draw, previous) {
+      const visible = canvas();
+      const layer = previous ?? document.createElement('canvas');
+      // Matched to the visible canvas's backing store, which a resize or a
+      // change of pixel ratio moves.
+      if (visible && layer.width !== visible.width) layer.width = visible.width;
+      if (visible && layer.height !== visible.height) layer.height = visible.height;
+      const context = layer.getContext('2d');
+      if (context) draw(context);
+      return layer;
+    },
+    present(base, drawOverlay) {
+      const context = canvas()?.getContext('2d');
+      if (!context) return;
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+      context.drawImage(base, 0, 0);
+      drawOverlay(context);
+    },
+  });
   let path: CursorPath | null = null;
   let motion: CursorMotion = { tick: 0, atMs: 0, ticksPerSecond: 0 };
   let loop: number | null = null;
@@ -101,11 +127,12 @@ export function createWebCanvasSurface({
   };
 
   return {
-    paint(score, options) {
-      const context = canvas()?.getContext('2d');
-      if (!context) return null;
-      return renderer.render(score, context, options);
+    paint(score, options, frame) {
+      if (!canvas()?.getContext('2d')) return null;
+      return layeredPaint(score, options, frame);
     },
+
+    prepare: (score, options) => renderer.prepare(score, options),
 
     showCursor(nextPath, nextMotion) {
       path = nextPath;
