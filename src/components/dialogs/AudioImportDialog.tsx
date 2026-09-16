@@ -13,7 +13,8 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AUDIO_IMPORT_EXTENSIONS, AUDIO_MIME, isLongAudio } from '@sudobility/music_io';
+import { isLongAudio } from '@sudobility/music_io';
+import { AUDIO_IMPORT_EXTENSIONS, AUDIO_MIME } from '@sudobility/music_types';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 
 export type AudioImportDialogProps = {
@@ -30,7 +31,7 @@ export type AudioImportDialogProps = {
 };
 
 /**
- * What the picker offers: music_io's list, which the native picker offers too,
+ * What the picker offers: music_types' list, which the native picker offers too,
  * by extension and by MIME type. Warned about past `isLongAudio` rather than
  * refused — trimming would mean decoding the audio here, which is the one thing
  * that would put a codec back in this bundle, and the server enforces its own

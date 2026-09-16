@@ -16,14 +16,21 @@ import { PageConfigContext } from '@/context/pageConfigContextDef';
 import { usePageConfig } from '@/hooks/usePageConfig';
 import { useFooterConfig } from '@/hooks/useFooterConfig';
 import { useTopBarConfig } from '@/hooks/useTopBarConfig';
+import type { LanguagePrefStore } from '@/hooks/useLocalizedNavigate';
 
-function ScreenContainerInner({ children }: { children: ReactNode }) {
+type ScreenContainerProps = {
+  children: ReactNode;
+  /** Where a language switch is remembered; defaults to the app-wide store. */
+  store?: LanguagePrefStore;
+};
+
+function ScreenContainerInner({ children, store }: ScreenContainerProps) {
   const location = useLocation();
 
   const pathParts = location.pathname.split('/').filter(Boolean);
   const isHomePage = pathParts.length <= 1;
 
-  const topBar = useTopBarConfig();
+  const topBar = useTopBarConfig(store);
 
   // Full on the home page, compact everywhere else — the split both reference
   // apps make.
@@ -49,11 +56,11 @@ function ScreenContainerInner({ children }: { children: ReactNode }) {
   );
 }
 
-export function ScreenContainer({ children }: { children: ReactNode }) {
+export function ScreenContainer({ children, store }: ScreenContainerProps) {
   const [pageConfig, setPageConfig] = useState<Partial<AppPageProps>>({});
   return (
     <PageConfigContext.Provider value={{ pageConfig, setPageConfig }}>
-      <ScreenContainerInner>{children}</ScreenContainerInner>
+      <ScreenContainerInner store={store}>{children}</ScreenContainerInner>
     </PageConfigContext.Provider>
   );
 }

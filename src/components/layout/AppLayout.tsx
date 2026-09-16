@@ -80,7 +80,6 @@ import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
 import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
 import {
-  DOCUMENT_EXTENSION,
   WRITABLE_EXPORT_FORMATS,
   adoptOutsideScore,
   exportFilename,
@@ -95,7 +94,7 @@ import {
 import type { ExportFormatId, ExportPlan } from '@sudobility/music_lib';
 import { renderScoreAudio } from '@sudobility/music_player';
 import { useProjectSnapshots } from '@sudobility/music_client';
-import { publishedSnapshotUrl } from '@sudobility/music_types';
+import { THEME_MODE_OPTIONS, publishedSnapshotUrl } from '@sudobility/music_types';
 import { SOUNDFONT_ASSETS } from '@/config/initialize';
 import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
 import { playbackController } from '@sudobility/music_lib';
@@ -365,7 +364,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * Writes one planned export.
    *
    * Which formats exist, their extensions and which score a scope means are
-   * music_editing's (`planExport`), shared with the native app. What stays here
+   * music_lib's (`planExport`), shared with the native app. What stays here
    * is what that package may not reach: the file name (music_codecs'
    * keep-the-title rule), rendering audio (music_player), fitting a tracker
    * module (music_lib) and the write (music_io).
@@ -416,10 +415,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           return;
         }
         case 'project': {
-          // The document's own extension rather than the plan's `json`: the
-          // project file is `.moo` on both apps now.
           await io.fileExporter.save(
-            exportFilename(plan.title, DOCUMENT_EXTENSION),
+            filename,
             serializeProjectFile({
               title: store.getState().projectName || plan.title,
               score: plan.target,
@@ -654,7 +651,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </Tooltip>
             {exportMenu.open && (
               <div role="menu" className={`left-0 ${MENU_CLASS}`}>
-                {/* music_editing's format list, in its order, so the menu and
+                {/* music_types' format list, in its order, so the menu and
                     the documentation's export table cannot disagree. */}
                 {WRITABLE_EXPORT_FORMATS.map((format) => (
                   <Button
@@ -694,7 +691,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             </Tooltip>
             {themeMenu.open && (
               <div role="menu" className={`right-0 ${MENU_CLASS}`}>
-                {(['light', 'dark', 'system'] as const).map((mode) => (
+                {THEME_MODE_OPTIONS.map(({ value: mode, labelKey }) => (
                   <Button
                     key={mode}
                     type="button"
@@ -706,7 +703,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     }}
                     className={cn(MENU_ITEM_CLASS, themeMode === mode && 'bg-theme-hover-bg')}
                   >
-                    {mode[0].toUpperCase() + mode.slice(1)}
+                    {t(labelKey)}
                   </Button>
                 ))}
               </div>

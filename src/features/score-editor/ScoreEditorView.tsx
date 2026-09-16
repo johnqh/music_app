@@ -74,6 +74,7 @@ import {
   relocateNotes,
   commitPitchDrag,
   collisionForEditMode,
+  selectEffectiveEditMode,
   barCount,
 } from '@sudobility/music_lib';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
@@ -83,13 +84,14 @@ import type { EditorStoreApi } from '@sudobility/music_lib';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
-import type { LayoutMode } from '@sudobility/music_drawing';
+import type { LayoutMode } from '@sudobility/music_types';
 import { ScoreCanvas, bindPlaybackToCanvas, boxFromPoints } from '@sudobility/music_drawing';
 import type { Point, ViewPoint } from '@sudobility/music_drawing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
-import { STAVE_POSITION_HEIGHT, outOfRangeNoteIds } from '@sudobility/music_drawing';
+import { STAVE_POSITION_HEIGHT } from '@sudobility/music_drawing';
+import { outOfRangeNoteIds } from '@sudobility/music_types';
 import {
   createWebCanvasSurface,
   webCanvasScheduler,
@@ -131,7 +133,6 @@ export function ScoreEditorView({
   const zoom = store((s) => s.zoom);
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
-  const editMode = store((s) => s.editMode);
   const snapGrid = store((s) => s.snapGrid);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
@@ -891,7 +892,9 @@ export function ScoreEditorView({
           relocateNotes(store, [...ids], {
             targetTrackId: target.trackId,
             deltaTicks: target.deltaTicks,
-            collision: collisionForEditMode(editMode),
+            // Read at the point of writing, like chord entry and paste: stack
+            // on a part that cannot play a chord is replace.
+            collision: collisionForEditMode(selectEffectiveEditMode(store.getState())),
           });
         }
         return;
@@ -936,15 +939,7 @@ export function ScoreEditorView({
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [
-      viewPointFromEvent,
-      scoreCanvas,
-      store,
-      stopAutoscroll,
-      pitchDragSteps,
-      editMode,
-      setDropTargetBoth,
-    ],
+    [viewPointFromEvent, scoreCanvas, store, stopAutoscroll, pitchDragSteps, setDropTargetBoth],
   );
 
   /**

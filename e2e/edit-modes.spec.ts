@@ -130,8 +130,31 @@ test.describe('edit modes', () => {
       await tapKey(page, midi);
     }
 
+    /*
+      The chord is the notes at tick 0 *on the track the taps went to*, not
+      every note at tick 0 in the score. `chordSelection` is what decides
+      whether the keys edit a chord or write a new note, and it refuses a
+      selection spanning more than one track — correctly: notes on two staves
+      are not a chord.
+
+      This filtered across the whole score, which was the same thing while
+      generation produced a single track. It no longer does: "Generate for me"
+      prepends a voice, so a generated score has a voice and a piano and each
+      carries a note at tick 0. The selection built from both was rejected, the
+      tap wrote at the caret instead of toggling, and nothing was removed.
+    */
+    const trackId = await page.evaluate(() => {
+      type State = { activeTrackId: string | null; score: { tracks: Array<{ id: string }> } };
+      const state = (
+        window as unknown as { __SCORESMITH_STORE__: { getState: () => State } }
+      ).__SCORESMITH_STORE__.getState();
+      // `selectActiveTrackId`'s own rule: unset means the first track.
+      return state.activeTrackId ?? state.score.tracks[0].id;
+    });
     const withChord = await readScoreSummary(page);
-    const chord = withChord!.notes.filter((n) => n.startTick === 0);
+    const chordAt0 = (summary: NonNullable<Awaited<ReturnType<typeof readScoreSummary>>>) =>
+      summary.notes.filter((n) => n.startTick === 0 && n.trackId === trackId);
+    const chord = chordAt0(withChord!);
     expect(chord.length).toBeGreaterThanOrEqual(3);
 
     await page.evaluate(
@@ -152,7 +175,7 @@ test.describe('edit modes', () => {
     await tapKey(page, 64);
 
     const after = await readScoreSummary(page);
-    expect(after!.notes.filter((n) => n.startTick === 0).length).toBe(chord.length - 1);
+    expect(chordAt0(after!).length).toBe(chord.length - 1);
     expect(getErrors()).toEqual([]);
   });
 });

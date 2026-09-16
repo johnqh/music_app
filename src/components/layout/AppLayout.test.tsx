@@ -247,6 +247,30 @@ describe('AppLayout', () => {
     expect(onNavigate).toHaveBeenCalledWith(`/project/${store.getState().projectId ?? ''}/print`);
   });
 
+  it('names the theme modes through the locale, and sets the one chosen', async () => {
+    // The menu used to capitalise the mode's own name, so every language read
+    // "Light / Dark / System" in English. A word only the locale holds proves
+    // the label comes from there.
+    const store = await makeStoreWithProject();
+    const { default: i18n } = await import('i18next');
+    const before = i18n.t('settings.themeSystem');
+    i18n.addResource('en', 'app', 'settings.themeSystem', 'Follow the device');
+    try {
+      renderLayout(<AppLayout store={store} />);
+      const user = userEvent.setup();
+      await user.click(screen.getByLabelText('Theme menu'));
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Light',
+        'Dark',
+        'Follow the device',
+      ]);
+      await user.click(screen.getByRole('menuitem', { name: 'Dark' }));
+      expect(store.getState().themeMode).toBe('dark');
+    } finally {
+      i18n.addResource('en', 'app', 'settings.themeSystem', before);
+    }
+  });
+
   it('"Back to dashboard" calls onNavigate("/projects")', async () => {
     const store = await makeStoreWithProject();
     const onNavigate = vi.fn();

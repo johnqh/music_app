@@ -1,22 +1,26 @@
 /**
  * Developer settings dialog (spec §33), reachable only when
- * `ui-slice.developerMode` is on: per-overlay debug toggles, clearing
- * locally-stored device preferences, generating a stress-test score, and
- * exporting a diagnostic JSON dump. (The mock-seed control and local
- * project database died with the Phase-2 move to server-side AI/storage.)
+ * `developerMode` (music_lib's device-prefs slice) is on: which backend
+ * generation is asked from, clearing locally-stored device preferences,
+ * generating a stress-test score, and exporting a diagnostic JSON dump. (The
+ * mock-seed control and local project database died with the Phase-2 move to
+ * server-side AI/storage.)
+ *
+ * **The six overlay toggles are gone.** `showIds`, `showTicks`,
+ * `showMeasureBoundaries`, `showPlaybackScheduling`, `enableDiagnostics` and
+ * `enableValidationWarnings` were drawn here and in the native app, and no
+ * package in the family ever read one of them — so a developer could switch six
+ * settings and watch nothing change, which reads as a broken feature rather than
+ * an absent one. What is left is `generationVariant`, which this app actually
+ * sends with a generation request, plus the four actions below.
  *
  * Adopts `@sudobility/components` controls (library sweep 2): every button
- * becomes the library `Button`, and `DevToggle` becomes a thin wrapper
- * around the library `Checkbox` -- each toggle's aria-label already
- * equalled its visible label text (unlike `GenerationPanel`'s
- * instrumentation checklist), so `Checkbox`'s `label` prop reproduces the
- * exact same accessible name with no visible-text change.
+ * becomes the library `Button`.
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
-  Checkbox,
   FormModal,
   Select,
   SelectContent,
@@ -57,20 +61,6 @@ function generateStressTestScore() {
     clef: (i % 2 === 0 ? 'treble' : 'bass') as Clef,
   }));
   return createEmptyScore({ title: 'Stress Test', measures: STRESS_MEASURE_COUNT, tracks });
-}
-
-type DevToggleProps = {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-};
-
-function DevToggle({ label, checked, onChange }: DevToggleProps) {
-  return (
-    <div className="py-1">
-      <Checkbox label={label} checked={checked} onChange={onChange} />
-    </div>
-  );
 }
 
 export function DeveloperSettingsDialog({
@@ -201,42 +191,6 @@ export function DeveloperSettingsDialog({
               </SelectContent>
             </Select>
           </div>
-          <DevToggle
-            label={t('devSettings.generationDiagnostics')}
-            checked={devSettings.enableDiagnostics}
-            onChange={(checked) => store.getState().setDevSettings({ enableDiagnostics: checked })}
-          />
-          <DevToggle
-            label={t('devSettings.showScoreIds')}
-            checked={devSettings.showIds}
-            onChange={(checked) => store.getState().setDevSettings({ showIds: checked })}
-          />
-          <DevToggle
-            label={t('devSettings.showTicks')}
-            checked={devSettings.showTicks}
-            onChange={(checked) => store.getState().setDevSettings({ showTicks: checked })}
-          />
-          <DevToggle
-            label={t('devSettings.showMeasureBoundaries')}
-            checked={devSettings.showMeasureBoundaries}
-            onChange={(checked) =>
-              store.getState().setDevSettings({ showMeasureBoundaries: checked })
-            }
-          />
-          <DevToggle
-            label={t('devSettings.showScheduling')}
-            checked={devSettings.showPlaybackScheduling}
-            onChange={(checked) =>
-              store.getState().setDevSettings({ showPlaybackScheduling: checked })
-            }
-          />
-          <DevToggle
-            label={t('devSettings.validationWarnings')}
-            checked={devSettings.enableValidationWarnings}
-            onChange={(checked) =>
-              store.getState().setDevSettings({ enableValidationWarnings: checked })
-            }
-          />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">

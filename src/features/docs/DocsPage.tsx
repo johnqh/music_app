@@ -19,13 +19,8 @@ import { Navigate, useParams } from 'react-router-dom';
 import { Heading, Section, Text } from '@sudobility/components';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
-import {
-  DOCS_GROUPS,
-  DOCS_TOPICS,
-  docsGroupLabelKey,
-  docsTopic,
-  type DocsGroup,
-} from '@sudobility/music_editing';
+import { DOCS_TOPICS, docsGroupLabelKey, docsTopic } from '@sudobility/music_lib';
+import { DOCS_GROUPS, type DocsGroup } from '@sudobility/music_types';
 import { InstrumentReference } from './InstrumentReference';
 import { ShortcutReference } from './ShortcutReference';
 import { FormatReference } from './FormatReference';

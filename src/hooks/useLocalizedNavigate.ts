@@ -5,7 +5,12 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import i18n from 'i18next';
+import { useAppStore } from '@sudobility/music_lib';
+import type { DevicePrefsActions } from '@sudobility/music_lib';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n';
+
+/** The part of the app store a language switch writes: the `language` device pref. */
+export type LanguagePrefStore = { getState: () => Pick<DevicePrefsActions, 'setLanguage'> };
 
 export function useCurrentLanguage(): SupportedLanguage {
   const { lang } = useParams<{ lang: string }>();
@@ -35,10 +40,17 @@ export function useLocalizedNavigate(): (path: string) => void {
  * lose their place every time.
  *
  * i18next is told separately because the URL is only one of the three inputs
- * its detector reads; `caches: ['localStorage']` then persists the choice, so
- * it survives a later visit to an unprefixed URL.
+ * its detector reads.
+ *
+ * The choice is also recorded as the `language` device pref, which is what a
+ * URL naming no language opens in (`LocalizedHomeRedirect`). Only here, not on
+ * every visit to a `/:lang` URL: following somebody's `/zh` link is not the
+ * reader choosing Chinese, and recording it would make their next bare visit
+ * open in whatever language they last clicked a link to.
  */
-export function useSwitchLanguage(): (next: SupportedLanguage) => void {
+export function useSwitchLanguage(
+  store: LanguagePrefStore = useAppStore,
+): (next: SupportedLanguage) => void {
   const navigate = useNavigate();
   const location = useLocation();
   const current = useCurrentLanguage();
@@ -47,6 +59,7 @@ export function useSwitchLanguage(): (next: SupportedLanguage) => void {
     (next: SupportedLanguage) => {
       if (next === current) return;
       void i18n.changeLanguage(next);
+      store.getState().setLanguage(next);
 
       const segments = location.pathname.split('/');
       // segments[0] is the empty string before the leading slash; [1] is the
@@ -58,6 +71,6 @@ export function useSwitchLanguage(): (next: SupportedLanguage) => void {
       }
       navigate(`${segments.join('/')}${location.search}${location.hash}`, { replace: true });
     },
-    [navigate, location, current],
+    [navigate, location, current, store],
   );
 }

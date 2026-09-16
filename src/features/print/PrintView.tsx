@@ -13,12 +13,8 @@ import { PAGE_MARGIN_MM, selectVisibleTrackIds } from '@sudobility/music_lib';
 import { findTrack } from '@sudobility/music_lib';
 import type { PaperOrientation, PaperSize } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
-import {
-  ORIENTATION_OPTIONS,
-  PAPER_OPTIONS,
-  WHOLE_SCORE,
-  printPlan,
-} from '@sudobility/music_drawing';
+import { WHOLE_SCORE, printPlan } from '@sudobility/music_drawing';
+import { ORIENTATION_OPTIONS, PAPER_OPTIONS } from '@sudobility/music_types';
 import { PrintSystem } from '@/features/print/PrintSystem';
 import '@/features/print/print.css';
 

@@ -288,6 +288,20 @@ describe('PianoKeyboardView', () => {
       expect(Math.max(...midis)).toBe(81);
     });
 
+    it('auditions the kit that playback would resolve the address to', () => {
+      // Program 45 is no kit; it sits inside Brush's region (40), which is what
+      // playback sounds. The audition is `auditionVoiceFor`'s answer, shared
+      // with the native keyboard, so a key and its part cannot disagree.
+      const store = makeDrumStore(45);
+      expect(store.getState().score!.tracks[0].midiProgram).toBe(45);
+      const { container } = render(<PianoKeyboardView store={store} />);
+      vi.mocked(playbackController.noteOn).mockClear();
+
+      fireEvent.pointerDown(key(container, 38), { pointerId: 1 });
+
+      expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalledWith(38, 40, true);
+    });
+
     it('names each key for the drum it strikes', () => {
       const { container } = render(<PianoKeyboardView store={makeDrumStore()} />);
 

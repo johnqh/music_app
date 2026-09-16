@@ -59,7 +59,8 @@ import {
 import { EmptyState } from '@sudobility/building_blocks';
 import { variants } from '@sudobility/design';
 import type { ProjectSummary } from '@sudobility/music_types';
-import { DOCUMENT_EXTENSIONS, ProjectFileError, parseProjectFile } from '@sudobility/music_codecs';
+import { ProjectFileError, parseProjectFile } from '@sudobility/music_codecs';
+import { DOCUMENT_EXTENSIONS } from '@sudobility/music_types';
 import {
   createGeneratedProject,
   musicQueryKeys,
@@ -684,7 +685,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           happen, and somewhere to report a file that cannot be read. */}
       <FileImportModal
         open={modImportOpen}
-        title={t('dashboard.importModuleTitle')}
+        title={t('dashboard.importModule')}
         accept=".mod,.dsm,.s3m,.xm,.it,.mptm,audio/mod,application/octet-stream"
         fileKind={t('dashboard.moduleFileKind')}
         onFile={(file) => void handleImportModFile(file)}

@@ -30,8 +30,15 @@ test('generating spends exactly what it produced', async ({ page }) => {
   const before = await readBalance(page);
   expect(before).toBeGreaterThan(0);
 
-  // Five bars on one instrument — a size no other spec generates (they all use
-  // 4 or 8), so the usage row this writes is unmistakably this test's.
+  /*
+    Five bars — a length no other spec generates (they all use 4 or 8), so the
+    usage row this writes is unmistakably this test's.
+
+    Two instruments, not one: a credit is one bar *per instrument*, and turning
+    "Generate for me" on prepends a voice to the roster, so five bars are
+    charged as ten track-measures. 4 and 8 bars bill as 8 and 16, so 10 is
+    still nobody else's row.
+  */
   await generateWholeScore(page, { prompt: 'A short piano phrase', measures: 5 });
   await waitForGenerationSettled(page);
 
@@ -48,12 +55,12 @@ test('generating spends exactly what it produced', async ({ page }) => {
    * wrong *size* — the failure this exists to catch — still fails here.
    */
   await page.goto('/en/credits/history');
-  const row = page.getByRole('row').filter({ hasText: 'generate-score — 5 track-measures' });
+  const row = page.getByRole('row').filter({ hasText: 'generate-score — 10 track-measures' });
   await expect(row).toHaveCount(1);
-  await expect(row.getByRole('cell').last()).toHaveText('5');
+  await expect(row.getByRole('cell').last()).toHaveText('10');
 
   // And it really came out of the balance, whatever else was spent alongside.
-  expect(await readBalance(page)).toBeLessThanOrEqual(before - 5);
+  expect(await readBalance(page)).toBeLessThanOrEqual(before - 10);
 });
 
 test('the dialog quotes the cost before committing to it', async ({ page }) => {

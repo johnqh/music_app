@@ -1,7 +1,7 @@
 /**
  * The site icons this page draws, and nothing else.
  *
- * **The links themselves moved to `@sudobility/music_editing`** — two apps show
+ * **The links themselves moved to `@sudobility/music_lib`** — two apps show
  * this page now, and a forty-two entry list transcribed into the second is
  * forty-two chances for the two to disagree about what this app can open. What
  * stays here is the one part a library cannot hold: files on disk, read through
@@ -11,8 +11,8 @@
  * with no description — i18next falls back to the key itself, so a missing
  * string renders as `resources.link.midkar` and nothing fails.
  */
-export { RESOURCE_GROUPS, hostOf, monogramFor } from '@sudobility/music_editing';
-export type { Resource, ResourceGroup } from '@sudobility/music_editing';
+export { RESOURCE_GROUPS, hostOf, monogramFor } from '@sudobility/music_lib';
+export type { Resource, ResourceGroup } from '@sudobility/music_types';
 
 const ICON_URLS = import.meta.glob('../assets/resource-icons/*.{png,svg}', {
   eager: true,

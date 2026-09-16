@@ -41,6 +41,7 @@ import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing
 import { useResolvedColorScheme } from '@/app/theme';
 import type { PianoKey } from '@sudobility/music_drawing';
 import { keyboardKeyFill, keyboardKeys } from '@sudobility/music_drawing';
+import { auditionVoiceFor } from '@sudobility/music_types';
 
 /**
  * One key. `React.memo` on primitive props matters here: a note boundary
@@ -196,7 +197,7 @@ const PianoKeyRow = memo(function PianoKeyRow({
   const playbackState = store((s) => s.state);
 
   /*
-    What is drawn pressed is music_editing's `litKeys`, shared with the native
+    What is drawn pressed is music_drawing's `litKeys`, shared with the native
     keyboard: the active track's sounding pitches **only while playing** — the
     engine clears sounding notes on `stop()` but not on `pause()`, so without
     the gate a paused chord stayed lit — plus the keys a finger holds.
@@ -331,12 +332,14 @@ export function PianoKeyboardView({
   const { playable, keys } = keyboard;
 
   /**
-   * The two fields the audition depends on, pulled out as primitives, so the
-   * press handler is not rebuilt on every score edit. Both are needed, because
-   * `midiProgram` means a drum kit or an instrument depending on the clef.
+   * The voice a key auditions on, pulled out as primitives, so the press
+   * handler is not rebuilt on every score edit. `auditionVoiceFor` reads the
+   * clef as well as the program — `midiProgram` means a drum kit or an
+   * instrument depending on it — and resolves a percussion address to the kit
+   * playback would use; the native keyboard asks the same function.
    */
-  const trackProgram = activeTrack?.midiProgram;
-  const trackClef = activeTrack?.clef;
+  const { program: auditionProgram, isPercussion: auditionPercussion } =
+    auditionVoiceFor(activeTrack);
 
   /**
    * The chord being played: which keys, which are still down, and when it began.
@@ -380,12 +383,9 @@ export function PianoKeyboardView({
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
       // must be heard whether or not a score is loaded or playing.
-      // The clef is as load-bearing as the program: it decides whether that
-      // number is an instrument or a drum kit, so a stale one auditions a
-      // pitched instrument for a note that plays back as a drum.
-      playbackController.noteOn(midi, trackProgram ?? 0, trackClef === 'percussion');
+      playbackController.noteOn(midi, auditionProgram, auditionPercussion);
     },
-    [trackProgram, trackClef, playable],
+    [auditionProgram, auditionPercussion, playable],
   );
 
   const releaseKey = useCallback(

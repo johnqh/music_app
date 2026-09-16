@@ -96,7 +96,10 @@ describe('insertChordAtCaret', () => {
 
   it('counts notes already at the tick, so a second pass cannot exceed the limit', () => {
     // Two separate double stops would otherwise put four notes under one bow.
+    // Stack, because that is the mode that keeps what is already there —
+    // replace removes it, so there is nothing left to count.
     const store = makeStore(40);
+    store.getState().setEditMode('stack');
     expect(insertChordAtCaret(store, [pitch('C'), pitch('E')])).toBe(true);
     expect(insertChordAtCaret(store, [pitch('G'), pitch('B')])).toBe(false);
     expect(notesAt(store, 0)).toHaveLength(2);
@@ -182,13 +185,18 @@ describe('insertChordAtCaret', () => {
       expect(notesAt(store, ppq).map((n) => n.pitch.step)).toEqual(['C']);
     });
 
-    it('stack mode still refuses a chord the instrument cannot play', () => {
+    it('stack on an instrument that cannot play a chord writes as replace', () => {
+      // The stored choice is stack, but a trumpet cannot stack, so the write
+      // uses the effective mode: the new note replaces the old one rather than
+      // being refused for a chord nobody asked for. Replace does not count the
+      // notes it removes.
       const store = makeStore(56); // Trumpet
       store.getState().setEditMode('stack');
       withExistingNote(store);
 
-      expect(insertChordAtCaret(store, [pitch('E')])).toBe(false);
-      expect(notesAt(store, 0).map((n) => n.pitch.step)).toEqual(['C']);
+      expect(insertChordAtCaret(store, [pitch('E')])).toBe(true);
+      expect(notesAt(store, 0).map((n) => n.pitch.step)).toEqual(['E']);
+      expect(store.getState().editMode).toBe('stack');
     });
   });
 });

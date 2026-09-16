@@ -1,7 +1,8 @@
 /**
- * DeveloperSettingsDialog (server-backed era): overlay toggles, stress-test
- * score generation, diagnostic export, and clearing device prefs. The
- * mock-seed control and local project database are gone (Phase 2).
+ * DeveloperSettingsDialog (server-backed era): the generation backend,
+ * stress-test score generation, diagnostic export, and clearing device prefs.
+ * The mock-seed control and local project database are gone (Phase 2), and so
+ * are the six overlay toggles — nothing in any package read one of them.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -34,14 +35,20 @@ afterEach(() => {
 });
 
 describe('DeveloperSettingsDialog', () => {
-  it('toggles overlay dev settings through the store', async () => {
+  it('offers only settings something reads', () => {
+    /*
+      Six overlay toggles were drawn here (`showIds`, `showTicks`,
+      `showMeasureBoundaries`, `showPlaybackScheduling`, `enableDiagnostics`,
+      `enableValidationWarnings`) and no package in the family read one of them,
+      so switching one did nothing at all. What is left is the generation
+      backend, which `DashboardPage` actually sends with a generation request.
+      A checkbox back in this dialog is a setting that does nothing.
+    */
     const store = makeStore();
     render(<DeveloperSettingsDialog open onClose={() => undefined} store={store} />);
-    const user = userEvent.setup();
 
-    const showIds = screen.getByRole('checkbox', { name: 'Show score IDs' });
-    await user.click(showIds);
-    expect(store.getState().devSettings.showIds).toBe(true);
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.getByRole('combobox', { name: 'Generation backend' })).toBeInTheDocument();
   });
 
   it('generates a stress-test score into the store', async () => {
@@ -71,8 +78,8 @@ describe('DeveloperSettingsDialog', () => {
     for (const button of screen.getAllByRole('button')) {
       expect(button).toHaveAccessibleName();
     }
-    for (const checkbox of screen.getAllByRole('checkbox')) {
-      expect(checkbox).toHaveAccessibleName();
+    for (const select of screen.getAllByRole('combobox')) {
+      expect(select).toHaveAccessibleName();
     }
   });
 });

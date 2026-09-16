@@ -45,7 +45,7 @@
 import { GenerationChoices } from '@/features/generation/GenerationChoices';
 import type { GenerationChoicesProps } from '@/features/generation/GenerationChoices';
 import { commandLabel } from '@sudobility/music_lib';
-import { outOfRangeNoteIds } from '@sudobility/music_drawing';
+import { outOfRangeNoteIds } from '@sudobility/music_types';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
 import {
   BarlineField,
@@ -98,7 +98,7 @@ import type {
 } from '@sudobility/music_types';
 import {
   ARTICULATION_OPTIONS,
-  CLEFS,
+  CLEF_OPTIONS,
   CUSTOM_DURATION,
   DYNAMIC_OPTIONS,
   KEY_MODE_OPTIONS,
@@ -373,6 +373,7 @@ function NoteTab({ store, onReplace }: TabProps) {
       */}
       {notes.length === 1 && startTick !== MIXED && startTick !== null ? (
         <BarBeatField
+          store={store}
           score={score}
           tick={startTick}
           disabled={locked}
@@ -899,7 +900,7 @@ function TrackTab({ store, onReplace }: TabProps) {
           value={track.clef}
           ariaLabel={t('inspector.trackClef')}
           disabled={isPlaying}
-          options={CLEFS.map((c) => ({ value: c, label: c }))}
+          options={CLEF_OPTIONS.map((c) => ({ value: c.value, label: t(c.labelKey) }))}
           onChange={(value) =>
             store.getState().setTrackClef(track.id, value as Clef, commandLabel('changeClef'))
           }

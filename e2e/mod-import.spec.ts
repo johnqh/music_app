@@ -44,7 +44,7 @@ test.describe('module import', () => {
     // project, so a menu on the editor's own title bar could only throw you
     // out of the project you had open. It is one menu now, and `chooseImport`
     // matches the option name exactly — every one of them begins "Import".
-    await chooseImport(page, 'Import MOD');
+    await chooseImport(page, 'Import Tracker Module');
     await page.getByLabel('module file input').setInputFiles({
       name: 'e2e.mod',
       mimeType: 'application/octet-stream',
@@ -71,8 +71,8 @@ test.describe('module import', () => {
     // imported and quietly is not the music.
     await gotoDashboard(page);
 
-    await chooseImport(page, 'Import MOD');
-    const dialog = page.getByRole('dialog', { name: 'Import module' });
+    await chooseImport(page, 'Import Tracker Module');
+    const dialog = page.getByRole('dialog', { name: 'Import Tracker Module' });
     await dialog.getByLabel('module file input').setInputFiles({
       name: 'notes.txt',
       mimeType: 'text/plain',

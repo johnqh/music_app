@@ -5,6 +5,11 @@ import type { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { twinkleScore } from '@sudobility/music_lib';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  resetMusicPosition,
+} from '@sudobility/music_types';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices, setAppServices } from '@/config/initialize';
 import { CommunityPage } from '@/features/community/CommunityPage';
@@ -62,7 +67,10 @@ describe('PublishedView', () => {
     installTestAppServices();
     stubPublicCalls();
   });
-  afterEach(() => resetTestAppServices());
+  afterEach(() => {
+    resetTestAppServices();
+    resetMusicPosition();
+  });
 
   const renderPublished = () =>
     render(
@@ -110,6 +118,22 @@ describe('PublishedView', () => {
     await waitFor(() => expect(player.loadedScore).toBe(score));
     view.unmount();
     expect(player.calls).toContain('stop');
+  });
+
+  it("plays from its own start and hands the editor's caret back on leaving", async () => {
+    // One playhead serves the whole app. The page starts its piece at the
+    // beginning — which moves that playhead — so it has to put the editor's
+    // caret back, or following a published link loses the reader's place.
+    const player = getMusicPlayer() as MockMusicPlayer;
+    getMusicPositionSource().moveTo(960);
+    const view = renderPublished();
+    await waitFor(() => expect(player.loadedScore).toBe(score));
+    expect(getMusicPosition().tick).toBe(0);
+
+    getMusicPositionSource().report(240); // the page's own playback moved it
+
+    view.unmount();
+    expect(getMusicPosition().tick).toBe(960);
   });
 
   it('shows a Share button carrying the shareable address', async () => {

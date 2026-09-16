@@ -401,9 +401,10 @@ describe('edit mode control', () => {
     expect(screen.getByLabelText('Stack mode')).toBeEnabled();
   });
 
-  it('falls back off stack when the active track cannot play chords', () => {
-    // The mode is set before the track changes; leaving it on stack would mean
-    // every subsequent edit silently refuses.
+  it('shows replace when the active track cannot play chords, leaving the stored choice alone', () => {
+    // The mode is set before the track changes. The bar shows the mode a write
+    // will actually use — every write reads `selectEffectiveEditMode` — while
+    // the stored choice stays the person's, so a piano gives stack back.
     const store = makeStore();
     store.getState().setEditMode('stack');
     const score = store.getState().score!;
@@ -413,7 +414,10 @@ describe('edit mode control', () => {
     });
     renderToolbar(store);
 
-    expect(store.getState().editMode).toBe('replace');
+    expect(screen.getByLabelText('Stack mode')).toBeDisabled();
+    expect(screen.getByLabelText('Stack mode')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByLabelText('Replace mode')).toHaveAttribute('aria-pressed', 'true');
+    expect(store.getState().editMode).toBe('stack');
   });
 });
 

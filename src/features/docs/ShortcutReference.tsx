@@ -7,12 +7,8 @@
  */
 import { useTranslation } from 'react-i18next';
 import { Heading } from '@sudobility/components';
-import {
-  SHORTCUTS,
-  SHORTCUT_GROUPS,
-  shortcutGroupLabelKey,
-  type ShortcutGroup,
-} from '@sudobility/music_editing';
+import { SHORTCUTS, shortcutGroupLabelKey } from '@sudobility/music_editing';
+import { SHORTCUT_GROUPS, type ShortcutGroup } from '@sudobility/music_types';
 
 export function ShortcutReference() {
   const { t } = useTranslation();

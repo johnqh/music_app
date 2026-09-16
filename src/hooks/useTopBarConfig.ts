@@ -16,13 +16,15 @@ import { LinkWrapper } from '@/components/layout/LinkWrapper';
 import { CONSTANTS } from '@/config/constants';
 import { LANGUAGE_OPTIONS } from '@/config/languages';
 import { useCurrentLanguage, useSwitchLanguage } from '@/hooks/useLocalizedNavigate';
+import type { LanguagePrefStore } from '@/hooks/useLocalizedNavigate';
 import { isLanguageSupported } from '@/i18n';
 
-export function useTopBarConfig(): TopBarConfig {
+/** `store` receives the language pref when the bar's selector switches language. */
+export function useTopBarConfig(store?: LanguagePrefStore): TopBarConfig {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const lang = useCurrentLanguage();
-  const switchLanguage = useSwitchLanguage();
+  const switchLanguage = useSwitchLanguage(store);
 
   // The account menu holds what belongs to the *user*: their credit balance,
   // what they bought, and the account itself. UI settings are not here — they
@@ -62,7 +64,7 @@ export function useTopBarConfig(): TopBarConfig {
       // options), so it sits in the nav beside Projects rather than under the
       // account — the same place `sudojo_app` puts it.
       menuItems: [
-        { id: 'projects', label: t('nav.dashboard'), href: `/${lang}/projects` },
+        { id: 'projects', label: t('nav.projects'), href: `/${lang}/projects` },
         { id: 'community', label: t('nav.community'), href: `/${lang}/community` },
         { id: 'docs', label: t('nav.docs'), href: `/${lang}/docs` },
         { id: 'resources', label: t('nav.resources'), href: `/${lang}/resources` },
@@ -83,7 +85,7 @@ export function useTopBarConfig(): TopBarConfig {
       authenticatedMenuItems,
       onLoginClick: () => navigate(`/${lang}/signin`),
       sticky: true,
-      ariaLabel: 'Main navigation',
+      ariaLabel: t('nav.mainNavigation'),
     }),
     [t, navigate, lang, switchLanguage, authenticatedMenuItems],
   );

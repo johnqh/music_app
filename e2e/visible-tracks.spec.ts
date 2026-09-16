@@ -23,8 +23,8 @@ test.describe('visible tracks', () => {
     });
     await waitForNotation(page);
 
-    // A second track, so there is something that can be hidden while leaving
-    // one visible — the control does not appear below two tracks.
+    // Another track, so there is something that can be hidden while leaving
+    // others visible — the control does not appear below two tracks.
     // "+" opens a menu now (Blank Track / Generate Track), rather than adding
     // a track outright.
     await page.getByRole('combobox', { name: 'Add Track' }).click();
@@ -38,10 +38,18 @@ test.describe('visible tracks', () => {
     const control = page.getByLabel('Visible tracks');
     await expect(control).toBeVisible();
 
-    // Hide the second track.
+    /*
+      Hide the second track.
+
+      Three boxes, not two: generation produces a voice and a piano now —
+      "Generate for me" prepends `DEFAULT_VOCAL_INSTRUMENT_VALUE` to the roster
+      — and the blank track above makes a third. What this spec is about is
+      unchanged: one track goes, the rest stay, and the choice survives a
+      reload.
+    */
     await control.click();
     const boxes = page.getByRole('checkbox', { name: /^Show / });
-    await expect(boxes).toHaveCount(2);
+    await expect(boxes).toHaveCount(3);
     await boxes.nth(1).uncheck();
     await page.keyboard.press('Escape');
 
@@ -54,7 +62,7 @@ test.describe('visible tracks', () => {
             .length;
         }),
       )
-      .toBe(1);
+      .toBe(2);
 
     // Wait for the choice to reach the server before reloading, or the
     // assertion races the autosave rather than testing persistence.
@@ -66,9 +74,10 @@ test.describe('visible tracks', () => {
 
     await page.getByLabel('Visible tracks').click();
     const afterReload = page.getByRole('checkbox', { name: /^Show / });
-    await expect(afterReload).toHaveCount(2);
+    await expect(afterReload).toHaveCount(3);
     await expect(afterReload.nth(1)).not.toBeChecked();
     await expect(afterReload.nth(0)).toBeChecked();
+    await expect(afterReload.nth(2)).toBeChecked();
 
     expect(getErrors()).toEqual([]);
   });

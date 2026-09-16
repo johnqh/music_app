@@ -124,7 +124,27 @@ test.describe('spec §39 acceptance scenario', () => {
     // spec's "what this costs".)
     const keyboard = page.getByRole('img', { name: /Piano keyboard/ });
     await expect(keyboard).toBeVisible();
-    await expect(page.locator('[data-testid^="piano-key-"]')).toHaveCount(88);
+    /*
+      The keyboard's range is the *active track's* instrument, not always 88
+      keys. This asserted 88 back when generation produced a lone piano; a
+      generated score now opens on a voice — turning "Generate for me" on
+      prepends `DEFAULT_VOCAL_INSTRUMENT_VALUE` (Voice Oohs, program 53) and a
+      voice sorts first, so the first track is the one this reads.
+
+      Voice Oohs' compass is MIDI 48-84, and both ends are already white keys,
+      so `snapToWhiteKeys` widens nothing: 37 keys, C3 to C6. The bounds are
+      asserted alongside the count so the number explains itself rather than
+      being a magic one, and so a range that merely *happened* to hold 37 keys
+      would still fail.
+    */
+    const keyRange = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[data-testid^="piano-key-"]')).map((el) =>
+        Number((el.getAttribute('data-testid') ?? '').replace('piano-key-', '')),
+      ),
+    );
+    expect(keyRange).toHaveLength(37);
+    expect(Math.min(...keyRange)).toBe(48);
+    expect(Math.max(...keyRange)).toBe(84);
 
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.locator('[data-playing="true"]').first()).toBeVisible({ timeout: 10_000 });

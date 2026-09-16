@@ -61,7 +61,7 @@ import {
 } from '@sudobility/music_lib';
 import type { MidiImportOptions, MidiImportPatch } from '@sudobility/music_lib';
 import {
-  CLEFS,
+  CLEF_OPTIONS,
   MIDI_GRID_OPTIONS,
   NO_MARK,
   parseNumericDraft,
@@ -382,9 +382,9 @@ export function MidiImportWizard({
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {CLEFS.map((clef) => (
-                                <SelectItem key={clef} value={clef}>
-                                  {clef}
+                              {CLEF_OPTIONS.map((clef) => (
+                                <SelectItem key={clef.value} value={clef.value}>
+                                  {t(clef.labelKey)}
                                 </SelectItem>
                               ))}
                             </SelectContent>

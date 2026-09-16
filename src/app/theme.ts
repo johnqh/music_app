@@ -2,7 +2,7 @@
  * The colour scheme the app is drawn in, and how the browser is asked for it.
  *
  * The *rule* — `system` follows the device, `light`/`dark` override it — is
- * music_editing's `resolveThemeMode`, shared with the native app, which asks
+ * music_lib's `resolveThemeMode`, shared with the native app, which asks
  * its own device the same question. What stays here is the part only a browser
  * can do: the `prefers-color-scheme` media query, and applying the answer to
  * the document.

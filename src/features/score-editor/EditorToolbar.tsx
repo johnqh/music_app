@@ -42,7 +42,7 @@ import type { Accidental, Articulation, DurationName, Ornament } from '@sudobili
 import { useAppStore } from '@sudobility/music_lib';
 import { selectSelectedNotes } from '@sudobility/music_lib';
 import type { EditMode } from '@sudobility/music_lib';
-import type { LayoutMode } from '@sudobility/music_drawing';
+import type { LayoutMode } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
 import { durationDisplay } from '@sudobility/music_lib';
@@ -201,7 +201,7 @@ const ACCIDENTAL_GLYPHS: Record<Accidental, NotationIcon> = {
  * The words each quantize grid is spelled out as in the menu.
  *
  * The grids themselves, and the short "1/16" the trigger shows, are
- * music_editing's (`QUANTIZE_GRIDS`, `QUANTIZE_GRID_SHORT`) — the native bar
+ * music_types' (`QUANTIZE_GRIDS`, `QUANTIZE_GRID_SHORT`) — the native bar
  * offers the same four. The short form rather than "thirtysecond" because the
  * full words made this the widest control on the bar, for a setting read at a
  * glance and changed rarely. A `Record`, so a fifth grid fails to compile here.
@@ -213,7 +213,7 @@ const QUANTIZE_GRID_LABEL_KEY: Record<QuantizeGrid, string> = {
   thirtysecond: 'importMidi.gridThirtySecond',
 };
 
-/** The glyph for each edit mode; the order, labels and hints are music_editing's. */
+/** The glyph for each edit mode; the order, labels and hints are music_types'. */
 const EDIT_MODE_GLYPHS: Record<EditMode, NotationIcon> = {
   insert: InsertModeIcon,
   replace: ReplaceModeIcon,
@@ -262,7 +262,6 @@ export function EditorToolbar({
    * trigger renders its own content and this only decides which row is ticked.
    */
   const durationValue = durationShown.kind === 'mixed' ? '' : durationShown.base;
-  const editMode = store((s) => s.editMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrack = store(selectSelectedTrack);
@@ -287,15 +286,11 @@ export function EditorToolbar({
     reads as replace (asked through the *track*, because a drum track's program
     is a kit: Brush sits at 40, the Violin address).
 
-    The stored mode is still corrected from an effect as well, because the
-    library's write path reads the stored `editMode` rather than the effective
-    one — without it a mode chosen before the track changed would refuse every
-    edit, a refusal that only surfaces after something has been played.
+    Only shown, never written back: chord entry and paste read the same
+    selector at the point of writing, so the stored choice stays the person's
+    and switching back to a piano gives stack back.
   */
   const effectiveEditMode = store(selectEffectiveEditMode);
-  useEffect(() => {
-    if (effectiveEditMode !== editMode) chooseEditMode(store, effectiveEditMode);
-  }, [editMode, effectiveEditMode, store]);
 
   const zoom = store((s) => s.zoom);
   const noteInput = store((s) => s.noteInput);
@@ -843,7 +838,7 @@ export function EditorToolbar({
 
         <VerticalDivider />
 
-        {/* How many voices is music_editing's `EDITOR_VOICE_COUNT` (two: stems
+        {/* How many voices is music_types' `EDITOR_VOICE_COUNT` (two: stems
           up against stems down on one stave). The hints used to be English
           literals here, which no parity test could see. */}
         <div role="group" aria-label={t('editor.voice')} className="flex items-center gap-0.5">
@@ -881,7 +876,7 @@ export function EditorToolbar({
           </Tooltip>
           <SelectContent>
             {/*
-              The entries and their order are music_editing's, shared with the
+              The entries and their order are music_types', shared with the
               native More menu, and each is disabled exactly when its control
               would be: a slide needs two notes, and bars and lyrics are content,
               so they lock while the transport plays. Glissando is here rather

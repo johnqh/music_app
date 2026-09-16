@@ -13,9 +13,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DOCS_TOPICS, DOCS_GROUPS } from '@sudobility/music_editing';
+import { DOCS_TOPICS } from '@sudobility/music_lib';
+import { DOCS_GROUPS } from '@sudobility/music_types';
 import { EXPORT_FORMATS, IMPORT_FORMATS } from './formats';
-import { SHORTCUT_GROUPS } from '@sudobility/music_editing';
+import { SHORTCUT_GROUPS } from '@sudobility/music_types';
 
 function load(lang: string): Record<string, unknown> {
   return JSON.parse(

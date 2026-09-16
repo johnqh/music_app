@@ -11,9 +11,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Input } from '@sudobility/components';
-import { barBeatForTick, setChordSymbol, tickForBarBeat } from '@sudobility/music_lib';
+import { barBeatForTick, setChordSymbol } from '@sudobility/music_lib';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { formatBeatForField, parseNumericDraft } from '@sudobility/music_types';
+import { barBeatCommitTick, formatBeatForField } from '@sudobility/music_types';
 import { setFingering } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import {
@@ -44,16 +44,29 @@ import {
  *
  * Drafted and committed on blur, like every other typed field here: committing
  * per keystroke would move the note through every intermediate number.
+ *
+ * **The field always shows what the score holds, and says so when that is not
+ * what was typed.** Both fields are re-seeded from the note's tick whatever
+ * happened — blank, nonsense, no such bar, a move the store refused — because a
+ * position field that kept text the score does not agree with is a field that
+ * lies. A refusal is reported instead, through the store's toasts, which is
+ * where every other editing refusal in this app arrives (`refuseOutOfRange`
+ * raises one for a pitch, and the Track tab for an instrument the part is too
+ * wide for). It used to be silent, so a refused move looked exactly like a
+ * typo being snapped back.
  */
 export function BarBeatField({
+  store,
   score,
   tick,
   onCommit,
   disabled,
 }: {
+  store: EditorStoreApi;
   score: Score;
   tick: number;
-  onCommit: (tick: number) => void;
+  /** Whether the move landed — see music_editing's `moveNoteToTick`. */
+  onCommit: (tick: number) => boolean;
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -76,13 +89,22 @@ export function BarBeatField({
 
   if (!position) return null;
 
-  const commit = (bar: string, beat: string): void => {
-    // A cleared field is "no change", never bar 0 — `Number('')` is 0.
-    const barNumber = parseNumericDraft(bar);
-    const beatNumber = parseNumericDraft(beat);
-    if (barNumber === null || beatNumber === null) return;
-    const next = tickForBarBeat(score, barNumber, beatNumber);
-    if (next !== null && next !== tick) onCommit(next);
+  const commit = (barText: string, beatText: string): void => {
+    // Everything about turning two drafts into a tick — a cleared box is "no
+    // change" and never bar 0, a bar the score has not got is nothing to
+    // commit, the note's own tick is not a move — is music_types', and shared
+    // with the native property sheet.
+    const next = barBeatCommitTick(score, barText, beatText, tick);
+    if (next !== null && !onCommit(next))
+      store.getState().pushToast({
+        message: t('inspector.moveRefused'),
+        severity: 'warning',
+      });
+    // Back to where the note is, whatever happened: blank, no such bar, or a
+    // move the store refused would otherwise leave text on screen the score
+    // does not hold. A move that landed re-seeds both from the new tick.
+    setBarDraft(bar === null ? '' : String(bar));
+    setBeatDraft(beat ?? '');
   };
 
   return (

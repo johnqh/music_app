@@ -138,7 +138,7 @@
     "importMidi": "导入 MIDI",
     "importMusicXml": "导入 MusicXML",
     "importAudio": "导入音频",
-    "importModule": "导入 MOD",
+    "importModule": "导入 Tracker 模块",
     "importProject": "导入项目文件",
     "templates": "模板",
     "yourProjects": "你的项目",
@@ -146,7 +146,6 @@
     "emptyNoMatch": "没有与「{{query}}」匹配的项目。",
     "deleteTitle": "删除项目",
     "deleteMessage": "确定删除「{{name}}」？此操作无法撤销。",
-    "importModuleTitle": "导入模块",
     "moduleFileKind": "模块文件",
     "decodingModule": "正在解码模块…",
     "moduleDescription": "将 tracker 模块（.MOD、.DSM、.S3M、.XM、.IT、.MPTM）作为新项目打开。音符按乐器而非声道分组，且顺序列表会被展平，因此播放三次的乐段会变成三组小节。",
@@ -163,12 +162,6 @@
   },
   "devSettings": {
     "title": "开发者设置",
-    "generationDiagnostics": "启用生成诊断",
-    "showScoreIds": "显示乐谱 ID",
-    "showTicks": "显示 tick 位置",
-    "showMeasureBoundaries": "显示小节边界",
-    "showScheduling": "显示播放调度数据",
-    "validationWarnings": "启用校验警告",
     "stressTest": "生成压力测试乐谱",
     "runBenchmark": "运行基准测试",
     "exportDiagnostics": "导出诊断 JSON",
@@ -229,7 +222,7 @@
       },
       "exporting": {
         "heading": "导出",
-        "p1": "导出菜单可以写出 MIDI、MusicXML、XM tracker 模块、WAV 或 MP3 音频，以及 JSON 项目文件。打印是独立的，提供 Letter 或 Legal 纸张、纵向或横向。",
+        "p1": "导出菜单可以写出 MIDI、MusicXML、XM tracker 模块、WAV 或 MP3 音频，以及项目文件。打印是独立的，提供 Letter 或 Legal 纸张、纵向或横向。",
         "p2": "音频通过播放时所用的同一套音色库渲染，因此文件是你所听内容的录音，而不是另一次不同的演绎。",
         "p3": "如果乐谱里有隐藏音轨，导出时会先问要不要包含它们，而不是替你悄悄决定。"
       },
@@ -245,7 +238,7 @@
         "musicxml": "MusicXML",
         "tracker": "Tracker 模块",
         "audio": "音频",
-        "project": "项目 JSON",
+        "project": "项目文件",
         "xm": "XM 模块",
         "wav": "WAV 音频",
         "mp3": "MP3 音频",
@@ -312,7 +305,7 @@
         "heading": "创建第一个项目",
         "p1": "一切都从「项目」页面开始。有四种起步方式：从模板开始、用 AI 生成整份乐谱、导入文件，或者复制一个已有的项目。",
         "p2": "模板是已经排好谱表的空白乐谱——主旋律谱、钢琴大谱表、弦乐四重奏、爵士小组。想要一张形状正确的白纸，模板是最快的路。",
-        "p3": "导入同样会创建新项目。MIDI 文件、MusicXML 文件、tracker 模块、音频录音或项目 JSON，都会成为一个新项目，而不是并入已经打开的那一个。"
+        "p3": "导入同样会创建新项目。MIDI 文件、MusicXML 文件、tracker 模块、音频录音或项目文件，都会成为一个新项目，而不是并入已经打开的那一个。"
       },
       "dashboard": {
         "heading": "项目页面",
@@ -1048,12 +1041,12 @@
   },
   "home": {
     "heroTitle": "用 AI 创作，逐音修改",
-    "heroBody": "{{appName}} 将完整的记谱编辑器和钢琴卷帘与 AI 生成结合：描述你想要的音乐，然后编辑每一个音符。",
+    "heroBody": "{{appName}} 将完整的记谱编辑器和可弹奏的钢琴键盘与 AI 生成结合：描述你想要的音乐，然后编辑每一个音符。",
     "cta": "打开我的项目",
     "featureEditorTitle": "真正的记谱编辑",
-    "featureEditorBody": "同一份乐谱上的雕版记谱与钢琴卷帘，并具备完整的撤销历史。",
+    "featureEditorBody": "同一份乐谱上的雕版记谱，下方配有钢琴键盘，并具备完整的撤销历史。",
     "featureAiTitle": "AI 生成",
-    "featureAiBody": "生成整首作品，或重新生成选中部分并预览多个候选结果。",
+    "featureAiBody": "生成整首作品，或重新生成选中的小节。",
     "featureFormatsTitle": "MIDI 与 MusicXML",
     "featureFormatsBody": "导入和导出可与其他工具配合使用的标准格式。",
     "ctaVisitor": "免费开始使用"
@@ -1182,7 +1175,6 @@
     "selectNote": "选择一个音符以查看其属性。",
     "selectMeasure": "选择一个小节以查看其属性。",
     "selectTrack": "选择一条音轨以查看其属性。",
-    "notesSelected": "已选中 {{count}} 个音符",
     "tracksSelected": "已选中 {{count}} 条音轨",
     "measureNumber": "第 {{number}} 小节",
     "measureRange": "第 {{from}}–{{to}} 小节",
@@ -1216,7 +1208,10 @@
     "noDynamic": "无",
     "dynamicHint": "从该音符起生效，直到该音轨上的下一个力度记号。",
     "chordSymbol": "和弦符号",
-    "chordSymbolPlaceholder": "例如 Cmaj7"
+    "chordSymbolPlaceholder": "例如 Cmaj7",
+    "moveRefused": "无法将该音符移动到该位置。",
+    "notesSelected_one": "已选中 1 个音符",
+    "notesSelected_other": "已选中 {{count}} 个音符"
   },
   "key": {
     "major": "大调",
@@ -1251,7 +1246,6 @@
     "noTempo": "未指定速度，已使用 {{defaultBpm}} BPM。"
   },
   "nav": {
-    "dashboard": "项目",
     "settings": "设置",
     "signOut": "退出登录",
     "signIn": "登录",
@@ -1259,7 +1253,9 @@
     "purchases": "购买记录",
     "community": "社区",
     "resources": "资源",
-    "docs": "文档"
+    "docs": "文档",
+    "projects": "项目",
+    "mainNavigation": "主导航"
   },
   "ornament": {
     "none": "无",
@@ -1627,5 +1623,12 @@
     "confirmTitle": "重新生成这首作品？",
     "confirmMessage": "这会用新生成的结果替换整份乐谱。除非先保存快照，否则当前乐谱不会保留。",
     "confirm": "重新生成"
+  },
+  "clef": {
+    "treble": "高音谱号",
+    "bass": "低音谱号",
+    "alto": "中音谱号",
+    "tenor": "次中音谱号",
+    "percussion": "打击乐谱号"
   }
 }

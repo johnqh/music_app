@@ -5,7 +5,7 @@
  * the same shell with a non-scrollable page config (set by AppLayout).
  * `ProjectRoute` keeps the store's open project in sync with the URL.
  */
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CreditsHistoryPage } from '@/features/credits/CreditsHistoryPage';
 import { CreditsPage } from '@/features/credits/CreditsPage';
@@ -15,6 +15,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from 'react-router-dom';
@@ -22,7 +23,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProjectLoading } from '@/components/layout/ProjectLoading';
 import { PaywallDialog } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
-import { playbackController, reportError, useAppStore } from '@sudobility/music_lib';
+import { loadPrefs, playbackController, reportError, useAppStore } from '@sudobility/music_lib';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 import { LanguageValidator as SharedLanguageValidator } from '@sudobility/components';
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
@@ -37,6 +38,13 @@ import SettingsPage from '@/pages/SettingsPage';
 import { PrintView } from '@/features/print/PrintView';
 import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 import { isLanguageSupported } from '@/i18n';
+import { SUPPORTED_LANGUAGES } from '@/config/languages';
+import { getAppServices } from '@/config/initialize';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  preferredLanguage,
+} from '@sudobility/music_types';
 
 export type AppRouterProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
@@ -48,9 +56,9 @@ function LoadingFallback() {
   return <div className="p-8 text-theme-text-secondary">{t('common.loading')}</div>;
 }
 
-export function ScreenContainerLayout() {
+export function ScreenContainerLayout({ store }: { store?: EditorStoreApi }) {
   return (
-    <ScreenContainer>
+    <ScreenContainer store={store}>
       <Suspense fallback={<LoadingFallback />}>
         <Outlet />
       </Suspense>
@@ -69,6 +77,49 @@ export function ScreenContainerLayout() {
  */
 export function LanguageValidator() {
   return <SharedLanguageValidator isLanguageSupported={isLanguageSupported} defaultLanguage="en" />;
+}
+
+/**
+ * Sends a URL with no usable route to a localized home page.
+ *
+ * A language already in the URL is kept: `/zh/nope` lands on `/zh`, because a
+ * shared link's language is the one thing about it that is still right. Only a
+ * URL with none — a bare `/` — consults the reader's `language` pref, which
+ * was persisted but never read while this was a hard `/en`.
+ *
+ * The pref is read from storage rather than the store. The store receives it
+ * from `bindDevicePrefs`, which `App` starts from an effect — and a parent's
+ * effect runs after this child's, so the store still holds the default when a
+ * cold `/` is redirected. Nothing is rendered for the moment the read takes.
+ */
+export function LocalizedHomeRedirect() {
+  const { pathname } = useLocation();
+  const inUrl = pathname.split('/')[1] ?? '';
+  const [chosen, setChosen] = useState<string | undefined>(
+    isLanguageSupported(inUrl) ? inUrl : undefined,
+  );
+
+  useEffect(() => {
+    if (chosen !== undefined) return;
+    let cancelled = false;
+    const device = typeof navigator === 'undefined' ? [] : navigator.languages;
+    const settle = (pref: string | null) => {
+      if (!cancelled) setChosen(preferredLanguage(pref, device, SUPPORTED_LANGUAGES));
+    };
+    // Inside the chain, so a missing service settles on the device's language
+    // rather than throwing out of an effect.
+    Promise.resolve()
+      .then(() => loadPrefs(getAppServices().prefsStorage))
+      .then(
+        (prefs) => settle(prefs.language),
+        () => settle(null),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [chosen]);
+
+  return chosen === undefined ? null : <Navigate to={`/${chosen}`} replace />;
 }
 
 function DashboardRoute({ store }: { store: EditorStoreApi }) {
@@ -120,9 +171,14 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
 
   // Leaving the editor (back to dashboard, settings, etc.) unmounts this
   // route; stop the transport so audio never keeps playing outside the editor.
+  // The caret is put back afterwards: it *is* the shared playhead, a stop homes
+  // that to 0, and the project is still open to come back to — from the
+  // dashboard, or from a published link.
   useEffect(() => {
     return () => {
+      const caret = getMusicPosition().tick;
       playbackController.stop();
+      getMusicPositionSource().moveTo(caret);
     };
   }, []);
 
@@ -177,9 +233,9 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
       */}
       <PaywallDialog store={store} />
       <Routes>
-        <Route path="/" element={<Navigate to="/en" replace />} />
+        <Route path="/" element={<LocalizedHomeRedirect />} />
         <Route path="/:lang" element={<LanguageValidator />}>
-          <Route element={<ScreenContainerLayout />}>
+          <Route element={<ScreenContainerLayout store={store} />}>
             {/* Public. */}
             <Route index element={<HomePage />} />
             <Route path="community" element={<CommunityPage />} />
@@ -241,7 +297,7 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
             }
           />
         </Route>
-        <Route path="*" element={<Navigate to="/en" replace />} />
+        <Route path="*" element={<LocalizedHomeRedirect />} />
       </Routes>
     </>
   );

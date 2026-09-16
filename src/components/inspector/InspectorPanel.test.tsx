@@ -127,7 +127,9 @@ describe('InspectorPanel', () => {
     // The panel opens on Note. Radix tabs act on pointer events, so a bare
     // fireEvent.click does not switch them — same as its Select.
     await user.click(screen.getByRole('tab', { name: 'Track' }));
-    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(bass.clef);
+    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(
+      new RegExp(bass.clef, 'i'),
+    );
   });
 
   it('keeps showing a track after the selection is cleared', async () => {
@@ -143,7 +145,9 @@ describe('InspectorPanel', () => {
     // that used to show "Select a track to inspect its properties".
     act(() => store.getState().clearSelection());
     await user.click(screen.getByRole('tab', { name: 'Track' }));
-    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(treble.clef);
+    expect(screen.getByRole('combobox', { name: 'Track clef' })).toHaveTextContent(
+      new RegExp(treble.clef, 'i'),
+    );
     expect(screen.queryByText(/Select a track to inspect/i)).toBeNull();
   });
 
@@ -616,7 +620,7 @@ describe('the measure clef field', () => {
     const store = makeStore();
     await openMeasure(store, 1);
 
-    expect(screen.getByLabelText('Clef from here')).toHaveTextContent(/Inherit \(treble\)/);
+    expect(screen.getByLabelText('Clef from here')).toHaveTextContent(/Inherit \(Treble\)/);
   });
 
   it('writes a clef change onto the selected bar', async () => {
@@ -624,7 +628,7 @@ describe('the measure clef field', () => {
     const { user } = await openMeasure(store, 1);
 
     await user.click(screen.getByLabelText('Clef from here'));
-    await user.click(await screen.findByRole('option', { name: 'bass' }));
+    await user.click(await screen.findByRole('option', { name: 'Bass' }));
 
     await waitFor(() => {
       expect(store.getState().score!.tracks[0].measures[1].clef).toBe('bass');
@@ -657,7 +661,7 @@ describe('the measure clef field', () => {
     expect(screen.queryByRole('option', { name: /Inherit/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Clef from here'));
-    await user.click(await screen.findByRole('option', { name: 'bass' }));
+    await user.click(await screen.findByRole('option', { name: 'Bass' }));
 
     await waitFor(() => {
       expect(store.getState().score!.tracks[0].clef).toBe('bass');

@@ -11,7 +11,7 @@
  * which is bound to the app-wide store: a visitor with a project open heard
  * that project instead of the one on the page, and a signed-out visitor, whose
  * app store holds no score, heard nothing. The page now binds the player to its
- * own store with music_editing's `bindPlayer` — the same binder the app-wide
+ * own store with music_lib's `bindPlayer` — the same binder the app-wide
  * adapter is a shell over — and lets go of it when the page is left.
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -22,7 +22,11 @@ import { bindPlayer, computeLayout, createAppStore } from '@sudobility/music_lib
 import type { PlayerBinding } from '@sudobility/music_lib';
 import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { PublishedSnapshot } from '@sudobility/music_types';
-import { publishedSnapshotUrl } from '@sudobility/music_types';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  publishedSnapshotUrl,
+} from '@sudobility/music_types';
 import { getAppServices } from '@/config/initialize';
 import { printRenderOptions, printSystems } from '@sudobility/music_drawing';
 import { PrintSystem } from '@/features/print/PrintSystem';
@@ -48,15 +52,28 @@ export function PublishedView() {
    * store's score arriving is what loads the player, so binding before the
    * fetch lands is fine. Stopped on the way out — a visitor who leaves the page
    * should not go on hearing it.
+   *
+   * The playhead is shared with the editor, and this page takes it: adopting
+   * the published score starts it at the top (so the page's Play begins at the
+   * beginning), and its own playback and stop move it further. So the editor's
+   * caret is remembered before any of that and put back last, or following a
+   * published link would cost the reader their place in their own project.
+   * Remembered here rather than by adopting with `resetPosition: false`: that
+   * would keep the page from moving the caret on arrival, but not its Play,
+   * which moves the one playhead wherever the editor's caret was.
    */
   const [binding, setBinding] = useState<PlayerBinding | null>(null);
   useEffect(() => {
+    const editorCaret = getMusicPosition().tick;
     const player = getMusicPlayer();
     const bound = bindPlayer(player, store);
     setBinding(bound);
     return () => {
       bound.stop();
       bound.unbind();
+      // Last: the stop above homes the playhead too. The player follows the
+      // move, and reloading the editor's score later keeps it.
+      getMusicPositionSource().moveTo(editorCaret);
     };
   }, [store]);
 

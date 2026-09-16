@@ -60,8 +60,15 @@ test.describe('track gutter and editor', () => {
     const editor = page.getByRole('tabpanel');
     await expect(editor).toBeVisible();
 
-    // The gutter is drawn in the canvas, so target it by geometry: the second
-    // track's stave band, inside the reserved left column.
+    /*
+      The gutter is drawn in the canvas, so target it by geometry: the blank
+      track's stave band, inside the reserved left column.
+
+      The *last* layout, not index 1. A generated score used to be one track,
+      so the track just added was the second; "Generate for me" now prepends a
+      voice to the roster, so index 1 is the generated piano and the click
+      landed on a track that was never added here.
+    */
     const point = await page.evaluate(() => {
       // Minimal local shape rather than `any`: only the fields this reads.
       type Box = { y: number; height: number };
@@ -75,7 +82,7 @@ test.describe('track gutter and editor', () => {
       const scroll = h.scrollBox!;
       const rect = scroll.getBoundingClientRect();
       const plan = h.result!.plan;
-      const box = plan.trackLayouts[1].measures[0].box;
+      const box = plan.trackLayouts[plan.trackLayouts.length - 1].measures[0].box;
       return { x: rect.left + 20, y: rect.top + box.y + box.height / 2 - scroll.scrollTop };
     });
     await page.mouse.click(point.x, point.y);

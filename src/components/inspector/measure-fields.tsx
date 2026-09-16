@@ -44,6 +44,7 @@ import type { EditorStoreApi, NavigationPatch, RepeatPatch } from '@sudobility/m
 */
 import {
   BARLINE_OPTIONS,
+  CLEF_LABEL_KEY,
   INHERIT_CLEF,
   NO_JUMP,
   NO_PICKUP,
@@ -263,7 +264,10 @@ export function MeasureClefField({ store, measure }: { store: EditorStoreApi; me
         disabled={isPlaying}
         options={options.map((option) => ({
           value: option as string,
-          label: option === INHERIT_CLEF ? t('inspector.clefInherit', { clef: inForce }) : option,
+          label:
+            option === INHERIT_CLEF
+              ? t('inspector.clefInherit', { clef: t(CLEF_LABEL_KEY[inForce]) })
+              : t(CLEF_LABEL_KEY[option]),
         }))}
         onChange={apply}
       />

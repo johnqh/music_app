@@ -1,6 +1,7 @@
 /**
  * App root (spec §6, §28): theme (light/dark/system, wired to
- * `ui-slice.themeMode` and persisted to device prefs), auth gate (sign-in
+ * the store's `themeMode` — music_lib's device-prefs slice — persisted by
+ * `bindDevicePrefs`), auth gate (sign-in
  * required app-wide), React Query provider, the router, and a top-level
  * ErrorBoundary so a render-time crash shows a recoverable fallback.
  *

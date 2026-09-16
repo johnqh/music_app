@@ -138,7 +138,7 @@
     "importMidi": "Import MIDI",
     "importMusicXml": "Import MusicXML",
     "importAudio": "Import Audio",
-    "importModule": "Import MOD",
+    "importModule": "Import Tracker Module",
     "importProject": "Import project file",
     "templates": "Templates",
     "yourProjects": "Your projects",
@@ -146,7 +146,6 @@
     "emptyNoMatch": "No project matches “{{query}}”.",
     "deleteTitle": "Delete project",
     "deleteMessage": "Delete \"{{name}}\"? This cannot be undone.",
-    "importModuleTitle": "Import module",
     "moduleFileKind": "module file",
     "decodingModule": "Decoding the module…",
     "moduleDescription": "Opens a tracker module (.MOD, .DSM, .S3M, .XM, .IT, .MPTM) as a new project. Notes are grouped by instrument rather than by channel, and the order list is flattened, so a pattern played three times becomes three sets of bars.",
@@ -163,12 +162,6 @@
   },
   "devSettings": {
     "title": "Developer settings",
-    "generationDiagnostics": "Enable generation diagnostics",
-    "showScoreIds": "Show score IDs",
-    "showTicks": "Show tick positions",
-    "showMeasureBoundaries": "Show bar boundaries",
-    "showScheduling": "Show playback scheduling data",
-    "validationWarnings": "Enable validation warnings",
     "stressTest": "Generate stress-test score",
     "runBenchmark": "Run benchmark",
     "exportDiagnostics": "Export diagnostic JSON",
@@ -229,7 +222,7 @@
       },
       "exporting": {
         "heading": "Exporting",
-        "p1": "The Export menu writes MIDI, MusicXML, an XM tracker module, audio as WAV or MP3, and the project as JSON. Print is separate, and offers Letter or Legal in portrait or landscape.",
+        "p1": "The Export menu writes MIDI, MusicXML, an XM tracker module, audio as WAV or MP3, and the project as a project file. Print is separate, and offers Letter or Legal in portrait or landscape.",
         "p2": "Audio is rendered through the same soundfont that plays it, so the file is a recording of what you heard rather than a second interpretation.",
         "p3": "If the score has hidden tracks, exporting asks whether to include them rather than quietly deciding for you."
       },
@@ -245,7 +238,7 @@
         "musicxml": "MusicXML",
         "tracker": "Tracker module",
         "audio": "Audio",
-        "project": "Project JSON",
+        "project": "Project file",
         "xm": "XM module",
         "wav": "WAV audio",
         "mp3": "MP3 audio",
@@ -312,7 +305,7 @@
         "heading": "Making your first project",
         "p1": "Everything starts on the Projects page. There are four ways to begin: start from a template, generate a whole score with AI, import a file, or duplicate a project you already have.",
         "p2": "Templates are empty scores with the staves already set up — a lead sheet, a piano grand staff, a string quartet, a jazz combo. They are the fastest way to a blank page that is the right shape.",
-        "p3": "Importing makes a project too. A MIDI file, a MusicXML file, a tracker module, an audio recording or a project JSON all land as a new project rather than merging into an open one."
+        "p3": "Importing makes a project too. A MIDI file, a MusicXML file, a tracker module, an audio recording or a project file all land as a new project rather than merging into an open one."
       },
       "dashboard": {
         "heading": "The Projects page",
@@ -1048,12 +1041,12 @@
   },
   "home": {
     "heroTitle": "Compose with AI, refine by hand",
-    "heroBody": "{{appName}} pairs a full notation editor and piano roll with AI generation: describe the music you want, then edit every note.",
+    "heroBody": "{{appName}} pairs a full notation editor and a playable piano keyboard with AI generation: describe the music you want, then edit every note.",
     "cta": "Open your projects",
     "featureEditorTitle": "Real notation editing",
-    "featureEditorBody": "Engraved notation and a piano roll over the same score, with full undo history.",
+    "featureEditorBody": "Engraved notation with a piano keyboard beneath it, over one score, with full undo history.",
     "featureAiTitle": "AI generation",
-    "featureAiBody": "Generate whole pieces or regenerate a selection with candidate previews.",
+    "featureAiBody": "Generate whole pieces, or regenerate a selection of bars.",
     "featureFormatsTitle": "MIDI & MusicXML",
     "featureFormatsBody": "Import and export standard formats that work with your other tools.",
     "ctaVisitor": "Get started free"
@@ -1182,7 +1175,6 @@
     "selectNote": "Select a note to inspect its properties.",
     "selectMeasure": "Select a bar to inspect its properties.",
     "selectTrack": "Select a track to inspect its properties.",
-    "notesSelected": "{{count}} notes selected",
     "tracksSelected": "{{count}} tracks selected",
     "measureNumber": "Bar {{number}}",
     "measureRange": "Bars {{from}}–{{to}}",
@@ -1216,7 +1208,10 @@
     "noDynamic": "None",
     "dynamicHint": "Applies from this note until the next marking on the track.",
     "chordSymbol": "Chord symbol",
-    "chordSymbolPlaceholder": "e.g. Cmaj7"
+    "chordSymbolPlaceholder": "e.g. Cmaj7",
+    "moveRefused": "The note could not be moved to that position.",
+    "notesSelected_one": "1 note selected",
+    "notesSelected_other": "{{count}} notes selected"
   },
   "key": {
     "major": "major",
@@ -1251,7 +1246,6 @@
     "tempoClamped": "Tempo {{bpm}} was outside {{min}}-{{max}} and became {{clamped}}."
   },
   "nav": {
-    "dashboard": "Projects",
     "settings": "Settings",
     "signOut": "Sign out",
     "signIn": "Sign in",
@@ -1259,7 +1253,9 @@
     "purchases": "Purchases",
     "community": "Community",
     "resources": "Resources",
-    "docs": "Docs"
+    "docs": "Docs",
+    "projects": "Projects",
+    "mainNavigation": "Main navigation"
   },
   "ornament": {
     "none": "None",
@@ -1627,5 +1623,12 @@
     "confirmTitle": "Generate this piece again?",
     "confirmMessage": "This replaces the whole score with a new generation. Your current score is not kept unless you save a snapshot first.",
     "confirm": "Generate again"
+  },
+  "clef": {
+    "treble": "Treble",
+    "bass": "Bass",
+    "alto": "Alto",
+    "tenor": "Tenor",
+    "percussion": "Percussion"
   }
 }

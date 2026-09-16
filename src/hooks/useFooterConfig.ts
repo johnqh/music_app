@@ -47,7 +47,7 @@ export function useFooterConfig(variant: 'full' | 'compact'): FooterConfig {
     linkSections: [
       {
         title: t('footer.create'),
-        links: [{ label: t('nav.dashboard'), href: `/${lang}/projects` }],
+        links: [{ label: t('nav.projects'), href: `/${lang}/projects` }],
       },
       {
         title: t('nav.community'),

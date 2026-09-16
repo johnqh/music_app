@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { createAppStore, createEmptyScore, type TestStoreContext } from '@sudobility/music_lib';
+import {
+  createAppStore,
+  createEmptyScore,
+  savePrefs,
+  type TestStoreContext,
+} from '@sudobility/music_lib';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  resetMusicPosition,
+} from '@sudobility/music_types';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@sudobility/music_lib';
 
@@ -35,6 +45,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetTestAppServices();
+  resetMusicPosition();
 });
 
 describe('AppRouter', () => {
@@ -52,6 +63,38 @@ describe('AppRouter', () => {
     // auth gate — so it is not part of this (signed-in) route table. What this
     // table still owns is the redirect to the localized root.
     await waitFor(() => expect(window.location.pathname).toBe('/en'));
+  });
+
+  it('redirects "/" to the language the reader chose', async () => {
+    // The device pref is what a bare URL has to go on: there is no language in
+    // it to be authoritative.
+    const store = makeStore();
+    await savePrefs(context.storage!, { language: 'zh' });
+    render(
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
+    );
+
+    await waitFor(() => expect(window.location.pathname).toBe('/zh'));
+  });
+
+  it('keeps the language a link names, whatever the reader chose', async () => {
+    // A shared link has to open in the language it was shared in.
+    const store = makeStore();
+    await savePrefs(context.storage!, { language: 'en' });
+    window.history.pushState({}, '', '/zh/nope');
+    render(
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
+    );
+
+    await waitFor(() => expect(window.location.pathname).toBe('/zh'));
   });
 
   it('renders the dashboard at "/en/projects"', async () => {
@@ -210,6 +253,34 @@ describe('AppRouter', () => {
     unmount();
 
     expect(playbackController.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaving the editor keeps its caret', async () => {
+    // A stop homes the playhead to 0, and the playhead is the caret — so
+    // stopping on the way out used to send the reader back to bar 1 of the
+    // project they return to, whether they went to the dashboard or followed a
+    // published link.
+    const store = makeStore();
+    const record = await context.fakeClient.createProject(
+      { name: 'Caret Project', score: createEmptyScore({ title: 'Caret Project' }) },
+      'test-token',
+    );
+    window.history.pushState({}, '', `/en/project/${record.id}`);
+    const { unmount } = render(
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
+    );
+    await waitFor(() => expect(store.getState().projectId).toBe(record.id));
+    vi.mocked(playbackController.stop).mockImplementation(() => getMusicPositionSource().report(0));
+    getMusicPositionSource().moveTo(960);
+
+    unmount();
+
+    expect(playbackController.stop).toHaveBeenCalled();
+    expect(getMusicPosition().tick).toBe(960);
   });
 
   it('a nonexistent project id falls back to the dashboard with an error toast', async () => {

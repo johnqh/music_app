@@ -94,7 +94,7 @@ describe('DashboardPage', () => {
       'Import MIDI',
       'Import MusicXML',
       'Import Audio',
-      'Import MOD',
+      'Import Tracker Module',
       'Import project file',
     ]) {
       expect(screen.getByRole('option', { name: label }), label).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
 
     for (const [item, title] of [
-      ['Import MOD', 'Import module'],
+      ['Import Tracker Module', 'Import Tracker Module'],
       ['Import project file', 'Import project file'],
       ['Import Audio', 'Import audio'],
     ] as const) {
@@ -127,11 +127,11 @@ describe('DashboardPage', () => {
     render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
-    await chooseImport(user, 'Import MOD');
+    await chooseImport(user, 'Import Tracker Module');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    // Anchored: `toHaveTextContent` is a substring match, and "Import MOD"
-    // contains "Import" — so an unanchored assertion passes against exactly the
-    // regression this test exists to catch.
+    // Anchored: `toHaveTextContent` is a substring match, and "Import Tracker
+    // Module" contains "Import" — so an unanchored assertion passes against
+    // exactly the regression this test exists to catch.
     expect(screen.getByRole('combobox', { name: 'Import a file' })).toHaveTextContent(/^Import$/);
   });
 
@@ -147,7 +147,7 @@ describe('DashboardPage', () => {
     for (const ext of ['.wav', '.mp3', '.mpa']) expect(audio.accept).toContain(ext);
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await chooseImport(user, 'Import MOD');
+    await chooseImport(user, 'Import Tracker Module');
     const mod = (await screen.findByLabelText('module file input')) as HTMLInputElement;
     expect(mod.accept).toContain('.mod');
   });
@@ -185,7 +185,9 @@ describe('DashboardPage', () => {
 
     await chooseImport(user, 'Import project file');
     const input = (await screen.findByLabelText('project file input')) as HTMLInputElement;
-    expect(input.accept).toContain('.moo');
+    // Every extension a project file has gone by: the editor has no Open of its
+    // own, because opening one makes a project, so this is the only way in.
+    for (const ext of ['.moo', '.moosiac', '.json']) expect(input.accept).toContain(ext);
     await user.upload(input, new File([text()], fileName, { type: 'application/json' }));
 
     await waitFor(() => expect(onNavigate).toHaveBeenCalled());

@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { preferredLanguage } from '@sudobility/music_types';
 import {
   LANGUAGE_NAMES,
   LANGUAGE_OPTIONS,
@@ -106,5 +107,29 @@ describe('language configuration', () => {
       const differing = Object.keys(english).filter((key) => translated[key] !== english[key]);
       expect(differing.length).toBeGreaterThan(Object.keys(english).length / 2);
     });
+  });
+});
+
+/**
+ * The resolution rule itself lives in music_types and is tested there, since
+ * both apps call it and the native app's own copy had drifted. What is this
+ * build's is the list it is called with, so what is left to pin here is that
+ * calling it with `SUPPORTED_LANGUAGES` answers a language this build ships.
+ */
+describe("preferredLanguage, against this build's list", () => {
+  it('answers a language with a bundle, whatever it is handed', () => {
+    for (const [chosen, device] of [
+      ['zh', ['en-US']],
+      [null, ['zh-CN', 'en']],
+      ['zh-Hans', []],
+      ['de', ['fr']],
+      [null, []],
+    ] as const) {
+      expect(SUPPORTED_LANGUAGES).toContain(preferredLanguage(chosen, device, SUPPORTED_LANGUAGES));
+    }
+  });
+
+  it('opens in English when nothing points anywhere else', () => {
+    expect(preferredLanguage(null, [], SUPPORTED_LANGUAGES)).toBe('en');
   });
 });

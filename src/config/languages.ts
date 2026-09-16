@@ -52,3 +52,15 @@ export const LANGUAGE_OPTIONS: Array<{ code: string; name: string; flag: string 
     name: LANGUAGE_NAMES[code],
     flag: LANGUAGE_FLAGS[code],
   }));
+
+/*
+ * The language to open when the URL does not name one is music_types'
+ * `preferredLanguage`, called with `SUPPORTED_LANGUAGES` — see `router.tsx`.
+ *
+ * The *rule* used to live here and, separately, in music_app_rn, where it
+ * compared whole tags rather than language subtags: a reader who had chosen
+ * Chinese there and so had a stored `zh-Hans` was quietly given English. Which
+ * languages a build ships is a fact about the build (the web fetches a
+ * directory per language, the native app bundles a JSON) and stays here; how a
+ * stored tag is matched against them is not, and is shared.
+ */

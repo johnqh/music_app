@@ -50,16 +50,16 @@ Paths below: **W** = `music_app/src`, **R** = `music_app_rn/src`.
 
 ## Where shared code goes (by responsibility)
 
-| Package         | Owns                                                                                                                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `music_types`   | the model, Zod schemas, pure primitives both frontend and backend need (pitch/tick math, vocabularies, picker options, readout formatting). No dependencies, hooks or async.                                                               |
-| `music_codecs`  | every score file format that carries notes: MIDI, MusicXML, tracker modules, **and the app's own `.moo` project file**. Filenames written for those formats.                                                                               |
-| `music_io`      | files and audio: the open/save layer, audio formats (wav/mp3 import extensions, MIME), filesystem, XML parsing, MIDI input.                                                                                                                |
-| `music_player`  | everything that makes sound: transport, engines, plans, offline rendering.                                                                                                                                                                 |
-| `music_client`  | the network: `MusicClient`, react-query hooks, generation job and snapshot hooks.                                                                                                                                                          |
-| `music_drawing` | canvas and keyboard geometry, the score canvas interface, print layout, render themes.                                                                                                                                                     |
-| `music_editing` | the editing store and every operation that changes a score; shared app content (docs, shortcuts, formats, resource links).                                                                                                                 |
-| `music_lib`     | frontend business logic above editing: composed app store, per-document stores, autosave, playback adapter, generation request builders and drafts, credits, device prefs, host copy wiring. Re-exports `music_types` and `music_editing`. |
+| Package         | Owns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `music_types`   | the model, Zod schemas, pure primitives both frontend and backend need (pitch/tick math, vocabularies, picker options, readout formatting, `outOfRangeNoteIds`), and **every shared type and closed vocabulary**: the codecs' option/result types, the audio-import extensions and MIME table, the `ScoreFiles`/storage platform contracts, and the frontend vocabulary (edit modes, theme and device-pref shapes, toasts, layout modes, paper options, inspector/toolbar/context-menu/docs vocabularies, input shapes such as `ScoreCanvasHit`, copy contracts, generation drafts and submissions, export formats and the formats table). No dependencies, hooks or async. |
+| `music_codecs`  | every score file format that carries notes: MIDI, MusicXML, tracker modules, **and the app's own `.moo` project file**. Filenames written for those formats.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `music_io`      | files and audio: the open/save layer (`createScoreFiles`), reading an audio file name or size (`audioMimeFor`, `isLongAudio`), filesystem, XML parsing, MIDI input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `music_player`  | everything that makes sound: transport, engines, plans, offline rendering.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `music_client`  | the network: `MusicClient`, react-query hooks, generation job and snapshot hooks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `music_drawing` | canvas and keyboard geometry and presentation (which keys are lit: `litKeys`), the score canvas interface, print layout, render themes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `music_editing` | the editing store and every operation that changes a score, including what a press means (`classifyPress`, `routeScorePress`), and nothing else (no playback binding, documents, export planning, docs content or device prefs). Does not depend on music_codecs or music_player.                                                                                                                                                                                                                                                                                                                                                                                           |
+| `music_lib`     | frontend business logic above editing: composed app store, per-document stores, autosave, the player binding (`bindPlayer`) and playback adapter, export planning (`planExport`), the unsaved-work guard, documentation content, generation request builders and drafts, credits, device prefs (theme, developer mode and settings, keyboard, font size, language), host copy wiring. Re-exports `music_types` and `music_editing`.                                                                                                                                                                                                                                         |
 
 Apps (`music_app`, `music_app_rn`) hold UI and platform wiring only.
 
@@ -486,8 +486,133 @@ From the wave 4 agents and review, to do here:
 - The published page's `setScore` moves the shared caret to 0 (the editor's caret
   is lost by visiting a published link).
 
+Single-responsibility pass (from the 2026-09-15 code review; do after the wave-5 app
+agents finish, together with moving the audit's category A types to music_types).
+**Library half done** (all eight libraries; each has a guard against the moved names);
+the apps' imports are what remains.
+Rules from the user: type definitions and vocabulary go to music_types; helper
+functions used by both frontend and backend stay in music_types; music_editing is for
+editing only; music_editing does not depend on music_codecs.
+
+- music_editing → music_lib: `bindPlayer` (typed on `IMusicPlayer` directly; its
+  `TransportSettings` type → music_types), docs structure and resource links,
+  `decideClose`/`decideQuit`, `planExport`/`WRITABLE_EXPORT_FORMATS`,
+  `resolveThemeMode` with `themeMode`/`developerMode` leaving the editing ui slice for
+  music_lib's device prefs (`THEME_MODES` → music_types; `pitchDisplay` stays).
+- music_editing → music_types: the formats table (`formats.ts`).
+- music_editing → music_drawing: `litKeys`, `samePitchSet`, `playingPitchesForTrack`.
+- music_drawing → music_editing: `classifyPress` and its constants.
+- music_drawing → music_types: `outOfRangeNoteIds`.
+- No re-exports from the old homes (music_lib re-exports several packages wholesale);
+  switch both apps' imports; add a guard per package against the moved modules.
+
 Guards:
 
 - `cross-app-parity.test.ts`: also fail when the same English lives under
   different keys in the two apps; rename to one key set.
 - Update both `CLAUDE.md` files for moved modules.
+
+### Wave 5 review (2026-09-15) — done, with fixes
+
+Verified end to end in both apps (code path and test for each): per-tab scroll
+memory (`DocumentList.scrollOffset`/`bankScroll`, `ScrollingScore`
+`initialScroll`/`onLeaveScroll`, caret-follow for a never-scrolled tab); `leaveFront`
+pausing before the caret is banked; editable bar/beat (both); the Track tab's
+out-of-range count (both, over `outOfRangeNoteIds`); percussion audition through
+`auditionVoiceFor` (both); effective edit mode read at the point of writing with no
+write-back (both toolbars, web note drag); `.moo` export through
+`WRITABLE_EXPORT_FORMATS`/`planExport`/`exportFilename`/`serializeProjectFile`
+(both); the 49 command labels and their guards (both); zh forks (none); the
+`LEGACY_THEME_MODE_KEY`/`LEGACY_FONT_SIZE_KEY` fallbacks; MIDI option null clearing;
+Replace preset labels; the web language pref (`LocalizedHomeRedirect`,
+`preferredLanguage`, `useSwitchLanguage`); the web published page binding its own
+store and handing the caret back; `ProjectRoute` restoring the caret; `adoptOutsideScore`
+stopping first. Single-responsibility app half: both apps import moved names from
+their new homes; RN device prefs (theme, developer mode, `devSettings`) are read
+off `devicePrefs` only, and the web store still composes and binds them.
+
+Found and fixed in review:
+
+- **Closing the RN tab in front mid-playback lost the next tab's caret.**
+  `leaveFront` was called with `null` for a closed document, so nothing paused;
+  the closed editor's binding paused later, on unmount, and that pause reported the
+  closed tab's position over the caret just restored. `DocumentList.close` now names
+  the closing document to `leaveFront` (and disposes it after the swap).
+- **The RN published page kept the editor's caret and then carried it off.** It
+  started at wherever the editor's caret was and left the caret where its own
+  playback stopped. It now starts at 0 and restores the editor's caret on leaving
+  (after the binding's unbind pause), as the web page does. Test added.
+- **Web bar/beat fields kept text the score does not hold** (blank, no such bar);
+  both apps also kept a position the store refused to move to. Both reset after
+  every commit. Tests added (web had none for the field).
+- **Web theme menu printed English literals** (`Light`/`Dark`/`System` by
+  capitalising the mode). Now `settings.themeLight|Dark|System`, the keys the
+  native settings screen uses too.
+- **Every clef picker in both apps printed the model token** (`treble`, `bass`) —
+  track clef, bar clef (and the "Inherit (…)" label), MIDI import. New
+  `clef.<member>` keys in both apps and both languages; RN's MIDI clef picker's
+  label now uses `importMidi.clefOfTrack` rather than concatenating.
+- Web top bar `ariaLabel: 'Main navigation'` literal → `nav.mainNavigation`.
+- Home/About copy described removed features (a piano roll, candidate previews);
+  corrected in both apps and both languages.
+- New guard in `cross-app-parity.test.ts`: the same English under a key only one
+  app has and a key only the other has fails, with `SAME_WORDS_DIFFERENT_KEYS` for
+  deliberate cases (and a stale-exemption check). It found 19; renamed to one key
+  set: RN `auth.password`→`auth.passwordLabel`, `document.save`→`editor.save`,
+  `import.midi|musicXml|audio|tracker`→`dashboard.importMidi|importMusicXml|importAudio|importModuleTitle`
+  (the tracker one landed on `dashboard.importModule` later, see Settled below),
+  `about.*` copy→`home.*`, `auth.signOut`→`nav.signOut`,
+  `trackerFit.confirm`→`trackerFit.exportAnyway`, `settings.theme_*`→`settings.theme*`;
+  web `nav.dashboard`→`nav.projects`, `inspector.notesSelected`→`_one`/`_other`.
+  Exempt: `footer.account`/`settings.account` (a footer link and a settings row).
+- Stale comments: the RN developer settings sheet claimed its toggles persist (they
+  do not — `DevicePrefs` has no `devSettings`); web comments still said
+  `ui-slice.themeMode`/`developerMode`.
+
+Still open:
+
+- For music_types: `CLEF_OPTIONS` (or a `CLEF_LABEL_KEY` record) and a theme-mode
+  label record beside `ACCIDENTAL_OPTIONS`, replacing both apps' `clef-labels.ts`
+  and `THEME_MODE_LABEL_KEY`; a pure `preferredLanguage(chosen, deviceTags,
+supported)` replacing web `preferredLanguage` and RN `languageFor`/`resolveLanguage`
+  (they disagree: RN ignores a stored `zh-Hans`, the web reads its subtag); a
+  bar/beat draft commit (`parseNumericDraft` ×2 → `tickForBarBeat` → unchanged?)
+  both inspectors restate.
+- For music_editing: `moveNoteToTick` returns `void`, so neither inspector can tell
+  a refused move from an applied one (the fields now reset unconditionally).
+  Settled:
+
+- **The six developer overlay toggles are removed, not wired.** Nothing in
+  music_types, music_codecs, music_player, music_drawing, music_editing,
+  music_client, music_io, music_lib, music_api or either app read `showIds`,
+  `showTicks`, `showMeasureBoundaries`, `showPlaybackScheduling`,
+  `enableDiagnostics` or `enableValidationWarnings` — the only mentions outside
+  the two settings UIs were their own tests — so both apps drew six switches
+  that did nothing, which reads as a broken feature rather than an absent one.
+  `DevSettings` now carries `generationVariant` alone (the one the web sends
+  with a generation request), and the native sheet went with them: it held
+  nothing else, so a Developer settings row on the native Settings screen could
+  only have opened an empty modal. `devSettings` is not a persisted pref and
+  never was, so nothing stored is stranded; `parseDevicePrefs` builds its answer
+  field by field and a test now pins that a stored object naming the removed
+  settings is ignored rather than resurrected.
+- **The RN macOS File menu deliberately has no project (`.moo`) export item.**
+  `.moo` is the app's _own_ document format, not something it exports to, so
+  File → Open and File → Save As… are the path: `menu-commands.ts` declares
+  `file.open`/`file.saveAs` and `MenuFileCommands.tsx` handles them —
+  `picker.pickFile(DOCUMENT_EXTENSIONS)` on the way in,
+  `exportFilename(title, DOCUMENT_EXTENSION)` then `saveAs(uri)` on the way out.
+  A project-file entry in the Export submenu would be a second route to that
+  same write, under a different word, so it is absent on purpose.
+  **Known duplicate, left alone:** the in-app `ExportSheet` renders every entry
+  of `WRITABLE_EXPORT_FORMATS`, which includes `{ id: 'project', extension:
+DOCUMENT_EXTENSION }` — so on a phone, where there is no File menu at all,
+  that sheet _is_ the only way to write the document out, and on macOS it sits
+  beside Save As. Removing it would take the write away from iOS; that trade is
+  the open question, not the native menu.
+- Web `dashboard.importModule` said "Import MOD" though the importer takes six
+  tracker formats. It now reads "Import Tracker Module" and is the key both
+  apps' import menus and the web's import modal title use — the native picker
+  had its own `dashboard.importModuleTitle` ("Import module") for the same
+  control, which is the one-string-one-key drift `cross-app-parity` exists to
+  catch; that key is gone.
