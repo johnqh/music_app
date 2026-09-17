@@ -14,7 +14,6 @@ import {
   computeLayout,
   isNoteEvent,
   soundingPitchForDrawn,
-  testRenderTheme,
   toggleOttavaCommand,
   twinkleScore,
   pitchToMidi,
@@ -23,6 +22,7 @@ import {
 import {
   STAVE_POSITION_HEIGHT,
   STAVE_TOP_LINE_OFFSET,
+  LIGHT_RENDER_THEME,
   pitchAtStavePoint,
 } from '@sudobility/music_drawing';
 import type { Pitch } from '@sudobility/music_types';
@@ -41,7 +41,7 @@ describe('pitchAtStavePoint with a clef change', () => {
       zoom: 1,
       layoutMode: 'page',
       width: 1200,
-      theme: testRenderTheme(),
+      theme: LIGHT_RENDER_THEME,
     });
     const trackLayout = plan.trackLayouts[0];
     const first = trackLayout.measures.find((m) => m.measureIndex === 0);
