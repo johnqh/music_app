@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import i18n from 'i18next';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { createAppStore, testStoreContext } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext } from '@/app-library';
 import { useSwitchLanguage } from '@/hooks/useLocalizedNavigate';
 
 afterEach(async () => {

@@ -7,11 +7,11 @@ import {
   setLyricCommand,
   testStoreContext,
   twinkleScore,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import type { NoteEvent } from '@sudobility/music_types';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
-import { syllabicFor } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { syllabicFor } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });

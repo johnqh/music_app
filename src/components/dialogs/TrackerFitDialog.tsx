@@ -10,8 +10,8 @@
 import { FormModal } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { TrackerFitReport } from '@sudobility/music_lib';
-import { trackerFitLosses } from '@sudobility/music_lib';
+import type { TrackerFitReport } from '@/app-library';
+import { trackerFitLosses } from '@/app-library';
 
 export type TrackerFitDialogProps = {
   open: boolean;

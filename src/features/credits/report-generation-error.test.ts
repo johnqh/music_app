@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createAppStore, testStoreContext } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext } from '@/app-library';
 import { ApiError, InsufficientCreditsError } from '@sudobility/music_client';
 import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() }) as unknown as EditorStoreApi;

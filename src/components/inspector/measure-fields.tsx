@@ -29,8 +29,8 @@ import {
   setRepeats,
   measureIndexOf,
   trackOfMeasure,
-} from '@sudobility/music_lib';
-import type { EditorStoreApi, NavigationPatch, RepeatPatch } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { EditorStoreApi, NavigationPatch, RepeatPatch } from '@/app-library';
 /*
   The pickers' lists and sentinels are music_types', and what each field does
   with a value — the clef options a bar offers, what a typed tempo commits, the

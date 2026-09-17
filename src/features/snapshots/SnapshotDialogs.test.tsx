@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
-import { snapshotTree } from '@sudobility/music_lib';
+import { snapshotTree } from '@/app-library';
 
 describe('CreateSnapshotDialog', () => {
   it('defaults the name to the next global version number', () => {

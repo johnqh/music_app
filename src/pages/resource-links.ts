@@ -11,7 +11,7 @@
  * with no description — i18next falls back to the key itself, so a missing
  * string renders as `resources.link.midkar` and nothing fails.
  */
-export { RESOURCE_GROUPS, hostOf, monogramFor } from '@sudobility/music_lib';
+export { RESOURCE_GROUPS, hostOf, monogramFor } from '@/app-library';
 export type { Resource, ResourceGroup } from '@sudobility/music_types';
 
 const ICON_URLS = import.meta.glob('../assets/resource-icons/*.{png,svg}', {

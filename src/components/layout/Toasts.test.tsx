@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });

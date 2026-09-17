@@ -6,7 +6,7 @@
  * through one.
  */
 import { useEffect, useRef } from 'react';
-import { CanvasScoreRenderer } from '@sudobility/music_lib';
+import { CanvasScoreRenderer } from '@/app-library';
 import type { Score } from '@sudobility/music_types';
 import { PRINT_SCALE, PRINT_WIDTH, printRenderOptions } from '@sudobility/music_drawing';
 import type { PrintSystemSlice } from '@sudobility/music_drawing';

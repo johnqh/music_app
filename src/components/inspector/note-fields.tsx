@@ -11,11 +11,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { Input } from '@sudobility/components';
-import { barBeatForTick, setChordSymbol } from '@sudobility/music_lib';
+import { barBeatForTick, setChordSymbol } from '@/app-library';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { barBeatCommitTick, formatBeatForField } from '@sudobility/music_types';
-import { setFingering } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { setFingering } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import {
   FIELD_HEIGHT_CLASS,
   FIELD_LABEL_CLASS,

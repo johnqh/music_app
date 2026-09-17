@@ -19,7 +19,7 @@ import {
   lockableChoiceValue,
   regenerateCreditEstimate,
   type LockableChoice,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 export type GenerationChoicesProps = {

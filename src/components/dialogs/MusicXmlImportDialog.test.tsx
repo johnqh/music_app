@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore } from '@sudobility/music_lib';
-import { exportMusicXml } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { twinkleScore } from '@/app-library';
+import { exportMusicXml } from '@/app-library';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {

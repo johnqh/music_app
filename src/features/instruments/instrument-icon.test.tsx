@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { GM_INSTRUMENTS, gmInstrumentIcon, gmKitIcon } from '@sudobility/music_lib';
+import { GM_INSTRUMENTS, gmInstrumentIcon, gmKitIcon } from '@/app-library';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
 
 /** Only the two fields the art depends on. */

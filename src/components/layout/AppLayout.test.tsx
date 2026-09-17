@@ -1,14 +1,14 @@
-import { commandLabel } from '@sudobility/music_lib';
+import { commandLabel } from '@/app-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext, decodeMidi, decodeTracker } from '@sudobility/music_lib';
+import { testStoreContext, decodeMidi, decodeTracker } from '@/app-library';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { threeTrackScore, twinkleScore, midiToPitch } from '@sudobility/music_lib';
-import { allNotes } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { threeTrackScore, twinkleScore, midiToPitch } from '@/app-library';
+import { allNotes } from '@/app-library';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { addMeasureCommand, changeVelocityCommand } from '@sudobility/music_lib';
-import { parseProjectFile, playbackController } from '@sudobility/music_lib';
+import { addMeasureCommand, changeVelocityCommand } from '@/app-library';
+import { parseProjectFile, playbackController } from '@/app-library';
 import type { NetworkClient } from '@sudobility/types';
 import type { ReactElement } from 'react';
 
@@ -16,8 +16,8 @@ import type { ReactElement } from 'react';
 // and TransportBar, both of which reach the app-wide playbackController
 // singleton -- mocked per the Task 13/15 test pattern so this suite never
 // constructs a real Tone.js engine.
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {
@@ -47,7 +47,7 @@ vi.mock('@/features/generation/useGenerationJob', async (importOriginal) => ({
 
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices, setAppServices } from '@/config/initialize';
 import { withQueryClient } from '@/test/query';

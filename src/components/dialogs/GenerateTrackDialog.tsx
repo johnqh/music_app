@@ -32,7 +32,7 @@ import {
   GENERATION_VARIANT_LABELS,
   instrumentChoiceFor,
   type InstrumentChoice,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 
 export type GenerateTrackDialogProps = {

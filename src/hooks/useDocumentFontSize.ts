@@ -18,7 +18,7 @@
  * `index.css`.
  */
 import { useEffect } from 'react';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 export function useDocumentFontSize(store: EditorStoreApi): void {
   const fontSize = store((s) => s.fontSize);

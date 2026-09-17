@@ -39,7 +39,7 @@ import {
   setErrorLogging,
   type PrefsStorage,
   type StoreContext,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { libraryCopy } from '@/i18n/library-copy';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';

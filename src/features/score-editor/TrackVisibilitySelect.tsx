@@ -14,8 +14,8 @@ import {
   selectVisibleTrackIds,
   trackPickerVisible,
   useAppStore,
-} from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { TEXT_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
 export type TrackVisibilitySelectProps = {

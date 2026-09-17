@@ -1,23 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore } from '@sudobility/music_lib';
-import { pitchToMidi, allNotes, findEvent } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { twinkleScore } from '@/app-library';
+import { pitchToMidi, allNotes, findEvent } from '@/app-library';
 import type { NoteEvent } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 import type { PlaybackToggle } from '@/features/score-editor/useEditorShortcuts';
 
 // useEditorShortcuts defaults its `controller` param to the app-wide
 // `playbackController` singleton, which eagerly constructs a real Tone.js
 // engine on import — every test below instead passes its own fake
 // `PlaybackToggle`, so this module is never imported for real here.
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {

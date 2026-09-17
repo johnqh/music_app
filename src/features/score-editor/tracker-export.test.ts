@@ -21,7 +21,7 @@ import {
   pitchToMidi,
   decodeTracker,
   encodeTracker,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import type { Score } from '@sudobility/music_types';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 

@@ -17,7 +17,7 @@
  * is now a deliberate act rather than an ordinary-looking one.
  */
 import { useCallback, useRef, useSyncExternalStore } from 'react';
-import { playbackController, playingPitchesForTrack, samePitchSet } from '@sudobility/music_lib';
+import { playbackController, playingPitchesForTrack, samePitchSet } from '@/app-library';
 
 /** The playhead, as the engine last reported it. ~30Hz while playing, silent otherwise. */
 export function usePlaybackPosition(): number {

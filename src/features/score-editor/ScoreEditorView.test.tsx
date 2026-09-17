@@ -1,31 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { act, fireEvent, render } from '@testing-library/react';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { stressScore, threeTrackScore, twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { stressScore, threeTrackScore, twinkleScore, twoTrackScore } from '@/app-library';
 import {
   TRACK_INFO_WIDTH,
   caretPositionForTick,
   computeLayout,
   pitchToMidi,
   tickForPoint,
-} from '@sudobility/music_lib';
-import { allNotes, findEvent, shiftDiatonic, writtenScore } from '@sudobility/music_lib';
-import { scoreWithPitch } from '@sudobility/music_lib';
+} from '@/app-library';
+import { allNotes, findEvent, shiftDiatonic, writtenScore } from '@/app-library';
+import { scoreWithPitch } from '@/app-library';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import type { BBox, RenderTheme } from '@sudobility/music_lib';
-import { CanvasScoreRenderer, createMock2DContext } from '@sudobility/music_lib';
-import { playbackController } from '@sudobility/music_lib';
+import type { BBox, RenderTheme } from '@/app-library';
+import { CanvasScoreRenderer, createMock2DContext } from '@/app-library';
+import { playbackController } from '@/app-library';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
 // controller, so it falls back to the app-wide `playbackController`
 // singleton, which eagerly constructs a real Tone.js engine on import —
 // mocked out here since this suite never exercises the Space shortcut.
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     // A real bus: the caret and the colour repaint both subscribe to it, and
@@ -68,7 +68,7 @@ function setTransport(store: EditorStoreApi, state: 'playing' | 'paused' | 'stop
   getMusicPositionSource().setPlaying(state === 'playing');
 }
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 // The component's own light theme, not a stand-in: reference renders below
 // must wrap and color identically to what the component draws.

@@ -45,9 +45,9 @@ import {
   runScoreContextAction,
   beginLyricEntry as beginLyricEntryAt,
   goToBarFromInput,
-} from '@sudobility/music_lib';
-import type { BBox, RenderTheme } from '@sudobility/music_lib';
-import type { LayoutPlan } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { BBox, RenderTheme } from '@/app-library';
+import type { LayoutPlan } from '@/app-library';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { GenerateScoreRequest, NoteEvent, Pitch } from '@sudobility/music_types';
 import {
@@ -58,29 +58,29 @@ import {
   // Aliased: the memo below is itself called `displayScore`, and the comments
   // around it name that.
   displayScore as applyDisplayLenses,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { useResolvedColorScheme } from '@/app/theme';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import {
   buildGenerateTrackRequest,
   estimateGenerateTrackCredits,
   withGenerationVariant,
-} from '@sudobility/music_lib';
-import type { InstrumentChoice } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { InstrumentChoice } from '@/app-library';
 import { resolveDrop } from '@sudobility/music_drawing';
 import type { DropTarget } from '@sudobility/music_drawing';
-import { useAppStore } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
 import {
   relocateNotes,
   commitPitchDrag,
   collisionForEditMode,
   selectEffectiveEditMode,
   barCount,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
@@ -89,7 +89,7 @@ import { ScoreCanvas, bindPlaybackToCanvas, boxFromPoints } from '@sudobility/mu
 import type { Point, ViewPoint } from '@sudobility/music_drawing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
-import { scoreWithPitch, stepsForDrag } from '@sudobility/music_lib';
+import { scoreWithPitch, stepsForDrag } from '@/app-library';
 import { STAVE_POSITION_HEIGHT } from '@sudobility/music_drawing';
 import { outOfRangeNoteIds } from '@sudobility/music_types';
 import {

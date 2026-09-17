@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, configure, renderHook, waitFor } from '@testing-library/react';
-import { createAppStore, testStoreContext, twinkleScore } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext, twinkleScore } from '@/app-library';
 import type { GenerationJob, GenerationJobStatus } from '@sudobility/music_types';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import type { UseProjectGenerationOptions } from '@/features/generation/useGenerationJob';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function job(status: GenerationJobStatus, error: string | null = null): GenerationJob {
   return {

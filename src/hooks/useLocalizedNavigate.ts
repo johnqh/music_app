@@ -5,8 +5,8 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import i18n from 'i18next';
-import { useAppStore } from '@sudobility/music_lib';
-import type { DevicePrefsActions } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
+import type { DevicePrefsActions } from '@/app-library';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n';
 
 /** The part of the app store a language switch writes: the `language` device pref. */

@@ -12,7 +12,7 @@
  */
 import { SelectGroup, SelectItem, SelectLabel } from '@sudobility/components';
 import { useTranslation } from 'react-i18next';
-import { GENERATION_INSTRUMENT_GROUPS } from '@sudobility/music_lib';
+import { GENERATION_INSTRUMENT_GROUPS } from '@/app-library';
 
 export function InstrumentSelectItems() {
   const { t } = useTranslation();

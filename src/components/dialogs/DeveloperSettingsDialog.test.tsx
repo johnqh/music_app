@@ -7,10 +7,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { PREFS_KEY, createAppStore, testStoreContext } from '@sudobility/music_lib';
+import { PREFS_KEY, createAppStore, testStoreContext } from '@/app-library';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {
@@ -23,7 +23,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 });
 
 import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsDialog';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(): EditorStoreApi {
   return createAppStore({ context: testStoreContext() });

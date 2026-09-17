@@ -55,11 +55,11 @@ import {
   synthLoadPercent,
   transportExtent,
 } from '@sudobility/music_types';
-import { commitOpeningTempoText, openingTempoBpm, playbackController } from '@sudobility/music_lib';
-import type { PlaybackStoreApi } from '@sudobility/music_lib';
-import { barBeatForTick, formatBarBeat } from '@sudobility/music_lib';
+import { commitOpeningTempoText, openingTempoBpm, playbackController } from '@/app-library';
+import type { PlaybackStoreApi } from '@/app-library';
+import { barBeatForTick, formatBarBeat } from '@/app-library';
 import { usePlaybackPosition, usePlaybackReadout } from '@/features/score-editor/usePlayback';
-import { useAppStore } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
 import { ArrowPathRoundedSquareIcon } from '@heroicons/react/24/solid';
 import {
   GoToStartIcon,

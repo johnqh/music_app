@@ -39,14 +39,14 @@ import {
   ORNAMENT_OPTIONS,
 } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
-import { useAppStore } from '@sudobility/music_lib';
-import { selectSelectedNotes } from '@sudobility/music_lib';
-import type { EditMode } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
+import { selectSelectedNotes } from '@/app-library';
+import type { EditMode } from '@/app-library';
 import type { LayoutMode } from '@sudobility/music_types';
-import type { EditorStoreApi } from '@sudobility/music_lib';
-import { durationParts, withBase, withModifier } from '@sudobility/music_lib';
-import { durationDisplay } from '@sudobility/music_lib';
-import type { BaseDuration } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
+import { durationParts, withBase, withModifier } from '@/app-library';
+import { durationDisplay } from '@/app-library';
+import type { BaseDuration } from '@/app-library';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 import type { ReactElement } from 'react';
 import {
@@ -124,8 +124,8 @@ import {
   EDITOR_VOICE_COUNT,
   QUANTIZE_GRIDS,
   QUANTIZE_GRID_SHORT,
-} from '@sudobility/music_lib';
-import type { EditorMoreAction, QuantizeGrid } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { EditorMoreAction, QuantizeGrid } from '@/app-library';
 
 export type EditorToolbarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */

@@ -20,10 +20,10 @@ import { AuthProvider } from '@/app/AuthContext';
 import { useDocumentLanguage } from '@/hooks/useDocumentLanguage';
 import { useDocumentFontSize } from '@/hooks/useDocumentFontSize';
 import { BrowserRouter } from 'react-router-dom';
-import { bindDevicePrefs, useAppStore } from '@sudobility/music_lib';
+import { bindDevicePrefs, useAppStore } from '@/app-library';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 type ErrorBoundaryProps = { children: ReactNode };
 type ErrorBoundaryState = { error: Error | null };

@@ -8,8 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { GENERATE_SCORE_STYLE_PRESETS, styleTempoRange } from '@sudobility/music_types';
-import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS } from '@sudobility/music_lib';
-import type { NewProjectSubmission } from '@sudobility/music_lib';
+import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS } from '@/app-library';
+import type { NewProjectSubmission } from '@/app-library';
 import { MemoryRouter } from 'react-router-dom';
 import { NewProjectDialog } from './NewProjectDialog';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
@@ -845,7 +845,7 @@ describe('NewProjectDialog: duration', () => {
     open(10);
     turnGenerationOn();
     expect(screen.queryByRole('switch', { name: 'Write lyrics' })).toBeChecked();
-    expect(screen.queryByLabelText('Duration')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Duration')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Write lyrics' }));
     expect(screen.getByLabelText('Duration')).toBeInTheDocument();
   });

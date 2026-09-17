@@ -11,8 +11,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createEmptyScore } from '@sudobility/music_types';
-import { createAppStore, testStoreContext } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { BarBeatField } from '@/components/inspector/note-fields';
 
 const score = createEmptyScore({ title: 'Test', measures: 4 });

@@ -11,7 +11,7 @@
  * colour of the text it sits beside, which the emoji glyphs it replaced could
  * not do.
  */
-import { ICON_STROKE_WIDTH, ICON_VIEWBOX, trackInstrumentIcon } from '@sudobility/music_lib';
+import { ICON_STROKE_WIDTH, ICON_VIEWBOX, trackInstrumentIcon } from '@/app-library';
 import type { Track } from '@sudobility/music_types';
 
 export type InstrumentIconProps = {

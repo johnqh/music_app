@@ -4,9 +4,34 @@ import { resolve } from 'node:path';
 import '@/i18n';
 import { beforeEach } from 'vitest';
 import { resetMusicPosition } from '@sudobility/music_types';
-import { installLibraryCopy } from '@sudobility/music_lib';
+import { installLibraryCopy } from '@/app-library';
 import { libraryCopy } from '@/i18n/library-copy';
 import '@testing-library/jest-dom/vitest';
+
+// Some Node/jsdom combinations expose the experimental Node localStorage
+// warning but leave `window.localStorage` undefined. Keep browser preference
+// tests independent of that runtime flag with a small in-memory Storage.
+if (typeof window !== 'undefined' && !window.localStorage) {
+  const values = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    setItem: (key, value) => {
+      values.set(key, String(value));
+    },
+  };
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: storage,
+  });
+}
 
 // Every language is fetched over HTTP from `public/locales/` at runtime (see
 // `src/i18n.ts`), and jsdom has no server to fetch from -- so without this,
@@ -100,7 +125,7 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
 // createMock2DContext — the same double the lib's own renderer tests use).
 // One context per canvas element, matching real browser semantics where
 // repeated getContext('2d') calls return the same object.
-import { createMock2DContext } from '@sudobility/music_lib';
+import { createMock2DContext } from '@/app-library';
 
 if (typeof HTMLCanvasElement !== 'undefined') {
   const mockContexts = new WeakMap<HTMLCanvasElement, ReturnType<typeof createMock2DContext>>();

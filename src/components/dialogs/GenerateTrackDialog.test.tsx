@@ -9,14 +9,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  GM_FAMILIES,
-  GM_KITS,
-  GM_FAMILY_LABELS,
-  gmInstrumentsByFamily,
-} from '@sudobility/music_lib';
+import { GM_FAMILIES, GM_KITS, GM_FAMILY_LABELS, gmInstrumentsByFamily } from '@/app-library';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
-import { instrumentChoiceFor } from '@sudobility/music_lib';
+import { instrumentChoiceFor } from '@/app-library';
 
 describe('instrumentChoiceFor', () => {
   it('gives every kit the percussion clef and its own program', () => {

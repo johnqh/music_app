@@ -18,8 +18,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@sudobility/components';
-import { bindPlayer, computeLayout, createAppStore } from '@sudobility/music_lib';
-import type { PlayerBinding } from '@sudobility/music_lib';
+import { bindPlayer, computeLayout, createAppStore } from '@/app-library';
+import type { PlayerBinding } from '@/app-library';
 import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { PublishedSnapshot } from '@sudobility/music_types';
 import {

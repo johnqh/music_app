@@ -53,13 +53,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@sudobility/components';
-import type { MidiSummary } from '@sudobility/music_lib';
-import {
-  canImportMidi,
-  defaultMidiImportOptions,
-  patchMidiImportOptions,
-} from '@sudobility/music_lib';
-import type { MidiImportOptions, MidiImportPatch } from '@sudobility/music_lib';
+import type { MidiSummary } from '@/app-library';
+import { canImportMidi, defaultMidiImportOptions, patchMidiImportOptions } from '@/app-library';
+import type { MidiImportOptions, MidiImportPatch } from '@/app-library';
 import {
   CLEF_OPTIONS,
   MIDI_GRID_OPTIONS,
@@ -69,11 +65,11 @@ import {
   type DurationName,
   type NoteEvent,
 } from '@sudobility/music_types';
-import { allNotes, importScore } from '@sudobility/music_lib';
-import { reportError } from '@sudobility/music_lib';
-import type { MidiImportResult } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { allNotes, importScore } from '@/app-library';
+import { reportError } from '@/app-library';
+import type { MidiImportResult } from '@/app-library';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
 

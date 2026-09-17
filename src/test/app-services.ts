@@ -5,7 +5,7 @@
  * against in-memory backends. Returns the context so tests can build a
  * matching store (`createAppStore({ context })`).
  */
-import { testStoreContext, type TestStoreContext } from '@sudobility/music_lib';
+import { testStoreContext, type TestStoreContext } from '@/app-library';
 import { createMusicIo } from '@sudobility/music_io/mocks';
 import { initializeMusicPlayer, resetMusicPlayer } from '@sudobility/music_player/core';
 import { MockMusicPlayer } from '@sudobility/music_player/mocks';

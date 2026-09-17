@@ -6,10 +6,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
-import { createAppStore, loadPrefs, savePrefs, type TestStoreContext } from '@sudobility/music_lib';
+import { createAppStore, loadPrefs, savePrefs, type TestStoreContext } from '@/app-library';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {
@@ -24,7 +24,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
 import { App } from '@/app/App';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { getAppServices, setAppServices, type AppServices } from '@/config/initialize';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function setup(): { store: EditorStoreApi; context: TestStoreContext } {
   const context = installTestAppServices();

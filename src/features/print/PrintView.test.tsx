@@ -12,8 +12,8 @@ import {
   testStoreContext,
   twoTrackScore,
   withRehearsalMarks,
-} from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { printRenderOptions } from '@sudobility/music_drawing';
 import { PrintView } from '@/features/print/PrintView';

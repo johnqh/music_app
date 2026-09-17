@@ -44,7 +44,7 @@
  */
 import { GenerationChoices } from '@/features/generation/GenerationChoices';
 import type { GenerationChoicesProps } from '@/features/generation/GenerationChoices';
-import { commandLabel } from '@sudobility/music_lib';
+import { commandLabel } from '@/app-library';
 import { outOfRangeNoteIds } from '@sudobility/music_types';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
 import {
@@ -133,9 +133,9 @@ import {
   noteTextFieldsVisible,
   DURATION_NAMES,
   selectSelectedTrack,
-} from '@sudobility/music_lib';
-import type { InspectorTab } from '@sudobility/music_lib';
-import type { TrackMixPatch } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { InspectorTab } from '@/app-library';
+import type { TrackMixPatch } from '@/app-library';
 import {
   changeAccidental as dispatchAccidental,
   changeArticulation as dispatchArticulation,
@@ -155,12 +155,12 @@ import {
   setKeySignature,
   voiceNumberOf,
   displayedPitchForNote,
-} from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
-import type { ReplaceScope } from '@sudobility/music_lib';
+} from '@/app-library';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
+import type { ReplaceScope } from '@/app-library';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
-import type { ReplaceSubmission } from '@sudobility/music_lib';
+import type { ReplaceSubmission } from '@/app-library';
 import { OTTAVAS } from '@sudobility/music_types';
 
 export type InspectorPanelProps = {

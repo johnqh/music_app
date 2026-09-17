@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { COMMAND_LABEL_KEYS } from '@sudobility/music_lib';
+import { COMMAND_LABEL_KEYS } from '@/app-library';
 
 function commandBlock(lang: string): Record<string, string> {
   const json = JSON.parse(readFileSync(`public/locales/${lang}/app.json`, 'utf8')) as {

@@ -9,8 +9,8 @@
  * when the answer is "you are out of credits".
  */
 import { useMemo } from 'react';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { useProjectGeneration as useSharedProjectGeneration } from '@sudobility/music_client';
 import type { ForegroundPort, GenerationClient, ProjectGeneration } from '@sudobility/music_client';
 import { reportGenerationError } from '@/features/credits/report-generation-error';

@@ -28,7 +28,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@sudobility/components';
-import type { ScoreContextAction, ScoreContextMenuModel } from '@sudobility/music_lib';
+import type { ScoreContextAction, ScoreContextMenuModel } from '@/app-library';
 
 export type ScoreContextMenuProps = {
   /** Viewport coordinates of the press that opened it. */

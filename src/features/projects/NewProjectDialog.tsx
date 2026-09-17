@@ -128,7 +128,7 @@ import {
   type NewProjectDraftAction,
   type NewProjectFormDraft,
   type NewProjectSubmission,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { variants } from '@sudobility/design';
 
@@ -269,6 +269,41 @@ function LabeledInput({
       />
       {hint ? <span className="text-xs text-amber-700 dark:text-amber-400">{hint}</span> : null}
     </label>
+  );
+}
+
+function TempoSlider({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  const bpm = Number(value);
+  const sliderValue = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+  return (
+    <div className="flex min-w-0 flex-[1.4] flex-col gap-1">
+      <span className="flex items-center justify-between text-xs text-theme-text-secondary">
+        <span>{label}</span>
+        <span>{sliderValue} BPM</span>
+      </span>
+      <input
+        type="range"
+        aria-label="Fast to slow"
+        min={40}
+        max={240}
+        step={1}
+        value={sliderValue}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-6 w-full accent-theme-primary"
+      />
+      <span className="flex justify-between text-[10px] text-theme-text-secondary">
+        <span>Slow</span>
+        <span>Fast</span>
+      </span>
+    </div>
   );
 }
 
@@ -724,16 +759,31 @@ export function NewProjectDialog({
                 : {})}
             />
           ) : null}
-          <LabeledInput
-            label={t('generateScore.tempo')}
-            value={draft.tempoText}
-            onChange={(text) => dispatch({ type: 'setTempo', text })}
-            min={1}
-            // Left blank the tempo is simply not sent; typed wrong it blocks
-            // Generate, and a disabled button with no reason is the trap this
-            // dialog's siblings document.
-            {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
-          />
+          {generating ? (
+            <div className="flex min-w-0 flex-[2.4] items-start gap-2">
+              <TempoSlider
+                label={t('generateScore.tempo')}
+                value={draft.tempoText}
+                onChange={(text) => dispatch({ type: 'setTempo', text })}
+              />
+              <LabeledInput
+                label={t('generateScore.tempo')}
+                value={draft.tempoText}
+                onChange={(text) => dispatch({ type: 'setTempo', text })}
+                min={1}
+                className="max-w-20"
+                {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
+              />
+            </div>
+          ) : (
+            <LabeledInput
+              label={t('generateScore.tempo')}
+              value={draft.tempoText}
+              onChange={(text) => dispatch({ type: 'setTempo', text })}
+              min={1}
+              {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
+            />
+          )}
         </div>
 
         <div className="flex gap-2">

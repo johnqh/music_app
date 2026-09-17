@@ -17,7 +17,7 @@ import {
   playbackController,
   resetMusicPosition,
   testStoreContext,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { getMusicPositionSource } from '@sudobility/music_types';
 import type { Score } from '@sudobility/music_types';
 import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
@@ -30,8 +30,8 @@ import { installTestAppServices } from '@/test/app-services';
   inert. Constructing the genuine controller here would build a soundfont
   engine, which is neither available nor the thing under test.
 */
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {

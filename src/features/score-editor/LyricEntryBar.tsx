@@ -27,8 +27,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input } from '@sudobility/components';
 import type { NoteEvent } from '@sudobility/music_types';
-import type { EditorStoreApi, LyricEntryState, LyricInput } from '@sudobility/music_lib';
-import { applyLyricStep, lyricEntryStep, lyricTextAt } from '@sudobility/music_lib';
+import type { EditorStoreApi, LyricEntryState, LyricInput } from '@/app-library';
+import { applyLyricStep, lyricEntryStep, lyricTextAt } from '@/app-library';
 
 export type LyricEntryBarProps = {
   store: EditorStoreApi;

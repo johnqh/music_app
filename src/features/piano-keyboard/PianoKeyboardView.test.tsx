@@ -1,5 +1,5 @@
 import { Profiler } from 'react';
-import { commandLabel } from '@sudobility/music_lib';
+import { commandLabel } from '@/app-library';
 import {
   getMusicPosition,
   getMusicPositionSource,
@@ -15,14 +15,13 @@ import {
   testStoreContext,
   twinkleScore,
   twoTrackScore,
-} from '@sudobility/music_lib';
-import { allNotes, changeTrackPropsCommand, playbackController } from '@sudobility/music_lib';
+} from '@/app-library';
+import { allNotes, changeTrackPropsCommand, playbackController } from '@/app-library';
 
 // The keyboard auditions through the controller; the real one would build a
 // Tone graph, which jsdom has no audio for.
-vi.mock('@sudobility/music_lib', async () => {
-  const actual =
-    await vi.importActual<typeof import('@sudobility/music_lib')>('@sudobility/music_lib');
+vi.mock('@/app-library', async () => {
+  const actual = await vi.importActual<typeof import('@/app-library')>('@/app-library');
   return {
     ...actual,
     // Replaced wholesale, not spread: the real export is a lazy Proxy that
@@ -39,8 +38,8 @@ vi.mock('@sudobility/music_lib', async () => {
   };
 });
 import type { Score, SoundingNote } from '@sudobility/music_types';
-import type { EditorStoreApi } from '@sudobility/music_lib';
-import { addNoteCommand, createEmptyScore } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
+import { addNoteCommand, createEmptyScore } from '@/app-library';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 

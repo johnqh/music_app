@@ -19,12 +19,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoBox, Stack, Text } from '@sudobility/components';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
-import { importScore } from '@sudobility/music_lib';
-import { allNotes } from '@sudobility/music_lib';
-import { reportError } from '@sudobility/music_lib';
-import type { MusicXmlImportResult } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { importScore } from '@/app-library';
+import { allNotes } from '@/app-library';
+import { reportError } from '@/app-library';
+import type { MusicXmlImportResult } from '@/app-library';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { getAppServices } from '@/config/initialize';
 

@@ -4,11 +4,11 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { playbackController } from '@sudobility/music_lib';
+import { playbackController } from '@/app-library';
 import { usePlaybackReadout } from './usePlayback';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return { ...actual, playbackController: { bus: new actual.PlaybackBus() } };
 });
 

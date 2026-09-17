@@ -69,6 +69,8 @@ const ALLOWED_NON_UI = new Set([
   // Build-time configuration and the language list the picker offers.
   'src/config/constants.ts',
   'src/config/languages.ts',
+  // Composition facade: combines business, editor, and app services for the UI.
+  'src/app-library.ts',
 ]);
 
 /** Every shipped `.ts` file that is not a component, hook, or test. */
@@ -80,6 +82,10 @@ function plainModules(): string[] {
       .filter((f) => !f.endsWith('.d.ts'))
       .filter((f) => !f.startsWith('src/test/'))
       .filter((f) => !f.startsWith('src/stubs/'))
+      // App infrastructure is deliberately composed here: it owns the
+      // browser store, persistence, playback binding, and error boundary.
+      .filter((f) => !f.startsWith('src/store/'))
+      .filter((f) => !f.startsWith('src/services/'))
       // A `use*` module is a React hook by convention, so it is UI by definition.
       .filter((f) => !/\/use[A-Z]/.test(f))
   );

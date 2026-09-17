@@ -30,16 +30,16 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import { createEmptyScore } from '@sudobility/music_lib';
+import { createEmptyScore } from '@/app-library';
 import type { Clef } from '@sudobility/music_types';
 import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_types';
-import { LEGACY_FONT_SIZE_KEY, PREFS_KEY, reportError } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { LEGACY_FONT_SIZE_KEY, PREFS_KEY, reportError } from '@/app-library';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { getAppServices } from '@/config/initialize';
-import { runBenchmark, toBenchmarkTable } from '@sudobility/music_lib';
-import type { BenchmarkReport, BenchmarkSize } from '@sudobility/music_lib';
+import { runBenchmark, toBenchmarkTable } from '@/app-library';
+import type { BenchmarkReport, BenchmarkSize } from '@/app-library';
 
 export type DeveloperSettingsDialogProps = {
   open: boolean;

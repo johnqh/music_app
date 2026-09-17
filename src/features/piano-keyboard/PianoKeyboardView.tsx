@@ -21,8 +21,8 @@ import {
   midiIsInRange,
   pitchToMidi,
   selectSelectedNotes,
-} from '@sudobility/music_lib';
-import type { SoundingNote, UUID } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { SoundingNote, UUID } from '@/app-library';
 // `chordSelection` for what the keys should *look* like; `playKeyGroup` for
 // what pressing them does. Only the first is this component's business.
 import {
@@ -31,12 +31,12 @@ import {
   playKeyGroup,
   pressKey as pressGroupKey,
   releaseKey as releaseGroupKey,
-} from '@sudobility/music_lib';
-import type { KeyGroup } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { KeyGroup } from '@/app-library';
 import type { RenderTheme } from '@sudobility/music_drawing';
 import { getAppServices } from '@/config/initialize';
 import { usePlayingPitches } from '@/features/score-editor/usePlayback';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { useResolvedColorScheme } from '@/app/theme';
 import type { PianoKey } from '@sudobility/music_drawing';

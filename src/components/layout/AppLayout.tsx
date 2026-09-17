@@ -75,9 +75,9 @@ import {
   MENU_ITEM_CLASS,
   useMenu,
 } from '@/components/layout/app-bar-menu';
-import { regenerateWithLocks } from '@sudobility/music_lib';
-import { scoreToTracker, isCleanFit } from '@sudobility/music_lib';
-import type { TrackerFitReport, WritableTrackerFormat } from '@sudobility/music_lib';
+import { regenerateWithLocks } from '@/app-library';
+import { scoreToTracker, isCleanFit } from '@/app-library';
+import type { TrackerFitReport, WritableTrackerFormat } from '@/app-library';
 import { TrackerFitDialog } from '@/components/dialogs/TrackerFitDialog';
 import {
   WRITABLE_EXPORT_FORMATS,
@@ -90,27 +90,27 @@ import {
   repairIssuesOutcome,
   selectRegeneratedInRange,
   serializeProjectFile,
-} from '@sudobility/music_lib';
-import type { ExportFormatId, ExportPlan } from '@sudobility/music_lib';
+} from '@/app-library';
+import type { ExportFormatId, ExportPlan } from '@/app-library';
 import { renderScoreAudio } from '@sudobility/music_player';
 import { useProjectSnapshots } from '@sudobility/music_client';
 import { THEME_MODE_OPTIONS, publishedSnapshotUrl } from '@sudobility/music_types';
 import { SOUNDFONT_ASSETS } from '@/config/initialize';
-import { findEvent, findMeasure, findTrack } from '@sudobility/music_lib';
-import { playbackController } from '@sudobility/music_lib';
-import { selectionSummaryLabel } from '@sudobility/music_lib';
-import type { ValidationIssue } from '@sudobility/music_lib';
-import { useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
-import { repairAllIssues } from '@sudobility/music_lib';
-import { reportError } from '@sudobility/music_lib';
+import { findEvent, findMeasure, findTrack } from '@/app-library';
+import { playbackController } from '@/app-library';
+import { selectionSummaryLabel } from '@/app-library';
+import type { ValidationIssue } from '@/app-library';
+import { useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
+import { repairAllIssues } from '@/app-library';
+import { reportError } from '@/app-library';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { TransportBar } from '@/components/transport/TransportBar';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
 import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
-import type { ReplaceScope, ReplaceSubmission } from '@sudobility/music_lib';
+import type { ReplaceScope, ReplaceSubmission } from '@/app-library';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import { CreditBadge } from '@/features/credits/CreditBadge';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';

@@ -15,17 +15,17 @@ import {
   playbackController,
   projectTemplates,
   type TestStoreContext,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import { serializeProjectFile } from '@sudobility/music_codecs';
 import { InsufficientCreditsError } from '@sudobility/music_client';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
 import { DashboardPage } from '@/features/projects/DashboardPage';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import { withQueryClient } from '@/test/query';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {

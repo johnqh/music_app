@@ -8,8 +8,8 @@
  * jobs from different code and both were reporting the 402 as a network error.
  */
 import { classifyGenerationError } from '@sudobility/music_client';
-import { reportError, useAppStore } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { reportError, useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { PAYWALL_DIALOG } from '@/features/credits/PaywallDialog';
 
 export type ReportGenerationErrorOptions = {

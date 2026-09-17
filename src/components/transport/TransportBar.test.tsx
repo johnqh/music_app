@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MAX_BPM, getMusicPositionSource } from '@sudobility/music_types';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore } from '@sudobility/music_lib';
-import type { PlaybackStoreApi } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { twinkleScore } from '@/app-library';
+import type { PlaybackStoreApi } from '@/app-library';
 
-vi.mock('@sudobility/music_lib', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@sudobility/music_lib')>();
+vi.mock('@/app-library', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/app-library')>();
   return {
     ...actual,
     playbackController: {
@@ -31,7 +31,7 @@ vi.mock('@sudobility/music_lib', async (importOriginal) => {
   };
 });
 
-import { playbackController } from '@sudobility/music_lib';
+import { playbackController } from '@/app-library';
 import { TransportBar } from '@/components/transport/TransportBar';
 
 function makeStore(withScore = true): PlaybackStoreApi {

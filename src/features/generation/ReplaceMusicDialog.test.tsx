@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReplacementRegion } from '@sudobility/music_lib';
+import type { ReplacementRegion } from '@/app-library';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
 
 function region(over: Partial<ReplacementRegion> = {}): ReplacementRegion {

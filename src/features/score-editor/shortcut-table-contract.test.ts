@@ -8,7 +8,7 @@
  * this checks the list against them.
  */
 import { describe, expect, it } from 'vitest';
-import { SHIFT_MARK_KEYS } from '@sudobility/music_lib';
+import { SHIFT_MARK_KEYS } from '@/app-library';
 import { SHORTCUTS } from '@sudobility/music_editing';
 
 describe('the shortcut list', () => {

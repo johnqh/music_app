@@ -8,8 +8,8 @@
  * the document.
  */
 import { useCallback, useSyncExternalStore } from 'react';
-import { resolveThemeMode } from '@sudobility/music_lib';
-import type { ThemeMode } from '@sudobility/music_lib';
+import { resolveThemeMode } from '@/app-library';
+import type { ThemeMode } from '@/app-library';
 
 /** User-facing colour scheme preference: the store's `themeMode`. */
 export type ColorSchemeMode = ThemeMode;

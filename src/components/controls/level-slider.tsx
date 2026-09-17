@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 /**
  * The app's slider: a native range input over painted divs.
  *

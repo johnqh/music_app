@@ -19,7 +19,7 @@ import {
   twinkleScore,
   pitchToMidi,
   trackWrittenTransposition,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import {
   STAVE_POSITION_HEIGHT,
   STAVE_TOP_LINE_OFFSET,

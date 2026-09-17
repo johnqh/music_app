@@ -20,7 +20,7 @@
 import { useTranslation } from 'react-i18next';
 import { Button, FormModal, Text, cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import { projectTemplates } from '@sudobility/music_lib';
+import { projectTemplates } from '@/app-library';
 import { libraryCopy } from '@/i18n/library-copy';
 
 export type TemplatePickerDialogProps = {

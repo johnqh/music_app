@@ -9,10 +9,10 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@sudobility/components';
-import { PAGE_MARGIN_MM, selectVisibleTrackIds } from '@sudobility/music_lib';
-import { findTrack } from '@sudobility/music_lib';
-import type { PaperOrientation, PaperSize } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { PAGE_MARGIN_MM, selectVisibleTrackIds } from '@/app-library';
+import { findTrack } from '@/app-library';
+import type { PaperOrientation, PaperSize } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { WHOLE_SCORE, printPlan } from '@sudobility/music_drawing';
 import { ORIENTATION_OPTIONS, PAPER_OPTIONS } from '@sudobility/music_types';
 import { PrintSystem } from '@/features/print/PrintSystem';

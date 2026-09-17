@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { createAppStore, testStoreContext } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 
 // The store's data comes from RevenueCat and the consumables API; neither
 // belongs in a test of when the modal is shown.

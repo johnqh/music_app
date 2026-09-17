@@ -67,6 +67,14 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // jsdom only exposes localStorage for a document with a real origin.
+    // Node's newer localStorage warning is otherwise surfaced as an undefined
+    // window.localStorage in tests that exercise device preferences.
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
     /*
       Worker startup, not test speed, is what made this suite unreliable.
 

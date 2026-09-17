@@ -4,7 +4,7 @@ import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { twinkleScore } from '@sudobility/music_lib';
+import { twinkleScore } from '@/app-library';
 import {
   getMusicPosition,
   getMusicPositionSource,

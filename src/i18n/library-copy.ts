@@ -19,6 +19,6 @@
  * strings are there; under test `t` returns the key, which is deterministic.
  */
 import i18next from 'i18next';
-import { createLibraryCopy } from '@sudobility/music_lib';
+import { createLibraryCopy } from '@/app-library';
 
 export const libraryCopy = createLibraryCopy((key, options) => i18next.t(key, options));

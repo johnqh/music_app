@@ -70,18 +70,13 @@ import {
   useProjects,
   useTranscriptionCapability,
 } from '@sudobility/music_client';
-import {
-  playbackController,
-  projectTemplates,
-  reportError,
-  useAppStore,
-} from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { playbackController, projectTemplates, reportError, useAppStore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { getAppServices } from '@/config/initialize';
 import { useMusicHookContext } from '@/app/AuthContext';
 import { NewProjectDialog } from '@/features/projects/NewProjectDialog';
 import { TemplatePickerDialog } from '@/features/projects/TemplatePickerDialog';
-import type { NewProjectSubmission } from '@sudobility/music_lib';
+import type { NewProjectSubmission } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';

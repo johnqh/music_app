@@ -1,16 +1,16 @@
-import { commandLabel } from '@sudobility/music_lib';
+import { commandLabel } from '@/app-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore } from '@sudobility/music_lib';
-import { allNotes, findEvent } from '@sudobility/music_lib';
-import { addMeasureCommand, deleteMeasureCommand } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { twinkleScore } from '@/app-library';
+import { allNotes, findEvent } from '@/app-library';
+import { addMeasureCommand, deleteMeasureCommand } from '@/app-library';
 import type { NoteEvent } from '@sudobility/music_types';
 import { getMusicPosition } from '@sudobility/music_types';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(withScore = true): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });

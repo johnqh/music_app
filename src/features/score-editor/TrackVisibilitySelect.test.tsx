@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  createAppStore,
-  testStoreContext,
-  threeTrackScore,
-  twinkleScore,
-} from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { createAppStore, testStoreContext, threeTrackScore, twinkleScore } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 
 function makeStore(score = threeTrackScore()): EditorStoreApi {

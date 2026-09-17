@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getMusicPosition, resetMusicPosition } from '@sudobility/music_types';
 
-vi.mock('@sudobility/music_lib', async () => {
-  const actual =
-    await vi.importActual<typeof import('@sudobility/music_lib')>('@sudobility/music_lib');
+vi.mock('@/app-library', async () => {
+  const actual = await vi.importActual<typeof import('@/app-library')>('@/app-library');
   return {
     ...actual,
     // Replaced wholesale, not spread: the real export is a lazy Proxy bound to
@@ -17,15 +16,10 @@ vi.mock('@sudobility/music_lib', async () => {
   };
 });
 
-import {
-  createAppStore,
-  testStoreContext,
-  createEmptyScore,
-  allNotes,
-} from '@sudobility/music_lib';
+import { createAppStore, testStoreContext, createEmptyScore, allNotes } from '@/app-library';
 import type { Pitch } from '@sudobility/music_types';
-import { insertChordAtCaret } from '@sudobility/music_lib';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import { insertChordAtCaret } from '@/app-library';
+import type { EditorStoreApi } from '@/app-library';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 const pitch = (step: string, octave = 4): Pitch =>

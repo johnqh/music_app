@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { twinkleScore, twoTrackScore } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { twinkleScore, twoTrackScore } from '@/app-library';
 import {
   allNotes,
   changeClefCommand,
@@ -16,12 +16,12 @@ import {
   changeTrackPropsCommand,
   setChordSymbolCommand,
   toGraceNoteCommand,
-} from '@sudobility/music_lib';
+} from '@/app-library';
 import type { NoteEvent } from '@sudobility/music_types';
 import { MAX_BPM } from '@sudobility/music_types';
 import { dragSlider } from '@/test/drag-slider';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
-import type { EditorStoreApi } from '@sudobility/music_lib';
+import type { EditorStoreApi } from '@/app-library';
 
 function makeStore(score: ReturnType<typeof twinkleScore> = twinkleScore()): EditorStoreApi {
   const store = createAppStore({ context: testStoreContext() });

@@ -15,9 +15,9 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, Section, Stack, Switch, Text } from '@sudobility/components';
 import { GlobalSettingsPage, type SettingsSectionConfig } from '@sudobility/building_blocks';
-import { useAppStore } from '@sudobility/music_lib';
+import { useAppStore } from '@/app-library';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
-import type { EditorStoreApi, FontSize } from '@sudobility/music_lib';
+import type { EditorStoreApi, FontSize } from '@/app-library';
 
 export type SettingsPageProps = { store?: EditorStoreApi };
 

@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { testStoreContext } from '@sudobility/music_lib';
+import { testStoreContext } from '@/app-library';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createAppStore } from '@sudobility/music_lib';
-import { chordScore, twinkleScore } from '@sudobility/music_lib';
-import { exportMidi } from '@sudobility/music_lib';
-import { analyzeMidi } from '@sudobility/music_lib';
+import { createAppStore } from '@/app-library';
+import { chordScore, twinkleScore } from '@/app-library';
+import { exportMidi } from '@/app-library';
+import { analyzeMidi } from '@/app-library';
 import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { Toasts } from '@/components/layout/Toasts';
-import type { EditorStoreApi, MidiImportOptions, MidiImportResult } from '@sudobility/music_lib';
+import type { EditorStoreApi, MidiImportOptions, MidiImportResult } from '@/app-library';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 
 function makeStore(): EditorStoreApi {
