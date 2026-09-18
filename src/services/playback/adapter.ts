@@ -26,7 +26,7 @@ import type { IMusicPlayer } from '@sudobility/music_player/core';
 import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { PlayerFailure } from '@sudobility/music_types';
 import { bindPlayer } from './bind-player.js';
-import type { PlayerBinding } from './bind-player.js';
+import type { BindPlayerOptions, PlayerBinding } from './bind-player.js';
 import { libraryMessage } from '@sudobility/music_lib';
 import { useAppStore } from '../../store/useAppStore.js';
 import type { createAppStore } from '../../store/useAppStore.js';
@@ -40,6 +40,7 @@ export class PlaybackAdapter {
   constructor(
     private readonly player: IMusicPlayer,
     private readonly store: PlaybackStoreApi,
+    options: Pick<BindPlayerOptions, 'deferUntilPlay'> = {},
   ) {
     /*
       No position subscription, and no caret to commit on stop.
@@ -48,6 +49,7 @@ export class PlaybackAdapter {
       so "play from the caret" needs nothing copied from one to the other.
     */
     this.binding = bindPlayer(player, store, {
+      ...options,
       // The translation lives here, not in the binder or music_player: the
       // message a user sees is localized, and neither of those carries copy.
       onError: (failure: PlayerFailure, error: unknown) =>
@@ -184,6 +186,7 @@ export class PlaybackAdapter {
 
   reportError(message: string, error: unknown): void {
     const detail = error instanceof Error ? error.message : String(error);
+    console.error('[ScoreSmith playback]', message, error);
     this.store.getState().pushToast({ message: `${message}: ${detail}`, severity: 'error' });
   }
 }
@@ -191,8 +194,9 @@ export class PlaybackAdapter {
 export function createPlaybackAdapter(
   player: IMusicPlayer,
   store: PlaybackStoreApi,
+  options: Pick<BindPlayerOptions, 'deferUntilPlay'> = {},
 ): PlaybackAdapter {
-  return new PlaybackAdapter(player, store);
+  return new PlaybackAdapter(player, store, options);
 }
 
 let singleton: PlaybackAdapter | null = null;
@@ -201,7 +205,9 @@ function realAdapter(): PlaybackAdapter {
   if (!singleton) {
     // The player comes from its own singleton, not from here: this file must
     // not know which platform it is running on.
-    singleton = createPlaybackAdapter(getMusicPlayer(), useAppStore);
+    singleton = createPlaybackAdapter(getMusicPlayer(), useAppStore, {
+      deferUntilPlay: import.meta.env.MODE !== 'test',
+    });
   }
   return singleton;
 }

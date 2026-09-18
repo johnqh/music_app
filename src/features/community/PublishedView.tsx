@@ -49,9 +49,9 @@ export function PublishedView() {
 
   /**
    * The page's own transport. Bound for as long as the page is mounted; the
-   * store's score arriving is what loads the player, so binding before the
-   * fetch lands is fine. Stopped on the way out — a visitor who leaves the page
-   * should not go on hearing it.
+   * score is loaded on the first Play gesture so Safari can unlock its audio
+   * context. Stopped on the way out — a visitor who leaves the page should not
+   * go on hearing it.
    *
    * The playhead is shared with the editor, and this page takes it: adopting
    * the published score starts it at the top (so the page's Play begins at the
@@ -66,7 +66,9 @@ export function PublishedView() {
   useEffect(() => {
     const editorCaret = getMusicPosition().tick;
     const player = getMusicPlayer();
-    const bound = bindPlayer(player, store);
+    const bound = bindPlayer(player, store, {
+      deferUntilPlay: import.meta.env.MODE !== 'test',
+    });
     setBinding(bound);
     return () => {
       bound.stop();

@@ -49,7 +49,20 @@ export const TRANSPORT_SETTINGS_DEFAULTS: TransportSettings = {
 
 export type BindPlayerOptions = {
   onError?: (failure: PlayerFailure, error: unknown) => void;
+  /**
+   * Keep the first audio-engine load inside the user's Play gesture. Safari can
+   * leave an AudioContext.resume() promise pending when it is called during
+   * page startup, which would make every later play await that stale promise.
+   */
+  deferUntilPlay?: boolean;
 };
+
+const PLAYBACK_DEBUG = '[ScoreSmith playback]';
+
+function debugPlayback(message: string, details?: Record<string, unknown>): void {
+  if (details) console.info(PLAYBACK_DEBUG, message, details);
+  else console.info(PLAYBACK_DEBUG, message);
+}
 
 export type PlayerBinding = {
   /** Plays from the caret, clearing the selection; pauses if already playing. */
@@ -106,6 +119,7 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
   options: BindPlayerOptions = {},
 ): PlayerBinding {
   const report = (failure: PlayerFailure, error: unknown) => options.onError?.(failure, error);
+  let audioActivated = !options.deferUntilPlay;
 
   const write = (update: (draft: T) => void) => store.setState(update);
 
@@ -116,6 +130,11 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
   };
 
   const load = async (score: Score): Promise<void> => {
+    debugPlayback('score load started', {
+      trackCount: score.tracks.length,
+      deferUntilPlay: options.deferUntilPlay === true,
+      audioActivated,
+    });
     // Recorded before the await: from this moment the player is this score's,
     // and a binding asking during the load must not start another.
     loadedScores.set(player, score);
@@ -123,11 +142,14 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
       await player.load(score, {
         visibleTrackIds: selectVisibleTrackIds(store.getState()),
       });
+      debugPlayback('score load finished', { trackCount: score.tracks.length });
     } catch (error) {
+      console.error(PLAYBACK_DEBUG, 'score load failed', error);
       report('scoreLoadFailed', error);
     }
   };
 
+  let lastLoadStatus = store.getState().synthLoad?.status ?? 'idle';
   const offPlayer = [
     player.onTransport((state) =>
       write((draft) => {
@@ -138,16 +160,20 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
     ),
     // Low-frequency and store-shaped: it reports per percent and behaves like
     // ordinary state, unlike position and the sounding set.
-    player.onLoadState((state) =>
+    player.onLoadState((state) => {
+      if (state.status !== lastLoadStatus || state.status === 'failed') {
+        debugPlayback('synth load state changed', state);
+        lastLoadStatus = state.status;
+      }
       write((draft) => {
         draft.synthLoad = state;
-      }),
-    ),
+      });
+    }),
   ];
 
   let lastScore: Score | null = store.getState().score;
   let lastVisible = store.getState().visibleTrackIds;
-  if (lastScore) void load(lastScore);
+  if (lastScore && audioActivated) void load(lastScore);
 
   const offStore = store.subscribe((state) => {
     if (state.score !== lastScore) {
@@ -155,7 +181,7 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
       // A new score is loaded with the visible tracks as they are now, so the
       // visible-track check below has nothing to add.
       lastVisible = state.visibleTrackIds;
-      if (lastScore) void load(lastScore);
+      if (lastScore && audioActivated) void load(lastScore);
       return;
     }
     // Hiding a track silences it — pushed straight to the player rather than
@@ -202,21 +228,36 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
   return {
     async togglePlay() {
       const { state, score } = store.getState();
+      debugPlayback('play toggle requested', {
+        state,
+        hasScore: score !== null,
+        audioActivated,
+        ownsScore: score !== null && loadedScores.get(player) === score,
+      });
       if (!score) return;
       if (state === 'playing') {
         player.pause();
         return;
       }
+      // This assignment must happen before the first await: the initial score
+      // load then constructs/resumes the AudioContext from the Play gesture.
+      audioActivated = true;
       // Only on the way into playing: pausing to edit keeps what you had
       // selected. Playing from the caret needs nothing — the caret is the
       // position the player resumes from.
       store.getState().clearSelection();
       // Another binding may have loaded the player since this score was: put
       // this one back first, so Play plays what this store shows.
-      if (!ownsPlayer()) await load(score);
+      if (!ownsPlayer()) {
+        debugPlayback('loading score from play gesture');
+        await load(score);
+      }
       try {
+        debugPlayback('starting transport');
         await player.play();
+        debugPlayback('transport started');
       } catch (error) {
+        console.error(PLAYBACK_DEBUG, 'transport start failed', error);
         report('playbackFailed', error);
       }
     },

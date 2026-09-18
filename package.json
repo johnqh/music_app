@@ -1,6 +1,6 @@
 {
   "name": "scoresmith",
-  "version": "0.2.115",
+  "version": "0.2.116",
   "description": "ScoreSmith - a browser-based AI-assisted sheet-music composition app",
   "private": true,
   "type": "module",
@@ -40,8 +40,8 @@
     "@sudobility/di": "^1.5.65",
     "@sudobility/di_web": "^0.1.234",
     "@sudobility/music_client": "^0.4.66",
+    "@sudobility/music_drawing": "^0.0.40",
     "@sudobility/music_editing": "^0.0.25",
-    "@sudobility/music_drawing": "^0.0.39",
     "@sudobility/music_io": "^0.9.48",
     "@sudobility/music_lib": "^1.9.57",
     "@sudobility/music_player": "^0.1.33",
@@ -56,12 +56,12 @@
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-http-backend": "^4.0.1",
     "js-synthesizer": "^1.13.0",
-    "tailwind-merge": "^3.3.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-helmet-async": "^3.0.0",
     "react-i18next": "^16.2.1",
     "react-router-dom": "^7.18.1",
+    "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
