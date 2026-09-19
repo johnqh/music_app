@@ -242,6 +242,9 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
       // This assignment must happen before the first await: the initial score
       // load then constructs/resumes the AudioContext from the Play gesture.
       audioActivated = true;
+      // Safari requires the audio device to be activated before the score load
+      // await lets the user-gesture window expire.
+      player.activateAudio?.();
       // Only on the way into playing: pausing to edit keeps what you had
       // selected. Playing from the caret needs nothing — the caret is the
       // position the player resumes from.

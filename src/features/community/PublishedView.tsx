@@ -67,7 +67,7 @@ export function PublishedView() {
     const editorCaret = getMusicPosition().tick;
     const player = getMusicPlayer();
     const bound = bindPlayer(player, store, {
-      deferUntilPlay: import.meta.env.MODE !== 'test',
+      deferUntilPlay: false,
     });
     setBinding(bound);
     return () => {

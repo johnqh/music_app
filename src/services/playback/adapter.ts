@@ -206,7 +206,7 @@ function realAdapter(): PlaybackAdapter {
     // The player comes from its own singleton, not from here: this file must
     // not know which platform it is running on.
     singleton = createPlaybackAdapter(getMusicPlayer(), useAppStore, {
-      deferUntilPlay: import.meta.env.MODE !== 'test',
+      deferUntilPlay: false,
     });
   }
   return singleton;
