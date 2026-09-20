@@ -59,6 +59,7 @@ import {
   Cog6ToothIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/solid';
+import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 // Line art, deliberately: a solid camera or printer is a heavy blob at 18px,
 // where the arrows and the gear read as line work even in the solid set.
 import {
@@ -87,6 +88,7 @@ import {
   hiddenTrackCount,
   planExport,
   prepareReplacement,
+  defaultReplaceSubmission,
   repairIssuesOutcome,
   selectRegeneratedInRange,
   serializeProjectFile,
@@ -207,6 +209,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       playbackController.stop();
       await store.getState().openProject(projectId);
 
+      // Generation output is external content. Repair it before the editor
+      // unlocks, then persist the repaired score so the issue list stays clear
+      // after a reload as well as in the current editor session.
+      const repairResult = repairAllIssues(store, t('editor.fixIssues'));
+      if (repairResult.remaining === 0 && repairResult.fixed > 0) {
+        await store.getState().saveNow();
+      }
+
       // Mark what the generation actually wrote, so it colours as generated
       // material rather than landing indistinguishable from the rest. The
       // candidate-accept workflow used to do this; a job applies server-side,
@@ -242,6 +252,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     },
     [generation, store],
   );
+
+  const generateInsertedBars = useCallback(async (): Promise<void> => {
+    const submission = defaultReplaceSubmission();
+    await startReplacement('measures', {
+      ...submission,
+      instruction: t('editor.generateInsertedBarsInstruction'),
+    });
+  }, [startReplacement, t]);
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const exportMenu = useMenu<HTMLDivElement>();
@@ -485,7 +503,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             onClick={() => onNavigate?.('/projects')}
             className={ICON_BUTTON_CLASS}
           >
-            ←
+            <ChevronLeftIcon className={ICON_GLYPH_CLASS} />
           </button>
 
           {titleDraft !== null ? (
@@ -821,6 +839,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 // behaves like every other generation: the overlay appears, the
                 // project is locked server-side, and leaving is safe.
                 onGenerateTrackJob={(request) => generation.start('generate-track', request)}
+                onGenerateInsertedBars={generateInsertedBars}
               />
             </div>
           </div>

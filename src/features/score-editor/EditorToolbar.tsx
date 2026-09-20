@@ -37,6 +37,7 @@ import {
   ARTICULATION_OPTIONS,
   NO_MARK,
   ORNAMENT_OPTIONS,
+  isVocalInstrumentValue,
 } from '@sudobility/music_types';
 import type { Accidental, Articulation, DurationName, Ornament } from '@sudobility/music_types';
 import { useAppStore } from '@/app-library';
@@ -139,6 +140,8 @@ export type EditorToolbarProps = {
   onGenerateTrack?: () => void;
   /** Opens the Go to bar prompt. Omitted in isolation tests. */
   onGoToBar?: () => void;
+  /** Opens the add/insert-bars form. Omitted in isolation tests. */
+  onAddMeasure?: () => void;
   /** Starts lyric entry on the active track. Omitted in isolation tests. */
   onEnterLyrics?: () => void;
 };
@@ -242,6 +245,7 @@ export function EditorToolbar({
   inspectorOpen,
   onToggleInspector,
   onGoToBar,
+  onAddMeasure,
   onEnterLyrics,
   onGenerateTrack,
 }: EditorToolbarProps) {
@@ -281,6 +285,10 @@ export function EditorToolbar({
    * of a component's top level.
    */
   const available = store(selectToolbarAvailability);
+  const lyricsDisabled =
+    !available.enterLyrics ||
+    activeTrack === null ||
+    !isVocalInstrumentValue(String(activeTrack.midiProgram));
   /*
     The mode a write will actually use. Stack on a part that cannot play a chord
     reads as replace (asked through the *track*, because a drum track's program
@@ -325,6 +333,7 @@ export function EditorToolbar({
 
   const handleMoreAction = (value: string): void => {
     runMoreAction(store, value as EditorMoreAction, {
+      addMeasure: onAddMeasure,
       goToBar: onGoToBar,
       enterLyrics: onEnterLyrics,
     });
@@ -888,7 +897,9 @@ export function EditorToolbar({
               <SelectItem
                 key={action.value}
                 value={action.value}
-                disabled={!available[action.control]}
+                disabled={
+                  action.value === 'enter-lyrics' ? lyricsDisabled : !available[action.control]
+                }
               >
                 {t(action.labelKey)}
               </SelectItem>

@@ -29,10 +29,19 @@
  */
 import { libraryCopy } from '@/i18n/library-copy';
 import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type React from 'react';
-import { useClipboardPrompts } from '@sudobility/music_editing';
+import { getMusicSelection, useClipboardPrompts } from '@sudobility/music_editing';
+import { insertBlankMeasuresAtCaret } from '@sudobility/music_editing';
 import {
   playbackController,
   selectActiveTrackId,
@@ -48,7 +57,7 @@ import {
 } from '@/app-library';
 import type { BBox, RenderTheme } from '@/app-library';
 import type { LayoutPlan } from '@/app-library';
-import { isNoteEvent } from '@sudobility/music_types';
+import { findTrack, isNoteEvent, isVocalInstrumentValue } from '@sudobility/music_types';
 import type { GenerateScoreRequest, NoteEvent, Pitch } from '@sudobility/music_types';
 import {
   findEvent,
@@ -78,6 +87,10 @@ import {
   barCount,
 } from '@/app-library';
 import { GoToBarDialog } from '@/features/score-editor/GoToBarDialog';
+import {
+  InsertBarsDialog,
+  type InsertBarsDialogResult,
+} from '@/features/score-editor/InsertBarsDialog';
 import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
 import type { EditorStoreApi } from '@/app-library';
@@ -110,6 +123,8 @@ export type ScoreEditorViewProps = {
    * job hook, the same one the Replace buttons use.
    */
   onGenerateTrackJob?: (request: GenerateScoreRequest) => Promise<void>;
+  /** Starts AI generation for the newly inserted bars after they are selected. */
+  onGenerateInsertedBars?: () => Promise<void>;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -123,6 +138,7 @@ export function ScoreEditorView({
   inspectorOpen,
   onToggleInspector,
   onGenerateTrackJob,
+  onGenerateInsertedBars,
 }: ScoreEditorViewProps) {
   const { t } = useTranslation();
   const clipboard = useClipboardPrompts(store);
@@ -130,6 +146,11 @@ export function ScoreEditorView({
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
+  const sharedSelection = useSyncExternalStore(
+    (onChange) => getMusicSelection().subscribe(onChange),
+    () => getMusicSelection().selection,
+    () => getMusicSelection().selection,
+  );
   const zoom = store((s) => s.zoom);
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
@@ -207,6 +228,7 @@ export function ScoreEditorView({
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [generateTrackOpen, setGenerateTrackOpen] = useState(false);
   const [generateTrackPending, setGenerateTrackPending] = useState(false);
+  const [insertBarsOpen, setInsertBarsOpen] = useState(false);
 
   /**
    * Generates one track and appends it, matched to the score already open.
@@ -255,6 +277,25 @@ export function ScoreEditorView({
       }
     },
     [store, onGenerateTrackJob],
+  );
+
+  const insertBars = useCallback(
+    async ({ count, position, generate }: InsertBarsDialogResult): Promise<void> => {
+      const inserted = insertBlankMeasuresAtCaret(store, count, position);
+      if (!inserted) return;
+      setInsertBarsOpen(false);
+      if (!generate || !onGenerateInsertedBars) return;
+      const nextScore = store.getState().score;
+      if (!nextScore) return;
+      const measureIds = nextScore.tracks.flatMap((track) =>
+        track.measures
+          .slice(inserted.startIndex, inserted.startIndex + inserted.count)
+          .map((measure) => measure.id),
+      );
+      store.getState().selectMeasures(measureIds);
+      await onGenerateInsertedBars();
+    },
+    [onGenerateInsertedBars, store],
   );
 
   /**
@@ -704,11 +745,47 @@ export function ScoreEditorView({
   const [lyricEntry, setLyricEntry] = useState<{ notes: NoteEvent[]; startIndex: number } | null>(
     null,
   );
+  const expectedLyricSelectionRef = useRef<readonly string[] | null>(null);
+
+  const selectedLyricNotes = useMemo(() => {
+    if (!score || sharedSelection.eventIds.length === 0) return [];
+    const selected = sharedSelection.eventIds
+      .map((id) => findEvent(score, id))
+      .filter((event): event is NoteEvent => event !== null && isNoteEvent(event));
+    if (selected.length === 0) return [];
+    const tracks = selected.map((note) => findTrack(score, note.trackId));
+    return tracks.every(
+      (track) => track !== null && isVocalInstrumentValue(String(track.midiProgram)),
+    )
+      ? selected
+      : [];
+  }, [score, sharedSelection.eventIds]);
+
+  useEffect(() => {
+    if (lyricEntry === null) return;
+    const selectedIds = sharedSelection.eventIds;
+    const expectedIds = expectedLyricSelectionRef.current;
+    const selectionIsExpected =
+      expectedIds !== null &&
+      expectedIds.length === selectedIds.length &&
+      expectedIds.every((id, index) => id === selectedIds[index]);
+    if (selectionIsExpected) return;
+    if (selectedLyricNotes.length === 0) {
+      expectedLyricSelectionRef.current = null;
+      setLyricEntry(null);
+      return;
+    }
+    expectedLyricSelectionRef.current = [...selectedIds];
+    setLyricEntry({ notes: selectedLyricNotes, startIndex: 0 });
+  }, [lyricEntry, selectedLyricNotes, sharedSelection.eventIds]);
 
   const beginLyricEntry = useCallback(() => {
     const entry = beginLyricEntryAt(store);
-    if (entry) setLyricEntry({ notes: entry.notes, startIndex: entry.startIndex });
-  }, [store]);
+    if (entry) {
+      expectedLyricSelectionRef.current = [...sharedSelection.eventIds];
+      setLyricEntry({ notes: entry.notes, startIndex: entry.startIndex });
+    }
+  }, [sharedSelection.eventIds, store]);
 
   /**
    * Right-click selects what is under the pointer, then opens the menu on it
@@ -758,6 +835,10 @@ export function ScoreEditorView({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
+      // A browser may suppress the synthetic click after a drag. Clear the
+      // previous gesture's suppression at the start of every new gesture so a
+      // missing post-drag click cannot swallow the next real note click.
+      suppressNextClickRef.current = false;
       // Every left press starts drag-tracking (no per-glyph DOM to exclude
       // any more): a press that never crosses DRAG_THRESHOLD stays a plain
       // click (handleClick runs; `suppressNextClickRef` is only set for
@@ -1022,11 +1103,15 @@ export function ScoreEditorView({
           }}
         />
       ) : null}
-      {lyricEntry !== null ? (
+      {lyricEntry !== null && selectedLyricNotes.length > 0 ? (
         <LyricEntryBar
           store={store}
           notes={lyricEntry.notes}
           startIndex={lyricEntry.startIndex}
+          onSelectNote={(noteId) => {
+            expectedLyricSelectionRef.current = [noteId];
+            store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+          }}
           onClose={() => setLyricEntry(null)}
         />
       ) : null}
@@ -1036,10 +1121,16 @@ export function ScoreEditorView({
         onClose={() => setGoToBarOpen(false)}
         onGo={(text) => goToBarFromInput(store, text)}
       />
+      <InsertBarsDialog
+        open={insertBarsOpen}
+        onClose={() => setInsertBarsOpen(false)}
+        onSubmit={(result) => void insertBars(result)}
+      />
       <EditorToolbar
         store={store}
         onEnterLyrics={beginLyricEntry}
         onGoToBar={() => setGoToBarOpen(true)}
+        onAddMeasure={() => setInsertBarsOpen(true)}
         layoutMode={layoutMode}
         onLayoutModeChange={setLayoutMode}
         inspectorOpen={inspectorOpen}

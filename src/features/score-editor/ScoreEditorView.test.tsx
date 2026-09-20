@@ -222,6 +222,32 @@ describe('ScoreEditorView', () => {
     expect(store.getState().selection.eventIds).toEqual([first.id]);
   });
 
+  it('does not let a drag with no synthetic click swallow the next note click', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const score = store.getState().score!;
+    const first = allNotes(score)[0]!;
+    const box = referenceRender(score).idToBBox.get(first.id)!;
+    const from = center(box);
+    const surface = interactionSurface();
+
+    fireEvent.pointerDown(surface, { ...from, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(surface, {
+      clientX: from.clientX + 20,
+      clientY: from.clientY + 20,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: from.clientX + 20,
+      clientY: from.clientY + 20,
+      pointerId: 1,
+    });
+
+    clickNote(score, first.id);
+
+    expect(store.getState().selection.eventIds).toEqual([first.id]);
+  });
+
   it('shift-clicking a second note adds it to the selection', () => {
     const store = makeStore();
     render(<ScoreEditorView store={store} />);

@@ -52,6 +52,24 @@ describe('LyricEntryBar', () => {
     expect(screen.getByText(/Note 2 of/)).toBeInTheDocument();
   });
 
+  it('loads and selects the next note lyric after a space', async () => {
+    const user = userEvent.setup();
+    const store = makeStore();
+    const notes = notesOf(store);
+    act(() => {
+      store.getState().dispatchCommand(setLyricCommand(notes[1].id, { text: 'existing' }, 'Lyric'));
+    });
+    render(<LyricEntryBar store={store} notes={notes} startIndex={0} onClose={() => {}} />);
+
+    await user.keyboard('new ');
+
+    const input = screen.getByLabelText('Syllable');
+    expect(input).toHaveValue('existing');
+    expect(input).toHaveFocus();
+    expect(input).toHaveProperty('selectionStart', 0);
+    expect(input).toHaveProperty('selectionEnd', 'existing'.length);
+  });
+
   it('hyphenates a syllable within a word, which is what draws the hyphen', async () => {
     const user = userEvent.setup();
     const store = makeStore();

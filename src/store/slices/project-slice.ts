@@ -15,6 +15,7 @@
  */
 import type { StateCreator } from 'zustand';
 import { newProjectScore } from '@sudobility/music_lib';
+import { repairScore } from '@sudobility/music_types';
 import type { GenerationRecord, ProjectSaveResult, Score } from '@sudobility/music_types';
 import { createDocumentSaver } from '../../services/persistence/document-saver.js';
 import type { DocumentSaver } from '../../services/persistence/document-saver.js';
@@ -179,7 +180,26 @@ export function createProjectSlice(
       positionUnsubscribe?.();
       const localUi = await loadProjectLocalUi(context.storage, project.id);
       currentProject = project;
-      const localScore = applyProjectLocalMix(score, localUi);
+      const mixedScore = applyProjectLocalMix(score, localUi);
+      // A generated score may already be complete by the time the editor
+      // opens it, so generation polling is not guaranteed to observe an
+      // "applied" transition. Repair generated output at the adoption
+      // boundary as well, then persist it before the editor becomes dirty.
+      let localScore = mixedScore;
+      let repairedGeneratedScore = false;
+      if (project.lastGeneration) {
+        for (let pass = 0; pass < 16; pass += 1) {
+          const repair = repairScore(localScore);
+          localScore = repair.score;
+          if (Object.keys(repair.fixed).length > 0) repairedGeneratedScore = true;
+          if (
+            Object.keys(repair.remaining).length === 0 ||
+            Object.keys(repair.fixed).length === 0
+          ) {
+            break;
+          }
+        }
+      }
       attachAutosaver(localScore);
       set((state) => {
         state.projectId = project.id;
@@ -195,6 +215,10 @@ export function createProjectSlice(
         if (localUi.zoom !== undefined) state.zoom = localUi.zoom;
       });
       get().setScore(localScore, { resetHistory: true });
+      if (repairedGeneratedScore) {
+        get().markDirty();
+        await get().saveNow();
+      }
       if (localUi.cursorTick !== undefined) {
         getMusicPositionSource().moveTo(localUi.cursorTick);
       }

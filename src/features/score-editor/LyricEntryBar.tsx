@@ -36,10 +36,18 @@ export type LyricEntryBarProps = {
   notes: NoteEvent[];
   /** Where to start — the note the caret was on when entry began. */
   startIndex: number;
+  /** Keeps the canvas selection on the note currently being edited. */
+  onSelectNote?: (noteId: string) => void;
   onClose: () => void;
 };
 
-export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryBarProps) {
+export function LyricEntryBar({
+  store,
+  notes,
+  startIndex,
+  onSelectNote = () => {},
+  onClose,
+}: LyricEntryBarProps) {
   const { t } = useTranslation();
   const [index, setIndex] = useState(startIndex);
   const [draft, setDraft] = useState('');
@@ -49,6 +57,13 @@ export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryB
    */
   const continuing = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const initializedIndex = useRef<number | null>(null);
+
+  useEffect(() => {
+    setIndex(startIndex);
+    continuing.current = false;
+    initializedIndex.current = null;
+  }, [notes, startIndex]);
 
   const note = notes[index];
 
@@ -68,8 +83,19 @@ export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryB
   useEffect(() => {
     const id = notes[index]?.id;
     if (!id) return;
-    setDraft(lyricTextAt(store, id));
-  }, [index, notes, store]);
+    const existing = lyricTextAt(store, id);
+    if (initializedIndex.current !== index) {
+      initializedIndex.current = index;
+      if (draft !== existing) {
+        setDraft(existing);
+        return;
+      }
+    }
+    // Do not steal the caret while the user is typing a new or edited lyric.
+    if (draft !== existing) return;
+    inputRef.current?.focus();
+    inputRef.current?.setSelectionRange(0, existing.length);
+  }, [draft, index]);
 
   if (!note) return null;
 
@@ -107,6 +133,7 @@ export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryB
       onClose();
       return;
     }
+    onSelectNote(notes[step.state.index].id);
     setIndex(step.state.index);
   };
 
@@ -122,10 +149,13 @@ export function LyricEntryBar({ store, notes, startIndex, onClose }: LyricEntryB
       <Input
         ref={inputRef}
         value={draft}
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
         aria-label={t('editor.syllable')}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="h-8 flex-1 px-2 text-sm"
+        className="normal-case h-8 flex-1 px-2 text-sm"
       />
       <span className="shrink-0 text-xs text-muted-foreground">{t('editor.lyricKeysHint')}</span>
       <Button type="button" variant="ghost" onClick={onClose} className="h-8 shrink-0 px-2 text-xs">

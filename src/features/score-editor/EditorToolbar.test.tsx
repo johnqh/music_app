@@ -536,7 +536,7 @@ describe('the overflow menu while playing', () => {
     renderToolbar(store);
 
     await userEvent.click(screen.getByLabelText('More actions'));
-    for (const name of ['Add bar', 'Delete bar at caret', 'Enter lyrics']) {
+    for (const name of ['Insert bars…', 'Delete bar at caret', 'Enter lyrics']) {
       expect(await screen.findByRole('option', { name }), name).toHaveAttribute(
         'aria-disabled',
         'true',
@@ -555,7 +555,7 @@ describe('measure and delete controls', () => {
     const before = store.getState().score!.tracks.map((t) => t.measures.length);
     renderToolbar(store);
 
-    await chooseMoreAction('Add bar');
+    await chooseMoreAction('Insert bars…');
 
     const after = store.getState().score!.tracks.map((t) => t.measures.length);
     expect(after).toEqual(before.map((n) => n + 1));
