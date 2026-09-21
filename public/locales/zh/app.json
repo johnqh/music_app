@@ -933,6 +933,7 @@
     "mode": "调式",
     "timeSignature": "拍号",
     "tempoInvalid": "速度必须是大于零的数字，或留空。",
+    "tempoRange": "此风格的速度必须在 {{min}} 到 {{max}} BPM 之间。",
     "preset": {
       "gentleMelody": "一段柔和的八小节大调旋律",
       "simpleBeginner": "只用四分音符和二分音符的简单旋律",

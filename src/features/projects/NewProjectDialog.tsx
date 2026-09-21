@@ -74,7 +74,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
-import { useScorePresets } from '@sudobility/music_client';
+import { useScorePresets, useScoreStyleSettings } from '@sudobility/music_client';
 import { useMusicHookContext, useSiteAdmin } from '@/app/AuthContext';
 import type { ChangeEvent, ReactNode } from 'react';
 import type * as React from 'react';
@@ -116,6 +116,7 @@ import {
   newProjectDurationRefused,
   newProjectSubmission,
   newProjectTempoRefused,
+  newProjectTempoRange,
   optionalFromPicker,
   optionalToPicker,
   reduceNewProjectDraft,
@@ -123,6 +124,7 @@ import {
   showNewProjectLyrics,
   showNewProjectLyricsTheme,
   styleLabelKey,
+  styleGenerationSettings,
   type GenerateScoreComplexity,
   type KeySignature,
   type NewProjectDraftAction,
@@ -240,6 +242,7 @@ function LabeledInput({
   value,
   onChange,
   min,
+  max,
   className,
   hint,
   type = 'number',
@@ -251,6 +254,7 @@ function LabeledInput({
   type?: 'number' | 'text';
   onBlur?: () => void;
   min?: number;
+  max?: number;
   className?: string;
   /** Shown under the field when what was typed is refused. */
   hint?: string;
@@ -263,6 +267,7 @@ function LabeledInput({
         aria-label={label}
         value={value}
         min={min}
+        max={max}
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         {...(onBlur ? { onBlur } : {})}
         className={TEXT_INPUT_CLASS}
@@ -276,13 +281,17 @@ function TempoSlider({
   value,
   onChange,
   label,
+  min,
+  max,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
+  min: number;
+  max: number;
 }) {
   const bpm = Number(value);
-  const sliderValue = Number.isFinite(bpm) && bpm > 0 ? bpm : 120;
+  const sliderValue = Math.min(max, Math.max(min, Number.isFinite(bpm) && bpm > 0 ? bpm : 120));
   return (
     <div className="flex min-w-0 flex-[1.4] flex-col gap-1">
       <span className="flex items-center justify-between text-xs text-theme-text-secondary">
@@ -292,8 +301,8 @@ function TempoSlider({
       <input
         type="range"
         aria-label="Fast to slow"
-        min={40}
-        max={240}
+        min={min}
+        max={max}
         step={1}
         value={sliderValue}
         onChange={(e) => onChange(e.target.value)}
@@ -337,6 +346,7 @@ export function NewProjectDialog({
   */
   const [draft, dispatch] = useReducer(reduceDraft, undefined, initialNewProjectDraft);
   const { generating, style } = draft;
+  const musicContext = useMusicHookContext();
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
 
   /*
@@ -376,7 +386,21 @@ export function NewProjectDialog({
     arrives: a server one version ahead of this app would otherwise print a
     brief's id at the reader, which is worse than showing one fewer brief.
   */
-  const { data: presetKeys } = useScorePresets(useMusicHookContext(), style || undefined);
+  const { data: presetKeys } = useScorePresets(musicContext, style || undefined);
+  const { data: styleSettings } = useScoreStyleSettings(musicContext);
+  const localTempoRange = newProjectTempoRange(draft);
+  const styleSetting = style ? (styleSettings?.[style] ?? styleGenerationSettings(style)) : null;
+  const tempoMin = styleSetting?.minBpm ?? localTempoRange?.[0] ?? 40;
+  const tempoMax = styleSetting?.maxBpm ?? localTempoRange?.[1] ?? 240;
+  const keyOptions = GENERATE_SCORE_KEY_FIFTHS_OPTIONS.filter(
+    (option) => !styleSetting || styleSetting.keys.includes(option.fifths),
+  );
+  const modeOptions = (['major', 'minor'] as const).filter(
+    (mode) => !styleSetting?.mode || styleSetting.mode === mode,
+  );
+  const meterOptions = Object.keys(GENERATE_SCORE_TIME_SIGNATURE_OPTIONS).filter(
+    (meter) => !styleSetting || styleSetting.timeSignature === meter,
+  );
   const presets = (presetKeys ?? [])
     .filter((key) => i18n.exists(`generateScore.preset.${key}`))
     .map((key) => t(`generateScore.preset.${key}`));
@@ -765,14 +789,21 @@ export function NewProjectDialog({
                 label={t('generateScore.tempo')}
                 value={draft.tempoText}
                 onChange={(text) => dispatch({ type: 'setTempo', text })}
+                min={tempoMin}
+                max={tempoMax}
               />
               <LabeledInput
                 label={t('generateScore.tempo')}
                 value={draft.tempoText}
                 onChange={(text) => dispatch({ type: 'setTempo', text })}
-                min={1}
+                min={tempoMin}
+                max={tempoMax}
                 className="max-w-20"
-                {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
+                {...(tempoRefused
+                  ? { hint: t('generateScore.tempoInvalid') }
+                  : style
+                    ? { hint: t('generateScore.tempoRange', { min: tempoMin, max: tempoMax }) }
+                    : {})}
               />
             </div>
           ) : (
@@ -780,8 +811,13 @@ export function NewProjectDialog({
               label={t('generateScore.tempo')}
               value={draft.tempoText}
               onChange={(text) => dispatch({ type: 'setTempo', text })}
-              min={1}
-              {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
+              min={tempoMin}
+              max={tempoMax}
+              {...(tempoRefused
+                ? { hint: t('generateScore.tempoInvalid') }
+                : style
+                  ? { hint: t('generateScore.tempoRange', { min: tempoMin, max: tempoMax }) }
+                  : {})}
             />
           )}
         </div>
@@ -798,7 +834,7 @@ export function NewProjectDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {GENERATE_SCORE_KEY_FIFTHS_OPTIONS.map((opt) => (
+              {keyOptions.map((opt) => (
                 <SelectItem key={opt.fifths} value={String(opt.fifths)}>
                   {opt.label}
                 </SelectItem>
@@ -817,8 +853,11 @@ export function NewProjectDialog({
             </SelectTrigger>
             <SelectContent>
               {/* Named through the locale: "major" is a word, not a code. */}
-              <SelectItem value="major">{t('key.major')}</SelectItem>
-              <SelectItem value="minor">{t('key.minor')}</SelectItem>
+              {modeOptions.map((mode) => (
+                <SelectItem key={mode} value={mode}>
+                  {t(`key.${mode}`)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select
@@ -832,9 +871,9 @@ export function NewProjectDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.keys(GENERATE_SCORE_TIME_SIGNATURE_OPTIONS).map((key) => (
-                <SelectItem key={key} value={key}>
-                  {key}
+              {meterOptions.map((meter) => (
+                <SelectItem key={meter} value={meter}>
+                  {meter}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -32,8 +32,10 @@ vi.mock('@sudobility/consumables_client', () => ({
 }));
 
 const useScorePresets = vi.fn(() => ({ data: undefined as string[] | undefined }));
+const useScoreStyleSettings = vi.fn(() => ({ data: undefined as unknown }));
 vi.mock('@sudobility/music_client', () => ({
   useScorePresets: (...args: unknown[]) => useScorePresets(...(args as [])) as unknown,
+  useScoreStyleSettings: (...args: unknown[]) => useScoreStyleSettings(...(args as [])) as unknown,
 }));
 
 const useSiteAdmin = vi.fn(() => false);
@@ -42,11 +44,17 @@ vi.mock('@/app/AuthContext', () => ({
   useMusicHookContext: () => ({ networkClient: {}, baseUrl: 'http://test.local' }),
 }));
 
-function open(balance: number, siteAdmin = false, onSubmit = vi.fn()) {
+function open(
+  balance: number,
+  siteAdmin = false,
+  onSubmit = vi.fn(),
+  styleSettings: unknown = undefined,
+) {
   useBalance.mockReturnValue({ balance, isLoading: false });
   // No briefs unless a test says otherwise: the server owns the list, and the
   // menu is meant to be absent when it has not arrived.
   useScorePresets.mockReturnValue({ data: undefined });
+  useScoreStyleSettings.mockReturnValue({ data: styleSettings });
   useSiteAdmin.mockReturnValue(siteAdmin);
   // Inside a router: the out-of-credits message links to the store, and the
   // dialog is always rendered within the app's router in production.
@@ -476,6 +484,29 @@ describe('NewProjectDialog: finding a style', () => {
     const tempo = Number((screen.getByLabelText('Tempo') as HTMLInputElement).value);
     expect(tempo).toBeGreaterThanOrEqual(min);
     expect(tempo).toBeLessThanOrEqual(max);
+  });
+
+  it('uses backend style settings to constrain tempo, key, mode, and meter', () => {
+    open(1000, false, vi.fn(), {
+      ambient: {
+        tempo: 70,
+        minBpm: 68,
+        maxBpm: 72,
+        timeSignature: '4/4',
+        keys: [0],
+        mode: 'major',
+      },
+    });
+    turnGenerationOn();
+    fireEvent.click(screen.getByLabelText('Style'));
+    fireEvent.click(screen.getByRole('option', { name: 'Ambient' }));
+
+    const tempo = screen.getByLabelText('Tempo') as HTMLInputElement;
+    expect(tempo.min).toBe('68');
+    expect(tempo.max).toBe('72');
+    expect(optionsOf('Key')).toEqual(['C']);
+    expect(optionsOf('Mode')).toEqual(['major']);
+    expect(optionsOf('Time signature')).toEqual(['4/4']);
   });
 
   it('does not give every generation of one genre the same key and tempo', () => {

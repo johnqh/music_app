@@ -933,6 +933,7 @@
     "mode": "Mode",
     "timeSignature": "Time signature",
     "tempoInvalid": "Tempo must be a number above zero, or left blank.",
+    "tempoRange": "For this style, tempo must be between {{min}} and {{max}} BPM.",
     "preset": {
       "gentleMelody": "A gentle eight-bar melody in a major key",
       "simpleBeginner": "A simple melody using only quarter and half notes",
