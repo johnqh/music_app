@@ -799,11 +799,7 @@ export function NewProjectDialog({
                 min={tempoMin}
                 max={tempoMax}
                 className="max-w-20"
-                {...(tempoRefused
-                  ? { hint: t('generateScore.tempoInvalid') }
-                  : style
-                    ? { hint: t('generateScore.tempoRange', { min: tempoMin, max: tempoMax }) }
-                    : {})}
+                {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
               />
             </div>
           ) : (
@@ -813,11 +809,7 @@ export function NewProjectDialog({
               onChange={(text) => dispatch({ type: 'setTempo', text })}
               min={tempoMin}
               max={tempoMax}
-              {...(tempoRefused
-                ? { hint: t('generateScore.tempoInvalid') }
-                : style
-                  ? { hint: t('generateScore.tempoRange', { min: tempoMin, max: tempoMax }) }
-                  : {})}
+              {...(tempoRefused ? { hint: t('generateScore.tempoInvalid') } : {})}
             />
           )}
         </div>

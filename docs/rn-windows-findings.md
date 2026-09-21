@@ -1,7 +1,8 @@
-# Windows on React Native — parked research
+# Windows on React Native — implementation notes and parked research
 
-**Windows is out of scope.** This file exists so the verified findings survive
-if it ever comes back; nothing here is part of the plan. See
+The React Native Windows target now exists in `music_app_rn/windows/`. This
+file records the remaining native work; the verified findings below still
+apply to the target. See
 [rn-app-plan.md](rn-app-plan.md).
 
 Findings still unverified are marked **[?]**.
