@@ -84,11 +84,11 @@ all 53 RNW prose doc sources.
 
 ## Audio
 
-**TinySoundFont + WASAPI** (`IAudioClient3` shared mode) was the pick. TSF is
-MIT, ARM64-trivial (source-only) and MSVC-clean — all 94 issues enumerated, none
-about MSVC or build failures, and `tsf.h` has zero `_MSC_VER` conditionals. Two
-costs: **no reverb or chorus** (`tsf.h` lines 570-571 mark both unsupported),
-and mandatory gain staging — a measured peak of 2.012 on a 24-note chord.
+**TinySoundFont + WASAPI** (`IAudioClient` shared mode) is now implemented in
+`music_app_rn/windows/MoosiacRN/SynthModule.cpp`. TSF is MIT, ARM64-trivial
+(source-only) and MSVC-clean. The Windows module bundles `stb_vorbis` for the
+existing SF3 font, supplies its own lightweight chorus/reverb stage, and
+exposes interpolation control through the shared `NativeSynthApi`.
 
 WASAPI in **shared** mode via `IAudioClient3::GetSharedModeEnginePeriod` +
 `InitializeSharedAudioStream` reaches the driver minimum; in-box HDAudio
