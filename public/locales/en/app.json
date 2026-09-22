@@ -23,6 +23,9 @@
     "alreadyHaveAccount": "Already have an account?",
     "dontHaveAccount": "Need an account?"
   },
+  "breadcrumbs": {
+    "home": "Home"
+  },
   "command": {
     "addMeasure": "Add bar",
     "insertBars": "Insert bars",

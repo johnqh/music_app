@@ -55,7 +55,7 @@ import {
   beginLyricEntry as beginLyricEntryAt,
   goToBarFromInput,
 } from '@/app-library';
-import type { BBox, RenderTheme } from '@/app-library';
+import type { BBox, PlaybackAdapter, RenderTheme } from '@/app-library';
 import type { LayoutPlan } from '@/app-library';
 import { findTrack, isNoteEvent, isVocalInstrumentValue } from '@sudobility/music_types';
 import type { GenerateScoreRequest, NoteEvent, Pitch } from '@sudobility/music_types';
@@ -125,6 +125,29 @@ export type ScoreEditorViewProps = {
   onGenerateTrackJob?: (request: GenerateScoreRequest) => Promise<void>;
   /** Starts AI generation for the newly inserted bars after they are selected. */
   onGenerateInsertedBars?: () => Promise<void>;
+  /**
+   * The published-snapshot page's mode: the canvas still scrolls, zooms and
+   * follows playback, but nothing on it responds to a click or a drag, no
+   * keyboard shortcut fires, and none of the editing chrome (toolbar, context
+   * menu, lyric entry, the insert/generate/go-to-bar dialogs) renders at all.
+   * `readOnly by construction, not by a flag` is exactly the guarantee
+   * `PublishedView` documents — this is that flag, and it holds because every
+   * one of those surfaces is the only way a click or a keypress ever reaches
+   * `dispatchCommand`.
+   */
+  readOnly?: boolean;
+  /**
+   * What the playback-follow effect reads sounding notes and the render
+   * delay from. Defaults to the app-wide `playbackController` singleton —
+   * wrong for a host with its own isolated store and player binding (the
+   * published-snapshot page): merely *accessing* that singleton lazily
+   * constructs a `PlaybackAdapter` bound to the real app-wide store, which
+   * throws where that store was never initialized (a signed-out visitor).
+   * Both members are store-agnostic passthroughs to the one real
+   * `IMusicPlayer`, so a host that only has a player (not a `PlaybackAdapter`)
+   * can build this from it directly.
+   */
+  controller?: Pick<PlaybackAdapter, 'bus' | 'setSoundingRenderDelay'>;
 };
 
 const DEFAULT_WIDTH = 900;
@@ -139,10 +162,12 @@ export function ScoreEditorView({
   onToggleInspector,
   onGenerateTrackJob,
   onGenerateInsertedBars,
+  readOnly = false,
+  controller = playbackController,
 }: ScoreEditorViewProps) {
   const { t } = useTranslation();
   const clipboard = useClipboardPrompts(store);
-  useEditorShortcuts(store, playbackController, clipboard);
+  useEditorShortcuts(store, playbackController, clipboard, !readOnly);
 
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
@@ -462,10 +487,17 @@ export function ScoreEditorView({
     canvas's now (it receives the sounding notes from the playback binding
     below). Every track's used to, which on a large score scattered colour
     across whichever parts happened to be sounding.
+
+    **Read-only forces this to `null`**, never the store's `activeTrackId`.
+    The store still picks a first active track on load — that default exists
+    for an editor, where something has to be the track a new note goes to —
+    but this page has no such thing as "the track you are working on", so
+    every track must draw in the same undimmed colour rather than one
+    happening to answer `store.getState().activeTrackId`.
   */
   useLayoutEffect(() => {
-    scoreCanvas.setActiveTrack(activeTrackId ?? null);
-  }, [scoreCanvas, activeTrackId]);
+    scoreCanvas.setActiveTrack(readOnly ? null : (activeTrackId ?? null));
+  }, [scoreCanvas, activeTrackId, readOnly]);
 
   useLayoutEffect(() => {
     // `regenerated` survives the removal of candidate previews:
@@ -531,13 +563,13 @@ export function ScoreEditorView({
       bindPlaybackToCanvas(scoreCanvas, {
         position: getMusicPosition(),
         defer: (work) => queueMicrotask(work),
-        onSounding: (listener) => playbackController.bus.onSounding(listener),
+        onSounding: (listener) => controller.bus.onSounding(listener),
         // The lit notes are published as far ahead as this canvas measures
         // drawing them takes, so they land with the sound.
-        setSoundingRenderDelay: (seconds) => playbackController.setSoundingRenderDelay(seconds),
+        setSoundingRenderDelay: (seconds) => controller.setSoundingRenderDelay(seconds),
         now: () => performance.now(),
       }),
-    [scoreCanvas, score],
+    [scoreCanvas, score, controller],
   );
 
   const stopAutoscroll = useCallback(() => {
@@ -684,6 +716,7 @@ export function ScoreEditorView({
 
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (readOnly) return;
       if (suppressNextClickRef.current) {
         suppressNextClickRef.current = false;
         return;
@@ -718,7 +751,7 @@ export function ScoreEditorView({
         pointTick: scoreCanvas.tickAt(point),
       });
     },
-    [store, scoreCanvas, viewPointFromEvent, pitchDisplay],
+    [store, scoreCanvas, viewPointFromEvent, pitchDisplay, readOnly],
   );
 
   /**
@@ -805,6 +838,7 @@ export function ScoreEditorView({
    */
   const handleContextMenu = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (readOnly) return;
       event.preventDefault();
       const point = viewPointFromEvent(event);
       measureAnchorRef.current = selectForContextMenu(
@@ -814,7 +848,7 @@ export function ScoreEditorView({
       );
       setContextMenu({ x: event.clientX, y: event.clientY });
     },
-    [store, scoreCanvas, viewPointFromEvent],
+    [store, scoreCanvas, viewPointFromEvent, readOnly],
   );
 
   /**
@@ -834,6 +868,7 @@ export function ScoreEditorView({
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (readOnly) return;
       if (event.button !== 0) return;
       // A browser may suppress the synthetic click after a drag. Clear the
       // previous gesture's suppression at the start of every new gesture so a
@@ -886,7 +921,7 @@ export function ScoreEditorView({
     // suggestions captures a stale value instead — that shipped as a bug once,
     // and only the e2e caught it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pointFromEvent, viewPointFromEvent, scoreCanvas, setDropTargetBoth],
+    [pointFromEvent, viewPointFromEvent, scoreCanvas, setDropTargetBoth, readOnly],
   );
 
   const handlePointerMove = useCallback(
@@ -1041,112 +1076,116 @@ export function ScoreEditorView({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ChoiceDialog
-        open={clipboard.pendingCut}
-        title={t('editor.cutTitle')}
-        message={t('editor.cutMessage')}
-        choices={[
-          {
-            value: 'silence' as const,
-            label: t('editor.leaveSilence'),
-            detail: t('editor.leaveSilenceDetail'),
-            primary: true,
-          },
-          {
-            value: 'close' as const,
-            label: t('editor.closeGap'),
-            detail: t('editor.closeGapDetail'),
-          },
-        ]}
-        onChoose={clipboard.resolveCut}
-        onCancel={clipboard.cancel}
-      />
-      <ChoiceDialog
-        open={clipboard.pendingPaste}
-        title={t('editor.pasteTitle')}
-        message={t('editor.pasteMessage')}
-        choices={[
-          {
-            value: 'replace' as const,
-            label: t('replace.action'),
-            detail: t('editor.replaceDetail'),
-            primary: true,
-          },
-          {
-            value: 'insert' as const,
-            label: t('editor.insert'),
-            detail: t('editor.insertDetail'),
-          },
-        ]}
-        onChoose={clipboard.resolvePaste}
-        onCancel={clipboard.cancel}
-      />
-      {contextMenu ? (
-        <ScoreContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          model={scoreContextMenuModel({
-            selection,
-            clipboard: store.getState().clipboard,
-            playing: store.getState().state === 'playing',
-            score,
-          })}
-          onClose={() => setContextMenu(null)}
-          // Re-checked against the store as it is now, so an entry chosen after
-          // the transport started is refused rather than trusted to the flag.
-          // Cut and paste ask the same question the shortcuts do.
-          onAction={(action) => {
-            runScoreContextAction(store, action, {
-              requestCut: clipboard.requestCut,
-              requestPaste: clipboard.requestPaste,
-            });
-          }}
-        />
-      ) : null}
-      {lyricEntry !== null && selectedLyricNotes.length > 0 ? (
-        <LyricEntryBar
-          store={store}
-          notes={lyricEntry.notes}
-          startIndex={lyricEntry.startIndex}
-          onSelectNote={(noteId) => {
-            expectedLyricSelectionRef.current = [noteId];
-            store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
-          }}
-          onClose={() => setLyricEntry(null)}
-        />
-      ) : null}
-      <GoToBarDialog
-        open={goToBarOpen}
-        barCount={barCount(score)}
-        onClose={() => setGoToBarOpen(false)}
-        onGo={(text) => goToBarFromInput(store, text)}
-      />
-      <InsertBarsDialog
-        open={insertBarsOpen}
-        onClose={() => setInsertBarsOpen(false)}
-        onSubmit={(result) => void insertBars(result)}
-      />
-      <EditorToolbar
-        store={store}
-        onEnterLyrics={beginLyricEntry}
-        onGoToBar={() => setGoToBarOpen(true)}
-        onAddMeasure={() => setInsertBarsOpen(true)}
-        layoutMode={layoutMode}
-        onLayoutModeChange={setLayoutMode}
-        inspectorOpen={inspectorOpen}
-        onToggleInspector={onToggleInspector}
-        onGenerateTrack={() => setGenerateTrackOpen(true)}
-      />
+      {!readOnly && (
+        <>
+          <ChoiceDialog
+            open={clipboard.pendingCut}
+            title={t('editor.cutTitle')}
+            message={t('editor.cutMessage')}
+            choices={[
+              {
+                value: 'silence' as const,
+                label: t('editor.leaveSilence'),
+                detail: t('editor.leaveSilenceDetail'),
+                primary: true,
+              },
+              {
+                value: 'close' as const,
+                label: t('editor.closeGap'),
+                detail: t('editor.closeGapDetail'),
+              },
+            ]}
+            onChoose={clipboard.resolveCut}
+            onCancel={clipboard.cancel}
+          />
+          <ChoiceDialog
+            open={clipboard.pendingPaste}
+            title={t('editor.pasteTitle')}
+            message={t('editor.pasteMessage')}
+            choices={[
+              {
+                value: 'replace' as const,
+                label: t('replace.action'),
+                detail: t('editor.replaceDetail'),
+                primary: true,
+              },
+              {
+                value: 'insert' as const,
+                label: t('editor.insert'),
+                detail: t('editor.insertDetail'),
+              },
+            ]}
+            onChoose={clipboard.resolvePaste}
+            onCancel={clipboard.cancel}
+          />
+          {contextMenu ? (
+            <ScoreContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              model={scoreContextMenuModel({
+                selection,
+                clipboard: store.getState().clipboard,
+                playing: store.getState().state === 'playing',
+                score,
+              })}
+              onClose={() => setContextMenu(null)}
+              // Re-checked against the store as it is now, so an entry chosen after
+              // the transport started is refused rather than trusted to the flag.
+              // Cut and paste ask the same question the shortcuts do.
+              onAction={(action) => {
+                runScoreContextAction(store, action, {
+                  requestCut: clipboard.requestCut,
+                  requestPaste: clipboard.requestPaste,
+                });
+              }}
+            />
+          ) : null}
+          {lyricEntry !== null && selectedLyricNotes.length > 0 ? (
+            <LyricEntryBar
+              store={store}
+              notes={lyricEntry.notes}
+              startIndex={lyricEntry.startIndex}
+              onSelectNote={(noteId) => {
+                expectedLyricSelectionRef.current = [noteId];
+                store.getState().setSelection({ eventIds: [noteId], measureIds: [], trackIds: [] });
+              }}
+              onClose={() => setLyricEntry(null)}
+            />
+          ) : null}
+          <GoToBarDialog
+            open={goToBarOpen}
+            barCount={barCount(score)}
+            onClose={() => setGoToBarOpen(false)}
+            onGo={(text) => goToBarFromInput(store, text)}
+          />
+          <InsertBarsDialog
+            open={insertBarsOpen}
+            onClose={() => setInsertBarsOpen(false)}
+            onSubmit={(result) => void insertBars(result)}
+          />
+          <EditorToolbar
+            store={store}
+            onEnterLyrics={beginLyricEntry}
+            onGoToBar={() => setGoToBarOpen(true)}
+            onAddMeasure={() => setInsertBarsOpen(true)}
+            layoutMode={layoutMode}
+            onLayoutModeChange={setLayoutMode}
+            inspectorOpen={inspectorOpen}
+            onToggleInspector={onToggleInspector}
+            onGenerateTrack={() => setGenerateTrackOpen(true)}
+          />
 
-      <GenerateTrackDialog
-        open={generateTrackOpen}
-        pending={generateTrackPending}
-        estimatedCredits={score ? estimateGenerateTrackCredits(score) : 0}
-        onGenerate={(prompt, instrument, variant) =>
-          void generateTrack(prompt, instrument, variant)
-        }
-        onClose={() => setGenerateTrackOpen(false)}
-      />
+          <GenerateTrackDialog
+            open={generateTrackOpen}
+            pending={generateTrackPending}
+            estimatedCredits={score ? estimateGenerateTrackCredits(score) : 0}
+            onGenerate={(prompt, instrument, variant) =>
+              void generateTrack(prompt, instrument, variant)
+            }
+            onClose={() => setGenerateTrackOpen(false)}
+          />
+        </>
+      )}
       <div
         ref={scrollBoxRef}
         data-testid="score-editor-scroll"

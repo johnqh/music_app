@@ -5,13 +5,17 @@
  * scrubber.
  *
  * Every control that actually moves the transport (play/pause/stop/seek/
- * loop/metronome/speed/volume) calls the `playbackController` singleton
- * directly (never `store.dispatchCommand` — playback is real-time device
- * control, not score history; see `services/playback/controller.ts`'s doc
- * comment). Tempo is the one exception: editing the BPM number *is* a
- * score edit (spec §22 "tempo control", persisted with the score, unlike
- * the ephemeral playback-speed multiplier), so it goes through
- * `changeTempoCommand`/`dispatchCommand` like any other score mutation.
+ * loop/metronome/speed/volume) calls `controller` (never
+ * `store.dispatchCommand` — playback is real-time device control, not score
+ * history; see `services/playback/controller.ts`'s doc comment), which
+ * defaults to the app-wide `playbackController` singleton but is a prop so a
+ * host with its own isolated store and player binding — the published-
+ * snapshot page — can pass its own instead. Tempo is the one exception:
+ * editing the BPM number *is* a score edit (spec §22 "tempo control",
+ * persisted with the score, unlike the ephemeral playback-speed multiplier),
+ * so it goes through `changeTempoCommand`/`dispatchCommand` like any other
+ * score mutation — which is why `readOnly` turns that one control back into
+ * plain text rather than needing a second injectable dependency.
  *
  * Adopts `@sudobility/components` controls (library sweep 1): plain
  * buttons become the library `Button` (variant="ghost", `size="icon"` for
@@ -56,7 +60,7 @@ import {
   transportExtent,
 } from '@sudobility/music_types';
 import { commitOpeningTempoText, openingTempoBpm, playbackController } from '@/app-library';
-import type { PlaybackStoreApi } from '@/app-library';
+import type { PlaybackAdapter, PlaybackStoreApi } from '@/app-library';
 import { barBeatForTick, formatBarBeat } from '@/app-library';
 import { usePlaybackPosition, usePlaybackReadout } from '@/features/score-editor/usePlayback';
 import { useAppStore } from '@/app-library';
@@ -73,9 +77,42 @@ import {
 } from '@/components/icons/notation-icons';
 import { ExclamationTriangleIcon, PauseIcon, PlayIcon, StopIcon } from '@heroicons/react/24/solid';
 
+/**
+ * The transport methods this bar actually calls, plus the `bus` its
+ * position-driven readouts read from. A `Pick` rather than the whole
+ * `PlaybackAdapter`, so a host with its own `PlayerBinding` (`bindPlayer`,
+ * `bind-player.ts` — not the same *class* as `PlaybackAdapter`, but carrying
+ * every one of these methods with the same signature) plus the raw player's
+ * own `bus` satisfies this structurally, with no adapter shim of its own —
+ * the published-snapshot page's `PublishedView` does exactly that.
+ */
+export type TransportController = Pick<
+  PlaybackAdapter,
+  | 'togglePlay'
+  | 'goToStart'
+  | 'previousMeasure'
+  | 'nextMeasure'
+  | 'stop'
+  | 'toggleLoop'
+  | 'setMetronome'
+  | 'seek'
+  | 'setTempoMultiplier'
+  | 'setMasterVolume'
+  | 'bus'
+>;
+
 export type TransportBarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: PlaybackStoreApi;
+  /**
+   * What every button here actually moves. Defaults to the app-wide
+   * `playbackController` singleton, which is bound to the app-wide store —
+   * wrong for a host with its own isolated store and player binding (the
+   * published-snapshot page), which passes its own `PlayerBinding` instead so
+   * Play here plays *this* store's score rather than whatever the app-wide
+   * store (possibly nothing, for a signed-out visitor) happens to hold.
+   */
+  controller?: TransportController;
   /**
    * Whether the piano keyboard below is collapsed, and how to toggle it.
    *
@@ -85,6 +122,13 @@ export type TransportBarProps = {
    */
   keyboardCollapsed?: boolean;
   onToggleKeyboard?: () => void;
+  /**
+   * The published-snapshot page's mode: every transport control here already
+   * calls the player rather than `dispatchCommand`, except the tempo readout,
+   * which opens an editable field that commits a score edit. Read-only turns
+   * that one control back into plain text.
+   */
+  readOnly?: boolean;
 };
 
 /** Icon-only transport controls, all at the bar's shared control height. */
@@ -183,7 +227,15 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
  * actually started. Nothing can play until the font is in, so the control that
  * starts playing says so.
  */
-function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScore: boolean }) {
+function PlayPauseButton({
+  store,
+  hasScore,
+  controller,
+}: {
+  store: PlaybackStoreApi;
+  hasScore: boolean;
+  controller: TransportController;
+}) {
   const { t } = useTranslation();
   const playbackState = store((s) => s.state);
   const preparing = store((s) => s.synthLoad.status === 'loading');
@@ -202,7 +254,7 @@ function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScor
         aria-label={label}
         aria-busy={preparing || undefined}
         disabled={!hasScore || preparing}
-        onClick={() => playbackController.togglePlay()}
+        onClick={() => void controller.togglePlay()}
         className={ICON_BUTTON_CLASS}
       >
         {preparing ? (
@@ -219,7 +271,13 @@ function PlayPauseButton({ store, hasScore }: { store: PlaybackStoreApi; hasScor
   );
 }
 
-function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
+function MeasureBeatReadout({
+  store,
+  controller,
+}: {
+  store: PlaybackStoreApi;
+  controller: TransportController;
+}) {
   const { t } = useTranslation();
   // Its own position subscriber, like every other readout that follows the
   // music: the position is not in the store, so reading it here is what keeps
@@ -231,8 +289,9 @@ function MeasureBeatReadout({ store }: { store: PlaybackStoreApi }) {
     counts a pickup, so on a score with an anacrusis this readout said one bar
     and the inspector — and "go to bar N" — said another.
   */
-  const readout = usePlaybackReadout((tick) =>
-    formatBarBeat(score ? barBeatForTick(score, tick) : null),
+  const readout = usePlaybackReadout(
+    (tick) => formatBarBeat(score ? barBeatForTick(score, tick) : null),
+    controller.bus,
   );
   return (
     <Tooltip content={t('transport.measureBeat')}>
@@ -253,16 +312,18 @@ function PositionScrubber({
   maxTick,
   disabled,
   onScrub,
+  controller,
 }: {
   maxTick: number;
   disabled: boolean;
   onScrub: (tick: number) => void;
+  controller: TransportController;
 }) {
   const { t } = useTranslation();
   // From the bus, not the store: the engine reports position on every seek and
   // stop as well as while playing, so this is always current — and it is the
   // subscription that keeps a 30Hz value out of every other component.
-  const positionTick = usePlaybackPosition();
+  const positionTick = usePlaybackPosition(controller.bus);
   const reported = Math.min(positionTick, maxTick);
   /*
     Painted from a local draft, not from the reported position.
@@ -316,14 +377,17 @@ function Timecode({
   maxTick,
   tempoMap,
   totalSeconds,
+  controller,
 }: {
   maxTick: number;
   tempoMap: TempoMap | null;
   totalSeconds: number;
+  controller: TransportController;
 }) {
   const { t } = useTranslation();
-  const elapsed = usePlaybackReadout((tick) =>
-    formatTimecode(tempoMap ? tempoMap.ticksToSeconds(Math.min(tick, maxTick)) : 0),
+  const elapsed = usePlaybackReadout(
+    (tick) => formatTimecode(tempoMap ? tempoMap.ticksToSeconds(Math.min(tick, maxTick)) : 0),
+    controller.bus,
   );
   return (
     <Tooltip content={t('transport.elapsed')}>
@@ -340,8 +404,10 @@ function Timecode({
 
 export function TransportBar({
   store = useAppStore,
+  controller = playbackController,
   keyboardCollapsed,
   onToggleKeyboard,
+  readOnly = false,
 }: TransportBarProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
@@ -397,7 +463,7 @@ export function TransportBar({
   };
 
   const handleSpeedChange = (value: string): void => {
-    playbackController.setTempoMultiplier(Number(value));
+    controller.setTempoMultiplier(Number(value));
   };
 
   /*
@@ -410,11 +476,11 @@ export function TransportBar({
   useEffect(() => setVolumeDraft(masterVolume), [masterVolume]);
   const handleVolumeChange = (value: number): void => {
     setVolumeDraft(value);
-    playbackController.setMasterVolume(value);
+    controller.setMasterVolume(value);
   };
 
   const handleScrub = (tick: number): void => {
-    playbackController.seek(tick);
+    controller.seek(tick);
   };
 
   return (
@@ -431,7 +497,7 @@ export function TransportBar({
           size="icon"
           aria-label={t('transport.goToStart')}
           disabled={!hasScore}
-          onClick={() => playbackController.goToStart()}
+          onClick={() => controller.goToStart()}
           className={ICON_BUTTON_CLASS}
         >
           <GoToStartIcon className={ICON_GLYPH_CLASS} />
@@ -444,13 +510,13 @@ export function TransportBar({
           size="icon"
           aria-label={t('transport.previousMeasure')}
           disabled={!hasScore}
-          onClick={() => playbackController.previousMeasure()}
+          onClick={() => controller.previousMeasure()}
           className={ICON_BUTTON_CLASS}
         >
           <PreviousMeasureIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
-      <PlayPauseButton store={store} hasScore={hasScore} />
+      <PlayPauseButton store={store} hasScore={hasScore} controller={controller} />
       <Tooltip content={t('transport.stop')}>
         <Button
           type="button"
@@ -460,7 +526,7 @@ export function TransportBar({
           disabled={!hasScore}
           onClick={() => {
             // Stop both the main transport and any candidate preview
-            playbackController.stop();
+            controller.stop();
           }}
           className={ICON_BUTTON_CLASS}
         >
@@ -474,7 +540,7 @@ export function TransportBar({
           size="icon"
           aria-label={t('transport.nextMeasure')}
           disabled={!hasScore}
-          onClick={() => playbackController.nextMeasure()}
+          onClick={() => controller.nextMeasure()}
           className={ICON_BUTTON_CLASS}
         >
           <NextMeasureIcon className={ICON_GLYPH_CLASS} />
@@ -488,7 +554,7 @@ export function TransportBar({
           aria-label={t('transport.toggleLoop')}
           aria-pressed={loopRange !== null}
           disabled={!hasScore}
-          onClick={() => playbackController.toggleLoop()}
+          onClick={() => controller.toggleLoop()}
           className={TOGGLE_BUTTON_CLASS}
         >
           <ArrowPathRoundedSquareIcon className={ICON_GLYPH_CLASS} />
@@ -502,16 +568,25 @@ export function TransportBar({
           aria-label={t('transport.toggleMetronome')}
           aria-pressed={metronome}
           disabled={!hasScore}
-          onClick={() => playbackController.setMetronome(!metronome)}
+          onClick={() => controller.setMetronome(!metronome)}
           className={TOGGLE_BUTTON_CLASS}
         >
           <MetronomeIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
 
-      <MeasureBeatReadout store={store} />
+      <MeasureBeatReadout store={store} controller={controller} />
 
-      {editingTempo ? (
+      {readOnly ? (
+        // No score edit reachable on a read-only host: plain text, not the
+        // button that opens the editable field below.
+        <span
+          aria-label={t('transport.tempoBpm')}
+          className={cn(TEXT_CONTROL_CLASS, 'min-w-[72px] justify-center')}
+        >
+          {currentBpm} BPM
+        </span>
+      ) : editingTempo ? (
         <Input
           type="number"
           aria-label={t('transport.tempoBpm')}
@@ -587,10 +662,20 @@ export function TransportBar({
         centred, so the two read as being on different rows.
       */}
       <div className="flex min-w-[120px] flex-1 items-center">
-        <PositionScrubber maxTick={maxTick} disabled={!hasScore} onScrub={handleScrub} />
+        <PositionScrubber
+          maxTick={maxTick}
+          disabled={!hasScore}
+          onScrub={handleScrub}
+          controller={controller}
+        />
       </div>
 
-      <Timecode maxTick={maxTick} tempoMap={tempoMap} totalSeconds={totalSeconds} />
+      <Timecode
+        maxTick={maxTick}
+        tempoMap={tempoMap}
+        totalSeconds={totalSeconds}
+        controller={controller}
+      />
 
       {/*
         The keyboard toggle, rightmost.

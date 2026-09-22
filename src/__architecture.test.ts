@@ -63,6 +63,11 @@ const ALLOWED_NON_UI = new Set([
   // paste need to ask. Both now live where a second app can reach them, and
   // nothing has been added back.
   'src/context/pageConfigContextDef.ts',
+  // The breadcrumb page-override context `useSetBreadcrumbs` reads and
+  // writes — the same shape `pageConfigContextDef.ts` above is, and for the
+  // same reason: a `createContext` call carries no logic of its own to move
+  // anywhere else.
+  'src/context/breadcrumbContextDef.ts',
   // Maps an API refusal onto the dialog that answers it — UI wiring, and it
   // imports the dialog it opens.
   'src/features/credits/report-generation-error.ts',

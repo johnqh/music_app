@@ -76,8 +76,17 @@ export function useEditorShortcuts(
    * actions' own defaults.
    */
   clipboard?: ClipboardPrompts,
+  /**
+   * False on a read-only host (the published-snapshot page): every one of
+   * these shortcuts is either a score edit or reaches a dialog that is not
+   * rendered there, so binding the listener would either do nothing or throw
+   * on a `store.getState()` call this host never wires. Default true keeps
+   * every existing caller's behaviour unchanged.
+   */
+  enabled = true,
 ): void {
   useEffect(() => {
+    if (!enabled) return;
     function handleKeyDown(event: KeyboardEvent): void {
       if (isEditableTarget(event.target)) return;
 
@@ -109,5 +118,5 @@ export function useEditorShortcuts(
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [store, controller, clipboard]);
+  }, [store, controller, clipboard, enabled]);
 }

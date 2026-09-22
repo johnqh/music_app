@@ -31,7 +31,7 @@ vi.mock('@/app-library', async (importOriginal) => {
   };
 });
 
-import { playbackController } from '@/app-library';
+import { PlaybackBus, playbackController } from '@/app-library';
 import { TransportBar } from '@/components/transport/TransportBar';
 
 function makeStore(withScore = true): PlaybackStoreApi {
@@ -502,5 +502,77 @@ describe('the keyboard toggle', () => {
     // render a transport with no keyboard under it.
     render(<TransportBar store={makeStore()} />);
     expect(screen.queryByRole('button', { name: /keyboard/i })).not.toBeInTheDocument();
+  });
+});
+
+/** A stand-in for a `PlayerBinding`, structurally distinct from the mocked `playbackController` above. */
+function fakeController() {
+  return {
+    // A real bus, not a mock: the position-driven readouts subscribe to it
+    // directly, the same as the mocked `playbackController.bus` above.
+    bus: new PlaybackBus(),
+    togglePlay: vi.fn().mockResolvedValue(undefined),
+    goToStart: vi.fn(),
+    previousMeasure: vi.fn(),
+    nextMeasure: vi.fn(),
+    stop: vi.fn(),
+    toggleLoop: vi.fn(),
+    setMetronome: vi.fn(),
+    seek: vi.fn(),
+    setTempoMultiplier: vi.fn(),
+    setMasterVolume: vi.fn(),
+  };
+}
+
+describe('TransportBar: injected controller (the published-snapshot page)', () => {
+  it('play calls the injected controller, not the app-wide singleton', async () => {
+    const controller = fakeController();
+    render(<TransportBar store={makeStore()} controller={controller} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(controller.togglePlay).toHaveBeenCalledTimes(1);
+    expect(playbackController.togglePlay).not.toHaveBeenCalled();
+  });
+
+  it('every other transport button calls the injected controller too', async () => {
+    const controller = fakeController();
+    render(<TransportBar store={makeStore()} controller={controller} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Go to start' }));
+    await user.click(screen.getByRole('button', { name: 'Previous bar' }));
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await user.click(screen.getByRole('button', { name: 'Next bar' }));
+    await user.click(screen.getByRole('button', { name: 'Toggle loop' }));
+    await user.click(screen.getByRole('button', { name: 'Toggle metronome' }));
+
+    expect(controller.goToStart).toHaveBeenCalledTimes(1);
+    expect(controller.previousMeasure).toHaveBeenCalledTimes(1);
+    expect(controller.stop).toHaveBeenCalledTimes(1);
+    expect(controller.nextMeasure).toHaveBeenCalledTimes(1);
+    expect(controller.toggleLoop).toHaveBeenCalledTimes(1);
+    expect(controller.setMetronome).toHaveBeenCalledTimes(1);
+    expect(playbackController.goToStart).not.toHaveBeenCalled();
+    expect(playbackController.stop).not.toHaveBeenCalled();
+  });
+});
+
+describe('TransportBar: readOnly (the published-snapshot page)', () => {
+  it('shows the tempo as plain text, not an editable control', () => {
+    render(<TransportBar store={makeStore()} readOnly />);
+    expect(screen.queryByRole('button', { name: 'Tempo (BPM)' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tempo (BPM)')).toHaveTextContent(/BPM/);
+  });
+
+  it('every other transport control still works', async () => {
+    const controller = fakeController();
+    render(<TransportBar store={makeStore()} controller={controller} readOnly />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Play' }));
+
+    expect(controller.togglePlay).toHaveBeenCalledTimes(1);
   });
 });

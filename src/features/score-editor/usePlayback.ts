@@ -18,14 +18,23 @@
  */
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import { playbackController, playingPitchesForTrack, samePitchSet } from '@/app-library';
+import type { PlaybackBus } from '@/app-library';
 
-/** The playhead, as the engine last reported it. ~30Hz while playing, silent otherwise. */
-export function usePlaybackPosition(): number {
-  const subscribe = useCallback(
-    (onChange: () => void) => playbackController.bus.onPosition(onChange),
-    [],
-  );
-  const get = useCallback(() => playbackController.bus.positionTick, []);
+/**
+ * The playhead, as the engine last reported it. ~30Hz while playing, silent
+ * otherwise.
+ *
+ * `bus` defaults to the app-wide `playbackController` singleton's — evaluated
+ * lazily (an ordinary JS default parameter, only read when the caller omits
+ * the argument), because merely *accessing* that singleton lazily constructs
+ * a `PlaybackAdapter` bound to the real app-wide store, which throws where
+ * that store was never initialized. A host with its own player and no
+ * `PlaybackAdapter` (the published-snapshot page's `TransportBar`) passes the
+ * raw player's own `bus` instead — a store-agnostic passthrough either way.
+ */
+export function usePlaybackPosition(bus: PlaybackBus = playbackController.bus): number {
+  const subscribe = useCallback((onChange: () => void) => bus.onPosition(onChange), [bus]);
+  const get = useCallback(() => bus.positionTick, [bus]);
   return useSyncExternalStore(subscribe, get, get);
 }
 
@@ -37,13 +46,15 @@ export function usePlaybackPosition(): number {
  * `useSyncExternalStore` compares snapshots, so handing it the *formatted* text
  * rather than the tick lets React skip every report that would print the same
  * thing. `format` is read at render, so a new score or tempo applies at once.
+ *
+ * `bus` defaults the same way `usePlaybackPosition`'s does.
  */
-export function usePlaybackReadout(format: (tick: number) => string): string {
-  const subscribe = useCallback(
-    (onChange: () => void) => playbackController.bus.onPosition(onChange),
-    [],
-  );
-  const get = () => format(playbackController.bus.positionTick);
+export function usePlaybackReadout(
+  format: (tick: number) => string,
+  bus: PlaybackBus = playbackController.bus,
+): string {
+  const subscribe = useCallback((onChange: () => void) => bus.onPosition(onChange), [bus]);
+  const get = () => format(bus.positionTick);
   return useSyncExternalStore(subscribe, get, get);
 }
 
@@ -58,18 +69,20 @@ export function usePlaybackReadout(format: (tick: number) => string): string {
  *
  * The notes arrive with their track and pitch already resolved by the
  * scheduler, so this is a filter rather than a search of the score.
+ *
+ * `bus` defaults the same way `usePlaybackPosition`'s does.
  */
-export function usePlayingPitches(activeTrackId: string | null): ReadonlySet<number> {
-  const subscribe = useCallback(
-    (onChange: () => void) => playbackController.bus.onSounding(onChange),
-    [],
-  );
+export function usePlayingPitches(
+  activeTrackId: string | null,
+  bus: PlaybackBus = playbackController.bus,
+): ReadonlySet<number> {
+  const subscribe = useCallback((onChange: () => void) => bus.onSounding(onChange), [bus]);
   const kept = useRef<ReadonlySet<number>>(NO_PITCHES);
   const get = useCallback(() => {
-    const next = playingPitchesForTrack(playbackController.bus.sounding, activeTrackId);
+    const next = playingPitchesForTrack(bus.sounding, activeTrackId);
     if (!samePitchSet(next, kept.current)) kept.current = next;
     return kept.current;
-  }, [activeTrackId]);
+  }, [bus, activeTrackId]);
   return useSyncExternalStore(subscribe, get, get);
 }
 

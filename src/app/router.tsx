@@ -249,6 +249,16 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
             <Route path="docs/:topicId" element={<DocsPage />} />
             <Route path="settings" element={<SettingsPage store={store} />} />
             <Route path="signin" element={<LoginPage />} />
+            {/*
+              The normal shell (topbar, breadcrumbs, footer), like every other
+              public page — it used to render full-bleed with none of that,
+              which read as a page torn out of the rest of the site.
+              `useSetPageConfig({ scrollable: false })` (in `PublishedView`)
+              is what keeps its own notation/transport area viewport-bounded
+              with its own internal scrolling rather than the shell's normal
+              whole-page scroll.
+            */}
+            <Route path="p/:publicId" element={<PublishedView />} />
 
             {/* Needs an account. */}
             <Route
@@ -276,9 +286,6 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
               }
             />
           </Route>
-
-          {/* Full-bleed reader for one shared score: deliberately no shell. */}
-          <Route path="p/:publicId" element={<PublishedView />} />
 
           <Route
             path="project/:id"

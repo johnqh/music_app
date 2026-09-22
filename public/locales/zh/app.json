@@ -23,6 +23,9 @@
     "alreadyHaveAccount": "已经有账户了？",
     "dontHaveAccount": "还没有账户？"
   },
+  "breadcrumbs": {
+    "home": "首页"
+  },
   "command": {
     "addMeasure": "添加小节",
     "insertBars": "插入小节",

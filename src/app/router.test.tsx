@@ -8,6 +8,8 @@ import {
 } from '@sudobility/music_types';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
 import type { EditorStoreApi } from '@/app-library';
+import { getAppServices, setAppServices } from '@/config/initialize';
+import { twinkleScore } from '@/app-library';
 
 vi.mock('@/app-library', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/app-library')>();
@@ -311,5 +313,47 @@ describe('AppRouter', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/en/projects'), ROUTE_CHANGE);
     // The dashboard's own search field — see above for why it is not the name.
     await screen.findByLabelText('Search projects', undefined, ROUTE_CHANGE);
+  });
+
+  it('gives the published-snapshot page the normal shell: topbar, breadcrumbs, footer', async () => {
+    // It used to render full-bleed with none of the site's own chrome — a
+    // page torn out of the rest of the site.
+    const publishedScore = twinkleScore();
+    const store = makeStore();
+    const services = getAppServices();
+    setAppServices({
+      ...services,
+      musicClient: {
+        ...services.musicClient,
+        getPublishedSnapshot: vi.fn().mockResolvedValue({
+          publicId: 'pub_x',
+          name: 'V1',
+          publicName: 'My Song Version 1',
+          publisherName: 'Jane',
+          score: publishedScore,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        }),
+      } as never,
+    });
+    window.history.pushState({}, '', '/en/p/pub_x');
+    render(
+      withQueryClient(
+        <AuthProvider>
+          <AppRouter store={store} />
+        </AuthProvider>,
+      ),
+    );
+
+    // Two, once loaded: the breadcrumb trail's current crumb and the page's
+    // own header, which still names what it plays alongside the Share button.
+    await waitFor(() => expect(screen.getAllByText('My Song Version 1').length).toBe(2));
+    // The shell's own landmarks, from AppPageLayout's `<header>`/`<footer>`
+    // (and the topbar's own nested `<header>`) — present regardless of what's
+    // inside them, so this does not need to know the topbar/footer's own
+    // content to prove the shell is there at all.
+    expect(screen.getAllByRole('banner').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('contentinfo').length).toBeGreaterThan(0);
+    // The breadcrumb trail: Home, then this snapshot's own public name.
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
   });
 });

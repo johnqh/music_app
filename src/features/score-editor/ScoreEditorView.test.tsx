@@ -18,6 +18,7 @@ import { scoreWithPitch } from '@/app-library';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import type { BBox, RenderTheme } from '@/app-library';
 import { CanvasScoreRenderer, createMock2DContext } from '@/app-library';
+import { selectActiveTrackId } from '@/app-library';
 import { playbackController } from '@/app-library';
 
 // ScoreEditorView wires useEditorShortcuts(store) with no explicit
@@ -476,6 +477,97 @@ describe('ScoreEditorView', () => {
     const opts = renderSpy.mock.calls.at(-1)![2];
     expect(opts.activeTrackId).toBe(score.tracks[0].id);
     expect(opts.selectedMeasureIds?.has(measureId)).toBe(true);
+  });
+});
+
+describe('ScoreEditorView: readOnly (the published-snapshot page)', () => {
+  it('does not render the editing toolbar', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} readOnly />);
+    // The toolbar's zoom-in control is as good a stand-in as any of its
+    // buttons for "the toolbar is not here at all".
+    expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
+  });
+
+  it('still draws the score', () => {
+    const store = makeStore();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} readOnly />);
+    expect(renderSpy).toHaveBeenCalled();
+  });
+
+  it('draws every track the same colour, even though the store still resolves a first active one', () => {
+    // `selectActiveTrackId` falls back to the first visible track whenever
+    // nothing was explicitly made active (music_editing's selectors.ts) — an
+    // editor needs something to put a new note on. This page has no such
+    // concept, and forwarding that fallback would dim every track but the
+    // first one, exactly as it did before this guard existed.
+    const store = makeStore(twoTrackScore());
+    expect(selectActiveTrackId(store.getState())).not.toBeNull();
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    render(<ScoreEditorView store={store} readOnly />);
+    const opts = renderSpy.mock.calls.at(-1)![2];
+    expect(opts.activeTrackId).toBeNull();
+  });
+
+  it('a click on a note does not select it', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} readOnly />);
+    const [first] = allNotes(store.getState().score!);
+
+    clickNote(store.getState().score!, first.id);
+
+    expect(store.getState().selection.eventIds).toEqual([]);
+  });
+
+  it('a drag over the score does not start a box selection', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} readOnly />);
+    const score = store.getState().score!;
+    const first = allNotes(score)[0]!;
+    const box = referenceRender(score).idToBBox.get(first.id)!;
+    const from = center(box);
+    const surface = interactionSurface();
+
+    fireEvent.pointerDown(surface, { ...from, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(surface, {
+      clientX: from.clientX + 40,
+      clientY: from.clientY + 40,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(surface, {
+      clientX: from.clientX + 40,
+      clientY: from.clientY + 40,
+      pointerId: 1,
+    });
+
+    expect(screen.queryByTestId('drag-selection-box')).not.toBeInTheDocument();
+    expect(store.getState().selection.eventIds).toEqual([]);
+  });
+
+  it('right-click does not open the context menu', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} readOnly />);
+    const [first] = allNotes(store.getState().score!);
+    const box = referenceRender(store.getState().score!).idToBBox.get(first.id)!;
+
+    fireEvent.contextMenu(interactionSurface(), center(box));
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('a keyboard shortcut (Delete) does not edit the score', () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} readOnly />);
+    const [first] = allNotes(store.getState().score!);
+    const before = allNotes(store.getState().score!).length;
+    act(() => {
+      store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    });
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+
+    expect(allNotes(store.getState().score!).length).toBe(before);
   });
 });
 

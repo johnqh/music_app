@@ -4,7 +4,7 @@ import { getMusicPlayer } from '@sudobility/music_player/core';
 import type { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { twinkleScore } from '@/app-library';
+import { CanvasScoreRenderer, twinkleScore } from '@/app-library';
 import {
   getMusicPosition,
   getMusicPositionSource,
@@ -94,6 +94,19 @@ describe('PublishedView', () => {
   it('can play', async () => {
     renderPublished();
     expect(await screen.findByRole('button', { name: /play/i })).toBeEnabled();
+  });
+
+  it('draws the track-name gutter, so a reader can tell which track plays which instrument', async () => {
+    // This used to draw with `printRenderOptions`, which sets `showTrackInfo:
+    // false` to save page width — the reason a reader here could not tell
+    // which track played which instrument. Reusing ScoreEditorView (screen
+    // render mode, `showTrackInfo` true by default) fixes that.
+    const renderSpy = vi.spyOn(CanvasScoreRenderer.prototype, 'render');
+    renderPublished();
+    await screen.findByText('My Song Version 1');
+    await waitFor(() => expect(renderSpy).toHaveBeenCalled());
+    const opts = renderSpy.mock.calls.at(-1)![2];
+    expect(opts.showTrackInfo).not.toBe(false);
   });
 
   it('plays the published score, not the score open in the editor', async () => {
