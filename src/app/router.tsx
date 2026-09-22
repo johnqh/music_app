@@ -222,6 +222,21 @@ function ProjectRoute({ store }: { store: EditorStoreApi }) {
  * Everything inside `ScreenContainerLayout` keeps the topbar and footer,
  * signed in or not — including the sign-in page itself.
  */
+function NotFoundRedirect() {
+  const { lang } = useParams();
+  return <Navigate to={'/' + (lang || 'en') + '/404'} replace />;
+}
+function NotFoundPage() {
+  const { lang } = useParams();
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-16 text-center">
+      <h1>404</h1>
+      <p>Page Not Found</p>
+      <a href={'/' + (lang || 'en')}>Go to Home</a>
+    </main>
+  );
+}
+
 export function AppRoutes({ store = useAppStore }: AppRouterProps) {
   return (
     <>
@@ -303,8 +318,10 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
               </ProtectedRoute>
             }
           />
+          <Route path="404" element={<NotFoundPage />} />
+          <Route path="*" element={<NotFoundRedirect />} />
         </Route>
-        <Route path="*" element={<LocalizedHomeRedirect />} />
+        <Route path="*" element={<Navigate to="/en/404" replace />} />
       </Routes>
     </>
   );

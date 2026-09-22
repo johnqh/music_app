@@ -78,8 +78,10 @@ describe('AppRouter', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/zh'));
   });
 
-  it('keeps the language a link names, whatever the reader chose', async () => {
-    // A shared link has to open in the language it was shared in.
+  it('keeps the language a link names, whatever the reader chose, even for an unknown path', async () => {
+    // A shared link has to open in the language it was shared in — including
+    // its 404, so a stale or mistyped link still reads in the language it
+    // arrived in rather than silently falling back to the reader's own.
     const store = makeStore();
     await savePrefs(context.storage!, { language: 'en' });
     window.history.pushState({}, '', '/zh/nope');
@@ -91,7 +93,7 @@ describe('AppRouter', () => {
       ),
     );
 
-    await waitFor(() => expect(window.location.pathname).toBe('/zh'));
+    await waitFor(() => expect(window.location.pathname).toBe('/zh/404'));
   });
 
   it('renders the dashboard at "/en/projects"', async () => {
@@ -210,7 +212,7 @@ describe('AppRouter', () => {
     expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument();
   });
 
-  it('an unknown path redirects to the localized home', async () => {
+  it('an unknown path with no language segment redirects to the English 404 page', async () => {
     const store = makeStore();
     window.history.pushState({}, '', '/nope');
 
@@ -224,8 +226,9 @@ describe('AppRouter', () => {
 
     // The home page itself is public and lives in `App.tsx`, matched before the
     // auth gate — so it is not part of this (signed-in) route table. What this
-    // table still owns is the redirect to the localized root.
-    await waitFor(() => expect(window.location.pathname).toBe('/en'));
+    // table still owns is the redirect to a 404 page — English, since there is
+    // no `:lang` segment here for a nested route to read.
+    await waitFor(() => expect(window.location.pathname).toBe('/en/404'));
   });
 
   it('stops playback (main transport and preview) when the project route unmounts', async () => {
