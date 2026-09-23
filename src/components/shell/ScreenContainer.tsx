@@ -52,7 +52,7 @@ function ScreenContainerInner({ children, store }: ScreenContainerProps) {
     // their own width. Widening only the content area is what left the logo
     // indented 176px while the page's cards started at 32px.
     layoutMode: 'full',
-    maxWidth: 'full',
+    maxWidth: '7xl',
     contentPadding: 'none',
     contentClassName: 'w-full min-w-0',
     ...pageConfigOverrides,

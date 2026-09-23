@@ -13,8 +13,9 @@
  */
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, CardContent, Section, Stack, Switch, Text } from '@sudobility/components';
+import { Card, CardContent, Stack, Switch, Text } from '@sudobility/components';
 import { GlobalSettingsPage, type SettingsSectionConfig } from '@sudobility/building_blocks';
+import { useSetPageConfig } from '@/hooks/usePageConfig';
 import { useAppStore } from '@/app-library';
 import { MusicalNoteIcon } from '@heroicons/react/24/outline';
 import type { EditorStoreApi, FontSize } from '@/app-library';
@@ -22,6 +23,7 @@ import type { EditorStoreApi, FontSize } from '@/app-library';
 export type SettingsPageProps = { store?: EditorStoreApi };
 
 export default function SettingsPage({ store = useAppStore }: SettingsPageProps) {
+  useSetPageConfig({ scrollable: false, contentPadding: 'none', maxWidth: 'full' });
   const { t } = useTranslation();
   const themeMode = store((s) => s.themeMode);
   const developerMode = store((s) => s.developerMode);
@@ -83,7 +85,7 @@ export default function SettingsPage({ store = useAppStore }: SettingsPageProps)
   );
 
   return (
-    <Section spacing="xl">
+    <>
       <GlobalSettingsPage
         theme={themeMode}
         fontSize={fontSize}
@@ -102,6 +104,6 @@ export default function SettingsPage({ store = useAppStore }: SettingsPageProps)
         showAppearanceInfoBox
         detailMaxWidth={720}
       />
-    </Section>
+    </>
   );
 }

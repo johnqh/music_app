@@ -1061,8 +1061,8 @@
     "featureEditorBody": "Engraved notation with a piano keyboard beneath it, over one score, with full undo history.",
     "featureAiTitle": "AI generation",
     "featureAiBody": "Generate whole pieces, or regenerate a selection of bars.",
-    "featureFormatsTitle": "MIDI & MusicXML",
-    "featureFormatsBody": "Import and export standard formats that work with your other tools.",
+    "featureFormatsTitle": "Bring in audio. Make it yours.",
+    "featureFormatsBody": "Import MP3, MPA, or WAV recordings and turn them into editable notes. Work with songs from AI music generators like Suno and Udio, or pull notes from a favorite song to practice an instrument.",
     "ctaVisitor": "Get started free"
   },
   "import": {

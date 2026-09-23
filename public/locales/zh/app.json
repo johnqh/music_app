@@ -1061,8 +1061,8 @@
     "featureEditorBody": "同一份乐谱上的雕版记谱，下方配有钢琴键盘，并具备完整的撤销历史。",
     "featureAiTitle": "AI 生成",
     "featureAiBody": "生成整首作品，或重新生成选中的小节。",
-    "featureFormatsTitle": "MIDI 与 MusicXML",
-    "featureFormatsBody": "导入和导出可与其他工具配合使用的标准格式。",
+    "featureFormatsTitle": "导入音频，创作属于你的版本",
+    "featureFormatsBody": "导入 MP3、MPA 或 WAV 录音，将音频转换为可编辑的音符。无论是来自 Suno、Udio 等 AI 音乐生成器的作品，还是你喜欢的歌曲，都可以提取音符来编辑或练习乐器。",
     "ctaVisitor": "免费开始使用"
   },
   "import": {
