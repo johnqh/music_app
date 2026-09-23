@@ -1,0 +1,9 @@
+# Generated/vendored audio assets, not source. `format`'s glob is `.` (the
+# whole repo), and prettier has no idea `-mp3.js` files carry a strict data
+# contract (`"B1": "data:..."`, double-quoted keys) that `parseSamplePack`
+# requires — its own style (singleQuote, unquoted-where-valid keys) silently
+# breaks it into `B1: 'data:...'`, which parses to zero samples. That is
+# exactly how the percussion packs shipped broken for months: nothing threw,
+# nothing failed a typecheck, the only symptom was drums with no sound. See
+# music_app_rn's src/config/soundfont-assets.test.ts, which is what caught it.
+public/audio/
