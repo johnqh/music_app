@@ -1,23 +1,33 @@
 /**
  * The one file-import modal, shared by every import on the Projects screen.
  *
- * They had drifted into three different shapes: MIDI and MusicXML each opened a
- * modal with their own hand-rolled chooser, Audio opened a modal with a raw
- * `<input type="file">` (whose look is the browser's, not the app's), and
- * `.MOD` and Project JSON skipped the modal entirely and jumped straight to the
- * OS picker — so two of the five gave no title, no description of what the
- * import would do, and nowhere to report a bad file.
+ * **Opens the OS picker directly.** Choosing a format used to land on a
+ * screen that only explained the format and offered a "Choose file…"
+ * button — a second click standing between the choice and the picker,
+ * paid on every import. The hidden `<input type="file">` is now clicked
+ * automatically the moment this opens, and the visible dialog (title,
+ * description, footer) stays off screen until there is something to show
+ * it for — a file read, a busy line, or an error. Cancelling the OS picker
+ * without choosing a file closes the whole thing, via the native `cancel`
+ * event `<input type="file">` fires (Chrome 113+, Firefox 106+, Safari
+ * 16.4+); nothing here has ever been shown for that to dismiss.
  *
- * What it standardises: the chooser (a button that becomes the chosen file's
- * name), a sentence saying what the import produces, a busy line while the file
- * is being read, an error line when it cannot be, and the footer. Anything
- * format-specific — a track table, a detected tempo — comes in as `children`
- * below all that, so each import stays as rich as it needs to be.
+ * The input is rendered *outside* `FormModal`'s children, as a sibling,
+ * because it has to exist and be clickable the instant `open` becomes
+ * true — before there is any content, which is exactly when `FormModal`
+ * itself is not yet shown. Its visible stand-in inside the dialog is a
+ * `<label htmlFor>` pointing at the same persistent input by id rather
+ * than wrapping it, since the input can no longer live inside the part
+ * that mounts late.
  *
- * A `<label>` wrapping a hidden input rather than a `<button>`: only a real
- * file input opens the browser's picker, and only a label can front one
- * without script. `role="button"` keeps it addressable as the control it is.
+ * What it standardises once a file exists: the chooser (now a re-pick
+ * label showing the chosen file's name), a sentence saying what the
+ * import produces, a busy line while the file is read, an error line
+ * when it cannot be, and the footer. Anything format-specific — a track
+ * table, a detected tempo — comes in as `children` below all that, so
+ * each import stays as rich as it needs to be.
  */
+import { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormModal, Spinner, cn } from '@sudobility/components';
@@ -85,6 +95,8 @@ export function FileImportModal({
   children,
 }: FileImportModalProps) {
   const { t } = useTranslation();
+  const inputId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   // Resolved here, not as parameter defaults: a default is evaluated once at
   // module scope and would freeze the label in the language loaded first.
   const busyText = busyLabel ?? t('import.readingFile');
@@ -98,90 +110,138 @@ export function FileImportModal({
     if (file) onFile(file);
   };
 
+  /*
+    Opens the OS picker itself, the moment there is one to open.
+
+    `useLayoutEffect`, not `useEffect`: React 18 flushes layout effects
+    synchronously within the same discrete event that changed `open` (the
+    format being chosen), which is still inside the click's "user
+    activation" window every browser requires before it will honour a
+    programmatic `.click()` on a file input. `useEffect`'s passive effects
+    run after paint, outside that window, and the picker silently would not
+    open — the one failure mode that would be invisible in testing and
+    obvious to every reader.
+  */
+  useLayoutEffect(() => {
+    if (open) inputRef.current?.click();
+  }, [open]);
+
+  /*
+    Cancelling the OS picker before anything was chosen closes the whole
+    flow — there is nothing on screen yet for a reader to dismiss instead.
+    Guarded on `fileName`: once a file exists, a *later* re-pick that gets
+    cancelled must leave the dialog exactly as it was, not close what the
+    reader is looking at.
+  */
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input || !open) return;
+    const handleCancel = (): void => {
+      if (!fileName) onClose();
+    };
+    input.addEventListener('cancel', handleCancel);
+    return () => input.removeEventListener('cancel', handleCancel);
+  }, [open, fileName, onClose]);
+
+  const hasContent = busy || Boolean(fileName) || Boolean(error);
+
   return (
-    <FormModal
-      open={open}
-      title={title}
-      onClose={onClose}
-      size={size}
-      // `actions`, not `onSave`: a Cancel belongs beside an import that creates
-      // a project, and the shorthand renders one full-width button.
-      actions={[
-        { label: t('common.cancel'), onClick: onClose },
-        { label: importText, onClick: onImport, disabled: !canImport || busy },
-      ]}
-      // The top-bar × is named "Cancel" by default, which would collide with
-      // the footer's Cancel and make both ambiguous.
-      closeAriaLabel={t('common.closeDialog')}
-    >
-      {/* FormModal renders the title and names its own dialog, so neither is
-          repeated here. */}
-      <div className="flex flex-col gap-4">
-        {description && <div className="text-sm text-theme-text-secondary">{description}</div>}
+    <>
+      {/*
+        Outside `FormModal`'s children on purpose — see the file comment.
+        Always in the DOM whenever `open` is true, regardless of whether
+        the dialog itself has anything to show yet.
+      */}
+      {open && (
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          accept={accept}
+          className="sr-only"
+          aria-label={t('import.fileInput', { kind: fileKind })}
+          disabled={busy}
+          onChange={handleChange}
+        />
+      )}
 
-        <label
-          role="button"
-          tabIndex={0}
-          aria-label={t('import.chooseFile', { kind: fileKind })}
-          className={cn(
-            variants.button.outline.default(),
-            'cursor-pointer px-3 py-2 text-center',
-            busy && 'pointer-events-none opacity-60',
-          )}
-        >
-          {fileName ?? t('import.chooseFileEllipsis', { kind: fileKind })}
-          <input
-            type="file"
-            accept={accept}
-            className="sr-only"
-            aria-label={t('import.fileInput', { kind: fileKind })}
-            disabled={busy}
-            onChange={handleChange}
-          />
-        </label>
+      <FormModal
+        open={open && hasContent}
+        title={title}
+        onClose={onClose}
+        size={size}
+        // `actions`, not `onSave`: a Cancel belongs beside an import that creates
+        // a project, and the shorthand renders one full-width button.
+        actions={[
+          { label: t('common.cancel'), onClick: onClose },
+          { label: importText, onClick: onImport, disabled: !canImport || busy },
+        ]}
+        // The top-bar × is named "Cancel" by default, which would collide with
+        // the footer's Cancel and make both ambiguous.
+        closeAriaLabel={t('common.closeDialog')}
+      >
+        {/* FormModal renders the title and names its own dialog, so neither is
+            repeated here. */}
+        <div className="flex flex-col gap-4">
+          {description && <div className="text-sm text-theme-text-secondary">{description}</div>}
 
-        {busy && (
-          <div className="flex flex-col gap-2">
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex items-center gap-2 text-sm text-theme-text-secondary"
-            >
-              {/* Decorative: the text beside it is the announcement. */}
-              <span aria-hidden="true">
-                <Spinner ariaLabel="Working" size="small" />
-              </span>
-              {busyText}
+          <label
+            htmlFor={inputId}
+            role="button"
+            tabIndex={0}
+            aria-label={t('import.chooseFile', { kind: fileKind })}
+            className={cn(
+              variants.button.outline.default(),
+              'cursor-pointer px-3 py-2 text-center',
+              busy && 'pointer-events-none opacity-60',
+            )}
+          >
+            {fileName ?? t('import.chooseFileEllipsis', { kind: fileKind })}
+          </label>
+
+          {busy && (
+            <div className="flex flex-col gap-2">
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 text-sm text-theme-text-secondary"
+              >
+                {/* Decorative: the text beside it is the announcement. */}
+                <span aria-hidden="true">
+                  <Spinner ariaLabel="Working" size="small" />
+                </span>
+                {busyText}
+                {progress !== null && (
+                  <span className="tabular-nums">{Math.round(progress * 100)}%</span>
+                )}
+              </div>
               {progress !== null && (
-                <span className="tabular-nums">{Math.round(progress * 100)}%</span>
+                <div
+                  role="progressbar"
+                  aria-label={busyText}
+                  aria-valuenow={Math.round(progress * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="h-1 w-full overflow-hidden rounded-full bg-theme-border"
+                >
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width] duration-150"
+                    style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+                  />
+                </div>
               )}
             </div>
-            {progress !== null && (
-              <div
-                role="progressbar"
-                aria-label={busyText}
-                aria-valuenow={Math.round(progress * 100)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                className="h-1 w-full overflow-hidden rounded-full bg-theme-border"
-              >
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-150"
-                  style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
-                />
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
-        {error && (
-          <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-        {children}
-      </div>
-    </FormModal>
+          {children}
+        </div>
+      </FormModal>
+    </>
   );
 }

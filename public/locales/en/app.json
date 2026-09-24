@@ -122,6 +122,7 @@
     "openProject": "Open project: {{name}}",
     "updated": "Updated {{date}}",
     "generating": "Generating…",
+    "transcribing": "Transcribing…",
     "cancelGeneration": "Cancel generation",
     "cancelGenerationFor": "Cancel generation: {{name}}",
     "duplicate": "Duplicate",

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
@@ -20,9 +20,55 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof FileImportMo
 }
 
 describe('FileImportModal', () => {
-  it('names the dialog after the import, and the picker after the file', () => {
-    // `FormModal` labels itself from `title`; the chooser says what to bring.
+  afterEach(() => vi.restoreAllMocks());
+
+  it('opens the OS picker itself, with no explaining screen first', () => {
+    // The whole point: choosing a format used to land on a screen that only
+    // explained it and offered a "Choose file…" button, a second click
+    // before the picker. There is nothing to explain until a file exists.
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click');
     renderModal();
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not re-open the picker on a re-render that leaves `open` unchanged', () => {
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click');
+    const { rerender } = render(<FileImportModal {...baseProps()} />);
+    expect(click).toHaveBeenCalledTimes(1);
+    // A prop unrelated to `open` changing (busy ticking on) must not fire a
+    // second picker — the reader would see it open again under their cursor.
+    rerender(<FileImportModal {...baseProps()} busy />);
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the whole flow when the OS picker is cancelled before anything is chosen', () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+    const input = screen.getByLabelText('audio file input');
+    input.dispatchEvent(new Event('cancel', { bubbles: true }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('does not close on a cancelled re-pick once a file is already chosen', () => {
+    // Cancelling a *second* pick, made to change the file, must leave the
+    // dialog exactly as it was rather than dismissing what is on screen.
+    const onClose = vi.fn();
+    renderModal({ onClose, fileName: 'take-3.mp3' });
+    const input = screen.getByLabelText('audio file input');
+    input.dispatchEvent(new Event('cancel', { bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('stays off screen with nothing chosen, nothing busy and nothing wrong', () => {
+    renderModal();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('names the dialog after the import, and the picker after the file, once there is something to show', () => {
+    // `FormModal` labels itself from `title`; the chooser says what to bring.
+    // `busy` is what makes there be something to show without a real file.
+    renderModal({ busy: true });
     expect(screen.getByRole('dialog', { name: 'Import audio' })).toBeInTheDocument();
     expect(screen.getByLabelText('Choose audio file')).toBeInTheDocument();
     expect(screen.getByLabelText('audio file input')).toHaveAttribute('accept', '.wav,.mp3');
@@ -63,9 +109,10 @@ describe('FileImportModal', () => {
     expect(fill.style.width).toBe('100%');
   });
 
-  it('hides the bar again when the work is done', () => {
-    renderModal({ busy: false, progress: 0.5 });
+  it('hides the bar again when the work is done, but stays open on the file already chosen', () => {
+    renderModal({ busy: false, progress: 0.5, fileName: 'take-3.mp3' });
     expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('cannot be committed while busy, even once there is something to import', () => {
@@ -95,8 +142,8 @@ describe('FileImportModal', () => {
 
   it('offers Cancel beside Import, and does not name the close button the same thing', async () => {
     // Two controls with one accessible name are ambiguous aloud and a
-    // strict-mode failure in tests.
-    const props = renderModal();
+    // strict-mode failure in tests. Needs content on screen to find either.
+    const props = renderModal({ fileName: 'take-3.mp3' });
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeInTheDocument();
 
@@ -104,3 +151,16 @@ describe('FileImportModal', () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 });
+
+function baseProps(): React.ComponentProps<typeof FileImportModal> {
+  return {
+    open: true,
+    title: 'Import audio',
+    accept: '.wav,.mp3',
+    fileKind: 'audio file',
+    onFile: vi.fn(),
+    canImport: false,
+    onImport: vi.fn(),
+    onClose: vi.fn(),
+  };
+}

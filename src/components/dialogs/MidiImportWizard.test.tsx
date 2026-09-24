@@ -236,28 +236,26 @@ describe('MidiImportWizard: the option fields', () => {
 });
 
 describe('accessibility (spec §27)', () => {
-  it('every interactive control has an accessible name, before and after a file is chosen', async () => {
+  it('has no dialog to check until a file is chosen, and every control is named once one is', async () => {
+    // The dialog (and everything in it) does not exist on screen until there
+    // is a file, a busy line or an error — see `FileImportModal`. Before a
+    // pick there is nothing to check controls *of*.
     const store = makeStore();
     render(<MidiImportWizard open onClose={vi.fn()} store={store} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
     const user = userEvent.setup();
-
-    const checkAllControls = () => {
-      const dialog = screen.getByRole('dialog');
-      for (const button of within(dialog).getAllByRole('button'))
-        expect(button).toHaveAccessibleName();
-      for (const checkbox of within(dialog).queryAllByRole('checkbox'))
-        expect(checkbox).toHaveAccessibleName();
-      for (const combobox of within(dialog).queryAllByRole('combobox'))
-        expect(combobox).toHaveAccessibleName();
-    };
-
-    checkAllControls();
-
     await chooseFile(user, fixtureMidiFile());
     await waitFor(() =>
       expect(screen.getByRole('table', { name: 'MIDI track summary' })).toBeInTheDocument(),
     );
 
-    checkAllControls();
+    const dialog = screen.getByRole('dialog');
+    for (const button of within(dialog).getAllByRole('button'))
+      expect(button).toHaveAccessibleName();
+    for (const checkbox of within(dialog).queryAllByRole('checkbox'))
+      expect(checkbox).toHaveAccessibleName();
+    for (const combobox of within(dialog).queryAllByRole('combobox'))
+      expect(combobox).toHaveAccessibleName();
   });
 });

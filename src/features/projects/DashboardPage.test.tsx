@@ -54,10 +54,26 @@ afterEach(() => {
  * Five buttons that differed by a word were one decision — which file — spread
  * across five controls; they are one Select now, so every test that used to
  * click a button by name opens the menu and chooses an option.
+ *
+ * Matched by a leading substring, not the exact label: each option now also
+ * shows a format description under its label, and `SelectItem` wraps both in
+ * one `ItemText` that Radix points its accessible name at — so the name is
+ * "Import MIDI Notes, tempo and…", not just "Import MIDI". A prefix is still
+ * unambiguous, since no two formats share one.
  */
 async function chooseImport(user: ReturnType<typeof userEvent.setup>, label: string) {
   await user.click(screen.getByRole('combobox', { name: 'Import a file' }));
-  await user.click(await screen.findByRole('option', { name: label }));
+  await user.click(await screen.findByRole('option', { name: new RegExp(`^${label}`) }));
+}
+
+/**
+ * Backs out of the OS picker `FileImportModal` opens automatically, the way
+ * a real cancelled `<input type="file">` does — dispatching the `cancel`
+ * event is the only way jsdom (which has no OS file dialog) can stand in for
+ * that, since nothing here can literally click Cancel until a file exists.
+ */
+function cancelPicker(inputLabel: string): void {
+  screen.getByLabelText(inputLabel).dispatchEvent(new Event('cancel', { bubbles: true }));
 }
 
 describe('DashboardPage', () => {
@@ -97,26 +113,36 @@ describe('DashboardPage', () => {
       'Import Tracker Module',
       'Import project file',
     ]) {
-      expect(screen.getByRole('option', { name: label }), label).toBeInTheDocument();
+      expect(
+        screen.getByRole('option', { name: new RegExp(`^${label}`) }),
+        label,
+      ).toBeInTheDocument();
     }
   });
 
-  it('opens a modal for every import, not the OS picker', async () => {
-    // `.MOD` and Project JSON used to jump straight to the file dialog, so two
-    // of the five imports had no title, no description of what they would do,
-    // and nowhere to report a file that could not be read.
+  it('opens the OS picker directly for every import, with no explaining screen first', async () => {
+    // Every import used to land on a modal that only explained the format and
+    // offered a "Choose file…" button — a second click before the file dialog
+    // even opened, paid on all five. `FileImportModal` now opens the picker
+    // itself the moment a format is chosen (see its own file comment); the
+    // dialog only appears once there is a file, a busy line or an error to
+    // show, so there is nothing with role `dialog` yet.
     const { store } = setup();
     render(withQueryClient(<DashboardPage store={store} />));
     const user = userEvent.setup();
 
-    for (const [item, title] of [
-      ['Import Tracker Module', 'Import Tracker Module'],
-      ['Import project file', 'Import project file'],
-      ['Import Audio', 'Import audio'],
+    for (const [item, inputLabel] of [
+      ['Import Tracker Module', 'module file input'],
+      ['Import project file', 'project file input'],
+      ['Import Audio', 'audio file input'],
     ] as const) {
+      const click = vi.spyOn(HTMLInputElement.prototype, 'click');
       await chooseImport(user, item);
-      expect(await screen.findByRole('dialog', { name: title }), item).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(await screen.findByLabelText(inputLabel), item).toBeInTheDocument();
+      expect(click, item).toHaveBeenCalled();
+      expect(screen.queryByRole('dialog'), item).not.toBeInTheDocument();
+      cancelPicker(inputLabel);
+      click.mockRestore();
     }
   });
 
@@ -128,7 +154,7 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
 
     await chooseImport(user, 'Import Tracker Module');
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    cancelPicker('module file input');
     // Anchored: `toHaveTextContent` is a substring match, and "Import Tracker
     // Module" contains "Import" — so an unanchored assertion passes against
     // exactly the regression this test exists to catch.
@@ -145,7 +171,7 @@ describe('DashboardPage', () => {
     await chooseImport(user, 'Import Audio');
     const audio = (await screen.findByLabelText('audio file input')) as HTMLInputElement;
     for (const ext of ['.wav', '.mp3', '.mpa']) expect(audio.accept).toContain(ext);
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    cancelPicker('audio file input');
 
     await chooseImport(user, 'Import Tracker Module');
     const mod = (await screen.findByLabelText('module file input')) as HTMLInputElement;
@@ -424,6 +450,59 @@ describe('DashboardPage generation', () => {
 
     expect(await screen.findByText('Calm Song')).toBeVisible();
     expect(screen.queryByText('Generating…')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A transcription runs for minutes, not seconds — see `handleAudioImport`'s
+   * own comment. It gets the same "busy" treatment a generation does: a
+   * distinct badge (so a reader can tell which is happening), and it must not
+   * be openable — opening it would show a mostly-empty score with no way to
+   * tell "still working" from "came back blank", which is exactly what the
+   * missing refusal let happen live.
+   */
+  it('marks a transcribing project in the list', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Recording', score: createEmptyScore({ title: 'Busy Recording' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'transcribing');
+
+    render(withQueryClient(<DashboardPage store={store} />));
+
+    expect(await screen.findByText('Transcribing…')).toBeVisible();
+  });
+
+  it('refuses to open a transcribing project', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Recording', score: createEmptyScore({ title: 'Busy Recording' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'transcribing');
+
+    const onNavigate = vi.fn();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Open project: Busy Recording' }),
+    );
+
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('refuses to open a generating project the same way', async () => {
+    const { store, context } = setup();
+    const project = await context.fakeClient.createProject(
+      { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },
+      'tok',
+    );
+    context.fakeClient.setProjectStatus(project.id, 'generating');
+
+    const onNavigate = vi.fn();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
+    await userEvent.click(await screen.findByRole('button', { name: 'Open project: Busy Song' }));
+
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it('offers Cancel on a generating project, so a job can be abandoned without opening it', async () => {

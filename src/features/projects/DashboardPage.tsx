@@ -157,6 +157,24 @@ const IMPORT_LABEL_KEYS: Record<ImportKind, string> = {
   project: 'dashboard.importProject',
 };
 
+/**
+ * The subtext each one shows, under its label.
+ *
+ * Reuses the in-app documentation's own `docs.formats.in.*` table (the
+ * "Formats it reads" screen) rather than a second set of strings — the same
+ * sentence explaining what a MIDI or MusicXML import keeps is one fact, not
+ * two that agree until an edit misses one of them. That table's key is
+ * `tracker`, not `module`; the two names are this app's own naming for the
+ * same format in two different places.
+ */
+const IMPORT_DESCRIPTION_KEYS: Record<ImportKind, string> = {
+  midi: 'docs.formats.in.midi',
+  musicxml: 'docs.formats.in.musicxml',
+  audio: 'docs.formats.in.audio',
+  module: 'docs.formats.in.tracker',
+  project: 'docs.formats.in.project',
+};
+
 export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPageProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
@@ -433,12 +451,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   /**
-   * Uploads the recording and opens the project it becomes.
+   * Uploads the recording and lets it transcribe in the background.
    *
    * Nothing is decoded or analysed here: the file goes to the server, which
    * separates it, transcribes each part and returns a score. The project comes
    * back immediately in a `transcribing` state and fills itself in when the job
-   * lands, so this navigates straight to it rather than waiting.
+   * lands. Unlike a generation, this does **not** navigate to it — a
+   * transcription runs for minutes, not seconds, and a reader dropped into a
+   * project with nothing in it yet has no way to tell "still working" from
+   * "came back empty". The card shows it as transcribing instead (see
+   * `renderCard` below), and opening it is refused until it lands.
    */
   const handleAudioImport = (file: File): void => {
     void (async () => {
@@ -446,10 +468,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       setAudioError(null);
       try {
         const { client, token } = await clientAndToken();
-        const saved = await client.transcribeAudio(file, file.name, token);
+        await client.transcribeAudio(file, file.name, token);
         setAudioImportOpen(false);
         void refresh();
-        onNavigate?.(`/project/${saved.id}`);
       } catch (err) {
         setAudioError(err instanceof Error ? err.message : 'That recording could not be sent.');
         reportError(err, { context: t('errors.audioImport'), store });
@@ -459,65 +480,82 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     })();
   };
 
-  const renderCard = (project: ProjectSummary) => (
-    <div key={project.id} className={CARD_CLASS}>
-      <Button
-        type="button"
-        variant="ghost"
-        aria-label={t('dashboard.openProject', { name: project.name })}
-        onClick={() => openProject(project.id)}
-        className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
-      >
-        <Text size="sm" weight="medium">
-          {project.name}
-        </Text>
-        <span className="text-xs text-theme-text-secondary">
-          {t('dashboard.updated', { date: formatDate(project.updatedAt) })}
-        </span>
-        {project.status === 'generating' && (
-          <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">
-            {t('dashboard.generating')}
-          </span>
-        )}
-      </Button>
-      <div className="flex gap-1 border-t border-theme-border p-2">
-        {project.status === 'generating' && (
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label={t('dashboard.cancelGenerationFor', { name: project.name })}
-            onClick={() => void cancelGeneration(project.id)}
-            className="px-3 py-1"
-          >
-            {t('dashboard.cancelGeneration')}
-          </Button>
-        )}
+  const renderCard = (project: ProjectSummary) => {
+    // A `generating` or `transcribing` project has no finished score to open
+    // yet — the editor would show whatever is there so far (for
+    // transcription, minutes of nothing) with no way to tell "still working"
+    // from "came back empty". Refused here instead, at the one place that
+    // already knows every project's status without an extra fetch.
+    const busy = project.status !== 'ready';
+    const statusLabel =
+      project.status === 'transcribing'
+        ? t('dashboard.transcribing')
+        : project.status === 'generating'
+          ? t('dashboard.generating')
+          : null;
+    return (
+      <div key={project.id} className={CARD_CLASS}>
         <Button
           type="button"
           variant="ghost"
-          aria-label={t('dashboard.duplicateProject', { name: project.name })}
-          onClick={() => void handleDuplicate(project)}
-          className="px-3 py-1"
+          aria-label={t('dashboard.openProject', { name: project.name })}
+          onClick={() => {
+            if (!busy) openProject(project.id);
+          }}
+          disabled={busy}
+          className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
         >
-          {t('dashboard.duplicate')}
+          <Text size="sm" weight="medium">
+            {project.name}
+          </Text>
+          <span className="text-xs text-theme-text-secondary">
+            {t('dashboard.updated', { date: formatDate(project.updatedAt) })}
+          </span>
+          {statusLabel ? (
+            <span className="rounded-full bg-info px-2 py-0.5 text-xs text-info-foreground">
+              {statusLabel}
+            </span>
+          ) : null}
         </Button>
-        {/* `variant="ghost"` + an explicit className override, not
+        <div className="flex gap-1 border-t border-theme-border p-2">
+          {project.status === 'generating' && (
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={t('dashboard.cancelGenerationFor', { name: project.name })}
+              onClick={() => void cancelGeneration(project.id)}
+              className="px-3 py-1"
+            >
+              {t('dashboard.cancelGeneration')}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('dashboard.duplicateProject', { name: project.name })}
+            onClick={() => void handleDuplicate(project)}
+            className="px-3 py-1"
+          >
+            {t('dashboard.duplicate')}
+          </Button>
+          {/* `variant="ghost"` + an explicit className override, not
             `variant="destructive-outline"`: see `DeveloperSettingsDialog`'s
             "Reset local database" button doc comment -- that CVA enum
             value has no matching `@sudobility/design` entry, so `Button`
             would silently fall back to its primary skin. */}
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label={t('dashboard.deleteProject', { name: project.name })}
-          onClick={() => setPendingDelete(project)}
-          className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1')}
-        >
-          {t('common.delete')}
-        </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={t('dashboard.deleteProject', { name: project.name })}
+            onClick={() => setPendingDelete(project)}
+            className={cn(variants.button.destructive.outline(), 'border-transparent px-3 py-1')}
+          >
+            {t('common.delete')}
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="p-6">
@@ -593,7 +631,22 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           <SelectContent>
             {IMPORT_KINDS.map((kind) => (
               <SelectItem key={kind} value={kind}>
-                {t(IMPORT_LABEL_KEYS[kind])}
+                {/*
+                  This library's `SelectItem` wraps all of `children` in
+                  Radix's `ItemText`, which is also what it points
+                  `aria-labelledby` at — so the option's accessible name is
+                  whatever is rendered here, description included, and an
+                  `aria-label` override would lose to that `aria-labelledby`
+                  anyway. Hearing the description as part of the name is the
+                  right outcome for a screen reader too, not just the
+                  unavoidable one.
+                */}
+                <div className="flex flex-col gap-0.5 py-0.5">
+                  <span>{t(IMPORT_LABEL_KEYS[kind])}</span>
+                  <span className="text-xs text-theme-text-secondary">
+                    {t(IMPORT_DESCRIPTION_KEYS[kind])}
+                  </span>
+                </div>
               </SelectItem>
             ))}
           </SelectContent>

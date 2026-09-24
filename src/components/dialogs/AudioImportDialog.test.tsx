@@ -11,19 +11,23 @@ const audioFile = (name = 'take.mp3', bytes = 1024) =>
   new File([new Uint8Array(bytes)], name, { type: 'audio/mpeg' });
 
 describe('AudioImportDialog', () => {
+  it('opens the OS picker itself, with nothing chosen yet to show', () => {
+    // The dialog (and so the description below) does not exist on screen at
+    // all until there is a file, a busy line or an error — see
+    // `FileImportModal`. `busy` is what gives the next test something to
+    // read without a real upload.
+    render(<AudioImportDialog {...props()} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('says what the import produces, and what it does not', () => {
     // It makes a whole project of separate parts, on the server, over minutes —
     // and it is a sketch rather than a copy of the record. Each of those is
     // something somebody would otherwise discover by being surprised.
-    render(<AudioImportDialog {...props()} />);
+    render(<AudioImportDialog {...props({ busy: true })} />);
     expect(screen.getByText(/split into parts/i)).toBeVisible();
     expect(screen.getByText(/takes a few minutes/i)).toBeVisible();
     expect(screen.getByText(/a sketch to edit, not a copy/i)).toBeVisible();
-  });
-
-  it('cannot be committed until a file has been chosen', () => {
-    render(<AudioImportDialog {...props()} />);
-    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
   });
 
   it('hands the picked file up when committed', async () => {
@@ -82,10 +86,11 @@ describe('AudioImportDialog', () => {
 
   it('offers Cancel beside Import, under a different name from the close button', async () => {
     // Two controls with one accessible name are ambiguous aloud and a
-    // strict-mode failure in tests.
+    // strict-mode failure in tests. Needs a file on screen to find either.
     const user = userEvent.setup();
     const onClose = vi.fn();
     render(<AudioImportDialog {...props({ onClose })} />);
+    await user.upload(screen.getByLabelText('audio file input'), audioFile());
 
     expect(screen.getByRole('button', { name: 'Close dialog' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));

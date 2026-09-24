@@ -122,6 +122,7 @@
     "openProject": "打开项目：{{name}}",
     "updated": "更新于 {{date}}",
     "generating": "生成中…",
+    "transcribing": "转录中…",
     "cancelGeneration": "取消生成",
     "cancelGenerationFor": "取消生成：{{name}}",
     "duplicate": "复制",
