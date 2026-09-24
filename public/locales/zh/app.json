@@ -1017,6 +1017,9 @@
       "disco": "迪斯科",
       "classical": "古典乐派",
       "baroque": "巴洛克",
+      "symphonySmall": "交响曲（室内乐）",
+      "symphonyMedium": "交响曲（古典）",
+      "symphonyLarge": "交响曲（浪漫）",
       "march": "进行曲"
     },
     "moodName": {

@@ -1017,6 +1017,9 @@
       "disco": "Disco",
       "classical": "Classical",
       "baroque": "Baroque",
+      "symphonySmall": "Symphony (Chamber)",
+      "symphonyMedium": "Symphony (Classical)",
+      "symphonyLarge": "Symphony (Romantic)",
       "march": "March"
     },
     "moodName": {
