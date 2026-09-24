@@ -45,6 +45,16 @@ vi.mock('@/features/generation/useGenerationJob', async (importOriginal) => ({
   useProjectGeneration: vi.fn(),
 }));
 
+// `SpatialView` mounts a real `@react-three/fiber` `<Canvas>`, which needs a
+// WebGL context jsdom does not provide — the same "GL rendering is not
+// unit-tested" boundary `music_spatial`'s own spec draws, applied here too.
+// This suite is testing AppLayout's swap-the-view wiring, not the 3D scene
+// itself (that's `music_spatial`'s own test suite's job), so a stand-in
+// that renders enough to prove the swap happened is what this needs.
+vi.mock('@sudobility/music_spatial', () => ({
+  SpatialView: () => <div data-testid="spatial-view-stub" />,
+}));
+
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import type { EditorStoreApi } from '@/app-library';
@@ -349,6 +359,33 @@ describe('AppLayout: simultaneous notation and piano keyboard', () => {
 
     await user.click(screen.getByRole('button', { name: 'Show keyboard' }));
     expect(screen.getByRole('img', { name: /Piano keyboard/ })).toBeInTheDocument();
+  });
+
+  it('shows the Spatial view in place of the notation, and back again', async () => {
+    renderLayout(<AppLayout store={makeStore()} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Show Spatial view' }));
+    expect(screen.queryByTestId('score-editor-canvas')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Hide Spatial view' }));
+    expect(screen.getByTestId('score-editor-canvas')).toBeInTheDocument();
+  });
+
+  it('mixes through the stage arrangement for exactly as long as the Spatial view shows', async () => {
+    // Same contract the old Unplugged tab's own mount/unmount effect gave —
+    // `bind-player.ts` reads this flag to decide whether to mix through the
+    // stage arrangement, and it must never be left true with nothing left
+    // to show it.
+    const store = makeStore();
+    renderLayout(<AppLayout store={store} />);
+    const user = userEvent.setup();
+
+    expect(store.getState().unpluggedActive).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Show Spatial view' }));
+    expect(store.getState().unpluggedActive).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Hide Spatial view' }));
+    expect(store.getState().unpluggedActive).toBe(false);
   });
 
   it('announces a regenerated selection in the status bar', () => {

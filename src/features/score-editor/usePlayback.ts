@@ -87,3 +87,42 @@ export function usePlayingPitches(
 }
 
 const NO_PITCHES: ReadonlySet<number> = new Set();
+
+function sameIdSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
+
+const NO_TRACK_IDS: ReadonlySet<string> = new Set();
+
+/**
+ * Every track id with an active note right now — what the Spatial 3D view
+ * (`@sudobility/music_spatial`) lights up. Same shape as
+ * `usePlayingPitches`, collecting distinct `trackId`s across every track
+ * rather than pitches for one — the Spatial view is meant to be looked at
+ * with everything visible, not filtered to an active track the way the
+ * piano keyboard is.
+ *
+ * `bus` defaults the same way `usePlaybackPosition`'s does. This package
+ * (music_spatial) never reads the player itself — this is that boundary's
+ * app-side half, the "caller supplies `soundingTrackIds`" its spec calls for.
+ */
+export function useSoundingTrackIds(
+  bus: PlaybackBus = playbackController.bus,
+): ReadonlySet<string> {
+  const subscribe = useCallback((onChange: () => void) => bus.onSounding(onChange), [bus]);
+  const kept = useRef<ReadonlySet<string>>(NO_TRACK_IDS);
+  const get = useCallback(() => {
+    if (bus.sounding.length === 0) {
+      if (kept.current.size !== 0) kept.current = NO_TRACK_IDS;
+      return kept.current;
+    }
+    const next = new Set<string>();
+    for (const note of bus.sounding) next.add(note.trackId);
+    if (!sameIdSet(next, kept.current)) kept.current = next;
+    return kept.current;
+  }, [bus]);
+  return useSyncExternalStore(subscribe, get, get);
+}

@@ -25,13 +25,15 @@ describe('InstrumentIcon', () => {
 
   it('draws a kit for a percussion track, not the instrument at that address', () => {
     // Program 40 is Brush as a kit address and Violin as an instrument. The
-    // icon follows the track, so a drum track never gets a violin.
+    // icon follows the track, so a drum track never gets a violin — it gets
+    // the Brush kit's own icon, which is also not the Standard kit's.
     const { container } = render(
       <InstrumentIcon track={{ clef: 'percussion', midiProgram: 40 }} />,
     );
 
-    expect(container.querySelectorAll('path, circle')).toHaveLength(gmKitIcon().shapes.length);
-    expect(gmKitIcon()).not.toEqual(gmInstrumentIcon(40));
+    expect(container.querySelectorAll('path, circle')).toHaveLength(gmKitIcon(40).shapes.length);
+    expect(gmKitIcon(40)).not.toEqual(gmInstrumentIcon(40));
+    expect(gmKitIcon(40).name).toBe('brush-kit');
   });
 
   it('strokes in currentColor, so it takes the colour of the text beside it', () => {

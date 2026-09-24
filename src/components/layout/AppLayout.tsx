@@ -48,7 +48,7 @@
  * documented, checked reason rather than an assumed one.
  */
 import { libraryCopy } from '@/i18n/library-copy';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
@@ -125,6 +125,9 @@ import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/S
 import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 import { useMusicHookContext } from '@/app/AuthContext';
+import { SpatialView } from '@sudobility/music_spatial';
+import { selectEditLocked, controlLocked } from '@/app-library';
+import { useSoundingTrackIds } from '@/features/score-editor/usePlayback';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -338,6 +341,25 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   // binding `App.tsx` installs, and expanded until somebody collapses it.
   const keyboardCollapsed = store((s) => s.keyboardCollapsed);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+
+  /**
+   * The "Spatial" 3D view, in place of the notation canvas — a view toggle
+   * local to this component, same as `inspectorOpen`, not a device pref.
+   *
+   * `unpluggedActive` (the store flag `bind-player.ts` reads to decide
+   * whether to mix through the stage arrangement) tracks this rather than
+   * being a separate on/off a reader has to keep in sync — Spatial view
+   * showing *is* what "unplugged mixing" means now, same as it was for the
+   * old Unplugged tab this replaced.
+   */
+  const [spatialActive, setSpatialActive] = useState(false);
+  useEffect(() => {
+    store.getState().setUnpluggedActive(spatialActive);
+    // Also covers leaving the editor entirely with Spatial view still on —
+    // the same safety net the old Unplugged tab's own mount/unmount effect
+    // gave: never leave the flag true with nothing left to show it.
+    return () => store.getState().setUnpluggedActive(false);
+  }, [store, spatialActive]);
 
   const hiddenCount = hiddenTrackCount(store);
   /**
@@ -831,16 +853,20 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               a strip of its own alongside a track-panel toggle; with that gone
               the strip was a blank row holding one button. */}
             <div className="min-h-0 flex-1">
-              <ScoreEditorView
-                store={store}
-                inspectorOpen={inspectorOpen}
-                onToggleInspector={() => setInspectorOpen((v) => !v)}
-                // The same runner the Replace buttons use, so adding a track
-                // behaves like every other generation: the overlay appears, the
-                // project is locked server-side, and leaving is safe.
-                onGenerateTrackJob={(request) => generation.start('generate-track', request)}
-                onGenerateInsertedBars={generateInsertedBars}
-              />
+              {spatialActive && score ? (
+                <SpatialSection store={store} />
+              ) : (
+                <ScoreEditorView
+                  store={store}
+                  inspectorOpen={inspectorOpen}
+                  onToggleInspector={() => setInspectorOpen((v) => !v)}
+                  // The same runner the Replace buttons use, so adding a track
+                  // behaves like every other generation: the overlay appears, the
+                  // project is locked server-side, and leaving is safe.
+                  onGenerateTrackJob={(request) => generation.start('generate-track', request)}
+                  onGenerateInsertedBars={generateInsertedBars}
+                />
+              )}
             </div>
           </div>
 
@@ -889,6 +915,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           store={store}
           keyboardCollapsed={keyboardCollapsed}
           onToggleKeyboard={() => store.getState().setKeyboardCollapsed(!keyboardCollapsed)}
+          spatialActive={spatialActive}
+          onToggleSpatial={() => setSpatialActive((v) => !v)}
         />
 
         {/* Full-width piano keyboard: a sibling of the transport rather than a
@@ -1090,5 +1118,44 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The Spatial 3D view, isolated as its own subscriber for the same reason
+ * every other per-tick readout in this file is: `useSoundingTrackIds`
+ * updates on every note of every track, and reading it at `AppLayout`'s own
+ * top level would re-render the whole editor — the inspector, the app bar,
+ * every dialog — on every note-on and note-off while playing. Here it
+ * touches only the Spatial view itself.
+ *
+ * `score` is asserted non-null by the caller (`spatialActive && score`) —
+ * `SpatialView` has no empty-score affordance of its own, the same reason
+ * `ScoreEditorView` isn't shown here without a project open either.
+ */
+function SpatialSection({ store }: { store: EditorStoreApi }) {
+  const score = store((s) => s.score);
+  const locked = store((s) => selectEditLocked(s) && controlLocked(s, 'unpluggedArrangement'));
+  const soundingTrackIds = useSoundingTrackIds();
+
+  if (!score) return null;
+  return (
+    <SpatialView
+      score={score}
+      soundingTrackIds={soundingTrackIds}
+      locked={locked}
+      onMoveListener={(patch) => store.getState().setUnpluggedListener(patch)}
+      onMoveTrack={(trackId, point) => store.getState().setUnpluggedTrackPosition(trackId, point)}
+      onResetArrangement={() => store.getState().resetUnpluggedArrangement()}
+      // The active track follows whatever the listener is facing: the
+      // inspector, the keyboard and the notation highlight then all show
+      // the part being looked at. Turning away from everything keeps the
+      // last one rather than clearing it — an inspector with nothing in it
+      // is not a better answer than the last instrument looked at.
+      onFacingTrackChange={(trackId) => {
+        if (trackId) store.getState().setActiveTrack(trackId);
+      }}
+      className="h-full w-full"
+    />
   );
 }

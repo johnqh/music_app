@@ -12,7 +12,10 @@ export default defineConfig({
     // but a local `bun link` during cross-repo development exposes music_lib's
     // own dev-installed react/zustand — two React instances then break every
     // hook ("Cannot read properties of null (reading 'useCallback')").
-    dedupe: ['react', 'react-dom', 'zustand'],
+    // `three` joins the list for the same reason: `@sudobility/music_spatial`/
+    // `music_spatial_core` bring their own dev-installed `three` too, and
+    // `@react-three/fiber` breaks the same way on two instances of it.
+    dedupe: ['react', 'react-dom', 'zustand', 'three'],
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       // Stub out @sudobility/building_blocks' optional peer deps we don't
@@ -119,11 +122,18 @@ export default defineConfig({
     //
     // consumables_pages needs no entry: it is Vite-bundled like entity_pages,
     // so its output has no relative imports at all.
+    //
+    // music_spatial (matches music_spatial_core too, as a substring) is the
+    // extensionless-relative-import case again -- it and music_spatial_core
+    // share music_editing's own tsc/tsconfig conventions, extensionless
+    // relative imports included, and hit the identical
+    // "Cannot find module '.../dist/SpatialView'" failure without this.
     server: {
       deps: {
         inline: [
           /@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/,
           /@sudobility\/consumables_client/,
+          /@sudobility\/music_spatial/,
         ],
       },
     },

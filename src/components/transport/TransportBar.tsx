@@ -75,7 +75,13 @@ import {
   PreviousMeasureIcon,
   TEXT_CONTROL_CLASS,
 } from '@/components/icons/notation-icons';
-import { ExclamationTriangleIcon, PauseIcon, PlayIcon, StopIcon } from '@heroicons/react/24/solid';
+import {
+  CubeTransparentIcon,
+  ExclamationTriangleIcon,
+  PauseIcon,
+  PlayIcon,
+  StopIcon,
+} from '@heroicons/react/24/solid';
 
 /**
  * The transport methods this bar actually calls, plus the `bus` its
@@ -122,6 +128,15 @@ export type TransportBarProps = {
    */
   keyboardCollapsed?: boolean;
   onToggleKeyboard?: () => void;
+  /**
+   * The "Spatial" 3D view: whether it's showing in place of the notation,
+   * and how to toggle it. Same optional-prop shape as the keyboard toggle
+   * beside it, for the same reason — a host with nothing to swap the view
+   * with (the published-snapshot page) simply omits the control rather than
+   * offering a dead one.
+   */
+  spatialActive?: boolean;
+  onToggleSpatial?: () => void;
   /**
    * The published-snapshot page's mode: every transport control here already
    * calls the player rather than `dispatchCommand`, except the tempo readout,
@@ -407,6 +422,8 @@ export function TransportBar({
   controller = playbackController,
   keyboardCollapsed,
   onToggleKeyboard,
+  spatialActive,
+  onToggleSpatial,
   readOnly = false,
 }: TransportBarProps) {
   const { t } = useTranslation();
@@ -676,6 +693,29 @@ export function TransportBar({
         totalSeconds={totalSeconds}
         controller={controller}
       />
+
+      {/*
+        The Spatial toggle, next to the keyboard toggle: on/off, drawn the
+        same way — an on/off switch, red while active, like loop and the
+        metronome. When on, the host swaps the notation canvas for
+        `@sudobility/music_spatial`'s `<SpatialView>`; this bar knows nothing
+        about that swap, only that it exists to toggle.
+      */}
+      {onToggleSpatial ? (
+        <Tooltip content={spatialActive ? t('editor.hideSpatial') : t('editor.showSpatial')}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={spatialActive ? t('editor.hideSpatial') : t('editor.showSpatial')}
+            aria-pressed={spatialActive}
+            onClick={onToggleSpatial}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <CubeTransparentIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
+      ) : null}
 
       {/*
         The keyboard toggle, rightmost.

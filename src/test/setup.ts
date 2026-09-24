@@ -118,6 +118,26 @@ if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   });
 }
 
+// jsdom does not implement ResizeObserver. `@sudobility/music_spatial`'s
+// `MapOverlay` measures its own container with one directly, and
+// `@react-three/fiber`'s `<Canvas>` (via `react-use-measure`) uses one
+// internally too — without this, either throws
+// "This browser does not support ResizeObserver out of the box" the moment
+// it mounts. A no-op is enough: nothing here asserts on a resize callback
+// actually firing.
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+  class NoopResizeObserver {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', {
+    configurable: true,
+    writable: true,
+    value: NoopResizeObserver,
+  });
+}
+
 // jsdom has no canvas implementation: `HTMLCanvasElement.getContext('2d')`
 // returns null. The canvas notation renderer (CanvasScoreRenderer +
 // paintHighlights) draws through whatever 2D context the element hands

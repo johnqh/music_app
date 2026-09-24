@@ -505,6 +505,44 @@ describe('the keyboard toggle', () => {
   });
 });
 
+describe('the Spatial toggle', () => {
+  it('reports a toggle rather than holding the state itself', async () => {
+    const onToggleSpatial = vi.fn();
+    render(
+      <TransportBar store={makeStore()} spatialActive={false} onToggleSpatial={onToggleSpatial} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show Spatial view' }));
+    expect(onToggleSpatial).toHaveBeenCalled();
+  });
+
+  it('names what pressing it will do, not what is showing', () => {
+    render(<TransportBar store={makeStore()} spatialActive onToggleSpatial={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Hide Spatial view' })).toBeInTheDocument();
+  });
+
+  it('sits immediately before the keyboard toggle, both still after everything else', () => {
+    render(
+      <TransportBar
+        store={makeStore()}
+        keyboardCollapsed={false}
+        onToggleKeyboard={vi.fn()}
+        spatialActive={false}
+        onToggleSpatial={vi.fn()}
+      />,
+    );
+    const bar = screen.getByRole('toolbar', { name: 'Playback transport' });
+    const buttons = Array.from(bar.querySelectorAll('button'));
+    expect(buttons[buttons.length - 2]).toHaveAccessibleName('Show Spatial view');
+    expect(buttons[buttons.length - 1]).toHaveAccessibleName('Hide keyboard');
+  });
+
+  it('offers nothing when the host has no view to swap it with', () => {
+    render(<TransportBar store={makeStore()} />);
+    expect(screen.queryByRole('button', { name: /spatial/i })).not.toBeInTheDocument();
+  });
+});
+
 /** A stand-in for a `PlayerBinding`, structurally distinct from the mocked `playbackController` above. */
 function fakeController() {
   return {
