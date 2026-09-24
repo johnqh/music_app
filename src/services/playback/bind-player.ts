@@ -32,6 +32,34 @@ import type { PlayerFailure, Score, ScoreRange, TransportSettings } from '@sudob
 import type { IMusicPlayer } from '@sudobility/music_player/core';
 import { selectVisibleTrackIds } from '@sudobility/music_editing';
 import type { EditingState, EditingStoreApi } from '@sudobility/music_editing';
+import { unpluggedMixes } from '@sudobility/music_lib';
+
+/**
+ * What the player actually loads: the score unchanged, or — while Unplugged
+ * is the active tab — a shadow copy whose tracks carry the arrangement's
+ * computed volume/pan instead of their own.
+ *
+ * A shadow copy rather than a second load path: `player.load` already
+ * derives its mix from `track.volume`/`track.pan`, and while playing it
+ * never rebuilds the note schedule on a reload — it reads the score's
+ * current mix and pushes it live. Feeding it a score with different
+ * `volume`/`pan` values is therefore all that's needed to make Unplugged's
+ * mix reach the engine. The real score, with the real `track.volume`/
+ * `pan`, is never mutated — Unplugged's positions live entirely on
+ * `score.unplugged`. Identical to the native app's own `bind-player.ts`,
+ * which carries the fuller comment on why.
+ */
+function scoreForPlayback(score: Score, unpluggedActive: boolean): Score {
+  if (!unpluggedActive) return score;
+  const mixes = unpluggedMixes(score);
+  return {
+    ...score,
+    tracks: score.tracks.map((track) => {
+      const mix = mixes[track.id];
+      return mix ? { ...track, volume: mix.volume, pan: mix.pan } : track;
+    }),
+  };
+}
 
 /**
  * What a store that has never been bound shows for the transport settings
@@ -58,11 +86,6 @@ export type BindPlayerOptions = {
 };
 
 const PLAYBACK_DEBUG = '[ScoreSmith playback]';
-
-function debugPlayback(message: string, details?: Record<string, unknown>): void {
-  if (details) console.info(PLAYBACK_DEBUG, message, details);
-  else console.info(PLAYBACK_DEBUG, message);
-}
 
 export type PlayerBinding = {
   /** Plays from the caret, clearing the selection; pauses if already playing. */
@@ -130,26 +153,19 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
   };
 
   const load = async (score: Score): Promise<void> => {
-    debugPlayback('score load started', {
-      trackCount: score.tracks.length,
-      deferUntilPlay: options.deferUntilPlay === true,
-      audioActivated,
-    });
     // Recorded before the await: from this moment the player is this score's,
     // and a binding asking during the load must not start another.
     loadedScores.set(player, score);
     try {
-      await player.load(score, {
+      await player.load(scoreForPlayback(score, store.getState().unpluggedActive), {
         visibleTrackIds: selectVisibleTrackIds(store.getState()),
       });
-      debugPlayback('score load finished', { trackCount: score.tracks.length });
     } catch (error) {
       console.error(PLAYBACK_DEBUG, 'score load failed', error);
       report('scoreLoadFailed', error);
     }
   };
 
-  let lastLoadStatus = store.getState().synthLoad?.status ?? 'idle';
   const offPlayer = [
     player.onTransport((state) =>
       write((draft) => {
@@ -161,10 +177,6 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
     // Low-frequency and store-shaped: it reports per percent and behaves like
     // ordinary state, unlike position and the sounding set.
     player.onLoadState((state) => {
-      if (state.status !== lastLoadStatus || state.status === 'failed') {
-        debugPlayback('synth load state changed', state);
-        lastLoadStatus = state.status;
-      }
       write((draft) => {
         draft.synthLoad = state;
       });
@@ -173,13 +185,17 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
 
   let lastScore: Score | null = store.getState().score;
   let lastVisible = store.getState().visibleTrackIds;
+  let lastUnpluggedActive = store.getState().unpluggedActive;
   if (lastScore && audioActivated) void load(lastScore);
 
   const offStore = store.subscribe((state) => {
     if (state.score !== lastScore) {
       lastScore = state.score;
       // A new score is loaded with the visible tracks as they are now, so the
-      // visible-track check below has nothing to add.
+      // visible-track check below has nothing to add. This also covers every
+      // drag on the Unplugged stage: moving an instrument or the listener is
+      // a `score.unplugged` edit, so it is a new score reference too, and
+      // `load` recomputes the arrangement's mix from it.
       lastVisible = state.visibleTrackIds;
       if (lastScore && audioActivated) void load(lastScore);
       return;
@@ -192,6 +208,14 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
       // The player is playing another binding's score: its channels are not
       // this score's tracks. The next load carries the visible tracks anyway.
       if (ownsPlayer()) player.setVisibleTracks(selectVisibleTrackIds(state));
+    }
+    // Opening or leaving the Unplugged tab changes nothing about the score
+    // itself, so it does not fall through the branch above — reload
+    // explicitly to switch the player between the real mix and the
+    // arrangement's computed one.
+    if (state.unpluggedActive !== lastUnpluggedActive) {
+      lastUnpluggedActive = state.unpluggedActive;
+      if (ownsPlayer() && state.score && audioActivated) void load(state.score);
     }
   });
 
@@ -228,12 +252,6 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
   return {
     async togglePlay() {
       const { state, score } = store.getState();
-      debugPlayback('play toggle requested', {
-        state,
-        hasScore: score !== null,
-        audioActivated,
-        ownsScore: score !== null && loadedScores.get(player) === score,
-      });
       if (!score) return;
       if (state === 'playing') {
         player.pause();
@@ -252,13 +270,10 @@ export function bindPlayer<T extends EditingState & Partial<TransportSettings>>(
       // Another binding may have loaded the player since this score was: put
       // this one back first, so Play plays what this store shows.
       if (!ownsPlayer()) {
-        debugPlayback('loading score from play gesture');
         await load(score);
       }
       try {
-        debugPlayback('starting transport');
         await player.play();
-        debugPlayback('transport started');
       } catch (error) {
         console.error(PLAYBACK_DEBUG, 'transport start failed', error);
         report('playbackFailed', error);

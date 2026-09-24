@@ -32,6 +32,7 @@ import {
   createSelectionSlice,
   createTrackSlice,
   createUiSlice,
+  createUnpluggedSlice,
 } from '@sudobility/music_editing';
 import { getMusicPosition } from '@sudobility/music_types';
 import type { EditingState, EditingStoreApi, SetScoreOptions } from '@sudobility/music_editing';
@@ -242,6 +243,7 @@ export function createDocumentStore(options: CreateDocumentStoreOptions) {
         ...createSelectionSlice<DocumentState>({ set, get, changed }),
         ...createTrackSlice<DocumentState>({ set, get, changed }),
         ...createUiSlice<DocumentState>({ set, get, changed: localUiChanged }),
+        ...createUnpluggedSlice<DocumentState>({ set, get, changed }),
         localUiChanged,
         ...(context.toasts ? toastSinkActions(context.toasts) : {}),
 

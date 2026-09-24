@@ -70,6 +70,7 @@ import {
   commonValue,
 } from '@/components/inspector/shared';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
+import { UnpluggedTab } from '@/components/inspector/UnpluggedTab';
 
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { useEffect, useMemo, useState } from 'react';
@@ -1138,6 +1139,9 @@ export function InspectorPanel({
         </TabsContent>
         <TabsContent value="track">
           <TrackTab store={store} onReplace={onReplace} />
+        </TabsContent>
+        <TabsContent value="unplugged">
+          <UnpluggedTab store={store} />
         </TabsContent>
       </Tabs>
     </div>

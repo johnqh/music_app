@@ -76,7 +76,11 @@
     "toggleOttava": "Octave bracket",
     "toggleFermata": "Fermata",
     "toggleHairpin": "Hairpin",
-    "toggleSlur": "Slur"
+    "toggleSlur": "Slur",
+    "moveUnpluggedListener": "Move listener",
+    "turnUnpluggedListener": "Turn listener",
+    "moveUnpluggedTrack": "Move instrument",
+    "resetUnpluggedArrangement": "Reset arrangement"
   },
   "common": {
     "clearSearch": "Clear search",
@@ -1185,6 +1189,12 @@
     "trackPan": "Track pan",
     "trackReadOnly": "Track (read-only)",
     "trackVolume": "Track volume",
+    "unplugged": "Unplugged",
+    "unpluggedHint": "Drag an instrument or yourself to change how it sounds. Drag the small handle to turn which way you're facing.",
+    "unpluggedListener": "You",
+    "unpluggedReset": "Reset arrangement",
+    "unpluggedStage": "Instrument arrangement",
+    "unpluggedTurnHandle": "Turn",
     "velocity": "Velocity",
     "voice": "Voice",
     "volume": "Volume",

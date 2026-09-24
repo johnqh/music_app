@@ -16,6 +16,7 @@ import {
   createSelectionSlice,
   createTrackSlice,
   createUiSlice,
+  createUnpluggedSlice,
 } from '@sudobility/music_editing';
 import type { EditingState } from '@sudobility/music_editing';
 import { createPlaybackSlice } from './slices/playback-slice.js';
@@ -78,6 +79,7 @@ export function createAppStore(options: CreateAppStoreOptions) {
         ...createSelectionSlice<AppState>({ set, get, changed }),
         ...createTrackSlice<AppState>({ set, get, changed }),
         ...createUiSlice<AppState>({ set, get, changed: localUiChanged }),
+        ...createUnpluggedSlice<AppState>({ set, get, changed }),
         ...createPlaybackSlice(set, get, api),
         ...createGenerationSlice(context)(set, get, api),
         ...createProjectSlice(context)(set, get, api),
