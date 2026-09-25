@@ -490,7 +490,9 @@ describe('DashboardPage generation', () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it('refuses to open a generating project the same way', async () => {
+  it('opens a generating project, because its notes can be watched arriving', async () => {
+    // Unlike a transcription, a generation streams each part into the editor
+    // as it is written; the card is the way in, not a refusal.
     const { store, context } = setup();
     const project = await context.fakeClient.createProject(
       { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },
@@ -502,7 +504,7 @@ describe('DashboardPage generation', () => {
     render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
     await userEvent.click(await screen.findByRole('button', { name: 'Open project: Busy Song' }));
 
-    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledWith(`/project/${project.id}`);
   });
 
   it('offers Cancel on a generating project, so a job can be abandoned without opening it', async () => {
@@ -521,18 +523,23 @@ describe('DashboardPage generation', () => {
     await waitFor(() => expect(context.fakeClient.storedRecord(project.id)?.status).toBe('ready'));
   });
 
-  it('creates the project up front so it appears while it generates', async () => {
-    // Created immediately rather than on completion: otherwise it would
-    // materialise in this list minutes later out of nowhere.
-    const { store } = setup();
-    render(withQueryClient(<DashboardPage store={store} />));
+  it('creates the project up front and goes straight to it', async () => {
+    // Created immediately rather than on completion, and opened at once: the
+    // job streams each part into the editor as it is written, so the place
+    // to wait is in front of the score, not on a card with a badge.
+    const { store, context } = setup();
+    const onNavigate = vi.fn();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
 
     await userEvent.click(screen.getByRole('button', { name: 'New Project' }));
     await userEvent.click(screen.getByRole('switch', { name: 'Generate for me' }));
     await userEvent.type(screen.getByLabelText('Prompt'), 'a gentle waltz');
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
-    expect(await screen.findByText('Generating…')).toBeVisible();
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledTimes(1));
+    const [created] = await context.fakeClient.listProjects('tok');
+    expect(created.status).toBe('generating');
+    expect(onNavigate).toHaveBeenCalledWith(`/project/${created.id}`);
   });
 });
 describe('DashboardPage: a refused generation', () => {

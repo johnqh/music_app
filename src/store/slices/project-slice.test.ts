@@ -7,6 +7,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { addMeasureCommand } from '@sudobility/music_types';
 import { testStoreContext } from '../../test/store-context.js';
+import { changeTrackPropsCommand } from '@sudobility/music_types';
+import type { GenerationRecord, Score } from '@sudobility/music_types';
 import { threeTrackScore } from '@sudobility/music_lib';
 import { createAppStore } from '../useAppStore.js';
 import { loadProjectLocalUi } from '../../services/persistence/project-ui.js';
@@ -337,5 +339,128 @@ describe('project-slice (server-backed)', () => {
       await vi.advanceTimersByTimeAsync(AUTOSAVE_MS + 50);
       expect(context.fakeClient.updateCalls).toBe(before);
     });
+  });
+});
+
+/**
+ * A generation streamed into the open project: what the store shows, and
+ * what it must not do with it — dirty the project, save it back (a 409), or
+ * move the caret out from under the reader.
+ */
+describe('project-slice: live generation', () => {
+  async function liveProject() {
+    const context = testStoreContext();
+    const store = createAppStore({ context });
+    await store.getState().newProject({ name: 'Live' });
+    return { context, store, id: store.getState().projectId! };
+  }
+
+  it('applyLiveScore shows the score clean, saves nothing back, and resets history on a snapshot', async () => {
+    const { context, store, id } = await liveProject();
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    expect(store.getState().canUndo).toBe(true);
+    // The edit's own autosave lands first, as the job runner flushes it
+    // before submitting; what is measured is what the live score adds.
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 2);
+    const updatesBefore = context.fakeClient.updateCalls;
+
+    const applied = store.getState().applyLiveScore(threeTrackScore(), {
+      projectId: id,
+      reason: 'snapshot',
+      serverUpdatedAt: 't9',
+    });
+
+    expect(applied).toBe(true);
+    expect(store.getState().score?.tracks).toHaveLength(3);
+    expect(store.getState().dirty).toBe(false);
+    expect(store.getState().saveState).toBe('saved');
+    expect(store.getState().serverUpdatedAt).toBe('t9');
+    expect(store.getState().canUndo).toBe(false);
+    // The server holds this score already; nothing is PUT back.
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
+    expect(context.fakeClient.updateCalls).toBe(updatesBefore);
+  });
+
+  it('a partial keeps the undo history a snapshot would reset', async () => {
+    const { store, id } = await liveProject();
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    store.getState().applyLiveScore(threeTrackScore(), { projectId: id, reason: 'partial' });
+    expect(store.getState().canUndo).toBe(true);
+  });
+
+  it('refuses a score for another project, and one arriving while playing', async () => {
+    const { store, id } = await liveProject();
+    const before = store.getState().score;
+    expect(
+      store
+        .getState()
+        .applyLiveScore(threeTrackScore(), { projectId: 'other', reason: 'snapshot' }),
+    ).toBe(false);
+    expect(store.getState().score).toBe(before);
+
+    store.setState({ state: 'playing' } as never);
+    expect(
+      store.getState().applyLiveScore(threeTrackScore(), { projectId: id, reason: 'partial' }),
+    ).toBe(false);
+    expect(store.getState().score).toBe(before);
+  });
+
+  it('carries the mute and solo the reader set onto a score the server sent bare', async () => {
+    const { store, id } = await liveProject();
+    const current = store.getState().score!;
+    const trackId = current.tracks[0].id;
+    store.getState().dispatchCommand(changeTrackPropsCommand(trackId, { muted: true }, 'Mute'));
+    // What the server sends: the same tracks, mute and solo never stored.
+    const fromServer: Score = {
+      ...current,
+      tracks: current.tracks.map((track) => ({ ...track, muted: false, solo: false })),
+    };
+
+    store.getState().applyLiveScore(fromServer, { projectId: id, reason: 'partial' });
+
+    expect(store.getState().score!.tracks[0].muted).toBe(true);
+  });
+
+  it('adoptLiveResult stops the transport, resets history, and records the stamp and the generation', async () => {
+    const { context, store, id } = await liveProject();
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 2);
+    const transport = { stop: vi.fn() };
+    const record = { request: { prompt: 'x' } } as unknown as GenerationRecord;
+    const updatesBefore = context.fakeClient.updateCalls;
+
+    const adopted = store.getState().adoptLiveResult(threeTrackScore(), transport, {
+      projectId: id,
+      serverUpdatedAt: 't9',
+      lastGeneration: record,
+    });
+
+    expect(adopted).toBe(true);
+    expect(transport.stop).toHaveBeenCalledTimes(1);
+    expect(store.getState().score?.tracks).toHaveLength(3);
+    expect(store.getState().canUndo).toBe(false);
+    expect(store.getState().serverUpdatedAt).toBe('t9');
+    expect(store.getState().lastGeneration).toBe(record);
+    expect(store.getState().dirty).toBe(false);
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
+    expect(context.fakeClient.updateCalls).toBe(updatesBefore);
+    // And the next edit saves against the adopted score, not the old one.
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
+    expect(context.fakeClient.storedRecord(id)?.score.tracks).toHaveLength(3);
+  });
+
+  it('adoptLiveResult refuses another project', async () => {
+    const { store } = await liveProject();
+    const before = store.getState().score;
+    const transport = { stop: vi.fn() };
+    expect(
+      store.getState().adoptLiveResult(threeTrackScore(), transport, {
+        projectId: 'other',
+        serverUpdatedAt: 't9',
+      }),
+    ).toBe(false);
+    expect(transport.stop).not.toHaveBeenCalled();
+    expect(store.getState().score).toBe(before);
   });
 });

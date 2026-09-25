@@ -66,8 +66,11 @@ import { withQueryClient } from '@/test/query';
 // build their import service from the composition root, so the harness has to
 // be installed for a plain render.
 const IDLE_GENERATION = {
+  status: 'ready',
   generating: false,
   error: null,
+  progress: null,
+  live: 'off',
   start: vi.fn(),
   cancel: vi.fn(),
 } as unknown as ReturnType<typeof useProjectGeneration>;
@@ -800,16 +803,18 @@ describe('AppLayout — snapshots', () => {
   });
 });
 
-describe('the generating overlay covers the whole editing area', () => {
-  it('covers the keyboard, the transport and the inspector — not just the sheet', async () => {
-    // A job rewrites the score server-side, and the project is immutable for
-    // the duration: a keyboard that still auditions notes, or a transport that
-    // still plays, is offering to edit music that is about to be replaced.
-    // The overlay used to sit inside the sheet's own column, leaving all three
-    // live underneath it.
+describe('a generating project: locked, not covered', () => {
+  it('shows the status strip, disables Play and undo, and locks the store', async () => {
+    // The notes stream into the sheet as the job writes them, so the sheet
+    // stays visible and scrollable. What is refused is an edit or a play:
+    // the store's lock holds against every command path, and the controls
+    // that would offer one say so.
     vi.mocked(useProjectGeneration).mockReturnValue({
+      status: 'generating',
       generating: true,
       error: null,
+      progress: { stage: 'part', label: 'Bass', done: 1, total: 3 },
+      live: 'live',
       start: vi.fn(),
       cancel: vi.fn(),
     } as unknown as ReturnType<typeof useProjectGeneration>);
@@ -817,16 +822,32 @@ describe('the generating overlay covers the whole editing area', () => {
     const store = await makeStoreWithProject();
     renderLayout(<AppLayout store={store} />);
 
-    const overlay = screen.getByTestId('generating-overlay');
-    // `absolute inset-0` covers its offset parent, so "what does it cover" is
-    // "what else lives in that parent".
-    const region = overlay.parentElement!;
-    expect(region.contains(screen.getByRole('toolbar', { name: 'Playback transport' }))).toBe(true);
-    expect(region.contains(screen.getByRole('img', { name: /Piano keyboard/ }))).toBe(true);
-    expect(region.contains(screen.getByRole('toolbar', { name: 'Score editor toolbar' }))).toBe(
-      true,
-    );
+    const strip = screen.getByTestId('generation-status-strip');
+    expect(strip.className).not.toContain('inset-0');
+    expect(screen.getByText('Part 1 of 3: Bass')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Nothing to undo|Undo/ })).toBeDisabled();
+    expect(store.getState().editLocked).toBe(true);
+    // The sheet is still there to watch; its toolbar, which only edits, is not.
+    expect(screen.getByRole('toolbar', { name: 'Playback transport' })).toBeInTheDocument();
+    expect(screen.queryByRole('toolbar', { name: 'Score editor toolbar' })).not.toBeInTheDocument();
     // But not the app bar: leaving is ordinary navigation.
-    expect(region.contains(screen.getByRole('button', { name: 'Back to dashboard' }))).toBe(false);
+    expect(screen.getByRole('button', { name: 'Back to dashboard' })).toBeEnabled();
+  });
+
+  it('releases the lock once the job is over', async () => {
+    vi.mocked(useProjectGeneration).mockReturnValue({
+      ...IDLE_GENERATION,
+      status: 'generating',
+      generating: true,
+    } as unknown as ReturnType<typeof useProjectGeneration>);
+    const store = await makeStoreWithProject();
+    const view = renderLayout(<AppLayout store={store} />);
+    expect(store.getState().editLocked).toBe(true);
+
+    vi.mocked(useProjectGeneration).mockReturnValue(IDLE_GENERATION);
+    view.rerender(withQueryClient(<AppLayout store={store} />));
+    expect(store.getState().editLocked).toBe(false);
+    expect(screen.queryByTestId('generation-status-strip')).not.toBeInTheDocument();
   });
 });

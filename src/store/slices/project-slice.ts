@@ -17,6 +17,8 @@ import type { StateCreator } from 'zustand';
 import { newProjectScore } from '@sudobility/music_lib';
 import { repairScore } from '@sudobility/music_types';
 import type { GenerationRecord, ProjectSaveResult, Score } from '@sudobility/music_types';
+import type { LiveScoreMeta } from '@sudobility/music_client';
+import type { TransportStopper } from '../document-store.js';
 import { createDocumentSaver } from '../../services/persistence/document-saver.js';
 import type { DocumentSaver } from '../../services/persistence/document-saver.js';
 import { projectWrite } from '../../services/persistence/project-write.js';
@@ -26,6 +28,7 @@ import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_type
 import type { SaveState } from '@sudobility/music_types';
 import {
   applyProjectLocalMix,
+  carryProjectLocalMix,
   loadProjectLocalUi,
   projectScoreForServer,
   saveProjectLocalUi,
@@ -33,6 +36,15 @@ import {
 } from '../../services/persistence/project-ui.js';
 
 export type NewProjectInput = { name: string; score?: Score };
+
+/** What a generation's final score arrives with, from the live stream. */
+export type LiveResultMeta = {
+  /** The project the stream belongs to; refused when it is not the open one. */
+  projectId: string;
+  /** The server's stamp for the score, as `GET /projects/:id` would report it. */
+  serverUpdatedAt: string;
+  lastGeneration?: GenerationRecord | undefined;
+};
 
 export type ProjectSlice = {
   projectId: string | null;
@@ -87,6 +99,23 @@ export type ProjectSlice = {
   noteServerVersion: (updatedAt: string) => void;
   /** Renames the currently-open project. The new name persists on the next autosave/`saveNow()` flush. No-op if no project is open. */
   renameProject: (name: string) => void;
+  /**
+   * Shows a score the server is writing right now — a live generation's
+   * snapshot or one of its partials — without dirtying the project, moving
+   * the caret, or treating it as this client's edit (the server holds it
+   * already, and a PUT of it back would be refused with a 409). False when
+   * `projectId` is not the open project, which is a stream outliving the
+   * editor that opened it, or while the transport is playing; the caller
+   * asks again a moment later.
+   */
+  applyLiveScore: (score: Score, meta: LiveScoreMeta) => boolean;
+  /**
+   * Adopts a generation's final score straight from the stream, as
+   * `openProject` would after a poll noticed it: the transport stops, the
+   * history resets, and the project is clean at the server's stamp. False
+   * when the project is no longer the open one.
+   */
+  adoptLiveResult: (score: Score, transport: TransportStopper, result: LiveResultMeta) => boolean;
 };
 
 export function createProjectSlice(
@@ -300,6 +329,48 @@ export function createProjectSlice(
           state.projectName = name;
         });
         get().markDirty();
+      },
+
+      applyLiveScore: (score, meta) => {
+        if (!currentProject || currentProject.id !== meta.projectId) return false;
+        // Play is disabled while a job runs; this is the guard behind it. A
+        // score swapped under a running player is read as a mix change, and
+        // the old music goes on playing out of its queue.
+        if (get().state === 'playing') return false;
+        const mixed = carryProjectLocalMix(get().score, score);
+        // A snapshot is a new document as far as undo goes; a partial is the
+        // same one with more written, and the caret stays where the reader
+        // left it either way.
+        get().setScore(mixed, { resetHistory: meta.reason === 'snapshot', resetPosition: false });
+        autosaver?.adopted(get().score ?? mixed);
+        set((state) => {
+          if (meta.serverUpdatedAt) state.serverUpdatedAt = meta.serverUpdatedAt;
+          state.dirty = false;
+          state.saveState = 'saved';
+        });
+        return true;
+      },
+
+      adoptLiveResult: (score, transport, result) => {
+        if (!currentProject || currentProject.id !== result.projectId) return false;
+        // Stop first: this write bypasses the edit lock, and a controller
+        // still running would read the new score as a mix change.
+        transport.stop();
+        const mixed = carryProjectLocalMix(get().score, score);
+        get().setScore(mixed, { resetHistory: true });
+        autosaver?.adopted(get().score ?? mixed);
+        currentProject = {
+          ...currentProject,
+          updatedAt: result.serverUpdatedAt,
+          ...(result.lastGeneration ? { lastGeneration: result.lastGeneration } : {}),
+        };
+        set((state) => {
+          state.serverUpdatedAt = result.serverUpdatedAt;
+          if (result.lastGeneration) state.lastGeneration = result.lastGeneration;
+          state.dirty = false;
+          state.saveState = 'saved';
+        });
+        return true;
       },
     };
   };

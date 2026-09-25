@@ -52,8 +52,12 @@ test.describe('generation jobs', () => {
         .getByText('Generating…'),
     ).toBeVisible();
 
-    // Come back and the result is there.
+    // Come back: the project reopens mid-job, still locked — the strip is
+    // there before the job lands. Wait for the lock to appear before waiting
+    // for it to clear: "no strip" is true while the project is still loading
+    // too, and settling alone then reads a store with no score in it yet.
     await page.goto(projectUrl);
+    await expect(page.getByText('Generating notes…')).toBeVisible({ timeout: 15_000 });
     await waitForGenerationSettled(page);
     const after = await readScoreSummary(page);
     expect(after).not.toBeNull();

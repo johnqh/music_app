@@ -124,7 +124,12 @@ export async function gotoDashboard(page: Page): Promise<void> {
  */
 export async function chooseImport(page: Page, label: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Import a file' }).click();
-  await page.getByRole('option', { name: label, exact: true }).click();
+  // Anchored, not exact: each option's accessible name now carries its
+  // description after the label ("Import MIDI Notes, tempo and …"), so an
+  // exact match never resolves. The anchor keeps "Import MIDI" from matching
+  // nothing else, which is what `exact` was for.
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await page.getByRole('option', { name: new RegExp(`^${escaped}\\b`) }).click();
 }
 
 /**
@@ -146,10 +151,10 @@ export async function createNewProject(page: Page, name = 'E2E Project'): Promis
  * Generates a whole score from the dashboard and opens it.
  *
  * Whole-score generation moved off the editor sidebar: it now creates its own
- * project and runs as a background job, so this navigates to the dashboard,
- * submits, waits for the job to finish, and opens the result. Callers keep the
- * same contract as before — a generated score is open in the editor when this
- * returns.
+ * project and runs as a background job, and the dashboard opens the project
+ * at once so the job can be watched writing it. This submits, waits for the
+ * job to finish, and returns with the generated score open in the editor —
+ * the contract callers always had.
  */
 export async function generateWholeScore(page: Page, options: GenerationOptions): Promise<string> {
   await gotoDashboard(page);
@@ -190,13 +195,12 @@ export async function generateWholeScore(page: Page, options: GenerationOptions)
 
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-  // Wait on a positive condition, never on the badge being absent: the badge
-  // has not necessarily rendered yet at this point, so "no badge" passes
-  // instantly and opens a project the job has not filled in.
-  const card = page.getByRole('button', { name: `Open project: ${title}`, exact: true });
-  await expect(card).toBeVisible({ timeout: 30_000 });
-  await card.click();
-  await expect(page).toHaveURL(/\/project\//);
+  // Straight into the project: the job streams each part into the editor as
+  // it is written, so the dashboard navigates the moment the row exists. The
+  // fixture provider finishes in microseconds, so by the time the editor is
+  // up the strip may already be gone — settle on a positive condition (the
+  // notes) rather than on the strip having been seen.
+  await expect(page).toHaveURL(/\/project\//, { timeout: 30_000 });
 
   await waitForGenerationSettled(page);
   await waitForNotation(page);

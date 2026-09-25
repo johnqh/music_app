@@ -260,11 +260,18 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       const { client, token } = await clientAndToken();
       // The dialog chooses the backend; the developer setting fills in when it
       // did not.
-      await createGeneratedProject(client, token, submission, {
+      const project = await createGeneratedProject(client, token, submission, {
         variant: store.getState().devSettings.generationVariant,
       });
       setNewProjectOpen(false);
-      await refresh();
+      /*
+        Straight into the project, as New Project does. The job streams each
+        part into the editor as it is written, so the place to wait is in
+        front of the score rather than on a card with a badge. No `refresh()`
+        first, for the reason the other branch gives: nobody is about to look
+        at this list.
+      */
+      onNavigate?.(`/project/${project.id}`);
     } catch (err) {
       // A refusal for want of credits opens the store; everything else is a
       // toast. The dialog closes either way — behind the paywall, an open
@@ -481,12 +488,13 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   const renderCard = (project: ProjectSummary) => {
-    // A `generating` or `transcribing` project has no finished score to open
-    // yet — the editor would show whatever is there so far (for
-    // transcription, minutes of nothing) with no way to tell "still working"
-    // from "came back empty". Refused here instead, at the one place that
-    // already knows every project's status without an extra fetch.
-    const busy = project.status !== 'ready';
+    // A `transcribing` project has no finished score to open yet — the editor
+    // would show minutes of nothing with no way to tell "still working" from
+    // "came back empty". Refused here instead, at the one place that already
+    // knows every project's status without an extra fetch. A `generating`
+    // project is the opposite case: its notes stream into the editor as they
+    // are written, and opening it is how you watch.
+    const busy = project.status === 'transcribing';
     const statusLabel =
       project.status === 'transcribing'
         ? t('dashboard.transcribing')

@@ -111,7 +111,7 @@ import { PianoKeyboardView } from '@/features/piano-keyboard/PianoKeyboardView';
 import { TransportBar } from '@/components/transport/TransportBar';
 import { Toasts } from '@/components/layout/Toasts';
 import { InspectorPanel } from '@/components/inspector/InspectorPanel';
-import { GeneratingOverlay } from '@/components/layout/GeneratingOverlay';
+import { GenerationStatusStrip } from '@/components/layout/GenerationStatusStrip';
 import type { ReplaceScope, ReplaceSubmission } from '@/app-library';
 import { useProjectGeneration } from '@/features/generation/useGenerationJob';
 import { CreditBadge } from '@/features/credits/CreditBadge';
@@ -201,8 +201,46 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * in the store is stale by definition at that point — the server wrote it.
    */
   const lastGeneration = store((s) => s.lastGeneration);
+  /**
+   * What a job's result is marked as once it lands — the same for a result
+   * that arrived live and one a poll noticed.
+   */
+  const markGenerated = useCallback(async () => {
+    // Generation output is external content. Repair it before the editor
+    // unlocks, then persist the repaired score so the issue list stays clear
+    // after a reload as well as in the current editor session.
+    const repairResult = repairAllIssues(store, t('editor.fixIssues'));
+    if (repairResult.remaining === 0 && repairResult.fixed > 0) {
+      await store.getState().saveNow();
+    }
+
+    // Mark what the generation actually wrote, so it colours as generated
+    // material rather than landing indistinguishable from the rest. The
+    // candidate-accept workflow used to do this; a job applies server-side,
+    // so the notes are found by the region that was asked for.
+    const range = lastReplacedRangeRef.current;
+    if (!range) return;
+    lastReplacedRangeRef.current = null;
+    selectRegeneratedInRange(store, range);
+  }, [store, t]);
   const generation = useProjectGeneration(projectId, {
     store,
+    /*
+      The live stream delivered the final score — the one `GET /projects/:id`
+      would return — so it is adopted from the message rather than fetched
+      again. The store refuses it for a project that is no longer open, in
+      which case there is nothing to mark either.
+    */
+    onComplete: async (final) => {
+      if (!projectId) return;
+      const adopted = store.getState().adoptLiveResult(final.score, playbackController, {
+        projectId,
+        serverUpdatedAt: final.updatedAt,
+        ...(final.lastGeneration ? { lastGeneration: final.lastGeneration } : {}),
+      });
+      if (!adopted) return;
+      await markGenerated();
+    },
     onApplied: async () => {
       if (!projectId) return;
       // Before the score is replaced. This write bypasses the edit lock — it
@@ -211,25 +249,24 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       // playing the old one from its queue.
       playbackController.stop();
       await store.getState().openProject(projectId);
-
-      // Generation output is external content. Repair it before the editor
-      // unlocks, then persist the repaired score so the issue list stays clear
-      // after a reload as well as in the current editor session.
-      const repairResult = repairAllIssues(store, t('editor.fixIssues'));
-      if (repairResult.remaining === 0 && repairResult.fixed > 0) {
-        await store.getState().saveNow();
-      }
-
-      // Mark what the generation actually wrote, so it colours as generated
-      // material rather than landing indistinguishable from the rest. The
-      // candidate-accept workflow used to do this; a job applies server-side,
-      // so the notes are found by the region that was asked for.
-      const range = lastReplacedRangeRef.current;
-      if (!range) return;
-      lastReplacedRangeRef.current = null;
-      selectRegeneratedInRange(store, range);
+      await markGenerated();
     },
   });
+  const generating = generation.generating;
+
+  /*
+    The edit lock, for as long as a job owns the project.
+
+    The read-only view and the disabled buttons below are what the reader
+    sees; this is what holds. Every edit goes through `dispatchCommand`, and
+    with the lock held it refuses content commands from any path — the piano
+    keyboard, the inspector, a shortcut, a menu — so nothing can dirty a
+    project whose score the server is in the middle of replacing.
+  */
+  useEffect(() => {
+    store.getState().setEditLocked(generating);
+    return () => store.getState().setEditLocked(false);
+  }, [store, generating]);
 
   /**
    * Turns a Replace submission into the request the server actually needs.
@@ -578,7 +615,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <button
               type="button"
               aria-label={t('editor.undo')}
-              disabled={!canUndo}
+              disabled={!canUndo || generating}
               onClick={() => store.getState().undo()}
               className={ICON_BUTTON_CLASS}
             >
@@ -594,7 +631,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <button
               type="button"
               aria-label={t('editor.redo')}
-              disabled={!canRedo}
+              disabled={!canRedo || generating}
               onClick={() => store.getState().redo()}
               className={ICON_BUTTON_CLASS}
             >
@@ -839,12 +876,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       </header>
 
       {/*
-        Everything below the app bar is one region, and the generating overlay
-        covers all of it: the sheet, the inspector, the keyboard and the
-        transport. A job rewrites the score out from under every one of those —
-        a keyboard that still auditions notes, or a transport that still plays,
-        is offering to edit music that is about to be replaced. The app bar
-        stays outside it on purpose, so you can leave and come back.
+        Everything below the app bar is one region. While a job owns the
+        project a status strip sits above the transport rather than a cover
+        over all of it: the notes stream into the sheet as they are written,
+        and the sheet is what the reader opened the project to watch. What
+        must not happen meanwhile — an edit, a play — is refused by the store's
+        lock, the read-only sheet and the disabled Play, not by hiding them.
       */}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex flex-1 min-h-0">
@@ -858,6 +895,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               ) : (
                 <ScoreEditorView
                   store={store}
+                  // Read-only while a job writes the score: the notes arrive
+                  // live and are worth watching, but not touching.
+                  readOnly={generating}
                   inspectorOpen={inspectorOpen}
                   onToggleInspector={() => setInspectorOpen((v) => !v)}
                   // The same runner the Replace buttons use, so adding a track
@@ -911,8 +951,18 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           and it is optional — so with it in between, opening or closing it moved
           the transport, which is the row a reader's hand goes to without
           looking. Fixed rows first, the variable one last. */}
+        {generating && (
+          <GenerationStatusStrip
+            onCancel={() => void generation.cancel()}
+            progress={generation.progress}
+            live={generation.live}
+            error={generation.error}
+          />
+        )}
+
         <TransportBar
           store={store}
+          playDisabled={generating}
           keyboardCollapsed={keyboardCollapsed}
           onToggleKeyboard={() => store.getState().setKeyboardCollapsed(!keyboardCollapsed)}
           spatialActive={spatialActive}
@@ -938,10 +988,6 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               </div>
             </div>
           </div>
-        )}
-
-        {generation.generating && (
-          <GeneratingOverlay onCancel={() => void generation.cancel()} error={generation.error} />
         )}
       </div>
 

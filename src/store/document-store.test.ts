@@ -424,3 +424,70 @@ describe('adoptOutsideScore', () => {
     expect(store.getState().dirty).toBe(false);
   });
 });
+
+/** The per-document store takes a streamed generation by the same rules as the app store. */
+describe('document store: live generation', () => {
+  async function liveDocument() {
+    const context = testStoreContext();
+    const created = await context.fakeClient.createProject(
+      { name: 'Live', score: twinkleScore() },
+      'tok',
+    );
+    const store = await openProjectDocument(context, created.id);
+    return { context, store, id: created.id };
+  }
+
+  it('applyLiveScore shows the score clean and saves nothing back', async () => {
+    const { context, store, id } = await liveDocument();
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS * 2);
+    const updatesBefore = context.fakeClient.updateCalls;
+
+    const applied = store.getState().applyLiveScore(threeTrackScore(), {
+      projectId: id,
+      reason: 'snapshot',
+      serverUpdatedAt: 't9',
+    });
+
+    expect(applied).toBe(true);
+    expect(store.getState().score?.tracks).toHaveLength(3);
+    expect(store.getState().dirty).toBe(false);
+    expect(store.getState().serverUpdatedAt).toBe('t9');
+    expect(store.getState().canUndo).toBe(false);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS * 3);
+    expect(context.fakeClient.updateCalls).toBe(updatesBefore);
+  });
+
+  it("refuses another project's score, and one arriving while playing", async () => {
+    const { store, id } = await liveDocument();
+    const before = store.getState().score;
+    expect(
+      store
+        .getState()
+        .applyLiveScore(threeTrackScore(), { projectId: 'other', reason: 'snapshot' }),
+    ).toBe(false);
+    store.setState({ state: 'playing' } as never);
+    expect(
+      store.getState().applyLiveScore(threeTrackScore(), { projectId: id, reason: 'partial' }),
+    ).toBe(false);
+    expect(store.getState().score).toBe(before);
+  });
+
+  it('adoptLiveResult stops the transport, resets history and records the stamp', async () => {
+    const { store, id } = await liveDocument();
+    store.getState().dispatchCommand(addMeasureCommand('Add measure'));
+    const transport = { stop: vi.fn() };
+
+    const adopted = store.getState().adoptLiveResult(threeTrackScore(), transport, {
+      projectId: id,
+      serverUpdatedAt: 't9',
+    });
+
+    expect(adopted).toBe(true);
+    expect(transport.stop).toHaveBeenCalledTimes(1);
+    expect(store.getState().score?.tracks).toHaveLength(3);
+    expect(store.getState().canUndo).toBe(false);
+    expect(store.getState().serverUpdatedAt).toBe('t9');
+    expect(store.getState().dirty).toBe(false);
+  });
+});

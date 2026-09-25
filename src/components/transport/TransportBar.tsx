@@ -144,6 +144,13 @@ export type TransportBarProps = {
    * that one control back into plain text.
    */
   readOnly?: boolean;
+  /**
+   * Keeps Play off while something else owns the score — a generation job
+   * writing it live. Everything else on the bar still works: Stop, the
+   * position controls, loop, metronome, tempo and volume change nothing the
+   * job is about to replace.
+   */
+  playDisabled?: boolean;
 };
 
 /** Icon-only transport controls, all at the bar's shared control height. */
@@ -246,10 +253,12 @@ function PlayPauseButton({
   store,
   hasScore,
   controller,
+  playDisabled = false,
 }: {
   store: PlaybackStoreApi;
   hasScore: boolean;
   controller: TransportController;
+  playDisabled?: boolean;
 }) {
   const { t } = useTranslation();
   const playbackState = store((s) => s.state);
@@ -268,7 +277,7 @@ function PlayPauseButton({
         size="icon"
         aria-label={label}
         aria-busy={preparing || undefined}
-        disabled={!hasScore || preparing}
+        disabled={!hasScore || preparing || playDisabled}
         onClick={() => void controller.togglePlay()}
         className={ICON_BUTTON_CLASS}
       >
@@ -425,6 +434,7 @@ export function TransportBar({
   spatialActive,
   onToggleSpatial,
   readOnly = false,
+  playDisabled = false,
 }: TransportBarProps) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
@@ -533,7 +543,12 @@ export function TransportBar({
           <PreviousMeasureIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
-      <PlayPauseButton store={store} hasScore={hasScore} controller={controller} />
+      <PlayPauseButton
+        store={store}
+        hasScore={hasScore}
+        controller={controller}
+        playDisabled={playDisabled}
+      />
       <Tooltip content={t('transport.stop')}>
         <Button
           type="button"

@@ -12,7 +12,13 @@ import { useMemo } from 'react';
 import { useAppStore } from '@/app-library';
 import type { EditorStoreApi } from '@/app-library';
 import { useProjectGeneration as useSharedProjectGeneration } from '@sudobility/music_client';
-import type { ForegroundPort, GenerationClient, ProjectGeneration } from '@sudobility/music_client';
+import type {
+  ForegroundPort,
+  GenerationClient,
+  LiveGenerationFinal,
+  LiveGenerationOptions,
+  ProjectGeneration,
+} from '@sudobility/music_client';
 import { reportGenerationError } from '@/features/credits/report-generation-error';
 import { getAppServices } from '@/config/initialize';
 
@@ -45,6 +51,18 @@ export type UseProjectGenerationOptions = {
   getToken?: () => Promise<string | null>;
   /** Called when the server's copy has moved on. Awaited before the editor unlocks. */
   onApplied?: () => void | Promise<void>;
+  /**
+   * Called with a generation's final score when the live stream delivered it.
+   * Awaited before the editor unlocks; `onApplied` is then the polling
+   * fallback rather than a second adoption.
+   */
+  onComplete?: (final: LiveGenerationFinal) => void | Promise<void>;
+  /**
+   * The live stream. Defaults to the app's API when the client is the app's
+   * own; `false` switches it off, and a test that injects a client gets none
+   * unless it passes one — a stub client has no socket to open.
+   */
+  live?: LiveGenerationOptions | false;
   pollMs?: number;
   idlePollMs?: number;
 };
@@ -53,9 +71,10 @@ export function useProjectGeneration(
   projectId: string | null,
   options: UseProjectGenerationOptions = {},
 ): ProjectGeneration {
-  const { store = useAppStore, onApplied, pollMs, idlePollMs } = options;
+  const { store = useAppStore, onApplied, onComplete, pollMs, idlePollMs } = options;
   const injectedClient = options.client;
   const injectedGetToken = options.getToken;
+  const injectedLive = options.live;
 
   // Resolved lazily and memoized: `getAppServices()` throws before start-up,
   // and a fresh object each render would rebuild the poll timer.
@@ -64,6 +83,10 @@ export function useProjectGeneration(
     () => injectedGetToken ?? (() => getAppServices().auth.getToken()),
     [injectedGetToken],
   );
+  const live = useMemo<LiveGenerationOptions | false>(() => {
+    if (injectedLive !== undefined) return injectedLive;
+    return injectedClient ? false : { baseUrl: getAppServices().baseUrl };
+  }, [injectedLive, injectedClient]);
 
   return useSharedProjectGeneration(projectId, {
     store,
@@ -77,6 +100,8 @@ export function useProjectGeneration(
     // failure otherwise.
     onStartError: (error) => reportGenerationError(error, { store }),
     ...(onApplied ? { onApplied } : {}),
+    ...(onComplete ? { onComplete } : {}),
+    ...(live ? { live } : {}),
     ...(pollMs === undefined ? {} : { pollMs }),
     ...(idlePollMs === undefined ? {} : { idlePollMs }),
   });

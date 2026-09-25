@@ -46,12 +46,14 @@ import type {
   Score,
   TransportSettings,
 } from '@sudobility/music_types';
+import type { LiveScoreMeta } from '@sudobility/music_client';
 import { authorizedServer, hasServer, toastSinkActions, type StoreContext } from './context.js';
 import { createDocumentSaver } from '../services/persistence/document-saver.js';
 import type { SaveWrite } from '../services/persistence/document-saver.js';
 import { projectWrite } from '../services/persistence/project-write.js';
 import {
   applyProjectLocalMix,
+  carryProjectLocalMix,
   loadProjectLocalUi,
   projectScoreForServer,
   saveProjectLocalUi,
@@ -60,6 +62,15 @@ import {
 
 /** Anything that can stop the transport: a player, a binding, the adapter. */
 export type TransportStopper = { stop(): void };
+
+/** What a generation's final score arrives with, from the live stream. */
+export type LiveResultMeta = {
+  /** The project the stream belongs to; refused when it is not this document's. */
+  projectId: string;
+  /** The server's stamp for the score, as `GET /projects/:id` would report it. */
+  serverUpdatedAt: string;
+  lastGeneration?: GenerationRecord | undefined;
+};
 
 export type DocumentSlice = {
   title: string;
@@ -107,6 +118,22 @@ export type DocumentSlice = {
    * the document clean.
    */
   reloadFromServer: (transport: TransportStopper) => Promise<void>;
+  /**
+   * Shows a score the server is writing right now — a live generation's
+   * snapshot or one of its partials — without dirtying the document, moving
+   * the caret, or treating it as this client's edit (the server holds it
+   * already, and a PUT of it back would be refused with a 409). False for a
+   * project other than this document's, or while the transport is playing;
+   * the caller asks again a moment later.
+   */
+  applyLiveScore: (score: Score, meta: LiveScoreMeta) => boolean;
+  /**
+   * Adopts a generation's final score straight from the stream, as
+   * `reloadFromServer` would after a poll noticed it: the transport stops,
+   * the history resets, and the document is clean at the server's stamp.
+   * False for a project other than this document's.
+   */
+  adoptLiveResult: (score: Score, transport: TransportStopper, result: LiveResultMeta) => boolean;
   /** Stops scheduling saves. Flush first if the work matters. */
   dispose: () => void;
 };
@@ -336,6 +363,49 @@ export function createDocumentStore(options: CreateDocumentStoreOptions) {
             state.dirty = false;
             state.saveState = 'saved';
           });
+        },
+
+        applyLiveScore: (liveScore, meta) => {
+          const origin = get().origin;
+          if (origin.kind !== 'project' || origin.projectId !== meta.projectId) {
+            return false;
+          }
+          // Play is disabled while a job runs; this is the guard behind it. A
+          // score swapped under a running player is read as a mix change, and
+          // the old music goes on playing out of its queue.
+          if (get().state === 'playing') return false;
+          const mixed = carryProjectLocalMix(get().score, liveScore);
+          // A snapshot is a new document as far as undo goes; a partial is the
+          // same one with more written, and the caret stays where the reader
+          // left it either way.
+          get().setScore(mixed, {
+            resetHistory: meta.reason === 'snapshot',
+            resetPosition: false,
+          });
+          saver.adopted(get().score ?? mixed);
+          set((state) => {
+            if (meta.serverUpdatedAt) state.serverUpdatedAt = meta.serverUpdatedAt;
+            state.dirty = false;
+            state.saveState = 'saved';
+          });
+          return true;
+        },
+
+        adoptLiveResult: (liveScore, transport, result) => {
+          const origin = get().origin;
+          if (origin.kind !== 'project' || origin.projectId !== result.projectId) {
+            return false;
+          }
+          const mixed = carryProjectLocalMix(get().score, liveScore);
+          adoptOutsideScore(store, mixed, transport, { resetHistory: true });
+          saver.adopted(get().score ?? mixed);
+          set((state) => {
+            state.serverUpdatedAt = result.serverUpdatedAt;
+            if (result.lastGeneration) state.lastGeneration = result.lastGeneration;
+            state.dirty = false;
+            state.saveState = 'saved';
+          });
+          return true;
         },
 
         dispose: () => saver.dispose(),

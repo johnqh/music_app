@@ -94,6 +94,24 @@ export function applyProjectLocalMix(score: Score, state: ProjectLocalUiState): 
   };
 }
 
+/**
+ * Carries the mute and solo of the score on screen onto one that arrived from
+ * the server, by track id.
+ *
+ * Mute and solo are listening preferences, not score data: the server never
+ * stores them (`projectScoreForServer`), so a score read back from it — a live
+ * partial, a generation's result — would silence nothing and un-solo
+ * everything. The current score is the source rather than local storage
+ * because it is what the reader sees now, not what was saved a moment ago.
+ */
+export function carryProjectLocalMix(from: Score | null, to: Score): Score {
+  if (!from) return to;
+  return applyProjectLocalMix(to, {
+    mutedTrackIds: from.tracks.filter((track) => track.muted).map((track) => track.id),
+    soloTrackIds: from.tracks.filter((track) => track.solo).map((track) => track.id),
+  });
+}
+
 export function projectScoreForServer(score: Score): Score {
   return {
     ...score,

@@ -42,6 +42,10 @@ PROJECTS=(
     # depends on it). It needs its own wait for the same reason music_types
     # does: music_api resolves it from npm, so the publish has to land first.
     "../music_spatial_core:0"
+    # The canvas renderer. After music_types (its only peer) and before
+    # music_lib, which re-exports it.
+    "../music_player:0"
+    "../music_drawing:0"
     "../music_codecs:60"
     # Playback: the transport, the two synth engines and offline rendering.
     # After music_types (its only required peer) and before music_lib, which
@@ -49,24 +53,20 @@ PROJECTS=(
     # it. Its own wait for the same reason music_codecs has one: the packages
     # after it resolve it from npm, so the publish has to land first.
     "../music_spatial:0"
-    "../music_spatial_rn:60"
-    "../music_player:60"
-    # The canvas renderer. After music_types (its only peer) and before
-    # music_lib, which re-exports it.
-    "../music_drawing:60"
+    "../music_spatial_rn:0"
     # The editing engine: the editing store and every operation that changes a
     # score. Its only peer is music_types, so it could go almost anywhere up
     # here — it sits directly before music_lib because that is what consumes
     # it, and it needs its own wait for the same reason the packages above do:
     # music_lib resolves it from npm, so the publish has to land first.
-    "../music_editing:60"
+    "../music_io:0"
+    "../music_editing:0"
     "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"
-    "../music_io:60"
     # music_app installs from this one, so it is the publish most worth waiting
     # on. Under the poll the number costs nothing when CI is quick.
-    "../music_lib:150"
+    "../music_lib:60"
     "../music_app:0"
     # The native app, last: it depends on the whole chain above and nothing
     # depends on it. `private: true`, so nothing is published to npm — this

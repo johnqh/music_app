@@ -1296,6 +1296,16 @@
   },
   "overlay": {
     "generatingNotes": "正在生成音符…",
+    "progress": "{{stage}}：第 {{done}}/{{total}} 项，{{label}}",
+    "reconnecting": "正在重新连接…",
+    "polling": "实时更新不可用；正在定期检查项目。",
+    "lockedWhileGenerating": "完成后可继续编辑和播放。",
+    "stage": {
+      "plan": "规划",
+      "part": "声部",
+      "section": "段落",
+      "chunk": "片段"
+    },
     "openingProject": "正在打开项目…"
   },
   "print": {
