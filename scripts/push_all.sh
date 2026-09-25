@@ -49,6 +49,7 @@ PROJECTS=(
     # it. Its own wait for the same reason music_codecs has one: the packages
     # after it resolve it from npm, so the publish has to land first.
     "../music_spatial:0"
+    "../music_spatial_rn:60"
     "../music_player:60"
     # The canvas renderer. After music_types (its only peer) and before
     # music_lib, which re-exports it.
