@@ -15,8 +15,15 @@
  */
 import type { StateCreator } from 'zustand';
 import { newProjectScore } from '@sudobility/music_lib';
-import { repairScore } from '@sudobility/music_types';
-import type { GenerationRecord, ProjectSaveResult, Score } from '@sudobility/music_types';
+import { originAfterJob, repairScore } from '@sudobility/music_types';
+import type {
+  GenerationJobKind,
+  GenerationRecord,
+  ProjectCreateOrigin,
+  ProjectOrigin,
+  ProjectSaveResult,
+  Score,
+} from '@sudobility/music_types';
 import type { LiveScoreMeta } from '@sudobility/music_client';
 import type { TransportStopper } from '../document-store.js';
 import { createDocumentSaver } from '../../services/persistence/document-saver.js';
@@ -35,7 +42,15 @@ import {
   type ProjectLocalUiState,
 } from '../../services/persistence/project-ui.js';
 
-export type NewProjectInput = { name: string; score?: Score };
+export type NewProjectInput = {
+  name: string;
+  score?: Score;
+  /**
+   * Where the project came from, as only the creator can say — the file an
+   * import read, or nothing. Omitted, the server records `blank`.
+   */
+  origin?: ProjectCreateOrigin;
+};
 
 /** What a generation's final score arrives with, from the live stream. */
 export type LiveResultMeta = {
@@ -44,6 +59,12 @@ export type LiveResultMeta = {
   /** The server's stamp for the score, as `GET /projects/:id` would report it. */
   serverUpdatedAt: string;
   lastGeneration?: GenerationRecord | undefined;
+  /**
+   * The job that produced the score, so the origin the server wrote for a
+   * generated project can be mirrored here without re-reading the row: the
+   * stream carries the score and nothing about where the project came from.
+   */
+  job?: { id: string; kind: GenerationJobKind } | null;
 };
 
 export type ProjectSlice = {
@@ -55,6 +76,12 @@ export type ProjectSlice = {
    * choices and generate again with some of them locked.
    */
   lastGeneration: GenerationRecord | null;
+  /**
+   * Where the open project came from — the job, file, recording or project
+   * it was made from — or null before a project is open and for a project
+   * written before the server recorded it.
+   */
+  origin: ProjectOrigin | null;
   dirty: boolean;
   saveState: SaveState;
   /**
@@ -234,6 +261,7 @@ export function createProjectSlice(
         state.projectId = project.id;
         state.projectName = project.name;
         state.lastGeneration = project.lastGeneration ?? null;
+        state.origin = project.origin ?? null;
         state.dirty = false;
         state.saveState = 'saved';
         state.serverUpdatedAt = project.updatedAt;
@@ -260,6 +288,7 @@ export function createProjectSlice(
       projectId: null,
       projectName: '',
       lastGeneration: null,
+      origin: null,
       dirty: false,
       saveState: 'saved',
       serverUpdatedAt: null,
@@ -272,7 +301,11 @@ export function createProjectSlice(
         const score = input.score ?? newProjectScore(input.name);
         const { client, token } = await authorizedServer(context);
         const created = await client.createProject(
-          { name: input.name, score: projectScoreForServer(score) },
+          {
+            name: input.name,
+            score: projectScoreForServer(score),
+            ...(input.origin ? { origin: input.origin } : {}),
+          },
           token,
         );
         // The score we just sent, not one shipped back to us: the server
@@ -367,6 +400,11 @@ export function createProjectSlice(
         set((state) => {
           state.serverUpdatedAt = result.serverUpdatedAt;
           if (result.lastGeneration) state.lastGeneration = result.lastGeneration;
+          // The same rule the server applied to the row, so a project that
+          // was blank a moment ago reads as generated without a re-read.
+          if (result.job) {
+            state.origin = originAfterJob(state.origin, result.job.kind, result.job.id);
+          }
           state.dirty = false;
           state.saveState = 'saved';
         });

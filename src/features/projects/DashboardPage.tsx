@@ -316,7 +316,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
     setCreatingProject(true);
     try {
-      await store.getState().newProject({ name: submission.title, score: submission.score });
+      await store.getState().newProject({
+        name: submission.title,
+        score: submission.score,
+        origin: { kind: 'blank' },
+      });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       setNewProjectOpen(false);
@@ -359,7 +363,12 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     const template = projectTemplates(libraryCopy.templates()).find((tpl) => tpl.id === templateId);
     if (!template) return;
     try {
-      await store.getState().newProject({ name: template.name, score: template.build() });
+      // A template is a starting point, not a source: it came from no file.
+      await store.getState().newProject({
+        name: template.name,
+        score: template.build(),
+        origin: { kind: 'blank' },
+      });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       if (id) onNavigate?.(`/project/${id}`);
@@ -405,7 +414,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       // `newProject` creates it and adopts what it just sent. Creating through
       // the client and then opening the result meant uploading the score and
       // immediately downloading the same bytes back.
-      await store.getState().newProject({ name: title, score });
+      await store.getState().newProject({
+        name: title,
+        score,
+        origin: { kind: 'imported', format: 'project', fileName: file.name },
+      });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       setJsonImportOpen(false);
@@ -441,7 +454,11 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     try {
       const bytes = await file.arrayBuffer();
       const { module: mod, score } = getAppServices().io.openTracker(bytes);
-      await store.getState().newProject({ name: mod.title || file.name, score });
+      await store.getState().newProject({
+        name: mod.title || file.name,
+        score,
+        origin: { kind: 'imported', format: 'tracker', fileName: file.name },
+      });
       const id = store.getState().projectId;
       resetOpenedProjectTransport();
       setModImportOpen(false);

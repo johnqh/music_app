@@ -34,7 +34,7 @@ import {
   createUiSlice,
   createUnpluggedSlice,
 } from '@sudobility/music_editing';
-import { getMusicPosition } from '@sudobility/music_types';
+import { getMusicPosition, projectOriginForDocument } from '@sudobility/music_types';
 import type { EditingState, EditingStoreApi, SetScoreOptions } from '@sudobility/music_editing';
 import { TRANSPORT_SETTINGS_DEFAULTS } from '../services/playback/bind-player.js';
 import { parseProjectFile, serializeProjectFile } from '@sudobility/music_codecs';
@@ -327,7 +327,11 @@ export function createDocumentStore(options: CreateDocumentStoreOptions) {
           if (!score) throw new Error('Cannot sync a document with no score.');
           const { client, token } = await authorizedServer(context);
           const project = await client.createProject(
-            { name: get().title, score: projectScoreForServer(score) },
+            {
+              name: get().title,
+              score: projectScoreForServer(score),
+              origin: projectOriginForDocument(get().origin),
+            },
             token,
           );
           saver.adopted(score);

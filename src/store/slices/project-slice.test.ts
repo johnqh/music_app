@@ -203,6 +203,24 @@ describe('project-slice (server-backed)', () => {
     });
   });
 
+  describe('origin', () => {
+    it('sends the origin an import declares, and holds what the server recorded', async () => {
+      const context = testStoreContext();
+      const store = createAppStore({ context });
+      const origin = { kind: 'imported', format: 'midi', fileName: 'tune.mid' } as const;
+      await store.getState().newProject({ name: 'Tune', origin });
+      expect(store.getState().origin).toEqual(origin);
+      expect(context.fakeClient.storedRecord('proj-1')!.origin).toEqual(origin);
+    });
+
+    it('reads as blank when nothing was declared, as the server records it', async () => {
+      const context = testStoreContext();
+      const store = createAppStore({ context });
+      await store.getState().newProject({ name: 'Blank' });
+      expect(store.getState().origin).toEqual({ kind: 'blank' });
+    });
+  });
+
   it('markDirty without an open project is a safe no-op for the autosaver', async () => {
     const context = testStoreContext();
     const store = createAppStore({ context });
@@ -433,6 +451,7 @@ describe('project-slice: live generation', () => {
       projectId: id,
       serverUpdatedAt: 't9',
       lastGeneration: record,
+      job: { id: 'job-1', kind: 'generate-score' },
     });
 
     expect(adopted).toBe(true);
@@ -441,6 +460,9 @@ describe('project-slice: live generation', () => {
     expect(store.getState().canUndo).toBe(false);
     expect(store.getState().serverUpdatedAt).toBe('t9');
     expect(store.getState().lastGeneration).toBe(record);
+    // A blank project whose score a job just wrote is a generated one now —
+    // the server's rule, mirrored so the inspector need not re-read the row.
+    expect(store.getState().origin).toEqual({ kind: 'generated', jobId: 'job-1' });
     expect(store.getState().dirty).toBe(false);
     await vi.advanceTimersByTimeAsync(AUTOSAVE_MS * 3);
     expect(context.fakeClient.updateCalls).toBe(updatesBefore);

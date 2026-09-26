@@ -103,7 +103,15 @@ export function MusicXmlImportDialog({
     }
     void store
       .getState()
-      .newProject({ name: fileName ?? result.score.metadata.title, score: result.score })
+      .newProject({
+        name: fileName ?? result.score.metadata.title,
+        score: result.score,
+        origin: {
+          kind: 'imported',
+          format: 'musicxml',
+          ...(fileName ? { fileName } : {}),
+        },
+      })
       .then(() => {
         const projectId = store.getState().projectId;
         handleClose();

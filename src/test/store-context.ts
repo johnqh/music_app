@@ -45,6 +45,7 @@ function saveResult(record: ProjectRecord): ProjectSaveResult {
     schemaVersion: record.schemaVersion,
     status: record.status,
     lastGenerationError: record.lastGenerationError,
+    origin: record.origin ?? null,
     ...(record.uiPrefs ? { uiPrefs: structuredClone(record.uiPrefs) } : {}),
     parentSnapshotId: record.parentSnapshotId ?? null,
   };
@@ -105,6 +106,8 @@ export class FakeMusicClient {
       // A freshly created project is editable; only a generation job moves it.
       status: 'ready',
       lastGenerationError: null,
+      // As the server records it: what the creator said, else blank.
+      origin: req.origin ?? { kind: 'blank' },
       score: structuredClone(req.score),
       ...(req.uiPrefs ? { uiPrefs: req.uiPrefs } : {}),
     };

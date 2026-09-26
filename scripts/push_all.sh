@@ -61,7 +61,6 @@ PROJECTS=(
     # music_lib resolves it from npm, so the publish has to land first.
     "../music_io:0"
     "../music_editing:0"
-    "../midi_transcriber_api:0"
     "../music_api:0"
     "../music_client:60"
     # music_app installs from this one, so it is the publish most worth waiting
@@ -77,6 +76,7 @@ PROJECTS=(
     # check. Its Jest component suite runs under `test:components` rather than
     # `test`, so `bun run test` covers the vitest half only.
     "../music_app_rn:0"
+    "../midi_transcriber_api:0"
 )
 
 # Source reusable script: prefer local workflows repo, fall back to GitHub

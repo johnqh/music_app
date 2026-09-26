@@ -1664,6 +1664,33 @@
     "confirmMessage": "This replaces the whole score with a new generation. Your current score is not kept unless you save a snapshot first.",
     "confirm": "Generate again"
   },
+  "projectOrigin": {
+    "heading": "Origin",
+    "kind": {
+      "generated": "Generated from a request",
+      "imported": "Imported from a file",
+      "transcribed": "Transcribed from a recording",
+      "duplicated": "Copied from another project",
+      "blank": "Started from a blank score",
+      "unknown": "Not recorded"
+    },
+    "file": "File",
+    "format": "Format",
+    "sourceProject": "Source project",
+    "sourceMissing": "A project that has since been deleted",
+    "request": "What was asked for",
+    "lineup": "Lineup",
+    "backend": "Backend",
+    "tempoValue": "{{bpm}} BPM",
+    "barsValue_one": "{{count}} bar",
+    "barsValue_other": "{{count}} bars",
+    "generatedOn": "Generated on",
+    "modelUsed": "Model used",
+    "tokens": "Tokens",
+    "tokensValue": "{{prompt}} in, {{completion}} out",
+    "jobLoading": "Loading the generation request…",
+    "jobMissing": "The job that generated this project is no longer listed."
+  },
   "clef": {
     "treble": "Treble",
     "bass": "Bass",

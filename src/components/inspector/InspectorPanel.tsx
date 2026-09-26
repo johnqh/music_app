@@ -44,6 +44,8 @@
  */
 import { GenerationChoices } from '@/features/generation/GenerationChoices';
 import type { GenerationChoicesProps } from '@/features/generation/GenerationChoices';
+import { ProjectOriginPanel } from '@/features/generation/ProjectOriginPanel';
+import type { ProjectOriginProps } from '@/features/generation/ProjectOriginPanel';
 import { commandLabel } from '@/app-library';
 import { outOfRangeNoteIds } from '@sudobility/music_types';
 import { BarBeatField, ChordSymbolField, FingeringField } from '@/components/inspector/note-fields';
@@ -176,6 +178,12 @@ export type InspectorPanelProps = {
    * Score tab. Omitted where the project was never generated.
    */
   generation?: GenerationChoicesProps;
+  /**
+   * Where the open project came from — its job, file, recording or source
+   * project — shown on the Score tab above Generate Again. Omitted where no
+   * project is open.
+   */
+  origin?: ProjectOriginProps;
 };
 
 /**
@@ -987,9 +995,11 @@ function TrackTab({ store, onReplace }: TabProps) {
 function ScoreTab({
   store,
   generation,
+  origin,
 }: {
   store: EditorStoreApi;
   generation?: GenerationChoicesProps;
+  origin?: ProjectOriginProps;
 }) {
   const { t } = useTranslation();
   const score = store((s) => s.score);
@@ -1046,6 +1056,7 @@ function ScoreTab({
 
       <p className="text-xs text-theme-text-secondary">{t('inspector.scoreTitleHint')}</p>
 
+      {origin && <ProjectOriginPanel {...origin} />}
       {generation && <GenerationChoices {...generation} />}
     </div>
   );
@@ -1081,6 +1092,7 @@ export function InspectorPanel({
   store = useAppStore,
   onReplace,
   generation,
+  origin,
 }: InspectorPanelProps) {
   const { t } = useTranslation();
   const selection = store((s) => s.selection);
@@ -1128,7 +1140,7 @@ export function InspectorPanel({
           />
         </TabsList>
         <TabsContent value="score">
-          <ScoreTab store={store} generation={generation} />
+          <ScoreTab store={store} generation={generation} origin={origin} />
         </TabsContent>
         <TabsContent value="note">
           <NoteTab store={store} onReplace={onReplace} />

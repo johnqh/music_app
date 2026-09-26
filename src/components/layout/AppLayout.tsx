@@ -189,7 +189,11 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   const dialogs = store((s) => s.dialogs);
   const selection = store((s) => s.selection);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
-  const score = store((s) => s.score);
+  // Whether there is a score, never the score: this component only asks
+  // that for its disabled flags, and subscribing to the object itself made
+  // every edit — and every frame of a walk or a drag on the Unplugged stage,
+  // each of which is a score command — render the whole editor chrome.
+  const hasScore = store((s) => s.score !== null);
   const validationIssues = store((s) => s.validationIssues);
   // Transport state only — it changes on a transition, not per position
   // report, so unlike `positionTick` it is safe to read at this level.
@@ -201,6 +205,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * in the store is stale by definition at that point — the server wrote it.
    */
   const lastGeneration = store((s) => s.lastGeneration);
+  const projectOrigin = store((s) => s.origin);
   /**
    * What a job's result is marked as once it lands — the same for a result
    * that arrived live and one a poll noticed.
@@ -237,6 +242,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         projectId,
         serverUpdatedAt: final.updatedAt,
         ...(final.lastGeneration ? { lastGeneration: final.lastGeneration } : {}),
+        // So a blank project reads as generated the moment its score lands,
+        // as the row now says, without fetching the project again.
+        job: final.job ? { id: final.job.id, kind: final.job.kind } : null,
       });
       if (!adopted) return;
       await markGenerated();
@@ -525,6 +533,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   };
 
   const navigateToIssue = (issue: ValidationIssue): void => {
+    const score = store.getState().score;
     if (!score) return;
     if (issue.objectId && findEvent(score, issue.objectId)) {
       store.getState().setSelection({ eventIds: [issue.objectId], measureIds: [], trackIds: [] });
@@ -666,7 +675,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     projectMenu.setOpen(false);
                     setCreateSnapshotOpen(true);
                   }}
-                  disabled={!score}
+                  disabled={!hasScore}
                   className={MENU_ITEM_CLASS}
                 >
                   {t('editor.createSnapshot')}
@@ -679,7 +688,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     projectMenu.setOpen(false);
                     setOpenSnapshotOpen(true);
                   }}
-                  disabled={!score}
+                  disabled={!hasScore}
                   className={MENU_ITEM_CLASS}
                 >
                   {t('editor.openSnapshot')}
@@ -692,7 +701,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     projectMenu.setOpen(false);
                     setManagePublishedOpen(true);
                   }}
-                  disabled={!score}
+                  disabled={!hasScore}
                   className={MENU_ITEM_CLASS}
                 >
                   {t('editor.managePublished')}
@@ -705,7 +714,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <button
               type="button"
               aria-label={t('editor.print')}
-              disabled={!score}
+              disabled={!hasScore}
               onClick={() => onNavigate?.(`/project/${store.getState().projectId ?? ''}/print`)}
               className={ICON_BUTTON_CLASS}
             >
@@ -737,7 +746,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     variant="ghost"
                     role="menuitem"
                     onClick={() => handleExport(format.id)}
-                    disabled={!score}
+                    disabled={!hasScore}
                     className={MENU_ITEM_CLASS}
                   >
                     {t(format.labelKey)}
@@ -890,7 +899,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               a strip of its own alongside a track-panel toggle; with that gone
               the strip was a blank row holding one button. */}
             <div className="min-h-0 flex-1">
-              {spatialActive && score ? (
+              {spatialActive && hasScore ? (
                 <SpatialSection store={store} />
               ) : (
                 <ScoreEditorView
@@ -922,6 +931,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 <InspectorPanel
                   store={store}
                   onReplace={(scope, submission) => void startReplacement(scope, submission)}
+                  origin={projectId ? { origin: projectOrigin, projectId } : undefined}
                   generation={
                     lastGeneration
                       ? {
@@ -1175,7 +1185,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
  * every dialog — on every note-on and note-off while playing. Here it
  * touches only the Spatial view itself.
  *
- * `score` is asserted non-null by the caller (`spatialActive && score`) —
+ * `score` is asserted non-null by the caller (`spatialActive && hasScore`) —
  * `SpatialView` has no empty-score affordance of its own, the same reason
  * `ScoreEditorView` isn't shown here without a project open either.
  */

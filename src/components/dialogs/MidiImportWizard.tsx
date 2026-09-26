@@ -256,9 +256,11 @@ export function MidiImportWizard({
         importScore(store, result.score);
         handleClose();
       } else {
-        await store
-          .getState()
-          .newProject({ name: fileName ?? result.score.metadata.title, score: result.score });
+        await store.getState().newProject({
+          name: fileName ?? result.score.metadata.title,
+          score: result.score,
+          origin: { kind: 'imported', format: 'midi', ...(fileName ? { fileName } : {}) },
+        });
         const projectId = store.getState().projectId;
         handleClose();
         if (projectId) onImportedNewProject?.(projectId);

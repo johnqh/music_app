@@ -324,6 +324,8 @@ describe('a server project document', () => {
 
     const state = store.getState();
     expect(state.origin).toEqual({ kind: 'project', projectId });
+    // Never saved anywhere, so the project started from nothing.
+    expect(context.fakeClient.storedRecord(projectId)!.origin).toEqual({ kind: 'blank' });
     expect(state.dirty).toBe(false);
     expect(state.canUndo).toBe(true);
     expect(state.serverUpdatedAt).toBe(context.fakeClient.storedRecord(projectId)!.updatedAt);

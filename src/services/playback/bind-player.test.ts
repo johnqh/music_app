@@ -38,6 +38,7 @@ type Bound = Pick<
   | 'setMetronome'
   | 'setMasterVolume'
   | 'setVisibleTracks'
+  | 'applyMix'
   | 'onTransport'
   | 'onLoadState'
 >;
@@ -68,6 +69,7 @@ function fakePlayer(overrides: Partial<Bound> = {}): Fake {
     setMetronome: record('setMetronome'),
     setMasterVolume: record('setMasterVolume'),
     setVisibleTracks: record('setVisibleTracks'),
+    applyMix: record('applyMix'),
     onTransport: (fn) => {
       transport.add(fn);
       return () => transport.delete(fn);
@@ -119,6 +121,22 @@ describe('bindPlayer', () => {
     store.getState().setVisibleTracks([first!.id]);
     expect(player.calls.setVisibleTracks).toEqual([[[first!.id]]]);
     expect(player.calls.load).toHaveLength(1);
+  });
+
+  it('pushes the mix without reloading while playing when only the stage arrangement moved', () => {
+    // A listener or instrument drag is one command per animation frame, and
+    // each used to reload the whole note schedule.
+    const store = testEditingStore(twoTrackScore());
+    const player = fakePlayer();
+    bindPlayer(player, store);
+    player.emitTransport('playing');
+    store.getState().setUnpluggedListener({ x: 1, z: 2 });
+    store.getState().setUnpluggedListener({ facingDeg: 90 });
+    expect(player.calls.load).toHaveLength(1);
+    expect(player.calls.applyMix).toHaveLength(2);
+    // The binding still owns the player afterwards: a content change reloads.
+    store.getState().setScore(twoTrackScore());
+    expect(player.calls.load).toHaveLength(2);
   });
 
   it('clears the selection on play, and pauses when already playing', async () => {

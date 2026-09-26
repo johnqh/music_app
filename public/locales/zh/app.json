@@ -1664,6 +1664,33 @@
     "confirmMessage": "这会用新生成的结果替换整份乐谱。除非先保存快照，否则当前乐谱不会保留。",
     "confirm": "重新生成"
   },
+  "projectOrigin": {
+    "heading": "来源",
+    "kind": {
+      "generated": "根据请求生成",
+      "imported": "从文件导入",
+      "transcribed": "从录音转录",
+      "duplicated": "从另一个项目复制",
+      "blank": "从空白乐谱开始",
+      "unknown": "未记录"
+    },
+    "file": "文件",
+    "format": "格式",
+    "sourceProject": "来源项目",
+    "sourceMissing": "该项目已被删除",
+    "request": "当时的请求",
+    "lineup": "编制",
+    "backend": "生成后端",
+    "tempoValue": "每分钟 {{bpm}} 拍",
+    "barsValue_one": "{{count}} 小节",
+    "barsValue_other": "{{count}} 小节",
+    "generatedOn": "生成时间",
+    "modelUsed": "使用的模型",
+    "tokens": "Token 用量",
+    "tokensValue": "输入 {{prompt}}，输出 {{completion}}",
+    "jobLoading": "正在加载生成请求…",
+    "jobMissing": "生成此项目的任务已不在列表中。"
+  },
   "clef": {
     "treble": "高音谱号",
     "bass": "低音谱号",
