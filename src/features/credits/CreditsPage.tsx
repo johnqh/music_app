@@ -12,11 +12,14 @@
  * writes — one bar, for one instrument.
  */
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Card, Section, Stack, Text } from '@sudobility/components';
 import { CreditStore } from '@/features/credits/CreditStore';
+import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 
-export function CreditsPage() {
+export function CreditsPage({ onRedeemCoupon }: { onRedeemCoupon?: () => void } = {}) {
   const { t } = useTranslation();
+  const lang = useCurrentLanguage();
 
   return (
     <Section spacing="xl" className="mx-auto max-w-3xl">
@@ -36,6 +39,22 @@ export function CreditsPage() {
         </Card>
 
         <CreditStore />
+        {onRedeemCoupon ? (
+          <button
+            type="button"
+            className="w-fit text-sm font-medium text-primary underline"
+            onClick={onRedeemCoupon}
+          >
+            Redeem a credit coupon
+          </button>
+        ) : (
+          <Link
+            className="text-sm font-medium text-primary underline"
+            to={`/${lang}/credits/coupons`}
+          >
+            Redeem a credit coupon
+          </Link>
+        )}
       </Stack>
     </Section>
   );

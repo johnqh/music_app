@@ -6,12 +6,18 @@
  */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { setConsumablesUserId } from '@sudobility/consumables_client';
+import { refreshConsumablesBalance, setConsumablesUserId } from '@sudobility/consumables_client';
+import { CurrentEntityProvider, useCurrentEntityOptional } from '@sudobility/entity_client';
 import {
   useSiteAdmin as useServerSiteAdmin,
   type MusicHookContext,
 } from '@sudobility/music_client';
-import { getAppServices, musicHookContext, type AuthUser } from '@/config/initialize';
+import {
+  getAppServices,
+  musicHookContext,
+  setActiveEntityId,
+  type AuthUser,
+} from '@/config/initialize';
 
 export type AuthContextValue = {
   user: AuthUser | null;
@@ -89,7 +95,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, hookContext, loading, siteAdmin, services],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const authenticatedTree = <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  if (!services.entityClient) return authenticatedTree;
+
+  return (
+    <CurrentEntityProvider
+      client={services.entityClient}
+      user={user ? { uid: user.uid, email: user.email } : null}
+    >
+      <EntitySelectionBridge>{authenticatedTree}</EntitySelectionBridge>
+    </CurrentEntityProvider>
+  );
+}
+
+/** Propagates the selected entity to authenticated API requests and refreshes its balance. */
+function EntitySelectionBridge({ children }: { children: ReactNode }) {
+  const entityContext = useCurrentEntityOptional();
+  const entityId = entityContext?.currentEntityId ?? null;
+
+  useEffect(() => {
+    setActiveEntityId(entityId);
+    if (entityId) refreshConsumablesBalance().catch(() => undefined);
+    return () => setActiveEntityId(null);
+  }, [entityId]);
+
+  return <>{children}</>;
 }
 
 /**

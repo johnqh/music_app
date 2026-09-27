@@ -25,6 +25,7 @@ import {
 import type { NetworkClient, NetworkRequestOptions, NetworkResponse } from '@sudobility/types';
 import { ConsumablesApiClient, initializeConsumables } from '@sudobility/consumables_client';
 import type { ConsumablesAdapter } from '@sudobility/consumables_client';
+import { EntityClient } from '@sudobility/entity_client';
 import {
   configureConsumablesWebAdapter,
   createConsumablesWebAdapter,
@@ -138,6 +139,7 @@ export class AuthenticatedNetworkClient implements NetworkClient {
   constructor(
     private readonly inner: NetworkClient,
     private readonly getToken: () => Promise<string | null>,
+    private readonly getEntityId: () => string | null = () => null,
   ) {}
 
   private async withAuth(options?: NetworkRequestOptions | null): Promise<NetworkRequestOptions> {
@@ -147,6 +149,7 @@ export class AuthenticatedNetworkClient implements NetworkClient {
       headers: {
         ...(options?.headers ?? {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(this.getEntityId() ? { 'X-Entity-Id': this.getEntityId()! } : {}),
       },
     };
   }
@@ -329,10 +332,18 @@ export type AppServices = {
   musicClient: MusicClient;
   baseUrl: string;
   auth: AuthBackend;
+  entityClient?: EntityClient;
   prefsStorage: PrefsStorage;
   /** The platform's implementations: playback, XML parsing, MIDI codec, file export. */
   io: MusicIo;
 };
+
+let activeEntityId: string | null = null;
+
+/** Set by the entity provider whenever the signed-in user changes workspaces. */
+export function setActiveEntityId(entityId: string | null): void {
+  activeEntityId = entityId;
+}
 
 let services: AppServices | null = null;
 
@@ -382,9 +393,18 @@ export function initializeApp(): AppServices {
 
   const baseUrl = CONSTANTS.API_URL;
   const networkClient = new FetchNetworkClient();
-  const musicClient = new MusicClient(networkClient, baseUrl);
-
   const auth = isE2e ? e2eBackend() : firebaseBackend();
+  setActiveEntityId(null);
+  const authenticatedNetworkClient = new AuthenticatedNetworkClient(
+    networkClient,
+    () => auth.getToken(),
+    () => activeEntityId,
+  );
+  const musicClient = new MusicClient(authenticatedNetworkClient, baseUrl);
+  const entityClient = new EntityClient({
+    baseUrl: `${baseUrl}/api/v1`,
+    networkClient: authenticatedNetworkClient,
+  });
 
   /**
    * Credits.
@@ -419,7 +439,7 @@ export function initializeApp(): AppServices {
     adapter: revenueCatKey ? createConsumablesWebAdapter() : unconfiguredPurchasing(),
     apiClient: new ConsumablesApiClient({
       baseUrl,
-      networkClient: new AuthenticatedNetworkClient(networkClient, () => auth.getToken()),
+      networkClient: authenticatedNetworkClient,
     }),
   });
   const prefsStorage: PrefsStorage = {
@@ -437,8 +457,9 @@ export function initializeApp(): AppServices {
   initializeAppStore(context);
 
   services = {
-    networkClient,
+    networkClient: authenticatedNetworkClient,
     musicClient,
+    entityClient,
     baseUrl,
     auth,
     prefsStorage,

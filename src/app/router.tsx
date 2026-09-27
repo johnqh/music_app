@@ -9,6 +9,9 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CreditsHistoryPage } from '@/features/credits/CreditsHistoryPage';
 import { CreditsPage } from '@/features/credits/CreditsPage';
+import { CreditCouponsPage } from '@/features/credits/CreditCouponsPage';
+import { EntitiesPage } from '@/features/entities/EntitiesPage';
+import { UserDashboardPage } from '@/features/dashboard/UserDashboardPage';
 import {
   BrowserRouter,
   Navigate,
@@ -40,6 +43,7 @@ import { useCurrentLanguage, useLocalizedNavigate } from '@/hooks/useLocalizedNa
 import { isLanguageSupported } from '@/i18n';
 import { SUPPORTED_LANGUAGES } from '@/config/languages';
 import { getAppServices } from '@/config/initialize';
+import { CONSTANTS } from '@/config/constants';
 import {
   getMusicPosition,
   getMusicPositionSource,
@@ -297,6 +301,34 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
               element={
                 <ProtectedRoute>
                   <CreditsHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="credits/coupons"
+              element={
+                <ProtectedRoute>
+                  <CreditCouponsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="entities"
+              element={
+                <ProtectedRoute>
+                  {CONSTANTS.SHOW_ENTITIES ? (
+                    <EntitiesPage />
+                  ) : (
+                    <Navigate to="../dashboard" replace />
+                  )}
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute>
+                  <UserDashboardPage />
                 </ProtectedRoute>
               }
             />

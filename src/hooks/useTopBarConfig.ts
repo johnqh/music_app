@@ -26,16 +26,14 @@ export function useTopBarConfig(store?: LanguagePrefStore): TopBarConfig {
   const lang = useCurrentLanguage();
   const switchLanguage = useSwitchLanguage(store);
 
-  // The account menu holds what belongs to the *user*: their credit balance,
-  // what they bought, and the account itself. UI settings are not here — they
-  // are a top-level nav item, as they are in `sudojo_app`, because they belong
-  // to the app rather than to whoever is signed in.
+  // The account menu holds the dashboard and purchase history. UI settings are
+  // a top-level nav item, as they are in `sudojo_app`.
   const authenticatedMenuItems = useMemo<AuthMenuItem[]>(
     () => [
       {
-        id: 'credits',
-        label: t('nav.credits'),
-        onClick: () => navigate(`/${lang}/credits`),
+        id: 'dashboard',
+        label: t('nav.dashboard'),
+        onClick: () => navigate(`/${lang}/dashboard`),
       },
       {
         id: 'purchases',
@@ -65,6 +63,7 @@ export function useTopBarConfig(store?: LanguagePrefStore): TopBarConfig {
       // account — the same place `sudojo_app` puts it.
       menuItems: [
         { id: 'projects', label: t('nav.projects'), href: `/${lang}/projects` },
+        { id: 'entities', label: t('nav.entities'), href: `/${lang}/entities` },
         { id: 'community', label: t('nav.community'), href: `/${lang}/community` },
         { id: 'docs', label: t('nav.docs'), href: `/${lang}/docs` },
         { id: 'resources', label: t('nav.resources'), href: `/${lang}/resources` },

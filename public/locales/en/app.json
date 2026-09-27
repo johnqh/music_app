@@ -1276,10 +1276,13 @@
     "tempoClamped": "Tempo {{bpm}} was outside {{min}}-{{max}} and became {{clamped}}."
   },
   "nav": {
+    "dashboard": "Dashboard",
     "settings": "Settings",
     "signOut": "Sign out",
     "signIn": "Sign in",
     "credits": "Credits",
+    "entities": "Workspaces",
+    "invitations": "Invitations",
     "purchases": "Purchases",
     "community": "Community",
     "resources": "Resources",

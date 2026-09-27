@@ -1276,10 +1276,13 @@
     "noTempo": "未指定速度，已使用 {{defaultBpm}} BPM。"
   },
   "nav": {
+    "dashboard": "仪表盘",
     "settings": "设置",
     "signOut": "退出登录",
     "signIn": "登录",
     "credits": "点数",
+    "entities": "工作区",
+    "invitations": "邀请",
     "purchases": "购买记录",
     "community": "社区",
     "resources": "资源",

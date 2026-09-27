@@ -115,10 +115,10 @@ export default defineConfig({
     //
     // music_lib ships ESM that imports CJS deps (@tonejs/midi), whose named
     // imports Node cannot interop. consumables_client is compiled by tsc with
-    // extensionless relative imports -- the house style it shares with
-    // entity_client -- which Node rejects as ERR_UNSUPPORTED_DIR_IMPORT. The
-    // browser never sees either problem, because Vite resolves both; only
-    // vitest, which hands bare dependencies to Node, does.
+    // extensionless relative imports, which Node rejects as
+    // ERR_UNSUPPORTED_DIR_IMPORT. The browser never sees this issue, because
+    // Vite resolves it; only vitest, which hands bare dependencies to Node,
+    // does.
     //
     // consumables_pages needs no entry: it is Vite-bundled like entity_pages,
     // so its output has no relative imports at all.
@@ -130,11 +130,7 @@ export default defineConfig({
     // "Cannot find module '.../dist/SpatialView'" failure without this.
     server: {
       deps: {
-        inline: [
-          /@sudobility\/(music_lib|building_blocks|components|auth-components|design|seo_lib)/,
-          /@sudobility\/consumables_client/,
-          /@sudobility\/music_spatial/,
-        ],
+        inline: true,
       },
     },
     coverage: {
