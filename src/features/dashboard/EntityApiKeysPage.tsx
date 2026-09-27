@@ -7,6 +7,7 @@ import {
   type CreatedEntityApiKey,
 } from '@sudobility/entity_client';
 import { getAppServices } from '@/config/initialize';
+import { CONSTANTS } from '@/config/constants';
 
 const button = 'rounded-md border border-theme-border px-3 py-2 text-sm hover:bg-theme-surface';
 const primary =
@@ -14,7 +15,7 @@ const primary =
 
 /** API keys belong to the currently selected entity; the secret is shown once. */
 export function EntityApiKeysPage() {
-  const { currentEntity } = useCurrentEntity();
+  const { currentEntity, isLoading } = useCurrentEntity();
   const entityClient = getAppServices().entityClient;
   if (!entityClient) throw new Error('Entity client is not configured');
   const slug = currentEntity?.entitySlug ?? null;
@@ -41,14 +42,24 @@ export function EntityApiKeysPage() {
     }
   }
 
-  if (!slug) return <p>Select a workspace to manage its API keys.</p>;
+  if (isLoading) return <p>Loading your entity…</p>;
+  if (!slug)
+    return (
+      <p role="status">
+        {CONSTANTS.SHOW_ENTITIES
+          ? 'Select a workspace to manage its API keys.'
+          : 'Your personal entity is not available yet.'}
+      </p>
+    );
+  const scopeName = CONSTANTS.SHOW_ENTITIES
+    ? currentEntity?.displayName || slug
+    : 'your personal entity';
   return (
     <main className="mx-auto max-w-4xl space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold">Workspace API keys</h1>
+        <h1 className="text-2xl font-semibold">API keys</h1>
         <p className="mt-1 text-theme-text-secondary">
-          Keys are associated with {currentEntity?.displayName || slug} and can act on this
-          workspace.
+          Keys are associated with {scopeName} and can act on that entity.
         </p>
       </header>
       {(message || create.error || keys.error || revoke.error) && (
@@ -135,7 +146,7 @@ export function EntityApiKeysPage() {
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-theme-text-secondary">No API keys for this workspace yet.</p>
+          <p className="text-sm text-theme-text-secondary">No API keys for this entity yet.</p>
         )}
       </section>
     </main>

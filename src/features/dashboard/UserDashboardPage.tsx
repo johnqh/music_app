@@ -87,16 +87,12 @@ export function UserDashboardPage() {
       description: t('dashboard.projectsDesc', 'Browse your music projects'),
       icon: MusicalNoteIcon,
     },
-    ...(CONSTANTS.SHOW_ENTITIES
-      ? [
-          {
-            id: 'api-keys' as const,
-            label: t('dashboard.apiKeys', 'API keys'),
-            description: t('dashboard.apiKeysDesc', 'Manage keys for this workspace'),
-            icon: KeyIcon,
-          },
-        ]
-      : []),
+    {
+      id: 'api-keys',
+      label: t('dashboard.apiKeys', 'API keys'),
+      description: t('dashboard.apiKeysDesc', 'Manage keys for your entity'),
+      icon: KeyIcon,
+    },
     {
       id: 'credits',
       label: t('dashboard.creditPacks', 'Credits'),
@@ -148,7 +144,7 @@ export function UserDashboardPage() {
       <CreditCouponsPage />
     ) : section === 'manage-coupons' && siteAdmin ? (
       <CreditCouponManagementPage />
-    ) : section === 'api-keys' && CONSTANTS.SHOW_ENTITIES ? (
+    ) : section === 'api-keys' ? (
       <EntityApiKeysPage />
     ) : CONSTANTS.SHOW_ENTITIES &&
       (section === 'workspaces' || section === 'members' || section === 'invitations') ? (
