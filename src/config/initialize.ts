@@ -333,6 +333,7 @@ export type AppServices = {
   baseUrl: string;
   auth: AuthBackend;
   entityClient?: EntityClient;
+  consumablesApiClient: ConsumablesApiClient;
   prefsStorage: PrefsStorage;
   /** The platform's implementations: playback, XML parsing, MIDI codec, file export. */
   io: MusicIo;
@@ -435,12 +436,13 @@ export function initializeApp(): AppServices {
     ? import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX
     : import.meta.env.VITE_REVENUECAT_API_KEY;
   if (revenueCatKey) configureConsumablesWebAdapter(revenueCatKey);
+  const consumablesApiClient = new ConsumablesApiClient({
+    baseUrl,
+    networkClient: authenticatedNetworkClient,
+  });
   initializeConsumables({
     adapter: revenueCatKey ? createConsumablesWebAdapter() : unconfiguredPurchasing(),
-    apiClient: new ConsumablesApiClient({
-      baseUrl,
-      networkClient: authenticatedNetworkClient,
-    }),
+    apiClient: consumablesApiClient,
   });
   const prefsStorage: PrefsStorage = {
     getItem: (key) => window.localStorage.getItem(key),
@@ -460,6 +462,7 @@ export function initializeApp(): AppServices {
     networkClient: authenticatedNetworkClient,
     musicClient,
     entityClient,
+    consumablesApiClient,
     baseUrl,
     auth,
     prefsStorage,

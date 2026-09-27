@@ -29,6 +29,7 @@ afterEach(() => {
 const useBalance = vi.fn();
 vi.mock('@sudobility/consumables_client', () => ({
   useBalance: () => useBalance() as unknown,
+  ConsumablesApiClient: class {},
 }));
 
 const useScorePresets = vi.fn(() => ({ data: undefined as string[] | undefined }));

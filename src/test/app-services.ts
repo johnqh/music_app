@@ -11,6 +11,7 @@ import { initializeMusicPlayer, resetMusicPlayer } from '@sudobility/music_playe
 import { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import { fakeMusicNetwork } from '@/test/fake-music-network';
 import { setAppServices, type AppServices, type AuthUser } from '@/config/initialize';
+import { ConsumablesApiClient } from '@sudobility/consumables_client';
 
 const TEST_USER: AuthUser = {
   uid: 'test-user',
@@ -51,6 +52,10 @@ export function installTestAppServices(
     networkClient: fakeMusicNetwork(context.client!),
     musicClient: context.client!,
     baseUrl: 'http://test.local',
+    consumablesApiClient: new ConsumablesApiClient({
+      baseUrl: 'http://test.local',
+      networkClient: fakeMusicNetwork(context.client!),
+    }),
     prefsStorage: context.storage!,
     auth: {
       observe: (cb) => {

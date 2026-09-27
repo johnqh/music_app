@@ -8,6 +8,7 @@ import {
   UsersIcon,
   EnvelopeIcon,
   TagIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
 import {
   MasterDetailLayout,
@@ -30,6 +31,7 @@ import { DashboardPage as MusicProjectsPage } from '@/features/projects/Dashboar
 import { useSetPageConfig } from '@/hooks/usePageConfig';
 import { CONSTANTS } from '@/config/constants';
 import { useAuth } from '@/app/AuthContext';
+import { EntityApiKeysPage } from '@/features/dashboard/EntityApiKeysPage';
 
 type DashboardSection =
   | 'projects'
@@ -39,7 +41,8 @@ type DashboardSection =
   | 'credits'
   | 'history'
   | 'redeem'
-  | 'manage-coupons';
+  | 'manage-coupons'
+  | 'api-keys';
 
 export function UserDashboardPage() {
   useSetPageConfig({
@@ -84,6 +87,16 @@ export function UserDashboardPage() {
       description: t('dashboard.projectsDesc', 'Browse your music projects'),
       icon: MusicalNoteIcon,
     },
+    ...(CONSTANTS.SHOW_ENTITIES
+      ? [
+          {
+            id: 'api-keys' as const,
+            label: t('dashboard.apiKeys', 'API keys'),
+            description: t('dashboard.apiKeysDesc', 'Manage keys for this workspace'),
+            icon: KeyIcon,
+          },
+        ]
+      : []),
     {
       id: 'credits',
       label: t('dashboard.creditPacks', 'Credits'),
@@ -135,6 +148,8 @@ export function UserDashboardPage() {
       <CreditCouponsPage />
     ) : section === 'manage-coupons' && siteAdmin ? (
       <CreditCouponManagementPage />
+    ) : section === 'api-keys' && CONSTANTS.SHOW_ENTITIES ? (
+      <EntityApiKeysPage />
     ) : CONSTANTS.SHOW_ENTITIES &&
       (section === 'workspaces' || section === 'members' || section === 'invitations') ? (
       <EntitiesPage section={section} />
