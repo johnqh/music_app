@@ -1,6 +1,6 @@
 {
   "name": "scoresmith",
-  "version": "0.2.142",
+  "version": "0.2.143",
   "description": "ScoreSmith - a browser-based AI-assisted sheet-music composition app",
   "private": true,
   "type": "module",
@@ -36,8 +36,8 @@
     "@sudobility/auth_lib": "^0.0.97",
     "@sudobility/building_blocks": "^0.0.308",
     "@sudobility/components": "^5.3.24",
-    "@sudobility/consumables_client": "^0.0.27",
-    "@sudobility/consumables_pages": "^0.0.55",
+    "@sudobility/consumables_client": "^0.0.28",
+    "@sudobility/consumables_pages": "^0.0.56",
     "@sudobility/design": "^1.1.55",
     "@sudobility/di": "^1.5.66",
     "@sudobility/di_web": "^0.1.237",
