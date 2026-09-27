@@ -431,9 +431,9 @@ export function initializeApp(): AppServices {
    * stubbed. This is the stubs-system pattern `src/stubs/` uses: an empty-state
    * implementation, never partially wired.
    */
-  const revenueCatKey = import.meta.env.PROD
-    ? import.meta.env.VITE_REVENUECAT_API_KEY
-    : import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX;
+  const revenueCatKey = CONSTANTS.DEV_MODE
+    ? import.meta.env.VITE_REVENUECAT_API_KEY_SANDBOX
+    : import.meta.env.VITE_REVENUECAT_API_KEY;
   if (revenueCatKey) configureConsumablesWebAdapter(revenueCatKey);
   initializeConsumables({
     adapter: revenueCatKey ? createConsumablesWebAdapter() : unconfiguredPurchasing(),

@@ -42,7 +42,12 @@ type DashboardSection =
   | 'manage-coupons';
 
 export function UserDashboardPage() {
-  useSetPageConfig({ layoutMode: 'full', maxWidth: 'full', contentPadding: 'none' });
+  useSetPageConfig({
+    layoutMode: 'full',
+    maxWidth: 'full',
+    contentPadding: 'none',
+    scrollable: false,
+  });
   const { t } = useTranslation();
   const { siteAdmin } = useAuth();
   const navigate = useLocalizedNavigate();
@@ -138,7 +143,7 @@ export function UserDashboardPage() {
     );
 
   return (
-    <div className="w-full min-w-0 flex-1">
+    <div className="h-full min-h-0 w-full min-w-0 flex-1">
       <MasterDetailLayout
         masterTitle={t('dashboard.title', 'Your dashboard')}
         backButtonText={t('dashboard.title', 'Dashboard')}
@@ -185,6 +190,8 @@ export function UserDashboardPage() {
         }
         detailContent={<div className="min-h-[400px]">{detailContent}</div>}
         detailTitle={selected.label}
+        masterClassName="min-h-0 overflow-y-auto overscroll-contain"
+        detailClassName="min-h-0 overflow-y-auto overscroll-contain"
         detailMaxWidth={1024}
         detailPadding
         mobileView={mobileView}

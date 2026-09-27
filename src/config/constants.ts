@@ -19,6 +19,9 @@ export const CONSTANTS = {
   // API
   API_URL: import.meta.env.VITE_API_URL || 'http://localhost:8032',
 
+  // Development mode selects sandbox services, including RevenueCat.
+  DEV_MODE: import.meta.env.VITE_DEV_MODE === 'true',
+
   // Entity management UI is opt-in for deployments. Entity-backed credits and
   // music data remain enabled independently of whether these controls show.
   SHOW_ENTITIES: import.meta.env.VITE_SHOW_ENTITIES === 'true',
