@@ -53,6 +53,15 @@ const ROUTES: Route[] = [
   },
   {
     method: 'POST',
+    pattern: /^\/projects\/transcribe$/,
+    call: (fake, _m, _q, body) => {
+      const file = body instanceof FormData ? body.get('file') : null;
+      const name = file instanceof File ? file.name : 'Audio';
+      return invoke(fake, 'transcribeAudio', file, name, TOKEN);
+    },
+  },
+  {
+    method: 'POST',
     pattern: /^\/projects\/([^/]+)\/duplicate$/,
     call: (fake, m, _q, body) =>
       invoke(fake, 'duplicateProject', decodeURIComponent(m[1]!), body ?? {}, TOKEN),

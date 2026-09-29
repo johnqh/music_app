@@ -475,16 +475,15 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   /**
-   * Uploads the recording and lets it transcribe in the background.
+   * Uploads the recording and opens the project it becomes.
    *
    * Nothing is decoded or analysed here: the file goes to the server, which
-   * separates it, transcribes each part and returns a score. The project comes
-   * back immediately in a `transcribing` state and fills itself in when the job
-   * lands. Unlike a generation, this does **not** navigate to it — a
-   * transcription runs for minutes, not seconds, and a reader dropped into a
-   * project with nothing in it yet has no way to tell "still working" from
-   * "came back empty". The card shows it as transcribing instead (see
-   * `renderCard` below), and opening it is refused until it lands.
+   * separates it and transcribes each part. The project comes back at once in
+   * a `transcribing` state, and this goes straight to it — as a generation
+   * does, and for the same reason. The editor watches the project's live
+   * stream, where each part lands in the score as the transcriber finishes
+   * it, under a strip that names the part being worked on; the place to wait
+   * is in front of the score rather than on a card with a badge.
    */
   const handleAudioImport = (file: File): void => {
     void (async () => {
@@ -492,9 +491,10 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       setAudioError(null);
       try {
         const { client, token } = await clientAndToken();
-        await client.transcribeAudio(file, file.name, token);
+        const project = await client.transcribeAudio(file, file.name, token);
         setAudioImportOpen(false);
         void refresh();
+        onNavigate?.(`/project/${project.id}`);
       } catch (err) {
         setAudioError(err instanceof Error ? err.message : 'That recording could not be sent.');
         reportError(err, { context: t('errors.audioImport'), store });
@@ -505,13 +505,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   };
 
   const renderCard = (project: ProjectSummary) => {
-    // A `transcribing` project has no finished score to open yet — the editor
-    // would show minutes of nothing with no way to tell "still working" from
-    // "came back empty". Refused here instead, at the one place that already
-    // knows every project's status without an extra fetch. A `generating`
-    // project is the opposite case: its notes stream into the editor as they
-    // are written, and opening it is how you watch.
-    const busy = project.status === 'transcribing';
+    // A busy project opens like any other: whether it is being generated or
+    // transcribed, its notes stream into the editor as they are written, and
+    // opening it is how you watch. The badge says which is happening.
     const statusLabel =
       project.status === 'transcribing'
         ? t('dashboard.transcribing')
@@ -524,10 +520,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           type="button"
           variant="ghost"
           aria-label={t('dashboard.openProject', { name: project.name })}
-          onClick={() => {
-            if (!busy) openProject(project.id);
-          }}
-          disabled={busy}
+          onClick={() => openProject(project.id)}
           className="flex h-auto flex-1 flex-col items-start gap-1 rounded-none p-4 text-left"
         >
           <Text size="sm" weight="medium">

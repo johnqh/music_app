@@ -9,6 +9,33 @@ describe('GenerationStatusStrip', () => {
     expect(screen.getByText('Generating notes…')).toBeVisible();
   });
 
+  it('says a recording is being transcribed, when that is the job', () => {
+    // "Generating" over a recording somebody uploaded describes something
+    // that is not happening.
+    render(<GenerationStatusStrip status="transcribing" onCancel={vi.fn()} />);
+    expect(screen.getByText('Transcribing the recording…')).toBeVisible();
+    expect(screen.queryByText('Generating notes…')).not.toBeInTheDocument();
+  });
+
+  it('names the part a transcription is working on, and the separation before any', () => {
+    const { rerender } = render(
+      <GenerationStatusStrip
+        status="transcribing"
+        onCancel={vi.fn()}
+        progress={{ stage: 'plan', label: 'Separation', done: 0, total: 8 }}
+      />,
+    );
+    expect(screen.getByText(/^Separating 0 of 8/)).toBeVisible();
+    rerender(
+      <GenerationStatusStrip
+        status="transcribing"
+        onCancel={vi.fn()}
+        progress={{ stage: 'part', label: 'Vocals', done: 2, total: 8 }}
+      />,
+    );
+    expect(screen.getByText('Part 2 of 8: Vocals')).toBeVisible();
+  });
+
   it('is a row, not a cover: the score above stays readable while the notes arrive', () => {
     // The old overlay covered the whole editor. With partials streamed into
     // the score, covering it would hide the one thing worth watching; what

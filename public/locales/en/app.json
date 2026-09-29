@@ -1083,7 +1083,7 @@
     "chooseFileEllipsis": "Choose {{kind}}…"
   },
   "importAudio": {
-    "description": "Turns a recording into a project, split into parts — vocals, drums, bass, guitar, piano and the rest, each on its own track. It runs on the server and takes a few minutes, so the project appears straight away and fills itself in when it is done. Expect a sketch to edit, not a copy of the record. {{formats}}.",
+    "description": "Turns a recording into a project, split into parts — vocals, drums, bass, guitar, piano and the rest, each on its own track. It runs on the server and takes a few minutes: the project opens straight away, and each part appears in the score as it is transcribed. Expect a sketch to edit, not a copy of the record. {{formats}}.",
     "title": "Import audio",
     "fileKind": "audio file",
     "sending": "Sending the recording…",
@@ -1299,12 +1299,14 @@
   },
   "overlay": {
     "generatingNotes": "Generating notes…",
+    "transcribingNotes": "Transcribing the recording…",
     "progress": "{{stage}} {{done}} of {{total}}: {{label}}",
     "reconnecting": "Reconnecting…",
     "polling": "Live updates unavailable; checking the project periodically.",
     "lockedWhileGenerating": "Editing and playback resume when it finishes.",
     "stage": {
       "plan": "Planning",
+      "separate": "Separating",
       "part": "Part",
       "section": "Section",
       "chunk": "Chunk"

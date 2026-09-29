@@ -453,12 +453,9 @@ describe('DashboardPage generation', () => {
   });
 
   /**
-   * A transcription runs for minutes, not seconds — see `handleAudioImport`'s
-   * own comment. It gets the same "busy" treatment a generation does: a
-   * distinct badge (so a reader can tell which is happening), and it must not
-   * be openable — opening it would show a mostly-empty score with no way to
-   * tell "still working" from "came back blank", which is exactly what the
-   * missing refusal let happen live.
+   * A transcription is watched the way a generation is: each part lands in
+   * the score as the transcriber finishes it. So the badge says which kind of
+   * job it is, and the card is the way in.
    */
   it('marks a transcribing project in the list', async () => {
     const { store, context } = setup();
@@ -473,7 +470,7 @@ describe('DashboardPage generation', () => {
     expect(await screen.findByText('Transcribing…')).toBeVisible();
   });
 
-  it('refuses to open a transcribing project', async () => {
+  it('opens a transcribing project, because its parts can be watched arriving', async () => {
     const { store, context } = setup();
     const project = await context.fakeClient.createProject(
       { name: 'Busy Recording', score: createEmptyScore({ title: 'Busy Recording' }) },
@@ -487,12 +484,32 @@ describe('DashboardPage generation', () => {
       await screen.findByRole('button', { name: 'Open project: Busy Recording' }),
     );
 
-    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledWith(`/project/${project.id}`);
+  });
+
+  it('goes straight to the project a recording becomes', async () => {
+    // As a generation does: the place to wait is in front of the score, where
+    // the parts arrive, rather than on a card with a badge.
+    const { store, context } = setup();
+    const onNavigate = vi.fn();
+    const user = userEvent.setup();
+    render(withQueryClient(<DashboardPage store={store} onNavigate={onNavigate} />));
+
+    await chooseImport(user, 'Import Audio');
+    const input = (await screen.findByLabelText('audio file input')) as HTMLInputElement;
+    await user.upload(input, new File(['RIFF'], 'Take 3.wav', { type: 'audio/wav' }));
+    await user.click(await screen.findByRole('button', { name: /^import/i }));
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledTimes(1));
+    const [created] = await context.fakeClient.listProjects('tok');
+    expect(created!.name).toBe('Take 3');
+    expect(created!.status).toBe('transcribing');
+    expect(onNavigate).toHaveBeenCalledWith(`/project/${created!.id}`);
   });
 
   it('opens a generating project, because its notes can be watched arriving', async () => {
-    // Unlike a transcription, a generation streams each part into the editor
-    // as it is written; the card is the way in, not a refusal.
+    // A generation streams each part into the editor as it is written; the
+    // card is the way in, not a refusal.
     const { store, context } = setup();
     const project = await context.fakeClient.createProject(
       { name: 'Busy Song', score: createEmptyScore({ title: 'Busy Song' }) },

@@ -235,6 +235,28 @@ export class FakeMusicClient {
   }
 
   /** Test helper: put a project into `generating` without going through a job. */
+  /**
+   * As the server does: a project named after the file, created at once and
+   * held `transcribing` until the job lands.
+   */
+  async transcribeAudio(
+    _file: unknown,
+    filename: string,
+    token: string,
+  ): Promise<ProjectSaveResult> {
+    const name = filename.replace(/\.[^.]+$/, '') || 'Audio';
+    const saved = await this.createProject(
+      {
+        name,
+        score: createEmptyScore({ title: name, measures: 4 }),
+        origin: { kind: 'transcribed', fileName: filename },
+      },
+      token,
+    );
+    this.setProjectStatus(saved.id, 'transcribing');
+    return { ...saved, status: 'transcribing' };
+  }
+
   setProjectStatus(id: string, status: ProjectRecord['status']): void {
     const record = this.records.get(id);
     if (record) this.records.set(id, { ...record, status });

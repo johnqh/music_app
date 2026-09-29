@@ -1083,7 +1083,7 @@
     "chooseFileEllipsis": "选择{{kind}}…"
   },
   "importAudio": {
-    "description": "将录音转换为项目，并拆分为多个声部——人声、鼓、贝斯、吉他、钢琴等，每个声部占一条音轨。转换在服务器上进行，需要几分钟，因此项目会立即出现，并在完成后自动填充。得到的是可供编辑的草稿，而不是原曲的复制品。支持 {{formats}}。",
+    "description": "将录音转换为项目，并拆分为多个声部——人声、鼓、贝斯、吉他、钢琴等，每个声部占一条音轨。转换在服务器上进行，需要几分钟：项目会立即打开，每个声部转录完成后即出现在乐谱中。得到的是可供编辑的草稿，而不是原曲的复制品。支持 {{formats}}。",
     "title": "导入音频",
     "fileKind": "音频文件",
     "sending": "正在上传录音…",
@@ -1299,12 +1299,14 @@
   },
   "overlay": {
     "generatingNotes": "正在生成音符…",
+    "transcribingNotes": "正在转录录音…",
     "progress": "{{stage}}：第 {{done}}/{{total}} 项，{{label}}",
     "reconnecting": "正在重新连接…",
     "polling": "实时更新不可用；正在定期检查项目。",
     "lockedWhileGenerating": "完成后可继续编辑和播放。",
     "stage": {
       "plan": "规划",
+      "separate": "分离声部",
       "part": "声部",
       "section": "段落",
       "chunk": "片段"

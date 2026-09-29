@@ -211,9 +211,17 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
    * that arrived live and one a poll noticed.
    */
   const markGenerated = useCallback(async () => {
-    // Generation output is external content. Repair it before the editor
-    // unlocks, then persist the repaired score so the issue list stays clear
-    // after a reload as well as in the current editor session.
+    // Generation output is external content. Repair it, then persist the
+    // repaired score so the issue list stays clear after a reload as well as
+    // in the current editor session. The server repairs what a job hands
+    // over; this is for a score that came from one that did not.
+    //
+    // The lock comes off first. This runs before the hook reports the
+    // project ready, so the edit lock is still held — and a repair is a
+    // content command, which the lock refuses without a word. With it held
+    // the repair fixed nothing, every time, and said so to nobody. The job
+    // has landed and its score is adopted; there is nothing left to guard.
+    store.getState().setEditLocked(false);
     const repairResult = repairAllIssues(store, t('editor.fixIssues'));
     if (repairResult.remaining === 0 && repairResult.fixed > 0) {
       await store.getState().saveNow();
@@ -261,6 +269,25 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     },
   });
   const generating = generation.generating;
+
+  /*
+    A transcription that ended badly says so after the strip has gone.
+
+    The strip is what shows `generation.error`, and it is unmounted the
+    moment the project is ready again — which, for a failure, is the same
+    moment. A generation's failure reaches a toast through the hook, by way
+    of the job it started; a transcription has no job, and the reader is now
+    sitting in front of the project when it fails rather than finding out
+    from a card on the dashboard.
+  */
+  const lastStatusRef = useRef(generation.status);
+  useEffect(() => {
+    const previous = lastStatusRef.current;
+    lastStatusRef.current = generation.status;
+    if (previous === 'transcribing' && generation.status === 'ready' && generation.error) {
+      store.getState().pushToast({ message: generation.error, severity: 'error' });
+    }
+  }, [store, generation.status, generation.error]);
 
   /*
     The edit lock, for as long as a job owns the project.
@@ -963,6 +990,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           looking. Fixed rows first, the variable one last. */}
         {generating && (
           <GenerationStatusStrip
+            status={generation.status}
             onCancel={() => void generation.cancel()}
             progress={generation.progress}
             live={generation.live}
@@ -1078,7 +1106,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     variant="primary"
                     className="w-full justify-center px-2 py-1 text-xs"
                     title={t('editor.fixIssuesTitle')}
-                    disabled={playbackState === 'playing'}
+                    // A repair is an edit, refused while the transport plays
+                    // and while a job owns the project. Disabled for both,
+                    // so the button never looks live and does nothing.
+                    disabled={playbackState === 'playing' || generating}
                     onClick={handleFixIssues}
                   >
                     {t('editor.fixIssues')}
