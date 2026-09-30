@@ -58,6 +58,7 @@ import {
 import { getAppServices } from '@/config/initialize';
 import { ScoreEditorView } from '@/features/score-editor/ScoreEditorView';
 import { TransportBar } from '@/components/transport/TransportBar';
+import { SpatialSection } from '@/features/spatial/SpatialSection';
 import { useSetPageConfig } from '@/hooks/usePageConfig';
 import { useSetBreadcrumbs } from '@/hooks/useBreadcrumbs';
 
@@ -74,6 +75,18 @@ export function PublishedView() {
       context: { client: musicClient, getToken: () => auth.getToken(), storage: prefsStorage },
     });
   }, []);
+
+  /*
+    The Spatial 3D view in the notation's place, as the editor offers it.
+    `unpluggedActive` follows it, so this page's binding mixes through the
+    stage arrangement while the stage is showing — the flag `bind-player.ts`
+    reads — and is cleared on the way out.
+  */
+  const [spatialActive, setSpatialActive] = useState(false);
+  useEffect(() => {
+    store.getState().setUnpluggedActive(spatialActive);
+    return () => store.getState().setUnpluggedActive(false);
+  }, [store, spatialActive]);
 
   /**
    * The page's own transport. Bound for as long as the page is mounted; the
@@ -148,9 +161,17 @@ export function PublishedView() {
   }, [publicId, store]);
 
   // The notation/transport area manages its own scrolling (ScoreEditorView's
-  // scroll box), the same override a master-detail page would use — the
-  // shell's normal whole-page scroll would fight it otherwise.
-  useSetPageConfig({ scrollable: false });
+  // scroll box), the same override a master-detail page uses — the shell's
+  // normal whole-page scroll would fight it otherwise. And the whole width,
+  // as the editor has: a score is the one thing here that is better for
+  // every pixel across, and the shell's reading-width cap left a third of a
+  // wide screen empty either side of it.
+  useSetPageConfig({
+    layoutMode: 'full',
+    maxWidth: 'full',
+    contentPadding: 'none',
+    scrollable: false,
+  });
   useSetBreadcrumbs(
     snapshot
       ? [
@@ -194,7 +215,11 @@ export function PublishedView() {
       </div>
 
       <div className="min-h-0 flex-1">
-        <ScoreEditorView store={store} readOnly controller={playerController} />
+        {spatialActive ? (
+          <SpatialSection store={store} bus={playerController.bus} />
+        ) : (
+          <ScoreEditorView store={store} readOnly controller={playerController} trackInfo="icon" />
+        )}
       </div>
 
       {/*
@@ -209,7 +234,15 @@ export function PublishedView() {
         runs.
       */}
       {transportController && (
-        <TransportBar store={store} controller={transportController} readOnly />
+        <TransportBar
+          store={store}
+          controller={transportController}
+          readOnly
+          // The 3D stage, as in the editor: listening in 3D is listening,
+          // which is what a visitor is here for.
+          spatialActive={spatialActive}
+          onToggleSpatial={() => setSpatialActive((v) => !v)}
+        />
       )}
     </div>
   );

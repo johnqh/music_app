@@ -895,10 +895,7 @@
     "trackInfo": "Track info",
     "trackInfoFull": "Full track info",
     "trackInfoIcon": "Instrument icons only",
-    "trackInfoHidden": "Hide track info",
-    "trackInfoFullHint": "Show each track’s name and instrument beside its staff",
-    "trackInfoIconHint": "Show only the instrument icon beside each staff",
-    "trackInfoHiddenHint": "Give the whole width to the music"
+    "trackInfoHint": "Show only the instrument icon beside each staff, or the full track info"
   },
   "error": {
     "crashed": "Something went wrong and {{appName}} couldn’t continue.",

@@ -38,6 +38,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getMusicPlayerIfInitialized } from '@sudobility/music_player/core';
+import { usePlaybackReadiness } from '@sudobility/music_player/react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { LevelSlider } from '@/components/controls/level-slider';
 import {
@@ -248,6 +250,14 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
  * ran on ahead through several silent bars before snapping back when the music
  * actually started. Nothing can play until the font is in, so the control that
  * starts playing says so.
+ *
+ * **Whether it is preparing is the player's own readiness, read and driven
+ * by music_player's `usePlaybackReadiness`** — not the store's `synthLoad`.
+ * The store only hears about a load that something started, and on a page
+ * opened cold nothing had: the button sat enabled over an engine that had
+ * not begun, and the press that should have played started the load
+ * instead. The hook starts it the moment this button is on screen, so the
+ * spinner is the first thing shown and Play the second, on every path in.
  */
 function PlayPauseButton({
   store,
@@ -262,7 +272,7 @@ function PlayPauseButton({
 }) {
   const { t } = useTranslation();
   const playbackState = store((s) => s.state);
-  const preparing = store((s) => s.synthLoad.status === 'loading');
+  const preparing = usePlaybackReadiness(getMusicPlayerIfInitialized()) === 'preparing';
   const label = preparing
     ? t('transport.preparingUnknown')
     : playbackState === 'playing'

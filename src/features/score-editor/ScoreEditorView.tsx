@@ -97,7 +97,7 @@ import type { EditorStoreApi } from '@/app-library';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
-import type { LayoutMode } from '@sudobility/music_types';
+import type { LayoutMode, TrackInfoMode } from '@sudobility/music_types';
 import { ScoreCanvas, bindPlaybackToCanvas, boxFromPoints } from '@sudobility/music_drawing';
 import type { Point, ViewPoint } from '@sudobility/music_drawing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
@@ -137,6 +137,13 @@ export type ScoreEditorViewProps = {
    */
   readOnly?: boolean;
   /**
+   * The track-info column's width, fixed by the host rather than read from
+   * the device pref. A published page pins it to the instrument icons: a
+   * visitor is there to listen, and the column of names was a fifth of the
+   * width taken from the music they came for.
+   */
+  trackInfo?: TrackInfoMode;
+  /**
    * What the playback-follow effect reads sounding notes and the render
    * delay from. Defaults to the app-wide `playbackController` singleton —
    * wrong for a host with its own isolated store and player binding (the
@@ -163,6 +170,7 @@ export function ScoreEditorView({
   onGenerateTrackJob,
   onGenerateInsertedBars,
   readOnly = false,
+  trackInfo: fixedTrackInfo,
   controller = playbackController,
 }: ScoreEditorViewProps) {
   const { t } = useTranslation();
@@ -183,7 +191,8 @@ export function ScoreEditorView({
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
   const visibleTrackIds = store(selectVisibleTrackIds);
-  const trackInfo = store((s) => s.trackInfo);
+  const preferredTrackInfo = store((s) => s.trackInfo);
+  const trackInfo = fixedTrackInfo ?? preferredTrackInfo;
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);

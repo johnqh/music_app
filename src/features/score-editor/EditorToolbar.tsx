@@ -43,12 +43,7 @@ import type { Accidental, Articulation, DurationName, Ornament } from '@sudobili
 import { useAppStore } from '@/app-library';
 import { selectSelectedNotes } from '@/app-library';
 import type { EditMode } from '@/app-library';
-import {
-  TRACK_INFO_MODES,
-  TRACK_INFO_MODE_HINT_KEY,
-  TRACK_INFO_MODE_LABEL_KEY,
-} from '@sudobility/music_types';
-import type { LayoutMode, TrackInfoMode } from '@sudobility/music_types';
+import type { LayoutMode } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/app-library';
 import { durationParts, withBase, withModifier } from '@/app-library';
 import { durationDisplay } from '@/app-library';
@@ -98,8 +93,6 @@ import {
   CrescendoIcon,
   DiminuendoIcon,
   OrnamentIcon,
-  TrackInfoFullIcon,
-  TrackInfoHiddenIcon,
   TrackInfoIconIcon,
 } from '@/components/icons/notation-icons';
 import {
@@ -240,16 +233,6 @@ const TOGGLE_BUTTON_CLASS = cn(
   TEXT_CONTROL_CLASS,
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
-
-/**
- * The picture for each width of the track-info column. A `Record`, so a
- * fourth mode fails to compile rather than drawing a button with no glyph.
- */
-const TRACK_INFO_ICON: Record<TrackInfoMode, (props: { className?: string }) => ReactElement> = {
-  full: TrackInfoFullIcon,
-  icon: TrackInfoIconIcon,
-  hidden: TrackInfoHiddenIcon,
-};
 
 function VerticalDivider() {
   return <div className="mx-1 h-6 w-px shrink-0 self-center bg-border" aria-hidden="true" />;
@@ -995,30 +978,27 @@ export function EditorToolbar({
           </Tooltip>
         </div>
         {/*
-          How much of the track-info column the score gives up its width to.
-          Beside the layout, because it is the same kind of choice: how the
-          sheet is arranged, not what is on it. A device pref, so it is the
-          same in the next project.
+          The track-info column: the whole thing, or the instrument icons
+          alone — one control that switches between the two, as the pitch
+          switch beside it does. The label names what clicking *does*. Beside
+          the layout, because it is the same kind of choice: how the sheet is
+          arranged, not what is on it. A device pref, so it is the same in
+          the next project.
         */}
-        <div role="group" aria-label={t('editor.trackInfo')} className="flex items-center gap-0.5">
-          {TRACK_INFO_MODES.map((mode) => {
-            const ModeIcon = TRACK_INFO_ICON[mode];
-            return (
-              <Tooltip key={mode} placement="bottom" content={t(TRACK_INFO_MODE_HINT_KEY[mode])}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  aria-label={t(TRACK_INFO_MODE_LABEL_KEY[mode])}
-                  aria-pressed={trackInfo === mode}
-                  onClick={() => store.getState().setTrackInfo(mode)}
-                  className={TOGGLE_BUTTON_CLASS}
-                >
-                  <ModeIcon className={ICON_GLYPH_CLASS} />
-                </Button>
-              </Tooltip>
-            );
-          })}
-        </div>
+        <Tooltip placement="bottom" content={t('editor.trackInfoHint')}>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={
+              trackInfo === 'icon' ? t('editor.trackInfoFull') : t('editor.trackInfoIcon')
+            }
+            aria-pressed={trackInfo === 'icon'}
+            onClick={() => store.getState().setTrackInfo(trackInfo === 'icon' ? 'full' : 'icon')}
+            className={TOGGLE_BUTTON_CLASS}
+          >
+            <TrackInfoIconIcon className={ICON_GLYPH_CLASS} />
+          </Button>
+        </Tooltip>
         <div
           role="group"
           aria-label={t('settings.pitchDisplay')}

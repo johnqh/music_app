@@ -119,9 +119,7 @@ import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/S
 import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 import { useMusicHookContext } from '@/app/AuthContext';
-import { SpatialView } from '@sudobility/music_spatial';
-import { selectEditLocked, controlLocked } from '@/app-library';
-import { useSoundingTrackIds } from '@/features/score-editor/usePlayback';
+import { SpatialSection } from '@/features/spatial/SpatialSection';
 
 export type AppLayoutProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -1203,44 +1201,5 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         />
       )}
     </div>
-  );
-}
-
-/**
- * The Spatial 3D view, isolated as its own subscriber for the same reason
- * every other per-tick readout in this file is: `useSoundingTrackIds`
- * updates on every note of every track, and reading it at `AppLayout`'s own
- * top level would re-render the whole editor — the inspector, the app bar,
- * every dialog — on every note-on and note-off while playing. Here it
- * touches only the Spatial view itself.
- *
- * `score` is asserted non-null by the caller (`spatialActive && hasScore`) —
- * `SpatialView` has no empty-score affordance of its own, the same reason
- * `ScoreEditorView` isn't shown here without a project open either.
- */
-function SpatialSection({ store }: { store: EditorStoreApi }) {
-  const score = store((s) => s.score);
-  const locked = store((s) => selectEditLocked(s) && controlLocked(s, 'unpluggedArrangement'));
-  const soundingTrackIds = useSoundingTrackIds();
-
-  if (!score) return null;
-  return (
-    <SpatialView
-      score={score}
-      soundingTrackIds={soundingTrackIds}
-      locked={locked}
-      onMoveListener={(patch) => store.getState().setUnpluggedListener(patch)}
-      onMoveTrack={(trackId, point) => store.getState().setUnpluggedTrackPosition(trackId, point)}
-      onResetArrangement={() => store.getState().resetUnpluggedArrangement()}
-      // The active track follows whatever the listener is facing: the
-      // inspector, the keyboard and the notation highlight then all show
-      // the part being looked at. Turning away from everything keeps the
-      // last one rather than clearing it — an inspector with nothing in it
-      // is not a better answer than the last instrument looked at.
-      onFacingTrackChange={(trackId) => {
-        if (trackId) store.getState().setActiveTrack(trackId);
-      }}
-      className="h-full w-full"
-    />
   );
 }

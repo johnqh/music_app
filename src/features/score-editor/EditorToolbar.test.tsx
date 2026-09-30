@@ -290,27 +290,22 @@ describe('EditorToolbar', () => {
     expect(onLayoutModeChange).toHaveBeenCalledWith('continuous');
   });
 
-  it('offers the track info column at three widths, and says which is on', async () => {
+  it('switches the track info column between the whole thing and the icons alone', async () => {
     const store = makeStore();
     renderToolbar(store);
     const user = userEvent.setup();
-    const group = screen.getByRole('group', { name: 'Track info' });
-    const full = within(group).getByRole('button', { name: 'Full track info' });
-    const icon = within(group).getByRole('button', { name: 'Instrument icons only' });
-    const hidden = within(group).getByRole('button', { name: 'Hide track info' });
 
-    // The whole column until somebody says otherwise.
-    expect(full).toHaveAttribute('aria-pressed', 'true');
-    expect(icon).toHaveAttribute('aria-pressed', 'false');
-
-    await user.click(icon);
+    // The whole column until somebody says otherwise; the label names what
+    // clicking does.
+    const toIcons = screen.getByRole('button', { name: 'Instrument icons only' });
+    expect(toIcons).toHaveAttribute('aria-pressed', 'false');
+    await user.click(toIcons);
     expect(store.getState().trackInfo).toBe('icon');
-    expect(icon).toHaveAttribute('aria-pressed', 'true');
-    expect(full).toHaveAttribute('aria-pressed', 'false');
 
-    await user.click(hidden);
-    expect(store.getState().trackInfo).toBe('hidden');
-    expect(hidden).toHaveAttribute('aria-pressed', 'true');
+    const toFull = screen.getByRole('button', { name: 'Full track info' });
+    expect(toFull).toHaveAttribute('aria-pressed', 'true');
+    await user.click(toFull);
+    expect(store.getState().trackInfo).toBe('full');
   });
 
   it('has no view switch: notation and piano roll are shown at the same time', () => {

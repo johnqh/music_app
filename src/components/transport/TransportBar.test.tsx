@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { initializeMusicPlayer, resetMusicPlayer } from '@sudobility/music_player/core';
+import { MockMusicPlayer } from '@sudobility/music_player/mocks';
 import { MAX_BPM, getMusicPositionSource } from '@sudobility/music_types';
 import { testStoreContext } from '@/app-library';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
@@ -42,6 +44,8 @@ function makeStore(withScore = true): PlaybackStoreApi {
 
 afterEach(async () => {
   vi.clearAllMocks();
+  // A player a test installed must not decide the next test's Play button.
+  resetMusicPlayer();
 });
 
 /*
@@ -420,11 +424,16 @@ describe('TransportBar: synth loading', () => {
     // "playing" anyway — so the caret, which interpolates from elapsed real
     // time between position reports, ran silently through several bars and
     // then snapped back when the music actually started at the beginning.
+    //
+    // Whether the engine is up is the player's own readiness, not the store's
+    // load state: the store only hears about a load something started.
+    const player = new MockMusicPlayer();
+    initializeMusicPlayer(player);
     const store = makeStore();
     render(<TransportBar store={store} />);
     expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
 
-    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: 0.4 }));
+    act(() => player.emitLoadState({ status: 'loading', fraction: 0.4 }));
 
     const button = screen.getByRole('button', { name: 'Preparing instruments' });
     expect(button).toBeDisabled();
@@ -432,12 +441,27 @@ describe('TransportBar: synth loading', () => {
     expect(screen.queryByRole('button', { name: 'Play' })).toBeNull();
   });
 
-  it('goes back to Play once the instruments are ready', () => {
+  it('starts the engine the moment it is on screen, and shows the wait', () => {
+    // On a page opened cold nothing had touched the player, so the button sat
+    // enabled over an engine that had not begun to load — and the press that
+    // should have played started the load instead.
+    const player = new MockMusicPlayer();
+    player.readiness = 'notReady';
+    initializeMusicPlayer(player);
     const store = makeStore();
     render(<TransportBar store={store} />);
-    act(() => store.getState().setSynthLoad({ status: 'loading', fraction: 0.4 }));
+    expect(player.prepareCalls).toBe(1);
+    expect(screen.getByRole('button', { name: 'Preparing instruments' })).toBeDisabled();
+  });
 
-    act(() => store.getState().setSynthLoad({ status: 'ready' }));
+  it('goes back to Play once the instruments are ready', () => {
+    const player = new MockMusicPlayer();
+    initializeMusicPlayer(player);
+    const store = makeStore();
+    render(<TransportBar store={store} />);
+    act(() => player.emitLoadState({ status: 'loading', fraction: 0.4 }));
+
+    act(() => player.emitLoadState({ status: 'ready' }));
 
     expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
   });

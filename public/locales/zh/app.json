@@ -895,10 +895,7 @@
     "trackInfo": "音轨信息",
     "trackInfoFull": "完整音轨信息",
     "trackInfoIcon": "仅显示乐器图标",
-    "trackInfoHidden": "隐藏音轨信息",
-    "trackInfoFullHint": "在每行谱表旁显示音轨名称和乐器",
-    "trackInfoIconHint": "在每行谱表旁只显示乐器图标",
-    "trackInfoHiddenHint": "把全部宽度留给乐谱"
+    "trackInfoHint": "在每行谱表旁只显示乐器图标，或显示完整音轨信息"
   },
   "error": {
     "crashed": "出现错误，{{appName}} 无法继续运行。",
