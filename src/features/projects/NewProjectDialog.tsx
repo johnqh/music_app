@@ -261,7 +261,7 @@ function LabeledInput({
 }) {
   return (
     <label className={`flex flex-1 flex-col gap-1 ${className ?? ''}`}>
-      <span className="text-xs text-theme-text-secondary">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <Input
         type={type}
         aria-label={label}
@@ -272,7 +272,7 @@ function LabeledInput({
         {...(onBlur ? { onBlur } : {})}
         className={TEXT_INPUT_CLASS}
       />
-      {hint ? <span className="text-xs text-amber-700 dark:text-amber-400">{hint}</span> : null}
+      {hint ? <span className="text-xs text-warning">{hint}</span> : null}
     </label>
   );
 }
@@ -294,7 +294,7 @@ function TempoSlider({
   const sliderValue = Math.min(max, Math.max(min, Number.isFinite(bpm) && bpm > 0 ? bpm : 120));
   return (
     <div className="flex min-w-0 flex-[1.4] flex-col gap-1">
-      <span className="flex items-center justify-between text-xs text-theme-text-secondary">
+      <span className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{label}</span>
         <span>{sliderValue} BPM</span>
       </span>
@@ -306,9 +306,9 @@ function TempoSlider({
         step={1}
         value={sliderValue}
         onChange={(e) => onChange(e.target.value)}
-        className="h-6 w-full accent-theme-primary"
+        className="h-6 w-full accent-primary"
       />
-      <span className="flex justify-between text-[10px] text-theme-text-secondary">
+      <span className="flex justify-between text-[10px] text-muted-foreground">
         <span>Slow</span>
         <span>Fast</span>
       </span>
@@ -473,7 +473,7 @@ export function NewProjectDialog({
       <div className="flex flex-col gap-4">
         <CollapsibleReveal shown={generating}>
           {outOfCredits ? (
-            <p className="text-sm text-theme-text-secondary">
+            <p className="text-sm text-muted-foreground">
               {t('generate.outOfCreditsBefore')}{' '}
               <LocalizedLink to="/credits" className="underline">
                 {t('generate.buyMore')}
@@ -482,7 +482,7 @@ export function NewProjectDialog({
             </p>
           ) : (
             estimatedCredits > 0 && (
-              <p className="text-xs text-theme-text-secondary">
+              <p className="text-xs text-muted-foreground">
                 {t('generate.estimate', { count: estimatedCredits })}
               </p>
             )
@@ -492,7 +492,7 @@ export function NewProjectDialog({
         {/* Named up front: every generated project would otherwise be called
           "Generated score", which is useless the moment you have two. */}
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-theme-text-secondary">{t('generateScore.titleField')}</span>
+          <span className="text-xs text-muted-foreground">{t('generateScore.titleField')}</span>
           <Input
             value={draft.title}
             onChange={(e: ChangeEvent<HTMLInputElement>) =>
@@ -515,8 +515,8 @@ export function NewProjectDialog({
             aria-label={t('newProject.generateForMe')}
           />
           <span className="flex flex-col">
-            <span className="text-sm text-theme-text-primary">{t('newProject.generateForMe')}</span>
-            <span className="text-xs text-theme-text-secondary">
+            <span className="text-sm text-foreground">{t('newProject.generateForMe')}</span>
+            <span className="text-xs text-muted-foreground">
               {t('newProject.generateForMeHint')}
             </span>
           </span>
@@ -528,7 +528,7 @@ export function NewProjectDialog({
               instead of a caption's height above it. Its accessible name comes
               from `aria-label`, not from a wrapping `<label>`. */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-theme-text-secondary">{t('generate.prompt')}</span>
+            <span className="text-xs text-muted-foreground">{t('generate.prompt')}</span>
             <div className="flex items-start gap-2">
               <div className="flex-1">
                 <TextArea
@@ -671,10 +671,8 @@ export function NewProjectDialog({
                 aria-label={t('newProject.writeLyrics')}
               />
               <span className="flex flex-col">
-                <span className="text-sm text-theme-text-primary">
-                  {t('newProject.writeLyrics')}
-                </span>
-                <span className="text-xs text-theme-text-secondary">
+                <span className="text-sm text-foreground">{t('newProject.writeLyrics')}</span>
+                <span className="text-xs text-muted-foreground">
                   {t('newProject.writeLyricsHint')}
                 </span>
               </span>
@@ -687,9 +685,7 @@ export function NewProjectDialog({
               rule rather than trusting this to stay in step. */}
           {showLyricsTheme ? (
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-theme-text-secondary">
-                {t('newProject.lyricsTheme')}
-              </span>
+              <span className="text-xs text-muted-foreground">{t('newProject.lyricsTheme')}</span>
               <Input
                 value={draft.lyricsTheme}
                 placeholder={t('newProject.lyricsThemePlaceholder')}

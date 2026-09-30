@@ -15,9 +15,15 @@ import { cn } from '@sudobility/components';
 import { variants } from '@sudobility/design';
 import { ICON_CONTROL_CLASS } from '@/components/icons/notation-icons';
 
+/**
+ * The hover wash is the bar's own foreground at a tenth, not white: the bar
+ * is `bg-primary text-primary-foreground`, and in the dark theme that
+ * foreground is black on a lighter red, where a white wash lowers the
+ * contrast of the glyph it sits behind.
+ */
 export const ICON_BUTTON_CLASS = cn(
   ICON_CONTROL_CLASS,
-  'rounded-md text-inherit hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40',
+  'rounded-md text-inherit hover:bg-primary-foreground/10 disabled:cursor-not-allowed disabled:opacity-40',
 );
 
 export const MENU_CLASS = cn(

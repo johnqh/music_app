@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@sudobility/components';
 import type { GenerationRecord } from '@sudobility/music_types';
 import {
   generationChoiceLabelKey,
@@ -59,44 +60,43 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
 
   return (
     <section aria-labelledby="generation-choices-heading" className="flex flex-col gap-2">
-      <p id="generation-choices-heading" className="text-sm font-semibold text-theme-text-primary">
+      <p id="generation-choices-heading" className="text-sm font-semibold text-foreground">
         {t('generationChoices.heading')}
       </p>
-      <p className="text-xs text-theme-text-secondary">{t('generationChoices.hint')}</p>
+      <p className="text-xs text-muted-foreground">{t('generationChoices.hint')}</p>
       <ul className="flex flex-col gap-1">
         {rows.map((key) => (
           <li key={key} className="flex items-start gap-2">
             <input
               type="checkbox"
-              className="mt-0.5"
+              className="mt-0.5 size-4 accent-primary"
               checked={locked.has(key)}
               disabled={generating}
               aria-label={t('generationChoices.lock', { name: t(generationChoiceLabelKey(key)) })}
               onChange={() => toggle(key)}
             />
             <span className="min-w-0 flex-1 text-xs">
-              <span className="text-theme-text-secondary">
-                {t(generationChoiceLabelKey(key))}:{' '}
-              </span>
-              <span className="text-theme-text-primary" title={shown(key) ?? undefined}>
+              <span className="text-muted-foreground">{t(generationChoiceLabelKey(key))}: </span>
+              <span className="text-foreground" title={shown(key) ?? undefined}>
                 {shown(key)}
               </span>
             </span>
           </li>
         ))}
       </ul>
-      <button
+      <Button
         type="button"
+        variant="outline"
         disabled={generating}
         onClick={() => setConfirming(true)}
-        className="self-start rounded border border-theme-border px-2 py-1 text-xs text-theme-text-primary disabled:opacity-50"
+        className="self-start px-3 py-1 text-xs"
       >
         {locked.size > 0
           ? t('generationChoices.againKeeping', { count: locked.size })
           : t('generationChoices.again')}
-      </button>
+      </Button>
       {estimatedCredits > 0 && (
-        <p className="text-xs text-theme-text-secondary">
+        <p className="text-xs text-muted-foreground">
           {t('generate.estimate', { count: estimatedCredits })}
         </p>
       )}

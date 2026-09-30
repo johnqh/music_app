@@ -167,7 +167,27 @@
     "projectFileKind": "项目文件",
     "readingProject": "正在读取项目…",
     "projectDescription": "将从本应用导出的项目作为新项目打开，当前已打开的项目不受影响。",
-    "newFromTemplate": "从模板新建：{{name}}"
+    "newFromTemplate": "从模板新建：{{name}}",
+    "account": "账户",
+    "accountDesc": "你的昵称和头像",
+    "creditPacks": "点数",
+    "creditPacksDesc": "购买点数，或兑换优惠券",
+    "creditHistory": "点数记录",
+    "creditHistoryDesc": "查看点数变动",
+    "redeemCoupon": "兑换优惠券",
+    "apiKeys": "API 密钥",
+    "apiKeysDesc": "管理工作区的密钥",
+    "manageCoupons": "管理优惠券",
+    "manageCouponsDesc": "创建优惠券并查看兑换情况",
+    "workspaces": "工作区",
+    "workspaceDesc": "切换和管理工作区",
+    "members": "成员",
+    "membersDesc": "管理工作区成员",
+    "invitations": "邀请",
+    "invitationsDesc": "管理并回复邀请",
+    "workspace": "当前工作区",
+    "selectWorkspace": "选择工作区",
+    "navigation": "仪表盘导航"
   },
   "devSettings": {
     "title": "开发者设置",
@@ -186,6 +206,7 @@
     "editor": {
       "title": "编辑器",
       "summary": "制谱画布、光标，以及音符是怎么写进去的。",
+      "figure": "乐谱上方的编辑栏，光标位于第一小节的开头。",
       "canvas": {
         "heading": "画布",
         "p1": "乐谱绘制在单张画布上，每一帧只绘制你看得见的那几行。这正是长乐谱仍然流畅的原因——绘制的开销不随小节数增长。",
@@ -273,6 +294,7 @@
     "generation": {
       "title": "音乐生成",
       "summary": "生成整份乐谱、一条音轨或一段替换，以及它们的花费。",
+      "figure": "打开“为我生成”后的新建项目表单。",
       "whole": {
         "heading": "生成整份乐谱",
         "p1": "在「项目」页面描述你想要什么，并选择乐器、长度、速度、调号和拍号。留空的部分由生成器自己决定。",
@@ -305,6 +327,7 @@
     "getting-started": {
       "title": "快速上手",
       "summary": "这个应用是什么，以及如何让第一份乐谱出现在你面前。",
+      "figure": "新建项目表单：标题、乐器，以及长度、调和拍号。",
       "what": {
         "heading": "这是什么",
         "p1": "Moosiac 是一个带有 AI 生成功能的制谱工具。你描述想要的音乐，它写出乐谱；从那之后，每一个音符都由你自己编辑、播放、打印和导出。",
@@ -330,6 +353,7 @@
     "inspector": {
       "title": "属性面板",
       "summary": "音轨、音符、小节与乐谱四个页签。",
+      "figure": "选中一个音符时的检查器。",
       "tabs": {
         "heading": "四个页签",
         "p1": "「音轨」排在最前，因为它总有内容可显示——当前音轨永远存在。它包含名称、乐器或鼓组、谱号、音量、声像、静音、独奏，以及删除音轨。",
@@ -401,6 +425,7 @@
     "midi-input": {
       "title": "MIDI 键盘",
       "summary": "用连接好的乐器把音符弹进乐谱。",
+      "figure": "乐谱下方的钢琴键盘，每个 C 和 F 都有标注。",
       "connecting": {
         "heading": "连接",
         "p1": "连接到电脑的 MIDI 键盘可以直接把音符弹进乐谱。权限在第一次列出设备时才请求，而不是在页面加载时，所以你不会为一个可能用不到的权限被打扰。",
@@ -417,6 +442,7 @@
     "navigation": {
       "title": "页面导航",
       "summary": "各个页面的用途，以及哪些需要登录。",
+      "figure": "在应用各部分之间切换的导航栏。",
       "routes": {
         "heading": "各个页面",
         "p1": "顶栏包含「项目」「社区」「文档」「资源」和「设置」，点击标志回到首页。所有页面都在语言前缀之下，英文站是 /en，中文站是 /zh。",
@@ -432,6 +458,7 @@
     "notation": {
       "title": "记号与记谱",
       "summary": "除了音高和时值之外，还能写在音符上的一切。",
+      "figure": "编辑栏：音符时值、临时记号、演奏法及其他记号。",
       "ties": {
         "heading": "延音线与休止符",
         "p1": "延音线把两个同音高的音符连成一个持续发声的音。选中一个音符按 T，或使用工具栏。延音线不是圆滑线：前者连接，后者只表示乐句。",
@@ -489,6 +516,7 @@
     "playback": {
       "title": "播放",
       "summary": "走带控制、钢琴键盘，以及视图如何跟随。",
+      "figure": "播放控制栏：播放、停止、循环、节拍器、位置、速度、倍速和音量。",
       "transport": {
         "heading": "走带控制",
         "p1": "空格键播放和暂停。走带栏还有停止、前后跳一个小节、循环、节拍器、播放速度、速度标记和总音量。",
@@ -510,6 +538,7 @@
     "settings": {
       "title": "设置",
       "summary": "外观、音高显示方式，以及开发者选项。",
+      "figure": "“设置”界面，显示的是“外观”。",
       "appearance": {
         "heading": "外观",
         "p1": "主题可以跟随系统，也可以固定为浅色或深色，字号也可以调整。两者都作用于整个应用，包括乐谱。",
@@ -530,6 +559,7 @@
     "sharing": {
       "title": "快照与分享",
       "summary": "保存版本，以及把某个版本公开给别人。",
+      "figure": "快照命令：创建快照、打开快照，以及查看你已发布的快照。",
       "snapshots": {
         "heading": "快照",
         "p1": "快照是乐谱此刻的副本，以你取的名字保存。系统会先保存你当前的工作，所以快照钉住的始终是你真正看到的内容。",
@@ -564,6 +594,7 @@
     "structure": {
       "title": "小节与结构",
       "summary": "拍号、调号、小节线、反复，以及作品的整体形状。",
+      "figure": "检查器的“小节”标签页：拍号、调、速度、谱号和小节线。",
       "bars": {
         "heading": "小节",
         "p1": "点击每行上方的小节号选中那一小节；Shift 点击另一个可以选中两者之间的一段。替换和重新生成都作用于一段范围，这就是瞄准它们的方式。",
@@ -613,6 +644,7 @@
     "tracks": {
       "title": "音轨与混音",
       "summary": "添加声部、选择音色，以及平衡它们。",
+      "figure": "检查器的“音轨”标签页：名称、乐器、谱号、音量、声像、静音和独奏。",
       "adding": {
         "heading": "添加与删除",
         "p1": "「添加音轨」提供空白音轨、AI 生成的音轨，或从音频文件转写而来的音轨。新音轨会沿用它所加入乐谱的小节网格。",
@@ -653,8 +685,6 @@
   "editor": {
     "accidental": "变音记号",
     "accidentalHint": "为选中的音符设置临时记号",
-    "activeTrackHint": "当前音轨，以及显示哪些音轨",
-    "visibleTracks": "显示的音轨",
     "addMeasure": "插入小节…",
     "insertBarsTitle": "插入小节",
     "insertBars": "插入小节",
@@ -861,7 +891,14 @@
     },
     "polyphonyOne": "{{instrument}}一次只能演奏一个音，{{action}}",
     "polyphonyMany": "{{instrument}}最多同时演奏 {{limit}} 个音，{{action}}",
-    "unknownInstrument": "该乐器"
+    "unknownInstrument": "该乐器",
+    "trackInfo": "音轨信息",
+    "trackInfoFull": "完整音轨信息",
+    "trackInfoIcon": "仅显示乐器图标",
+    "trackInfoHidden": "隐藏音轨信息",
+    "trackInfoFullHint": "在每行谱表旁显示音轨名称和乐器",
+    "trackInfoIconHint": "在每行谱表旁只显示乐器图标",
+    "trackInfoHiddenHint": "把全部宽度留给乐谱"
   },
   "error": {
     "crashed": "出现错误，{{appName}} 无法继续运行。",
@@ -1241,7 +1278,8 @@
     "chordSymbolPlaceholder": "例如 Cmaj7",
     "moveRefused": "无法将该音符移动到该位置。",
     "notesSelected_one": "已选中 1 个音符",
-    "notesSelected_other": "已选中 {{count}} 个音符"
+    "notesSelected_other": "已选中 {{count}} 个音符",
+    "visibleTracks": "显示的音轨"
   },
   "key": {
     "major": "大调",
@@ -1702,5 +1740,16 @@
     "alto": "中音谱号",
     "tenor": "次中音谱号",
     "percussion": "打击乐谱号"
+  },
+  "account": {
+    "nickname": "昵称",
+    "nicknameHint": "分享快照时使用的名字，绝不会显示你的邮箱地址。",
+    "picture": "头像",
+    "choosePicture": "选择图片",
+    "removePicture": "移除头像",
+    "pictureHint": "支持 JPEG、PNG 或 WebP，上传前会自动缩小。",
+    "pictureUnsupported": "该文件无法用作头像。",
+    "saveFailed": "无法保存个人资料。",
+    "signedInAs": "已登录：{{email}}"
   }
 }

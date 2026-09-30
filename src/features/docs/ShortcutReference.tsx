@@ -25,13 +25,13 @@ export function ShortcutReference() {
             <table className="w-full text-sm">
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.actionKey} className="border-b border-theme-border/40 align-top">
+                  <tr key={row.actionKey} className="border-b border-border/40 align-top">
                     <th scope="row" className="w-56 py-1.5 pr-4 text-left font-medium">
-                      <kbd className="rounded bg-theme-surface-hover px-1.5 py-0.5 font-mono text-xs">
+                      <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                         {row.keys ?? t(row.keysKey!)}
                       </kbd>
                     </th>
-                    <td className="py-1.5 text-theme-text-secondary">{t(row.actionKey)}</td>
+                    <td className="py-1.5 text-muted-foreground">{t(row.actionKey)}</td>
                   </tr>
                 ))}
               </tbody>

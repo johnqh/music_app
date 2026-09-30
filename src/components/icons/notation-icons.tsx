@@ -563,6 +563,78 @@ export function PageLayoutIcon(props: GlyphProps) {
   );
 }
 
+/*
+  The three widths of the track-info column, drawn as the sheet they leave:
+  the same frame and the same staves, with the column beside them at the
+  width the mode gives it. Read left to right they are one picture narrowing.
+*/
+
+/** Track info in full: a column wide enough to be written in. */
+export function TrackInfoFullIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect
+        x={3}
+        y={4}
+        width={18}
+        height={16}
+        rx={1.8}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      />
+      <rect x={10.6} y={4} width={1.6} height={16} />
+      <rect x={5.4} y={8} width={3.4} height={1.6} rx={0.6} />
+      <rect x={5.4} y={11.6} width={3.4} height={1.6} rx={0.6} />
+      <rect x={14} y={9} width={5} height={1.4} rx={0.6} />
+      <rect x={14} y={13.4} width={5} height={1.4} rx={0.6} />
+    </Glyph>
+  );
+}
+
+/** Track info as the icon alone: a column as wide as one mark. */
+export function TrackInfoIconIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect
+        x={3}
+        y={4}
+        width={18}
+        height={16}
+        rx={1.8}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      />
+      <rect x={7.6} y={4} width={1.6} height={16} />
+      <circle cx={5.9} cy={9.6} r={1} />
+      <circle cx={5.9} cy={14.2} r={1} />
+      <rect x={11} y={9} width={8} height={1.4} rx={0.6} />
+      <rect x={11} y={13.4} width={8} height={1.4} rx={0.6} />
+    </Glyph>
+  );
+}
+
+/** Track info hidden: the sheet, and nothing beside it. */
+export function TrackInfoHiddenIcon(props: GlyphProps) {
+  return (
+    <Glyph {...props}>
+      <rect
+        x={3}
+        y={4}
+        width={18}
+        height={16}
+        rx={1.8}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+      />
+      <rect x={6} y={9} width={12} height={1.4} rx={0.6} />
+      <rect x={6} y={13.4} width={12} height={1.4} rx={0.6} />
+    </Glyph>
+  );
+}
+
 /** Continuous layout: one line running off both edges. */
 export function ContinuousLayoutIcon(props: GlyphProps) {
   return (

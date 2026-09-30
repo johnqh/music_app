@@ -57,6 +57,12 @@ const ALLOWED_NON_UI = new Set([
   // The app bar's menu hook and button classes — a React hook and class
   // strings, so UI by definition.
   'src/components/layout/app-bar-menu.ts',
+  // One class string: the casing of a field whose text is kept as typed.
+  // Presentation, and shared so three dialogs cannot state it three ways.
+  'src/components/controls/input-classes.ts',
+  // Which documentation topics have a figure, and where it is served from.
+  // This app's own pictures of this app's own screens.
+  'src/features/docs/figures.ts',
   // The "dispatch helpers" exemption is gone, and so are the four modules that
   // sat under it. `editing.ts` was 834 lines of editing logic in the UI
   // package; `clipboard-prompts.ts` was pure score rules about when cut and

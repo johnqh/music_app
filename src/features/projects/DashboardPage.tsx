@@ -180,6 +180,18 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('updatedAt');
   const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
+  /*
+    Counts the choices made from the Import menu, and keys the dialogs.
+
+    Each dialog opens the file picker when its `open` goes from false to
+    true. That is every choice, as long as the dialog was closed in between —
+    and a picker dismissed in a browser that fires no `cancel` event leaves it
+    open with nothing on screen, so the next choice of that format changed
+    nothing and opened nothing. Keyed by the request, the dialog is mounted
+    for each choice and the picker opens for each: whatever format is chosen,
+    and whatever happened to the last one.
+  */
+  const [importRequest, setImportRequest] = useState(0);
   const [midiImportOpen, setMidiImportOpen] = useState(false);
   const [musicXmlImportOpen, setMusicXmlImportOpen] = useState(false);
   const [audioBusy, setAudioBusy] = useState(false);
@@ -349,6 +361,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
    * order to learn it in.
    */
   const openImport = (kind: ImportKind): void => {
+    // A new key for every choice, so the dialog chosen is mounted afresh and
+    // opens its picker — see `importRequest`.
+    setImportRequest((request) => request + 1);
     if (kind === 'midi') setMidiImportOpen(true);
     else if (kind === 'musicxml') setMusicXmlImportOpen(true);
     else if (kind === 'module') setModImportOpen(true);
@@ -526,7 +541,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           <Text size="sm" weight="medium">
             {project.name}
           </Text>
-          <span className="text-xs text-theme-text-secondary">
+          <span className="text-xs text-muted-foreground">
             {t('dashboard.updated', { date: formatDate(project.updatedAt) })}
           </span>
           {statusLabel ? (
@@ -535,7 +550,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
             </span>
           ) : null}
         </Button>
-        <div className="flex gap-1 border-t border-theme-border p-2">
+        <div className="flex gap-1 border-t border-border p-2">
           {project.status === 'generating' && (
             <Button
               type="button"
@@ -661,7 +676,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
                 */}
                 <div className="flex flex-col gap-0.5 py-0.5">
                   <span>{t(IMPORT_LABEL_KEYS[kind])}</span>
-                  <span className="text-xs text-theme-text-secondary">
+                  <span className="text-xs text-muted-foreground">
                     {t(IMPORT_DESCRIPTION_KEYS[kind])}
                   </span>
                 </div>
@@ -724,6 +739,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       />
 
       <MidiImportWizard
+        key={`midiImportOpen-${importRequest}`}
         open={midiImportOpen}
         onClose={() => setMidiImportOpen(false)}
         store={store}
@@ -735,6 +751,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         }}
       />
       <AudioImportDialog
+        key={`audioImportOpen-${importRequest}`}
         open={audioImportOpen}
         busy={audioBusy}
         error={audioError}
@@ -750,6 +767,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
           one. They still go through the same shell: a title saying what will
           happen, and somewhere to report a file that cannot be read. */}
       <FileImportModal
+        key={`modImportOpen-${importRequest}`}
         open={modImportOpen}
         title={t('dashboard.importModule')}
         accept=".mod,.dsm,.s3m,.xm,.it,.mptm,audio/mod,application/octet-stream"
@@ -767,6 +785,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         description={t('dashboard.moduleDescription')}
       />
       <FileImportModal
+        key={`jsonImportOpen-${importRequest}`}
         open={jsonImportOpen}
         title={t('dashboard.importProject')}
         accept={[...DOCUMENT_EXTENSIONS.map((ext) => `.${ext}`), 'application/json'].join(',')}
@@ -784,6 +803,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         description={t('dashboard.projectDescription')}
       />
       <MusicXmlImportDialog
+        key={`musicXmlImportOpen-${importRequest}`}
         open={musicXmlImportOpen}
         onClose={() => setMusicXmlImportOpen(false)}
         store={store}

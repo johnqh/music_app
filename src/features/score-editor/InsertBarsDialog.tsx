@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormModal, Input, Switch } from '@sudobility/components';
+import { FormModal, Input, RadioGroup, Switch } from '@sudobility/components';
 import type { InsertBarsPosition } from '@sudobility/music_editing';
 
 export type InsertBarsDialogResult = {
@@ -47,7 +47,7 @@ export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogPr
     >
       <div className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-theme-text-secondary">{t('editor.barCount')}</span>
+          <span className="text-xs text-muted-foreground">{t('editor.barCount')}</span>
           <Input
             value={count}
             autoFocus
@@ -58,27 +58,19 @@ export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogPr
         </label>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-xs text-theme-text-secondary">
+          <legend className="text-xs text-muted-foreground">
             {t('editor.insertBarsPosition')}
           </legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="insert-bars-position"
-              checked={position === 'before'}
-              onChange={() => setPosition('before')}
-            />
-            {t('editor.insertBarsBefore')}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="insert-bars-position"
-              checked={position === 'after'}
-              onChange={() => setPosition('after')}
-            />
-            {t('editor.insertBarsAfter')}
-          </label>
+          <RadioGroup
+            name="insert-bars-position"
+            size="sm"
+            value={position}
+            onChange={(value) => setPosition(value === 'before' ? 'before' : 'after')}
+            options={[
+              { value: 'before', label: t('editor.insertBarsBefore') },
+              { value: 'after', label: t('editor.insertBarsAfter') },
+            ]}
+          />
         </fieldset>
 
         <label className="flex items-center gap-3">
@@ -88,10 +80,8 @@ export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogPr
             aria-label={t('editor.generateInsertedBars')}
           />
           <span className="flex flex-col">
-            <span className="text-sm text-theme-text-primary">
-              {t('editor.generateInsertedBars')}
-            </span>
-            <span className="text-xs text-theme-text-secondary">
+            <span className="text-sm text-foreground">{t('editor.generateInsertedBars')}</span>
+            <span className="text-xs text-muted-foreground">
               {t('editor.generateInsertedBarsHint')}
             </span>
           </span>

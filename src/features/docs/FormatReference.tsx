@@ -18,14 +18,14 @@ function FormatTable({ titleKey, entries }: { titleKey: string; entries: readonl
       <table className="w-full text-sm">
         <tbody>
           {entries.map((entry) => (
-            <tr key={entry.id} className="border-b border-theme-border/40 align-top">
+            <tr key={entry.id} className="border-b border-border/40 align-top">
               <th scope="row" className="w-44 py-1.5 pr-4 text-left font-medium">
                 {t(`docs.formats.name.${entry.id}`)}
                 <Text as="p" size="xs" color="muted" className="font-mono">
                   {entry.extensions}
                 </Text>
               </th>
-              <td className="py-1.5 text-theme-text-secondary">{t(entry.noteKey)}</td>
+              <td className="py-1.5 text-muted-foreground">{t(entry.noteKey)}</td>
             </tr>
           ))}
         </tbody>

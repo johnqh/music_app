@@ -191,7 +191,7 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
     return (
       <div
         role="status"
-        className="flex items-center gap-1.5 whitespace-nowrap text-xs text-theme-error"
+        className="flex items-center gap-1.5 whitespace-nowrap text-xs text-destructive"
       >
         <ExclamationTriangleIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>{t('transport.loadFailed')}</span>
@@ -207,7 +207,7 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
     <div
       role="status"
       aria-live="polite"
-      className="flex items-center gap-2 whitespace-nowrap text-xs text-theme-text-secondary"
+      className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground"
     >
       <span>
         {percent === null ? t('transport.preparingUnknown') : t('transport.preparing', { percent })}
@@ -220,13 +220,13 @@ function SynthLoadIndicator({ store }: { store: PlaybackStoreApi }) {
         {...(percent === null
           ? {}
           : { 'aria-valuenow': percent, 'aria-valuemin': 0, 'aria-valuemax': 100 })}
-        className="h-1 w-16 overflow-hidden rounded-full bg-theme-border"
+        className="h-1 w-16 overflow-hidden rounded-full bg-border"
       >
         <div
           className={
             percent === null
-              ? 'h-full w-1/3 animate-pulse rounded-full bg-theme-text-secondary'
-              : 'h-full rounded-full bg-theme-text-secondary transition-[width] duration-200'
+              ? 'h-full w-1/3 animate-pulse rounded-full bg-muted-foreground'
+              : 'h-full rounded-full bg-muted-foreground transition-[width] duration-200'
           }
           style={percent === null ? undefined : { width: `${percent}%` }}
         />
@@ -324,7 +324,7 @@ function MeasureBeatReadout({
         // `tabular-nums` because the digits change under the reader: with
         // proportional figures "1.1" and "1.4" are different widths, so the
         // centred text shuffled on every beat even once the fraction was gone.
-        className="min-w-[40px] text-center text-sm tabular-nums text-theme-text-primary"
+        className="min-w-[40px] text-center text-sm tabular-nums text-foreground"
       >
         {readout}
       </span>
@@ -418,7 +418,7 @@ function Timecode({
       <span
         data-testid="playback-timecode"
         aria-label={t('transport.time')}
-        className="min-w-[104px] text-right text-sm tabular-nums text-theme-text-primary"
+        className="min-w-[104px] text-right text-sm tabular-nums text-foreground"
       >
         {elapsed} / {formatTimecode(totalSeconds)}
       </span>
@@ -515,7 +515,7 @@ export function TransportBar({
       role="toolbar"
       aria-label={t('transport.transport')}
       // Same reasoning as the editor toolbar: one row, scrolled, never wrapped.
-      className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-theme-border px-2 py-1"
+      className="flex shrink-0 items-center gap-2 overflow-x-auto border-t border-border px-2 py-1"
     >
       <Tooltip content={t('transport.goToStart')}>
         <Button

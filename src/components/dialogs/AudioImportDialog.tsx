@@ -86,14 +86,14 @@ export function AudioImportDialog({
       description={t('importAudio.description', { formats: FORMAT_NAMES })}
     >
       {!canTranscribe && (
-        <p role="status" className="text-sm text-theme-text-secondary">
+        <p role="status" className="text-sm text-muted-foreground">
           {t('importAudio.unavailable')}
         </p>
       )}
       {long && canTranscribe && (
         // Said rather than prevented: the server has the real limit, and this
         // cannot know the true duration without decoding the file.
-        <p className="text-sm text-theme-text-secondary">
+        <p className="text-sm text-muted-foreground">
           {t('importAudio.largeFile', { minutes: roughMinutes(file.size) })}
         </p>
       )}

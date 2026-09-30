@@ -184,12 +184,12 @@ export function ReplaceMusicDialog({
     >
       <div className="flex flex-col gap-4">
         {region && (
-          <p className="text-sm text-theme-text-primary">
+          <p className="text-sm text-foreground">
             {summarise(region, trackLabel, t)}
             {region.unselectedNoteCount > 0 && (
               // Said up front rather than discovered afterwards: a
               // non-contiguous selection is replaced as its bounding span.
-              <span className="text-amber-700 dark:text-amber-400">
+              <span className="text-warning">
                 {' '}
                 {t('replace.unselected', { count: region.unselectedNoteCount })}
               </span>
@@ -197,13 +197,13 @@ export function ReplaceMusicDialog({
           </p>
         )}
         {region && estimatedCredits > 0 && (
-          <p className="text-xs text-theme-text-secondary">
+          <p className="text-xs text-muted-foreground">
             {t('generate.estimate', { count: estimatedCredits })}
           </p>
         )}
 
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">{t('replace.instruction')}</span>
+          <span className="text-muted-foreground">{t('replace.instruction')}</span>
           <TextArea
             value={draft.instruction}
             onChange={(v: string) => patch({ instruction: v })}
@@ -254,7 +254,7 @@ export function ReplaceMusicDialog({
 
         <div className="flex gap-2">
           <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="text-theme-text-secondary">{t('generateScore.style')}</span>
+            <span className="text-muted-foreground">{t('generateScore.style')}</span>
             <Select
               value={optionalToPicker(draft.style)}
               onValueChange={(v) => patch({ style: optionalFromPicker(v) })}
@@ -272,7 +272,7 @@ export function ReplaceMusicDialog({
             </Select>
           </label>
           <label className="flex flex-1 flex-col gap-1 text-sm">
-            <span className="text-theme-text-secondary">{t('generateScore.mood')}</span>
+            <span className="text-muted-foreground">{t('generateScore.mood')}</span>
             <Select
               value={optionalToPicker(draft.mood)}
               onValueChange={(v) => patch({ mood: optionalFromPicker(v) })}
@@ -292,7 +292,7 @@ export function ReplaceMusicDialog({
         </div>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">{t('generateScore.complexity')}</span>
+          <span className="text-muted-foreground">{t('generateScore.complexity')}</span>
           <Select
             value={draft.complexity}
             onValueChange={(v) => patch({ complexity: v as GenerateScoreComplexity })}
@@ -311,7 +311,7 @@ export function ReplaceMusicDialog({
         </label>
 
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">{t('generateScore.model')}</span>
+          <span className="text-muted-foreground">{t('generateScore.model')}</span>
           <Select value={draft.variant} onValueChange={(v) => patch({ variant: v })}>
             <SelectTrigger aria-label={t('generateScore.model')} className={SELECT_CLASS}>
               <SelectValue />

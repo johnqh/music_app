@@ -167,7 +167,27 @@
     "projectFileKind": "project file",
     "readingProject": "Reading the project…",
     "projectDescription": "Opens a project exported from this app as a new project. The one already open is untouched.",
-    "newFromTemplate": "New from template: {{name}}"
+    "newFromTemplate": "New from template: {{name}}",
+    "account": "Account",
+    "accountDesc": "Your nickname and picture",
+    "creditPacks": "Credits",
+    "creditPacksDesc": "Buy credits, or redeem a coupon",
+    "creditHistory": "Credit history",
+    "creditHistoryDesc": "Review credit activity",
+    "redeemCoupon": "Redeem coupon",
+    "apiKeys": "API keys",
+    "apiKeysDesc": "Manage keys for your workspace",
+    "manageCoupons": "Manage coupons",
+    "manageCouponsDesc": "Create coupons and review redemptions",
+    "workspaces": "Workspaces",
+    "workspaceDesc": "Switch and manage workspaces",
+    "members": "Members",
+    "membersDesc": "Manage workspace members",
+    "invitations": "Invitations",
+    "invitationsDesc": "Manage and respond to invitations",
+    "workspace": "Workspace",
+    "selectWorkspace": "Select workspace",
+    "navigation": "Dashboard navigation"
   },
   "devSettings": {
     "title": "Developer settings",
@@ -186,6 +206,7 @@
     "editor": {
       "title": "The editor",
       "summary": "The notation canvas, the caret, and how notes get written.",
+      "figure": "The editing bar above a score, with the caret at the start of the first bar.",
       "canvas": {
         "heading": "The canvas",
         "p1": "The score is drawn onto a single canvas, and only the systems you can see are drawn on any frame. That is what lets a long score stay responsive — the cost of drawing does not grow with the number of bars.",
@@ -273,6 +294,7 @@
     "generation": {
       "title": "Music generation",
       "summary": "Generating a score, a track, or a replacement — and what it costs.",
+      "figure": "The new project form with Generate for me switched on.",
       "whole": {
         "heading": "Generating a score",
         "p1": "From the Projects page, describe what you want and choose the instruments, the length, the tempo, the key and the meter. Anything you leave blank the generator decides for itself.",
@@ -305,6 +327,7 @@
     "getting-started": {
       "title": "Getting started",
       "summary": "What this app is, and how to get a score in front of you.",
+      "figure": "The new project form: a title, the instruments, and the length, key and meter.",
       "what": {
         "heading": "What it is",
         "p1": "Moosiac is a notation editor with AI generation attached. You describe the music you want and it writes a score; from there every note is yours to edit, play back, print and export.",
@@ -330,6 +353,7 @@
     "inspector": {
       "title": "The inspector",
       "summary": "The property panel: track, note, bar and score.",
+      "figure": "The inspector with a note selected.",
       "tabs": {
         "heading": "The four tabs",
         "p1": "Track is first because it always has something to show — there is always an active track. It holds the name, the instrument or drum kit, the clef, volume, pan, mute and solo, and deleting the track.",
@@ -401,6 +425,7 @@
     "midi-input": {
       "title": "MIDI keyboards",
       "summary": "Playing notes in from a connected instrument.",
+      "figure": "The piano keyboard under the score, labelled at every C and F.",
       "connecting": {
         "heading": "Connecting",
         "p1": "A MIDI keyboard connected to your computer can play notes straight into the score. Access is requested the first time devices are listed, not when the page loads, so you are never prompted for a permission you may not need.",
@@ -417,6 +442,7 @@
     "navigation": {
       "title": "Getting around",
       "summary": "The pages, what each is for, and which need an account.",
+      "figure": "The bar that moves between the sections of the app.",
       "routes": {
         "heading": "The pages",
         "p1": "The top bar carries Projects, Community, Docs, Resources and Settings. The logo returns to the home page. Everything sits under a language prefix, so the English site is /en and the Chinese one is /zh.",
@@ -432,6 +458,7 @@
     "notation": {
       "title": "Marks and notation",
       "summary": "Everything you can write on a note beyond its pitch and length.",
+      "figure": "The editing bar: note lengths, accidentals, articulations and the other markings.",
       "ties": {
         "heading": "Ties and rests",
         "p1": "A tie joins two notes of the same pitch into one sounding note. Select a note and press T, or use the toolbar. A tie is not a slur — it joins, where a slur only phrases.",
@@ -489,6 +516,7 @@
     "playback": {
       "title": "Playback",
       "summary": "The transport, the piano keyboard, and how the view follows.",
+      "figure": "The transport bar: play, stop, loop, metronome, position, tempo, speed and volume.",
       "transport": {
         "heading": "The transport",
         "p1": "Space plays and pauses. The transport bar also carries stop, step by a bar either way, loop, a metronome, playback speed, tempo and the master volume.",
@@ -510,6 +538,7 @@
     "settings": {
       "title": "Settings",
       "summary": "Appearance, how pitch is shown, and the developer options.",
+      "figure": "The Settings screen, showing Appearance.",
       "appearance": {
         "heading": "Appearance",
         "p1": "Theme can follow your system or be pinned to light or dark, and the text size can be adjusted. Both apply across the whole app, including the score.",
@@ -530,6 +559,7 @@
     "sharing": {
       "title": "Snapshots and sharing",
       "summary": "Keeping versions, and publishing one for other people.",
+      "figure": "The snapshot commands: create one, open one, and see the ones you have published.",
       "snapshots": {
         "heading": "Snapshots",
         "p1": "A snapshot is a copy of the score as it is now, kept under a name you choose. Your current work is saved first, so a snapshot always pins what you can actually see.",
@@ -564,6 +594,7 @@
     "structure": {
       "title": "Bars and structure",
       "summary": "Meter, key, barlines, repeats and the shape of the piece.",
+      "figure": "The inspector’s Bar tab: time signature, key, tempo, clef and barline.",
       "bars": {
         "heading": "Bars",
         "p1": "Click a bar number above a system to select that bar; shift-click another to select the span between them. That is how you aim Replace and regeneration, which both work on a range.",
@@ -613,6 +644,7 @@
     "tracks": {
       "title": "Tracks and mixing",
       "summary": "Adding parts, choosing sounds, and balancing them.",
+      "figure": "The inspector’s Track tab: name, instrument, clef, volume, pan, mute and solo.",
       "adding": {
         "heading": "Adding and removing",
         "p1": "Add Track offers a blank track, a generated one, or one transcribed from an audio file. A new track gets the same bar grid as the score it joins.",
@@ -653,8 +685,6 @@
   "editor": {
     "accidental": "Accidental",
     "accidentalHint": "Set the accidental on the selected notes",
-    "activeTrackHint": "Active track, and which tracks are shown",
-    "visibleTracks": "Visible tracks",
     "addMeasure": "Insert bars…",
     "insertBarsTitle": "Insert bars",
     "insertBars": "Insert bars",
@@ -861,7 +891,14 @@
     },
     "polyphonyOne": "{{instrument}} plays one note at a time, {{action}}",
     "polyphonyMany": "{{instrument}} plays at most {{limit}} notes at once, {{action}}",
-    "unknownInstrument": "This instrument"
+    "unknownInstrument": "This instrument",
+    "trackInfo": "Track info",
+    "trackInfoFull": "Full track info",
+    "trackInfoIcon": "Instrument icons only",
+    "trackInfoHidden": "Hide track info",
+    "trackInfoFullHint": "Show each track’s name and instrument beside its staff",
+    "trackInfoIconHint": "Show only the instrument icon beside each staff",
+    "trackInfoHiddenHint": "Give the whole width to the music"
   },
   "error": {
     "crashed": "Something went wrong and {{appName}} couldn’t continue.",
@@ -1241,7 +1278,8 @@
     "chordSymbolPlaceholder": "e.g. Cmaj7",
     "moveRefused": "The note could not be moved to that position.",
     "notesSelected_one": "1 note selected",
-    "notesSelected_other": "{{count}} notes selected"
+    "notesSelected_other": "{{count}} notes selected",
+    "visibleTracks": "Visible tracks"
   },
   "key": {
     "major": "major",
@@ -1702,5 +1740,16 @@
     "alto": "Alto",
     "tenor": "Tenor",
     "percussion": "Percussion"
+  },
+  "account": {
+    "nickname": "Nickname",
+    "nicknameHint": "The name you share snapshots under. Never your email address.",
+    "picture": "Profile picture",
+    "choosePicture": "Choose picture",
+    "removePicture": "Remove picture",
+    "pictureHint": "JPEG, PNG or WebP. It is resized before it is uploaded.",
+    "pictureUnsupported": "That file could not be used as a picture.",
+    "saveFailed": "Could not save your profile.",
+    "signedInAs": "Signed in as {{email}}"
   }
 }

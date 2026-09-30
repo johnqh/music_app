@@ -33,19 +33,13 @@
  *
  * The app bar's own buttons (Back to dashboard, Save/Undo/Redo, Print, the
  * four menu *triggers*, Keyboard shortcuts) stay hand-rolled on
- * `ICON_BUTTON_CLASS`, per this file's pre-existing doc comment
- * below -- verified, not just assumed, for this sweep: `Button`'s `ghost`
- * variant's own `dark:text-gray-300`/`dark:hover:bg-gray-800` compile to a
- * `.dark <class>` selector, which is *more specific* than a plain
- * `text-inherit`/`hover:bg-white/10` override, so it still wins in dark
- * mode even after a className override -- only adding matching `dark:`-
- * prefixed counterparts (`dark:text-inherit`, `dark:hover:bg-white/10`)
- * actually neutralizes it (tailwind-merge dedupes same-modifier-stack
- * classes). That's *possible*, but the inverted, "works on any bg-primary"
- * skin these buttons need has no equivalent in the library variant set,
- * so it'd only ever be this file's own bespoke override, not a real library
- * skin -- the honest characterization is still "kept native", just with a
- * documented, checked reason rather than an assumed one.
+ * `ICON_BUTTON_CLASS`. Two reasons, both about the bar rather than about
+ * the library. The bar is `bg-primary text-primary-foreground`, and every
+ * `Button` variant states a colour of its own — `ghost` is
+ * `text-muted-foreground hover:bg-muted`, a grey glyph on red — where
+ * these inherit the bar's foreground and wash it on hover. And the bar is
+ * one of the two h-8 editor bars sized by `ICON_CONTROL_CLASS`, where the
+ * library's 44px minimum height does not belong.
  */
 import { libraryCopy } from '@/i18n/library-copy';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -619,7 +613,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               type="button"
               onClick={() => setTitleDraft(projectName)}
               aria-label={t('editor.editProjectTitle')}
-              className="rounded-md border-none bg-transparent px-1 py-0.5 text-lg font-medium text-inherit hover:bg-white/10"
+              className="rounded-md border-none bg-transparent px-1 py-0.5 text-lg font-medium text-inherit hover:bg-primary-foreground/10"
             >
               {projectName || t('editor.untitledProject')}
             </button>
@@ -814,7 +808,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                       store.getState().setThemeMode(mode);
                       themeMenu.setOpen(false);
                     }}
-                    className={cn(MENU_ITEM_CLASS, themeMode === mode && 'bg-theme-hover-bg')}
+                    className={cn(MENU_ITEM_CLASS, themeMode === mode && 'bg-accent')}
                   >
                     {t(labelKey)}
                   </Button>
@@ -889,7 +883,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                     onChange={() => store.getState().setDeveloperMode(!developerMode)}
                     onClick={(e) => e.stopPropagation()}
                     aria-label={t('editor.developerMode')}
-                    className="h-4 w-4"
+                    className="h-4 w-4 accent-primary"
                   />
                 </div>
                 <Button
@@ -948,7 +942,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
 
           {inspectorOpen && (
             <div
-              className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-theme-border"
+              className="flex shrink-0 flex-col overflow-y-auto overscroll-contain border-l border-border"
               style={{ width: SIDE_PANEL_WIDTH }}
             >
               {/* The generation panels are gone: whole-score generation moved
@@ -1017,7 +1011,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           that has to survive in order to stay reachable. */}
         {keyboardCollapsed ? null : (
           <div
-            className="shrink-0 overflow-hidden border-t border-theme-border"
+            className="shrink-0 overflow-hidden border-t border-border"
             style={{ height: PIANO_KEYBOARD_PANEL_HEIGHT }}
           >
             <div className="flex h-full min-h-0">
@@ -1032,9 +1026,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <div
         role="status"
         aria-label={t('editor.statusBar')}
-        className="flex items-center gap-4 border-t border-theme-border px-4 py-1"
+        className="flex items-center gap-4 border-t border-border px-4 py-1"
       >
-        <span className="text-xs text-theme-text-secondary">
+        <span className="text-xs text-muted-foreground">
           {selectionSummaryLabel(selection, libraryCopy.selection(), selectionRegenerated)}
         </span>
         <div className="flex-1" />
@@ -1049,8 +1043,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           >
             {t('editor.issues')}
             <span
-              className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white ${
-                errorIssues.length > 0 ? 'bg-destructive' : 'bg-warning'
+              className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
+                errorIssues.length > 0
+                  ? 'bg-destructive text-destructive-foreground'
+                  : 'bg-warning text-warning-foreground'
               }`}
             >
               {validationIssues.length}
@@ -1065,7 +1061,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             >
               <div role="list" aria-label={t('editor.validationList')}>
                 {validationIssues.length === 0 && (
-                  <p className="p-1 text-sm text-theme-text-secondary">{t('editor.noIssues')}</p>
+                  <p className="p-1 text-sm text-muted-foreground">{t('editor.noIssues')}</p>
                 )}
                 {validationIssues.map((issue, i) => (
                   <div
@@ -1079,16 +1075,18 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                         navigateToIssue(issue);
                       }
                     }}
-                    className="cursor-pointer rounded p-1 hover:bg-theme-hover-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+                    className="cursor-pointer rounded p-1 hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
                   >
                     <span
-                      className={`mr-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium text-white ${
-                        issue.severity === 'error' ? 'bg-destructive' : 'bg-warning'
+                      className={`mr-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        issue.severity === 'error'
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'bg-warning text-warning-foreground'
                       }`}
                     >
                       {issue.severity}
                     </span>
-                    <span className="text-sm text-theme-text-primary">{issue.message}</span>
+                    <span className="text-sm text-foreground">{issue.message}</span>
                   </div>
                 ))}
               </div>
@@ -1100,7 +1098,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 than to offer a button that silently does nothing.
               */}
               {validationIssues.length > 0 && (
-                <div className="sticky bottom-0 mt-1 border-t border-theme-border-primary bg-theme-surface-primary p-1">
+                <div className="sticky bottom-0 mt-1 border-t border-border bg-popover p-1">
                   <Button
                     type="button"
                     variant="primary"

@@ -47,7 +47,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
       <table aria-label={t('editor.keyboardShortcuts')} className="w-full border-collapse text-sm">
         <tbody>
           {SHORTCUTS.map((s) => (
-            <tr key={s.keys ?? s.keysKey} className="border-b border-theme-border last:border-b-0">
+            <tr key={s.keys ?? s.keysKey} className="border-b border-border last:border-b-0">
               <th
                 scope="row"
                 // `w-px` with `whitespace-nowrap`: the column takes exactly the
@@ -58,7 +58,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
                   <div key={line}>{line}</div>
                 ))}
               </th>
-              <td className="py-1.5 align-top text-theme-text-secondary">{t(s.actionKey)}</td>
+              <td className="py-1.5 align-top text-muted-foreground">{t(s.actionKey)}</td>
             </tr>
           ))}
         </tbody>
@@ -72,7 +72,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
         href={`/${lang}/docs/shortcuts`}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 inline-block text-sm text-theme-primary underline"
+        className="mt-4 inline-block text-sm text-primary underline"
       >
         {t('editor.shortcutsInDocs')}
       </a>

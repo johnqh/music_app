@@ -48,7 +48,7 @@ export function GenerationStatusStrip({
   return (
     <div
       data-testid="generation-status-strip"
-      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-theme-border bg-theme-surface px-4 py-2"
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-card px-4 py-2"
       role="status"
       aria-live="polite"
     >
@@ -57,11 +57,11 @@ export function GenerationStatusStrip({
       <div aria-hidden="true">
         <Spinner ariaLabel="Generating" size="small" />
       </div>
-      <span className="text-sm font-medium text-theme-text-primary">
+      <span className="text-sm font-medium text-foreground">
         {t(transcribing ? 'overlay.transcribingNotes' : 'overlay.generatingNotes')}
       </span>
       {progress ? (
-        <span className="text-xs text-theme-text-secondary">
+        <span className="text-xs text-muted-foreground">
           {t('overlay.progress', {
             // A transcription's first stage splits the recording into parts;
             // "Planning" is what a generation does before it writes any.
@@ -76,15 +76,15 @@ export function GenerationStatusStrip({
         </span>
       ) : null}
       {live === 'reconnecting' ? (
-        <span className="text-xs text-theme-text-secondary">{t('overlay.reconnecting')}</span>
+        <span className="text-xs text-muted-foreground">{t('overlay.reconnecting')}</span>
       ) : live === 'fallback' ? (
-        <span className="text-xs text-theme-text-secondary">{t('overlay.polling')}</span>
+        <span className="text-xs text-muted-foreground">{t('overlay.polling')}</span>
       ) : null}
-      <span className="hidden text-xs text-theme-text-secondary md:inline">
+      <span className="hidden text-xs text-muted-foreground md:inline">
         {t('overlay.lockedWhileGenerating')}
       </span>
       {error && (
-        <p role="alert" className="text-xs text-red-700">
+        <p role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}

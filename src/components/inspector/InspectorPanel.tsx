@@ -72,6 +72,7 @@ import {
   commonValue,
 } from '@/components/inspector/shared';
 import { InstrumentIcon } from '@/features/instruments/instrument-icon';
+import { VisibleTracksField } from '@/components/inspector/VisibleTracksField';
 
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { useEffect, useMemo, useState } from 'react';
@@ -262,15 +263,14 @@ function NoteTab({ store, onReplace }: TabProps) {
   */
   const locked = store(selectEditLocked);
 
-  if (!score)
-    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
+  if (!score) return <p className="p-2 text-sm text-foreground">{t('inspector.noScore')}</p>;
   const noteIds = selectedNoteIds(score, selection);
   const notes = noteIds
     .map((id) => findEvent(score, id))
     .filter((e): e is NoteEvent => e !== null && isNoteEvent(e));
 
   if (notes.length === 0) {
-    return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectNote')}</p>;
+    return <p className="p-2 text-sm text-muted-foreground">{t('inspector.selectNote')}</p>;
   }
 
   const shown = (note: NoteEvent): Pitch => displayedPitchForNote(score, note, pitchDisplay);
@@ -301,7 +301,7 @@ function NoteTab({ store, onReplace }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">
+      <p className="text-sm font-semibold text-foreground">
         {notes.length > 1
           ? t('inspector.notesSelected', { count: notes.length })
           : t('inspector.note')}
@@ -432,7 +432,7 @@ function NoteTab({ store, onReplace }: TabProps) {
             setDynamic(store, noteIds, value === NO_MARK ? undefined : (value as Dynamic))
           }
         />
-        <span className="text-xs text-theme-text-secondary">{t('inspector.dynamicHint')}</span>
+        <span className="text-xs text-muted-foreground">{t('inspector.dynamicHint')}</span>
       </label>
 
       <label className="flex flex-col gap-1">
@@ -574,8 +574,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
   const selection = store((s) => s.selection);
   const locked = store(selectEditLocked);
 
-  if (!score)
-    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
+  if (!score) return <p className="p-2 text-sm text-foreground">{t('inspector.noScore')}</p>;
   const measures = selection.measureIds
     .map((id) => findMeasure(score, id))
     .filter((m) => m !== null);
@@ -583,8 +582,8 @@ function MeasureTab({ store, onReplace }: TabProps) {
   if (measures.length === 0) {
     return (
       <div className="flex flex-col gap-1 p-2">
-        <p className="text-sm text-theme-text-secondary">{t('inspector.selectMeasure')}</p>
-        <p className="text-xs text-theme-text-secondary">{t('inspector.selectMeasureHint')}</p>
+        <p className="text-sm text-muted-foreground">{t('inspector.selectMeasure')}</p>
+        <p className="text-xs text-muted-foreground">{t('inspector.selectMeasureHint')}</p>
       </div>
     );
   }
@@ -612,7 +611,7 @@ function MeasureTab({ store, onReplace }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">
+      <p className="text-sm font-semibold text-foreground">
         {numbers.length === 0
           ? t('inspector.pickup')
           : measures.length > 1 && numbers.length > 1
@@ -805,11 +804,10 @@ function TrackTab({ store, onReplace }: TabProps) {
     setNameDraft(track?.name ?? '');
   }, [track?.id, track?.name]);
 
-  if (!score)
-    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
+  if (!score) return <p className="p-2 text-sm text-foreground">{t('inspector.noScore')}</p>;
 
   if (!track) {
-    return <p className="p-2 text-sm text-theme-text-secondary">{t('inspector.selectTrack')}</p>;
+    return <p className="p-2 text-sm text-muted-foreground">{t('inspector.selectTrack')}</p>;
   }
 
   const chooseInstrument = (value: string): void => {
@@ -834,7 +832,7 @@ function TrackTab({ store, onReplace }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">{t('inspector.track')}</p>
+      <p className="text-sm font-semibold text-foreground">{t('inspector.track')}</p>
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>{t('inspector.name')}</span>
@@ -893,7 +891,7 @@ function TrackTab({ store, onReplace }: TabProps) {
         moving the notes.
       */}
       {outOfRange ? (
-        <p className="text-xs text-theme-text-secondary">
+        <p className="text-xs text-muted-foreground">
           {t('inspector.outOfRange', {
             count: outOfRange.count,
             low: pitchToString(midiToPitch(outOfRange.compass.min)),
@@ -942,6 +940,8 @@ function TrackTab({ store, onReplace }: TabProps) {
           onChange={(checked) => mix({ solo: checked })}
         />
       </div>
+
+      <VisibleTracksField store={store} />
 
       <ReplaceButton
         store={store}
@@ -1013,8 +1013,7 @@ function ScoreTab({
     setComposer(score?.metadata.composer ?? '');
   }, [score?.metadata.title, score?.metadata.composer]);
 
-  if (!score)
-    return <p className="p-2 text-sm text-theme-text-primary">{t('inspector.noScore')}</p>;
+  if (!score) return <p className="p-2 text-sm text-foreground">{t('inspector.noScore')}</p>;
 
   // `setScoreMetadata` trims, refuses a blank title and skips a field that has
   // not changed, answering whether it wrote. Whatever it declines, the draft
@@ -1024,7 +1023,7 @@ function ScoreTab({
 
   return (
     <div className="flex flex-col gap-4 p-2">
-      <p className="text-sm font-semibold text-theme-text-primary">{t('inspector.score')}</p>
+      <p className="text-sm font-semibold text-foreground">{t('inspector.score')}</p>
 
       <label className="flex flex-col gap-1">
         <span className={FIELD_LABEL_CLASS}>{t('inspector.scoreTitle')}</span>
@@ -1054,7 +1053,7 @@ function ScoreTab({
         />
       </label>
 
-      <p className="text-xs text-theme-text-secondary">{t('inspector.scoreTitleHint')}</p>
+      <p className="text-xs text-muted-foreground">{t('inspector.scoreTitleHint')}</p>
 
       {origin && <ProjectOriginPanel {...origin} />}
       {generation && <GenerationChoices {...generation} />}

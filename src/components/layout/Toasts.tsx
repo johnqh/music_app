@@ -6,18 +6,18 @@
  * `action` (spec §28: "retry actions where appropriate") shows a button
  * that runs it and then dismisses.
  *
- * Kept hand-rolled (library sweep 2, same contrast reasoning as
- * `AppLayout`'s app-bar buttons): `SEVERITY_CLASSES` gives each toast an
- * arbitrary, severity-driven background (red/amber/green/theme-text), and
- * both buttons here rely on inheriting that background's own text color
- * (Tailwind's preflight sets `button { color: inherit }`) rather than
- * setting one themselves. The library `Button`'s own variants (e.g.
- * `ghost`'s `text-gray-700 dark:text-gray-300`) would override that
- * inherited color outright, and -- unlike `ConfirmDialog`/`ShortcutHelp
- * Dialog`'s buttons, which sit on one fixed, known card background --
- * there's no single className override that's correct for all four
- * severities at once here, since each needs a different text color to
- * stay readable against its own background.
+ * The two buttons stay hand-rolled, and the reason is the ink. Each
+ * severity is a pair of design tokens — a surface and the foreground the
+ * theme declares for it (`bg-warning text-warning-foreground`) — and both
+ * buttons inherit that foreground (Tailwind's preflight sets
+ * `button { color: inherit }`). Every library `Button` variant states a
+ * colour of its own, and no one variant is legible on all four surfaces.
+ *
+ * The pairs used to be palette classes with `text-white` on each. That
+ * is wrong in the dark theme, where the tokens get lighter and their
+ * declared foreground is black; and the fourth was `bg-theme-text-primary
+ * text-theme-bg-primary`, two variables nothing defined, so an info toast
+ * had no surface at all.
  */
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,10 +37,10 @@ const AUTO_HIDE_MS: Record<string, number> = {
 };
 
 const SEVERITY_CLASSES: Record<string, string> = {
-  error: 'bg-red-600 text-white',
-  warning: 'bg-amber-500 text-white',
-  success: 'bg-green-600 text-white',
-  info: 'bg-theme-text-primary text-theme-bg-primary',
+  error: 'bg-destructive text-destructive-foreground',
+  warning: 'bg-warning text-warning-foreground',
+  success: 'bg-success text-success-foreground',
+  info: 'bg-foreground text-background',
 };
 
 export function Toasts({ store = useAppStore }: ToastsProps) {

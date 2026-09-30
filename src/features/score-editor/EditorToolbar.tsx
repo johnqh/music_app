@@ -43,12 +43,16 @@ import type { Accidental, Articulation, DurationName, Ornament } from '@sudobili
 import { useAppStore } from '@/app-library';
 import { selectSelectedNotes } from '@/app-library';
 import type { EditMode } from '@/app-library';
-import type { LayoutMode } from '@sudobility/music_types';
+import {
+  TRACK_INFO_MODES,
+  TRACK_INFO_MODE_HINT_KEY,
+  TRACK_INFO_MODE_LABEL_KEY,
+} from '@sudobility/music_types';
+import type { LayoutMode, TrackInfoMode } from '@sudobility/music_types';
 import type { EditorStoreApi } from '@/app-library';
 import { durationParts, withBase, withModifier } from '@/app-library';
 import { durationDisplay } from '@/app-library';
 import type { BaseDuration } from '@/app-library';
-import { TrackVisibilitySelect } from '@/features/score-editor/TrackVisibilitySelect';
 import type { ReactElement } from 'react';
 import {
   ChevronDoubleLeftIcon,
@@ -94,6 +98,9 @@ import {
   CrescendoIcon,
   DiminuendoIcon,
   OrnamentIcon,
+  TrackInfoFullIcon,
+  TrackInfoHiddenIcon,
+  TrackInfoIconIcon,
 } from '@/components/icons/notation-icons';
 import {
   changeAccidental,
@@ -234,8 +241,18 @@ const TOGGLE_BUTTON_CLASS = cn(
   'aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:opacity-90',
 );
 
+/**
+ * The picture for each width of the track-info column. A `Record`, so a
+ * fourth mode fails to compile rather than drawing a button with no glyph.
+ */
+const TRACK_INFO_ICON: Record<TrackInfoMode, (props: { className?: string }) => ReactElement> = {
+  full: TrackInfoFullIcon,
+  icon: TrackInfoIconIcon,
+  hidden: TrackInfoHiddenIcon,
+};
+
 function VerticalDivider() {
-  return <div className="mx-1 h-6 w-px shrink-0 self-center bg-theme-border" aria-hidden="true" />;
+  return <div className="mx-1 h-6 w-px shrink-0 self-center bg-border" aria-hidden="true" />;
 }
 
 export function EditorToolbar({
@@ -267,6 +284,7 @@ export function EditorToolbar({
    */
   const durationValue = durationShown.kind === 'mixed' ? '' : durationShown.base;
   const pitchDisplay = store((s) => s.pitchDisplay);
+  const trackInfo = store((s) => s.trackInfo);
   const activeVoiceIndex = store((s) => s.activeVoiceIndex);
   const activeTrack = store(selectSelectedTrack);
   /**
@@ -377,7 +395,7 @@ export function EditorToolbar({
     // `flex-1` spacer collapses once the tools overflow, pushing the toggle
     // past the right edge where it can only be reached by scrolling the
     // toolbar.
-    <div className="flex shrink-0 items-stretch border-b border-theme-border">
+    <div className="flex shrink-0 items-stretch border-b border-border">
       <div
         role="toolbar"
         aria-label={t('editor.toolbar')}
@@ -388,11 +406,12 @@ export function EditorToolbar({
         // page sliding away with blank space under the keyboard panel.
         className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-2 py-1"
       >
-        {/* Tracks first: which track you are on decides where every other
-            control in this bar acts, so it reads left-to-right as "this track,
-            then what to do to it". */}
+        {/* Tracks first: adding a part, before anything that acts within one.
+            There is no track picker here. Clicking a staff makes its track the
+            active one, so a second way to say the same thing was a control the
+            width of a field on the widest bar in the app; which tracks are
+            drawn is on the inspector's Track tab (`VisibleTracksField`). */}
         <div role="group" aria-label={t('editor.tracks')} className="flex items-center gap-0.5">
-          <TrackVisibilitySelect store={store} />
           <Select
             value=""
             onValueChange={(value) =>
@@ -914,7 +933,7 @@ export function EditorToolbar({
           you look at the score, not the score itself, and they were the first
           things to disappear behind the horizontal scroll — measured at 1440px,
           362px of the bar was unreachable, and zoom and layout were in it. */}
-      <div className="flex shrink-0 items-center gap-0.5 border-l border-theme-border pl-1">
+      <div className="flex shrink-0 items-center gap-0.5 border-l border-border pl-1">
         <div className="flex items-center gap-0.5">
           <Tooltip placement="bottom" content={t('editor.zoomOut')}>
             <Button
@@ -931,7 +950,7 @@ export function EditorToolbar({
           <Tooltip placement="bottom" content={t('editor.currentZoom')}>
             <span
               aria-label={t('editor.currentZoom')}
-              className="min-w-[40px] text-center text-sm text-theme-text-primary"
+              className="min-w-[40px] text-center text-sm text-foreground"
             >
               {zoomLabel}
             </span>
@@ -974,6 +993,31 @@ export function EditorToolbar({
               <ContinuousLayoutIcon className={ICON_GLYPH_CLASS} />
             </Button>
           </Tooltip>
+        </div>
+        {/*
+          How much of the track-info column the score gives up its width to.
+          Beside the layout, because it is the same kind of choice: how the
+          sheet is arranged, not what is on it. A device pref, so it is the
+          same in the next project.
+        */}
+        <div role="group" aria-label={t('editor.trackInfo')} className="flex items-center gap-0.5">
+          {TRACK_INFO_MODES.map((mode) => {
+            const ModeIcon = TRACK_INFO_ICON[mode];
+            return (
+              <Tooltip key={mode} placement="bottom" content={t(TRACK_INFO_MODE_HINT_KEY[mode])}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={t(TRACK_INFO_MODE_LABEL_KEY[mode])}
+                  aria-pressed={trackInfo === mode}
+                  onClick={() => store.getState().setTrackInfo(mode)}
+                  className={TOGGLE_BUTTON_CLASS}
+                >
+                  <ModeIcon className={ICON_GLYPH_CLASS} />
+                </Button>
+              </Tooltip>
+            );
+          })}
         </div>
         <div
           role="group"

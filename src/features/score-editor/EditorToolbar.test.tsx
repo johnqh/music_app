@@ -4,7 +4,7 @@ import { testStoreContext } from '@/app-library';
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createAppStore } from '@/app-library';
-import { twinkleScore } from '@/app-library';
+import { twinkleScore, twoTrackScore } from '@/app-library';
 import { allNotes, findEvent } from '@/app-library';
 import { addMeasureCommand, deleteMeasureCommand } from '@/app-library';
 import type { NoteEvent } from '@sudobility/music_types';
@@ -288,6 +288,29 @@ describe('EditorToolbar', () => {
     await user.click(screen.getByRole('button', { name: 'Continuous layout' }));
 
     expect(onLayoutModeChange).toHaveBeenCalledWith('continuous');
+  });
+
+  it('offers the track info column at three widths, and says which is on', async () => {
+    const store = makeStore();
+    renderToolbar(store);
+    const user = userEvent.setup();
+    const group = screen.getByRole('group', { name: 'Track info' });
+    const full = within(group).getByRole('button', { name: 'Full track info' });
+    const icon = within(group).getByRole('button', { name: 'Instrument icons only' });
+    const hidden = within(group).getByRole('button', { name: 'Hide track info' });
+
+    // The whole column until somebody says otherwise.
+    expect(full).toHaveAttribute('aria-pressed', 'true');
+    expect(icon).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(icon);
+    expect(store.getState().trackInfo).toBe('icon');
+    expect(icon).toHaveAttribute('aria-pressed', 'true');
+    expect(full).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(hidden);
+    expect(store.getState().trackInfo).toBe('hidden');
+    expect(hidden).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('has no view switch: notation and piano roll are shown at the same time', () => {
@@ -660,14 +683,27 @@ describe('pitch display', () => {
 
 describe('tracks group', () => {
   it('is the first group on the bar', () => {
-    // Which track you are on decides where every other control acts, so it
-    // reads left-to-right as "this track, then what to do to it".
+    // Adding a part comes before anything that acts within one.
     const store = createAppStore({ context: testStoreContext() });
     store.getState().setScore(twinkleScore());
     renderToolbar(store);
 
     const groups = screen.getAllByRole('group');
     expect(groups[0]).toHaveAccessibleName('Tracks');
+  });
+
+  it('has no track picker, however many tracks there are', () => {
+    /*
+      Clicking a staff makes its track the active one, so the bar no longer
+      says it a second way. Which tracks are drawn moved to the inspector's
+      Track tab — `VisibleTracksField.test.tsx` holds that half.
+    */
+    const store = createAppStore({ context: testStoreContext() });
+    store.getState().setScore(twoTrackScore());
+    renderToolbar(store);
+
+    expect(screen.queryByLabelText('Visible tracks')).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
   it('offers Blank Track and Generate Track', async () => {

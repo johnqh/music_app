@@ -55,7 +55,7 @@ export function GoToBarDialog({ open, barCount, onClose, onGo }: GoToBarDialogPr
       closeAriaLabel={t('common.closeDialog')}
     >
       <label className="flex flex-col gap-1">
-        <span className="text-xs text-theme-text-secondary">
+        <span className="text-xs text-muted-foreground">
           {t('editor.barNumberOf', { count: barCount })}
         </span>
         <Input

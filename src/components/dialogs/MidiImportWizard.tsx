@@ -315,14 +315,11 @@ export function MidiImportWizard({
       >
         {summary && options && (
           <>
-            <div
-              role="status"
-              className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
-            >
+            <div role="status" className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
               {t('importMidi.performanceTiming')}
             </div>
 
-            <p className="text-sm font-medium text-theme-text-primary">
+            <p className="text-sm font-medium text-foreground">
               {t('importMidi.summaryLine', {
                 count: summary.tracks.length,
                 seconds: summary.durationSeconds.toFixed(1),
@@ -330,10 +327,10 @@ export function MidiImportWizard({
               })}
             </p>
 
-            <div className="overflow-x-auto rounded-md border border-theme-border">
+            <div className="overflow-x-auto rounded-md border border-border">
               <table aria-label={t('importMidi.trackSummary')} className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-theme-border text-theme-text-secondary">
+                  <tr className="border-b border-border text-muted-foreground">
                     <th className="px-2 py-1.5 font-medium">{t('importMidi.colInclude')}</th>
                     <th className="px-2 py-1.5 font-medium">{t('importMidi.colTrack')}</th>
                     <th className="px-2 py-1.5 font-medium">{t('importMidi.colChannel')}</th>
@@ -351,7 +348,7 @@ export function MidiImportWizard({
                     return (
                       <tr
                         key={track.index}
-                        className="border-b border-theme-border text-theme-text-primary last:border-b-0"
+                        className="border-b border-border text-foreground last:border-b-0"
                       >
                         <td className="px-2 py-1.5">
                           <Checkbox
@@ -397,7 +394,7 @@ export function MidiImportWizard({
 
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-theme-text-secondary">
+                <span className="text-xs text-muted-foreground">
                   {t('importMidi.quantizeGrid')}
                 </span>
                 <Select
@@ -429,7 +426,7 @@ export function MidiImportWizard({
               />
 
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-theme-text-secondary">
+                <span className="text-xs text-muted-foreground">
                   {t('importMidi.minDurationShort')}
                 </span>
                 <NumberDraftInput
@@ -448,7 +445,7 @@ export function MidiImportWizard({
               />
 
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-theme-text-secondary">{t('importMidi.sustain')}</span>
+                <span className="text-xs text-muted-foreground">{t('importMidi.sustain')}</span>
                 <Select
                   value={options.sustainPedal}
                   onValueChange={(v) => patchOptions({ sustainPedal: v as 'extend' | 'ignore' })}
@@ -474,7 +471,7 @@ export function MidiImportWizard({
 
               {options.pianoStaffSplit && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-theme-text-secondary">
+                  <span className="text-xs text-muted-foreground">
                     {t('importMidi.splitPoint')}
                   </span>
                   <NumberDraftInput
@@ -508,15 +505,15 @@ export function MidiImportWizard({
 
             {preview && (
               <div className="flex flex-col gap-2">
-                <p className="text-sm text-theme-text-primary">
+                <p className="text-sm text-foreground">
                   {t('importMidi.previewCount', { count: preview.noteCount })}
                 </p>
-                <p className="font-mono text-sm text-theme-text-secondary">{preview.text}</p>
+                <p className="font-mono text-sm text-muted-foreground">{preview.text}</p>
                 {preview.warnings.map((w) => (
                   <div
                     key={w}
                     role="status"
-                    className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-700"
+                    className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning"
                   >
                     {w}
                   </div>

@@ -35,7 +35,9 @@ test.describe('visible tracks', () => {
     // both files but referenced nowhere in src/.
     await expect(page.getByRole('tab', { name: 'Track' })).toBeVisible();
 
-    const control = page.getByLabel('Visible tracks');
+    // On the inspector's Track tab, which is the tab showing: the editing
+    // bar's track picker is gone, and this list is what it left behind.
+    const control = page.getByRole('group', { name: 'Visible tracks' });
     await expect(control).toBeVisible();
 
     /*
@@ -47,11 +49,9 @@ test.describe('visible tracks', () => {
       unchanged: one track goes, the rest stay, and the choice survives a
       reload.
     */
-    await control.click();
-    const boxes = page.getByRole('checkbox', { name: /^Show / });
+    const boxes = control.getByRole('checkbox');
     await expect(boxes).toHaveCount(3);
     await boxes.nth(1).uncheck();
-    await page.keyboard.press('Escape');
 
     // The notation must actually lose it, not merely record the preference.
     await expect
@@ -72,8 +72,7 @@ test.describe('visible tracks', () => {
     await page.reload();
     await waitForNotation(page);
 
-    await page.getByLabel('Visible tracks').click();
-    const afterReload = page.getByRole('checkbox', { name: /^Show / });
+    const afterReload = page.getByRole('group', { name: 'Visible tracks' }).getByRole('checkbox');
     await expect(afterReload).toHaveCount(3);
     await expect(afterReload.nth(1)).not.toBeChecked();
     await expect(afterReload.nth(0)).toBeChecked();

@@ -6,12 +6,10 @@ import {
   useCurrentEntity,
   type CreatedEntityApiKey,
 } from '@sudobility/entity_client';
+import { Button, Input } from '@sudobility/components';
+import { AS_TYPED_INPUT_CLASS } from '@/components/controls/input-classes';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
-
-const button = 'rounded-md border border-theme-border px-3 py-2 text-sm hover:bg-theme-surface';
-const primary =
-  'rounded-md bg-theme-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50';
 
 /** API keys belong to the currently selected entity; the secret is shown once. */
 export function EntityApiKeysPage() {
@@ -58,44 +56,46 @@ export function EntityApiKeysPage() {
     <main className="mx-auto max-w-4xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold">API keys</h1>
-        <p className="mt-1 text-theme-text-secondary">
+        <p className="mt-1 text-muted-foreground">
           Keys are associated with {scopeName} and can act on that entity.
         </p>
       </header>
       {(message || create.error || keys.error || revoke.error) && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-destructive">
           {message || (create.error ?? keys.error ?? revoke.error)?.message}
         </p>
       )}
       {revealed && (
-        <section className="space-y-3 rounded-lg border-2 border-amber-400 bg-amber-50 p-4">
+        <section className="space-y-3 border border-warning/30 bg-warning/10 p-4 text-foreground">
           <h2 className="font-semibold">Your new key: {revealed.keyName}</h2>
           <p className="text-sm">Copy this secret now. It cannot be shown again.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded border bg-white p-2">
+            <code className="min-w-0 flex-1 break-all border border-border bg-card p-2 font-mono text-sm text-card-foreground">
               {revealed.key}
             </code>
-            <button
+            <Button
               type="button"
-              className={button}
+              variant="outline"
               onClick={() => void navigator.clipboard.writeText(revealed.key)}
             >
               Copy key
-            </button>
-            <button type="button" className={button} onClick={() => setRevealed(null)}>
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setRevealed(null)}>
               Hide
-            </button>
+            </Button>
           </div>
         </section>
       )}
       <form
         onSubmit={(event) => void submit(event)}
-        className="flex flex-wrap items-end gap-3 rounded-lg border p-4"
+        className="flex flex-wrap items-end gap-3 border border-border p-4"
       >
         <label className="min-w-48 flex-1 text-sm">
           Key name
-          <input
-            className="mt-1 w-full rounded border border-theme-border bg-theme-background px-3 py-2"
+          {/* A key's name is kept as typed, so it is shown as typed: the
+              theme's input is upper case, which would hide the difference. */}
+          <Input
+            className={`mt-1 ${AS_TYPED_INPUT_CLASS}`}
             maxLength={100}
             required
             value={name}
@@ -103,31 +103,31 @@ export function EntityApiKeysPage() {
             placeholder="e.g. Production integration"
           />
         </label>
-        <button className={primary} disabled={create.isPending || !name.trim()}>
+        <Button type="submit" variant="primary" disabled={create.isPending || !name.trim()}>
           {create.isPending ? 'Creating…' : 'Create key'}
-        </button>
+        </Button>
       </form>
       <section>
         <h2 className="mb-2 text-lg font-semibold">Entity keys</h2>
         {keys.isLoading ? (
-          <p className="text-sm text-theme-text-secondary">Loading keys…</p>
+          <p className="text-sm text-muted-foreground">Loading keys…</p>
         ) : keys.data?.length ? (
-          <ul className="divide-y rounded-lg border">
+          <ul className="divide-y divide-border border border-border">
             {keys.data.map((key) => (
               <li key={key.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
                 <div>
                   <p className="font-medium">{key.keyName}</p>
-                  <p className="font-mono text-xs text-theme-text-secondary">{key.keyPrefix}…</p>
-                  <p className="text-xs text-theme-text-secondary">
+                  <p className="font-mono text-xs text-muted-foreground">{key.keyPrefix}…</p>
+                  <p className="text-xs text-muted-foreground">
                     {key.isActive ? 'Active' : 'Revoked'} · Created{' '}
                     {key.createdAt ? new Date(key.createdAt).toLocaleString() : '—'} · Last used{' '}
                     {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : 'Never'}
                   </p>
                 </div>
                 {key.isActive && (
-                  <button
+                  <Button
                     type="button"
-                    className={button}
+                    variant="destructive"
                     disabled={revoke.isPending}
                     onClick={() =>
                       void revoke
@@ -140,13 +140,13 @@ export function EntityApiKeysPage() {
                     }
                   >
                     Revoke
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-theme-text-secondary">No API keys for this entity yet.</p>
+          <p className="text-sm text-muted-foreground">No API keys for this entity yet.</p>
         )}
       </section>
     </main>

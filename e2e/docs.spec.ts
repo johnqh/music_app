@@ -35,6 +35,41 @@ test.describe('documentation', () => {
     await expect(page.getByRole('row')).toHaveCount(3); // header + both
   });
 
+  test('a long topic scrolls in its own panel, and the list stays put', async ({ page }) => {
+    /*
+      Measured, because nothing else can see it. The layout scrolls only when
+      what holds it has a height; held in a plain block, the panel grew to the
+      5,000px of the instrument table, never overflowed, and the page — told
+      not to scroll — left everything past the fold out of reach.
+    */
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/en/docs/instruments');
+    await expect(page.getByRole('row')).toHaveCount(129);
+
+    const panel = page
+      .locator('article')
+      .locator(
+        'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " overflow-y-auto ")][1]',
+      );
+    const sizes = await panel.evaluate((node) => ({
+      client: node.clientHeight,
+      content: node.scrollHeight,
+    }));
+    expect(sizes.client).toBeLessThan(720);
+    expect(sizes.content).toBeGreaterThan(sizes.client);
+
+    await panel.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    expect(await panel.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    // The last instrument is reachable, which is the point of scrolling.
+    await expect(page.getByRole('row').last()).toBeInViewport();
+    // And the list did not go anywhere while the topic moved.
+    await expect(
+      page.getByRole('navigation', { name: 'Documentation topics' }).getByRole('link').first(),
+    ).toBeInViewport();
+  });
+
   test('a deep link into one topic works on its own', async ({ page }) => {
     await page.goto('/en/docs/shortcuts');
     await expect(page.getByText('Shift+F')).toBeVisible();

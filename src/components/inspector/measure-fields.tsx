@@ -324,7 +324,7 @@ export function RepeatFields({ store, measure }: { store: EditorStoreApi; measur
         />
       </label>
 
-      <span className="text-xs text-theme-text-secondary">{t('editor.repeatsPlaybackNote')}</span>
+      <span className="text-xs text-muted-foreground">{t('editor.repeatsPlaybackNote')}</span>
     </div>
   );
 }
@@ -394,7 +394,7 @@ export function MeasureTempoField({
           {t('editor.removeTempoChange')}
         </Button>
       ) : (
-        <span className="text-xs text-theme-text-secondary">
+        <span className="text-xs text-muted-foreground">
           {here.ownEventId ? t('inspector.tempoStarting') : t('inspector.tempoInherited')}
         </span>
       )}

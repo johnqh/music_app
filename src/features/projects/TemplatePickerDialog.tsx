@@ -64,8 +64,8 @@ export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePicker
                 'h-auto flex-col items-start gap-1 rounded-md p-4 text-left',
               )}
             >
-              <span className="text-sm font-medium text-theme-text-primary">{template.name}</span>
-              <span className="text-xs text-theme-text-secondary">{template.description}</span>
+              <span className="text-sm font-medium text-foreground">{template.name}</span>
+              <span className="text-xs text-muted-foreground">{template.description}</span>
             </Button>
           ))}
         </div>

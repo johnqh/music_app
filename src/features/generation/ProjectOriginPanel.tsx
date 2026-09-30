@@ -38,8 +38,8 @@ function OriginRows({ rows }: { rows: readonly Row[] }) {
     <dl className="flex flex-col gap-1 text-xs">
       {rows.map(([label, value]) => (
         <div key={label} className="flex items-start gap-2">
-          <dt className="shrink-0 text-theme-text-secondary">{label}:</dt>
-          <dd className="min-w-0 flex-1 whitespace-pre-line break-words text-theme-text-primary">
+          <dt className="shrink-0 text-muted-foreground">{label}:</dt>
+          <dd className="min-w-0 flex-1 whitespace-pre-line break-words text-foreground">
             {value}
           </dd>
         </div>
@@ -135,7 +135,7 @@ function GeneratedOrigin({ projectId, jobId }: { projectId: string; jobId: strin
   const job = jobs.data?.find((candidate) => candidate.id === jobId);
   if (job) return <GeneratedOriginDetails job={job} />;
   return (
-    <p className="text-xs text-theme-text-secondary">
+    <p className="text-xs text-muted-foreground">
       {jobs.isSuccess ? t('projectOrigin.jobMissing') : t('projectOrigin.jobLoading')}
     </p>
   );
@@ -160,10 +160,10 @@ export function ProjectOriginPanel({ origin, projectId }: ProjectOriginProps) {
   const { t } = useTranslation();
   return (
     <section aria-labelledby="project-origin-heading" className="flex flex-col gap-2">
-      <p id="project-origin-heading" className="text-sm font-semibold text-theme-text-primary">
+      <p id="project-origin-heading" className="text-sm font-semibold text-foreground">
         {t('projectOrigin.heading')}
       </p>
-      <p className="text-xs text-theme-text-primary">
+      <p className="text-xs text-foreground">
         {t(`projectOrigin.kind.${origin?.kind ?? 'unknown'}`)}
       </p>
       {origin?.kind === 'imported' && (

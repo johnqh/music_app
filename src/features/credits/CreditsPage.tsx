@@ -10,16 +10,19 @@
  * understate every multi-instrument score fourfold on the one screen where
  * being wrong costs the reader money, so the copy says what a credit actually
  * writes — one bar, for one instrument.
+ *
+ * **Redeeming a coupon is on this page, under the store.** It was a page of
+ * its own, a link away, which made the one way to get credits without paying
+ * the hardest one to find. It is the same question as the store above it —
+ * how do I get more — so it is asked in the same place.
  */
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { Card, Section, Stack, Text } from '@sudobility/components';
 import { CreditStore } from '@/features/credits/CreditStore';
-import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
+import { CreditCouponsPage } from '@/features/credits/CreditCouponsPage';
 
-export function CreditsPage({ onRedeemCoupon }: { onRedeemCoupon?: () => void } = {}) {
+export function CreditsPage() {
   const { t } = useTranslation();
-  const lang = useCurrentLanguage();
 
   return (
     <Section spacing="xl" className="mx-auto max-w-3xl">
@@ -39,22 +42,9 @@ export function CreditsPage({ onRedeemCoupon }: { onRedeemCoupon?: () => void } 
         </Card>
 
         <CreditStore />
-        {onRedeemCoupon ? (
-          <button
-            type="button"
-            className="w-fit text-sm font-medium text-primary underline"
-            onClick={onRedeemCoupon}
-          >
-            Redeem a credit coupon
-          </button>
-        ) : (
-          <Link
-            className="text-sm font-medium text-primary underline"
-            to={`/${lang}/credits/coupons`}
-          >
-            Redeem a credit coupon
-          </Link>
-        )}
+        <section aria-label={t('dashboard.redeemCoupon')}>
+          <CreditCouponsPage />
+        </section>
       </Stack>
     </Section>
   );

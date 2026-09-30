@@ -43,7 +43,7 @@ export function ExportScopeDialog({
         { label: t('print.wholeScore'), onClick: () => onChoose('all'), variant: 'primary' },
       ]}
     >
-      <p className="text-sm text-theme-text-secondary">
+      <p className="text-sm text-muted-foreground">
         {t('exportScope.hiddenCount', { count: hiddenCount })}
       </p>
     </FormModal>

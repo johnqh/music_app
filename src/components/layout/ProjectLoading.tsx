@@ -29,7 +29,7 @@ export function ProjectLoading() {
       data-testid="project-loading"
       // The whole screen: this replaces the editor rather than covering it, so
       // there is no offset parent to inset against.
-      className="flex min-h-screen flex-col items-center justify-center gap-4 bg-theme-surface"
+      className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background"
       role="status"
       aria-live="polite"
     >
@@ -38,7 +38,7 @@ export function ProjectLoading() {
       <div aria-hidden="true">
         <Spinner ariaLabel={t('overlay.openingProject')} size="large" />
       </div>
-      <p className="text-sm font-medium text-theme-text-primary">{t('overlay.openingProject')}</p>
+      <p className="text-sm font-medium text-foreground">{t('overlay.openingProject')}</p>
     </div>
   );
 }

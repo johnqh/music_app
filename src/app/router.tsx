@@ -9,7 +9,6 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CreditsHistoryPage } from '@/features/credits/CreditsHistoryPage';
 import { CreditsPage } from '@/features/credits/CreditsPage';
-import { CreditCouponsPage } from '@/features/credits/CreditCouponsPage';
 import { EntitiesPage } from '@/features/entities/EntitiesPage';
 import { UserDashboardPage } from '@/features/dashboard/UserDashboardPage';
 import {
@@ -57,7 +56,7 @@ export type AppRouterProps = {
 
 function LoadingFallback() {
   const { t } = useTranslation();
-  return <div className="p-8 text-theme-text-secondary">{t('common.loading')}</div>;
+  return <div className="p-8 text-muted-foreground">{t('common.loading')}</div>;
 }
 
 export function ScreenContainerLayout({ store }: { store?: EditorStoreApi }) {
@@ -304,14 +303,12 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="credits/coupons"
-              element={
-                <ProtectedRoute>
-                  <CreditCouponsPage />
-                </ProtectedRoute>
-              }
-            />
+            {/*
+              Redeeming a coupon is part of the credits page now. The address
+              it had is kept and sent there, so a link somebody saved still
+              lands on the form rather than on a 404.
+            */}
+            <Route path="credits/coupons" element={<Navigate to="../credits" replace />} />
             <Route
               path="entities"
               element={

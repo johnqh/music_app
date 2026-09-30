@@ -18,11 +18,11 @@ import { Input, Text } from '@sudobility/components';
 import { gmInstrumentRows } from '@sudobility/music_types';
 
 const BASIS_TONE: Record<string, string> = {
-  measured: 'text-theme-success',
-  tunable: 'text-theme-warning',
-  synthetic: 'text-theme-text-secondary',
-  unpitched: 'text-theme-text-secondary',
-  assumed: 'text-theme-error',
+  measured: 'text-success',
+  tunable: 'text-warning',
+  synthetic: 'text-muted-foreground',
+  unpitched: 'text-muted-foreground',
+  assumed: 'text-destructive',
 };
 
 export function InstrumentReference() {
@@ -45,7 +45,7 @@ export function InstrumentReference() {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[46rem] text-sm">
           <thead>
-            <tr className="border-b border-theme-border text-left">
+            <tr className="border-b border-border text-left">
               <th className="py-2 pr-3 font-medium">{t('docs.instruments.colProgram')}</th>
               <th className="py-2 pr-3 font-medium">{t('docs.instruments.colName')}</th>
               <th className="py-2 pr-3 font-medium">{t('docs.instruments.colFamily')}</th>
@@ -57,12 +57,10 @@ export function InstrumentReference() {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.program} className="border-b border-theme-border/40">
-                <td className="py-1.5 pr-3 tabular-nums text-theme-text-secondary">
-                  {row.program}
-                </td>
+              <tr key={row.program} className="border-b border-border/40">
+                <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">{row.program}</td>
                 <td className="py-1.5 pr-3">{row.name}</td>
-                <td className="py-1.5 pr-3 text-theme-text-secondary">{row.familyLabel}</td>
+                <td className="py-1.5 pr-3 text-muted-foreground">{row.familyLabel}</td>
                 <td className="py-1.5 pr-3 tabular-nums">{row.range}</td>
                 <td className="py-1.5 pr-3 tabular-nums">
                   {row.polyphony ?? t('docs.instruments.polyUnlimited')}

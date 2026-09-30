@@ -53,7 +53,7 @@ export function ChoiceDialog<T extends string>({
       actions={[{ label: t('common.cancel'), onClick: onCancel, variant: 'ghost' }]}
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-theme-text-secondary">{message}</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
 
         <div className="flex flex-col gap-2">
           {choices.map((choice) => (

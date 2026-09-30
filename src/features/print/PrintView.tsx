@@ -64,7 +64,12 @@ export function PrintView({ store, onBack }: PrintViewProps) {
         into a stylesheet is how they silently drift apart.
       */}
       <style>{`@page { size: ${paperOption?.css} ${orientation}; margin: ${PAGE_MARGIN_MM}mm; }`}</style>
-      <div className="print-chrome flex flex-wrap items-center gap-3 border-b border-neutral-300 px-4 py-3">
+      {/*
+        The bar is the app's, so it takes the theme; only the paper under it
+        is white. On the white wrapper a ghost button's ink is the dark
+        theme's light grey, which is nearly the colour of the page.
+      */}
+      <div className="print-chrome flex flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3 text-foreground">
         <Select value={scope} onValueChange={setScope}>
           <SelectTrigger aria-label={t('print.whatToPrint')} className="h-auto w-auto px-3 py-1.5">
             <span>{scopeLabel}</span>

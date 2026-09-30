@@ -11,8 +11,10 @@
  * half-typed title never reaches a public page.
  */
 import { useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormModal } from '@sudobility/components';
+import { FormModal, Input } from '@sudobility/components';
+import { AS_TYPED_INPUT_CLASS } from '@/components/controls/input-classes';
 import type { SnapshotSummary } from '@sudobility/music_types';
 
 export type ManagePublishedDialogProps = {
@@ -67,18 +69,20 @@ export function ManagePublishedDialog({
     >
       <div className="flex flex-col gap-4">
         {published.length === 0 ? (
-          <p className="text-sm text-theme-text-secondary">{t('snapshot.nonePublished')}</p>
+          <p className="text-sm text-muted-foreground">{t('snapshot.nonePublished')}</p>
         ) : (
           published.map((snapshot) => (
             <label key={snapshot.id} className="flex flex-col gap-1 text-sm">
-              <span className="text-theme-text-secondary">
+              <span className="text-muted-foreground">
                 {t('snapshot.publicNameFor', { name: snapshot.name })}
               </span>
-              <input
+              <Input
                 aria-label={t('snapshot.publicNameFor', { name: snapshot.name })}
                 value={titleOf(snapshot)}
-                onChange={(e) => setDrafts((prev) => ({ ...prev, [snapshot.id]: e.target.value }))}
-                className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setDrafts((prev) => ({ ...prev, [snapshot.id]: e.target.value }))
+                }
+                className={AS_TYPED_INPUT_CLASS}
               />
             </label>
           ))

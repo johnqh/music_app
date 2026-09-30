@@ -15,6 +15,15 @@ vi.mock('@sudobility/consumables_client', () => ({
   usePurchaseCredits: () => hooks.usePurchaseCredits() as unknown,
 }));
 
+/*
+  The coupon form is the shared package's, with a test suite of its own, and
+  needs a workspace and an API client to draw. Stood in for, so that what is
+  pinned here is that the credits page holds it.
+*/
+vi.mock('@/features/credits/CreditCouponsPage', () => ({
+  CreditCouponsPage: () => <p>coupon form</p>,
+}));
+
 vi.mock('@/app/AuthContext', () => ({
   useAuth: () => ({ user: { uid: 'u1', email: 'a@b.c', displayName: null } }),
 }));
@@ -74,5 +83,16 @@ describe('CreditsPage', () => {
     // Being at zero is exactly when the store matters most.
     setup(0);
     expect(screen.getByText(/Your balance/i)).toBeInTheDocument();
+  });
+
+  it('holds the coupon form, under the store, rather than linking to one', () => {
+    setup(96);
+    const region = screen.getByRole('region', { name: 'Redeem coupon' });
+    expect(region).toHaveTextContent('coupon form');
+    expect(screen.queryByRole('link', { name: /coupon/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /redeem a credit coupon/i })).toBeNull();
+    // After the packages on sale, which are the first answer to the question.
+    const store = screen.getByText('1,000');
+    expect(store.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

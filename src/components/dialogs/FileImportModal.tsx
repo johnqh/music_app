@@ -183,7 +183,7 @@ export function FileImportModal({
         {/* FormModal renders the title and names its own dialog, so neither is
             repeated here. */}
         <div className="flex flex-col gap-4">
-          {description && <div className="text-sm text-theme-text-secondary">{description}</div>}
+          {description && <div className="text-sm text-muted-foreground">{description}</div>}
 
           <label
             htmlFor={inputId}
@@ -204,7 +204,7 @@ export function FileImportModal({
               <div
                 role="status"
                 aria-live="polite"
-                className="flex items-center gap-2 text-sm text-theme-text-secondary"
+                className="flex items-center gap-2 text-sm text-muted-foreground"
               >
                 {/* Decorative: the text beside it is the announcement. */}
                 <span aria-hidden="true">
@@ -222,7 +222,7 @@ export function FileImportModal({
                   aria-valuenow={Math.round(progress * 100)}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  className="h-1 w-full overflow-hidden rounded-full bg-theme-border"
+                  className="h-1 w-full overflow-hidden rounded-full bg-border"
                 >
                   <div
                     className="h-full rounded-full bg-primary transition-[width] duration-150"
@@ -234,7 +234,10 @@ export function FileImportModal({
           )}
 
           {error && (
-            <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+            <div
+              role="alert"
+              className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
               {error}
             </div>
           )}

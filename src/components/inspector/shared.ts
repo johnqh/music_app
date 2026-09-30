@@ -70,7 +70,7 @@ export const MIXED_VALUE = '__mixed__';
   `DYNAMIC_OPTIONS` uses. Import those from `@sudobility/music_lib` directly.
 */
 
-export const FIELD_LABEL_CLASS = 'text-xs text-theme-text-secondary';
+export const FIELD_LABEL_CLASS = 'text-xs text-muted-foreground';
 
 /**
  * One stated height for every field in the panel.

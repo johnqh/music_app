@@ -10,8 +10,7 @@
  */
 import { Component, useEffect, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { cn } from '@sudobility/components';
-import { variants } from '@sudobility/design';
+import { Button } from '@sudobility/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { applyDocumentTheme, type ColorSchemeMode, useResolvedColorScheme } from '@/app/theme';
 import { AppRoutes } from '@/app/router';
@@ -39,17 +38,21 @@ function ErrorFallback() {
   return (
     <div className="mx-auto max-w-[480px] p-8">
       <div className="flex flex-col gap-4">
-        <div role="alert" className="rounded-md bg-red-600/10 px-3 py-2 text-sm text-red-700">
+        <div
+          role="alert"
+          className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {t('error.crashed', { appName: CONSTANTS.APP_NAME })}
         </div>
-        <p className="text-sm text-theme-text-secondary">{t('error.autosaved')}</p>
-        <button
+        <p className="text-sm text-muted-foreground">{t('error.autosaved')}</p>
+        <Button
           type="button"
+          variant="primary"
           onClick={() => window.location.reload()}
-          className={cn(variants.button.primary.default(), 'self-start')}
+          className="self-start"
         >
           {t('error.reload')}
-        </button>
+        </Button>
       </div>
     </div>
   );

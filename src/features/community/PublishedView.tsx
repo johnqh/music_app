@@ -163,8 +163,8 @@ export function PublishedView() {
   if (failed) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12">
-        <h1 className="text-xl font-semibold text-theme-text-primary">{t('published.notFound')}</h1>
-        <p className="mt-2 text-sm text-theme-text-secondary">{t('published.noLongerShared')}</p>
+        <h1 className="text-xl font-semibold text-foreground">{t('published.notFound')}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{t('published.noLongerShared')}</p>
       </div>
     );
   }
@@ -174,11 +174,11 @@ export function PublishedView() {
     // viewport-bounded (`scrollable: false` above), so this only needs to
     // fill whatever height that already-bounded ancestor gives it — the same
     // reasoning AppLayout's own inner rows follow.
-    <div className="flex min-h-0 flex-1 flex-col bg-theme-surface-primary text-theme-text-primary">
-      <div className="flex flex-wrap items-center gap-3 border-b border-theme-border px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col bg-background text-foreground">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
         <span className="font-medium">{snapshot?.publicName ?? t('common.loading')}</span>
         {snapshot && (
-          <span className="text-sm text-theme-text-secondary">
+          <span className="text-sm text-muted-foreground">
             {t('community.sharedBy', { name: snapshot.publisherName })}
           </span>
         )}
@@ -187,7 +187,7 @@ export function PublishedView() {
           {t('published.share')}
         </Button>
         {shareOpen && (
-          <code className="rounded bg-theme-hover-bg px-2 py-1 text-xs">
+          <code className="rounded bg-accent px-2 py-1 text-xs">
             {publishedSnapshotUrl(window.location.origin, lang, publicId)}
           </code>
         )}

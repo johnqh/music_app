@@ -25,7 +25,9 @@ import { useTranslation } from 'react-i18next';
 import type { AuthActionProps, AuthUser as LibAuthUser } from '@sudobility/auth-components';
 import { Avatar } from '@sudobility/auth-components';
 import { Button, Dropdown } from '@sudobility/components';
+import { useProfile } from '@sudobility/music_client';
 import { useAuth } from '@/app/AuthContext';
+import { getAppServices } from '@/config/initialize';
 
 /**
  * This app's `AuthUser` carries only what it needs (`uid`, `email`,
@@ -33,19 +35,24 @@ import { useAuth } from '@/app/AuthContext';
  * the difference at this boundary instead of widening the app's own type to
  * satisfy a component.
  *
- * `photoURL` is null, so `Avatar` falls back to initials — which is what these
- * accounts show anyway, since sign-in is email and Google without a photo sync.
+ * `photoURL` is the picture the user uploaded on the dashboard's Account
+ * page, and null until they have — `Avatar` then falls back to initials.
+ * Never Firebase's own `photoURL`: sign-in is email and Google without a photo
+ * sync, and the picture a user chose here is the one they meant.
  */
-function toLibUser(user: {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-}): LibAuthUser {
+function toLibUser(
+  user: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+  },
+  photoURL: string | null,
+): LibAuthUser {
   return {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
-    photoURL: null,
+    photoURL,
     isAnonymous: false,
     emailVerified: true,
     providerId: null,
@@ -62,7 +69,9 @@ export function AuthActionAdapter({
   className,
 }: AuthActionProps) {
   const { t } = useTranslation();
-  const { user, signOut } = useAuth();
+  const { user, signOut, hookContext } = useAuth();
+  const avatarId = useProfile(hookContext).data?.avatarId ?? null;
+  const photoURL = avatarId ? getAppServices().musicClient.avatarUrl(avatarId) : null;
 
   const items = useMemo(
     () => [
@@ -104,7 +113,7 @@ export function AuthActionAdapter({
       className={className}
       trigger={
         <Avatar
-          user={toLibUser(user)}
+          user={toLibUser(user, photoURL)}
           size={avatarSize}
           // The trigger is the button; the avatar inside it must not also be
           // clickable, or the dropdown opens and closes on the same press.

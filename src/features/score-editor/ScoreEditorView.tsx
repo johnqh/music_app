@@ -183,6 +183,7 @@ export function ScoreEditorView({
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
   const visibleTrackIds = store(selectVisibleTrackIds);
+  const trackInfo = store((s) => s.trackInfo);
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
@@ -406,8 +407,8 @@ export function ScoreEditorView({
     handler, the resize observer) to read without taking them as dependencies —
     a scroll must not need a fresh callback every time the theme changes.
   */
-  const viewInputsRef = useRef({ zoom, layoutMode, renderTheme, visibleTrackIds });
-  viewInputsRef.current = { zoom, layoutMode, renderTheme, visibleTrackIds };
+  const viewInputsRef = useRef({ zoom, layoutMode, renderTheme, visibleTrackIds, trackInfo });
+  viewInputsRef.current = { zoom, layoutMode, renderTheme, visibleTrackIds, trackInfo };
 
   /**
    * Tells the canvas the view's size and scroll, as the DOM measures them now,
@@ -450,6 +451,9 @@ export function ScoreEditorView({
       // hiding a track costs one option rather than a code path. The gutter,
       // the caret and hit-testing all follow, since they read the same plan.
       trackIds: inputs.visibleTrackIds,
+      // How much of the track-info column to draw. A layout option: the
+      // canvas gives the width it does not use back to the music.
+      trackInfo: inputs.trackInfo,
       devicePixelRatio: dpr,
     });
     scoreCanvas.setScroll(box.scrollLeft, box.scrollTop);
@@ -535,6 +539,7 @@ export function ScoreEditorView({
     layoutMode,
     renderTheme,
     visibleTrackIds,
+    trackInfo,
     syncView,
     publishLayout,
   ]);
@@ -1266,7 +1271,7 @@ export function ScoreEditorView({
               width: dragBox.width,
               height: dragBox.height,
             }}
-            className="pointer-events-none absolute border border-dashed border-primary bg-theme-hover-bg"
+            className="pointer-events-none absolute border border-dashed border-primary bg-primary/10"
           />
         )}
         {dropTarget && layoutPlan && (
@@ -1314,7 +1319,7 @@ function DropIndicator({
     <div
       data-testid="drop-indicator"
       aria-hidden
-      className="pointer-events-none absolute bg-sky-400/20 ring-1 ring-sky-500"
+      className="pointer-events-none absolute bg-primary/15 ring-1 ring-primary"
       style={{
         left: box.x * zoom,
         top: box.y * zoom,

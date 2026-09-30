@@ -130,7 +130,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
           // `whitespace-nowrap` with the span centred on the key: a drum name
           // is wider than the key it belongs to, so it has to overhang rather
           // than wrap into the row below and collide with it.
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[9px] text-theme-text-secondary"
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-center text-[9px] text-muted-foreground"
           style={{ top: labelTop }}
         >
           {label}

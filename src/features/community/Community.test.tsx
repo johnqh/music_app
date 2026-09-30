@@ -22,6 +22,7 @@ const published = {
   name: 'Version 1',
   publicName: 'My Song Version 1',
   publisherName: 'Jane',
+  publisherAvatarId: null as string | null,
   score,
   createdAt: '2026-01-01T00:00:00.000Z',
 };
@@ -34,6 +35,7 @@ function stubPublicCalls() {
     musicClient: {
       ...services.musicClient,
       listCommunity: vi.fn().mockResolvedValue([published]),
+      avatarUrl: (avatarId: string) => `https://api.test/public/avatars/${avatarId}`,
       getPublishedSnapshot: vi.fn().mockResolvedValue(published),
     } as never,
   });
@@ -46,7 +48,7 @@ describe('CommunityPage', () => {
   });
   afterEach(() => resetTestAppServices());
 
-  it('lists what has been shared, with its publisher', async () => {
+  const renderCommunity = () =>
     render(
       <MemoryRouter initialEntries={['/en/community']}>
         <Routes>
@@ -54,11 +56,48 @@ describe('CommunityPage', () => {
         </Routes>
       </MemoryRouter>,
     );
+
+  it('lists what has been shared, with its publisher', async () => {
+    renderCommunity();
     // The public title, not the owner's version label: "Version 1" means
     // nothing to a stranger.
     expect(await screen.findByText('My Song Version 1')).toBeVisible();
     expect(screen.queryByText('Version 1')).toBeNull();
-    expect(screen.getByText(/by Jane/)).toBeVisible();
+    expect(screen.getByText('Jane')).toBeVisible();
+    // The tile is one link, named for the score and for who shared it.
+    expect(screen.getByRole('link', { name: 'My Song Version 1, by Jane' })).toBeVisible();
+  });
+
+  it("heads a tile with the publisher's initial when they have no picture", async () => {
+    renderCommunity();
+    await screen.findByText('My Song Version 1');
+    expect(screen.getByText('J')).toBeVisible();
+    expect(document.querySelector('img')).toBeNull();
+  });
+
+  it("heads a tile with the publisher's picture when they have one", async () => {
+    const services = getAppServices();
+    setAppServices({
+      ...services,
+      musicClient: {
+        ...services.musicClient,
+        listCommunity: vi.fn().mockResolvedValue([{ ...published, publisherAvatarId: 'av_1' }]),
+      } as never,
+    });
+    renderCommunity();
+    await screen.findByText('My Song Version 1');
+    expect(document.querySelector('img')?.getAttribute('src')).toBe(
+      'https://api.test/public/avatars/av_1',
+    );
+  });
+
+  it('offers nothing to do to a shared score but open it', async () => {
+    // It is somebody else's: no Duplicate and no Delete, which the project
+    // tiles this one is drawn like both have.
+    renderCommunity();
+    await screen.findByText('My Song Version 1');
+    expect(screen.queryByRole('button', { name: /duplicate/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
   });
 });
 

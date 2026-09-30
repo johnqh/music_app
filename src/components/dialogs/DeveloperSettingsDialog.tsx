@@ -172,9 +172,7 @@ export function DeveloperSettingsDialog({
             stored here is harmless.
           */}
           <div className="flex items-center justify-between gap-3 py-1">
-            <span className="text-sm text-theme-text-primary">
-              {t('devSettings.generationBackend')}
-            </span>
+            <span className="text-sm text-foreground">{t('devSettings.generationBackend')}</span>
             <Select
               value={devSettings.generationVariant}
               onValueChange={(v) => store.getState().setDevSettings({ generationVariant: v })}
@@ -242,7 +240,7 @@ export function DeveloperSettingsDialog({
         {benchmarkReport && (
           <div
             role="status"
-            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-theme-bg-secondary px-3 py-2 text-sm text-theme-text-primary"
+            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-muted px-3 py-2 text-sm text-foreground"
           >
             <span>
               Benchmark complete: {benchmarkReport.sizes.length} size(s) timed
@@ -266,7 +264,7 @@ export function DeveloperSettingsDialog({
         {resetDone && (
           <div
             role="status"
-            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-green-600/10 px-3 py-2 text-sm text-green-700"
+            className="mt-4 flex items-start justify-between gap-3 rounded-md bg-success/10 px-3 py-2 text-sm text-success"
           >
             <span>{t('devSettings.databaseCleared')}</span>
             <Button

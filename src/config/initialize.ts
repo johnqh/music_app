@@ -47,10 +47,13 @@ import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_play
 import { CONSTANTS } from '@/config/constants';
 
 // Activate the design-system theme (Swiss). configureTheme() registers the
-// JS class overrides; the semantic tokens (theme-bg-*, theme-text-*, the
-// component palette) resolve via the CSS custom properties injected below
-// (:root light + .dark) — same pattern as sudojo_app / sider_app. Without
-// this style tag every theme-* utility resolves to an undefined variable.
+// JS class overrides; the semantic tokens (`bg-background`, `text-foreground`,
+// `text-muted-foreground`, `border-border`, the component palette) resolve
+// via the CSS custom properties injected below (:root light + .dark) — same
+// pattern as sudojo_app / sider_app. Without this style tag every one of
+// them resolves to an undefined variable. What it injects is `--border`,
+// `--muted-foreground` and so on; it has never injected `--color-*`, which
+// is what this app's `theme-*` classes used to read.
 configureTheme(swissTheme);
 if (typeof document !== 'undefined' && !document.getElementById('sudobility-design-theme')) {
   const styleEl = document.createElement('style');

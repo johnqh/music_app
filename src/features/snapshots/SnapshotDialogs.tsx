@@ -6,8 +6,10 @@
  * destructive path always has a non-destructive escape.
  */
 import { useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FormModal } from '@sudobility/components';
+import { FormModal, Input } from '@sudobility/components';
+import { AS_TYPED_INPUT_CLASS } from '@/components/controls/input-classes';
 import { LIVE_NODE_ID } from '@/app-library';
 import type { TreeNode } from '@/app-library';
 import { publishNamesProblem, suggestedPublicName } from '@sudobility/music_client';
@@ -94,64 +96,62 @@ export function CreateSnapshotDialog({
       ]}
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-theme-text-secondary">{t('snapshot.createHint')}</p>
+        <p className="text-sm text-muted-foreground">{t('snapshot.createHint')}</p>
         <label className="flex flex-col gap-1 text-sm">
-          <span className="text-theme-text-secondary">{t('snapshot.name')}</span>
-          <input
+          <span className="text-muted-foreground">{t('snapshot.name')}</span>
+          <Input
             aria-label={t('snapshot.name')}
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
+            className={AS_TYPED_INPUT_CLASS}
           />
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
+            className="size-4 accent-primary"
             aria-label={t('snapshot.publish')}
             checked={publish}
             onChange={(e) => setPublish(e.target.checked)}
           />
-          <span className="text-theme-text-secondary">{t('snapshot.publishHint')}</span>
+          <span className="text-muted-foreground">{t('snapshot.publishHint')}</span>
         </label>
 
         {publish && (
           <>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-theme-text-secondary">{t('snapshot.publicName')}</span>
-              <input
+              <span className="text-muted-foreground">{t('snapshot.publicName')}</span>
+              <Input
                 aria-label={t('snapshot.publicName')}
                 value={publicName}
-                onChange={(e) => setPublicNameOverride(e.target.value)}
-                className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setPublicNameOverride(e.target.value)
+                }
+                className={AS_TYPED_INPUT_CLASS}
               />
-              <span className="text-xs text-theme-text-secondary">
-                {t('snapshot.publicNameHint')}
-              </span>
+              <span className="text-xs text-muted-foreground">{t('snapshot.publicNameHint')}</span>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-theme-text-secondary">{t('snapshot.publisherName')}</span>
-              <input
+              <span className="text-muted-foreground">{t('snapshot.publisherName')}</span>
+              <Input
                 aria-label={t('snapshot.publisherName')}
                 value={publisherName}
-                onChange={(e) => setPublisherName(e.target.value)}
-                className="rounded border border-theme-border bg-theme-surface px-2 py-1"
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setPublisherName(e.target.value)}
+                className={AS_TYPED_INPUT_CLASS}
               />
-              <span className="text-xs text-theme-text-secondary">
-                {t('snapshot.publisherHint')}
-              </span>
+              <span className="text-xs text-muted-foreground">{t('snapshot.publisherHint')}</span>
             </label>
 
-            <p className="text-sm text-amber-700 dark:text-amber-400">
-              {t('snapshot.copyrightWarning')}
-            </p>
+            <p className="text-sm text-warning">{t('snapshot.copyrightWarning')}</p>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                className="size-4 accent-primary"
                 aria-label={t('snapshot.copyrightConfirm')}
                 checked={copyrightConfirmed}
                 onChange={(e) => setCopyrightConfirmed(e.target.checked)}
               />
-              <span className="text-theme-text-secondary">{t('snapshot.copyrightConfirm')}</span>
+              <span className="text-muted-foreground">{t('snapshot.copyrightConfirm')}</span>
             </label>
           </>
         )}
@@ -203,9 +203,9 @@ export function OpenSnapshotDialog({
       ]}
     >
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-amber-700 dark:text-amber-400">{t('snapshot.openWarning')}</p>
+        <p className="text-sm text-warning">{t('snapshot.openWarning')}</p>
 
-        <div className="relative min-h-[200px] overflow-auto rounded border border-theme-border p-3">
+        <div className="relative min-h-[200px] overflow-auto rounded border border-border p-3">
           {/* Edges first, so nodes draw over them. */}
           <svg
             aria-hidden
@@ -223,7 +223,7 @@ export function OpenSnapshotDialog({
                   x2={node.lane * LANE_STEP + 60}
                   y2={node.depth * DEPTH_STEP + 20}
                   stroke="currentColor"
-                  className="text-theme-border"
+                  className="text-border"
                   strokeWidth={1}
                 />
               );
@@ -237,7 +237,7 @@ export function OpenSnapshotDialog({
               <div
                 key={node.id}
                 data-testid="snapshot-node-live"
-                className="absolute rounded border border-dashed border-theme-border px-2 py-1 text-xs text-theme-text-secondary"
+                className="absolute rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
                 style={{ left: node.lane * LANE_STEP, top: node.depth * DEPTH_STEP }}
               >
                 {t('snapshot.currentWork')}
@@ -249,7 +249,7 @@ export function OpenSnapshotDialog({
                 onClick={() => setSelected(node.id)}
                 aria-pressed={selected === node.id}
                 className={`absolute rounded border px-2 py-1 text-xs ${
-                  selected === node.id ? 'border-primary bg-theme-hover-bg' : 'border-theme-border'
+                  selected === node.id ? 'border-primary bg-accent' : 'border-border'
                 }`}
                 style={{ left: node.lane * LANE_STEP, top: node.depth * DEPTH_STEP }}
               >

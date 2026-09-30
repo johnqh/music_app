@@ -60,7 +60,7 @@ export function ConfirmDialog({
         },
       ]}
     >
-      <p className="text-sm text-theme-text-secondary">{message}</p>
+      <p className="text-sm text-muted-foreground">{message}</p>
     </FormModal>
   );
 }
