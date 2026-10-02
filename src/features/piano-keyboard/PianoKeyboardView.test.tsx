@@ -529,6 +529,29 @@ describe('playing the keyboard writes notes', () => {
     expect(key(container, 60)).toHaveAttribute('data-playing', 'false');
     expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
   });
+
+  it('writes nothing for a touch the browser took to pan the keyboard', () => {
+    // A keyboard wider than its panel scrolls, and on a touch screen a pan
+    // starts on a key; the browser cancels that key's pointer when it pans.
+    const store = makeStore();
+    const before = allNotes(store.getState().score!).length;
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerCancel(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+
+    expect(allNotes(store.getState().score!)).toHaveLength(before);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('draws 44-wide white keys, centred when they fit', () => {
+    const { container } = render(<PianoKeyboardView store={makeStore()} />);
+    expect(key(container, 60).style.width).toBe('44px');
+    const board = container.querySelector('[role="img"]') as HTMLElement;
+    expect(board.className).toContain('mx-auto');
+    expect(board.style.width).toBe(`${52 * 44}px`);
+  });
 });
 
 describe('playing several keys at once writes a chord', () => {

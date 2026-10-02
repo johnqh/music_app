@@ -29,7 +29,7 @@
         "@sudobility/entity_pages": "^0.0.167",
         "@sudobility/music_client": "^0.4.83",
         "@sudobility/music_codecs": "^0.2.49",
-        "@sudobility/music_drawing": "^0.0.58",
+        "@sudobility/music_drawing": "^0.0.59",
         "@sudobility/music_editing": "^0.0.41",
         "@sudobility/music_io": "^0.9.65",
         "@sudobility/music_lib": "^1.9.70",
@@ -463,7 +463,7 @@
 
     "@sudobility/music_codecs": ["@sudobility/music_codecs@0.2.49", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.47" } }, "sha512-ssByfiLA/c6FuQQo4W2+ad14ya3jKyVSQQ1H6VciuYmZ1V3LMN3aVccLdGXMIrz6WG7FXY4kLx26to8h+AN7vw=="],
 
-    "@sudobility/music_drawing": ["@sudobility/music_drawing@0.0.58", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.47", "vexflow": "^4.2.5" } }, "sha512-Ia5XJnYmb5agbSNbKPaJkmiN0AKdskqWfqo9lYcbsbSdyl1lNS7nd8UvuDUCVyxtbG3guMott7+IVcbqfeaKQw=="],
+    "@sudobility/music_drawing": ["@sudobility/music_drawing@0.0.59", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.47", "vexflow": "^4.2.5" } }, "sha512-FUbXYLvR5opb/eiqYv30az8DIWz60nppEEERnqOubRgt2b8NNI1GjQINCoEMBCygrvo1sz/a4CoCID4eThL58Q=="],
 
     "@sudobility/music_editing": ["@sudobility/music_editing@0.0.41", "", { "peerDependencies": { "@sudobility/music_types": "^0.13.47", "immer": "^11.1.18", "react": ">=18", "zustand": ">=5" } }, "sha512-QHE1wPLCRp/36G2pq/SfXBFXyN/q9/0FiXsRjBA1hNrJ/BDK3BwLcmE7oxWcWhQFlWRv8AVVtucbU9BEyiZkPg=="],
 

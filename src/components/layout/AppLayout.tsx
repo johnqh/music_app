@@ -43,6 +43,7 @@
  */
 import { libraryCopy } from '@/i18n/library-copy';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { KEYBOARD_MAX_HEIGHT, keyboardPanelHeight } from '@sudobility/music_drawing';
 import { useTranslation } from 'react-i18next';
 import type { KeyboardEvent } from 'react';
 import { Button, Tooltip, cn } from '@sudobility/components';
@@ -129,12 +130,6 @@ export type AppLayoutProps = {
 };
 
 const SIDE_PANEL_WIDTH = 280;
-/**
- * Fixed height of the piano-keyboard panel. Not resizable — collapse is the
- * only size control. Far shorter than the timeline it replaced, which hands
- * ~130px back to the notation.
- */
-const PIANO_KEYBOARD_PANEL_HEIGHT = 190;
 
 /** Keys, resolved at render so the label follows the language. */
 const SAVE_STATE_LABEL_KEY: Record<string, string> = {
@@ -404,6 +399,28 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   // A device pref, not component state: remembered across reloads by the
   // binding `App.tsx` installs, and expanded until somebody collapses it.
   const keyboardCollapsed = store((s) => s.keyboardCollapsed);
+  /*
+    The keyboard's height: half of the room the score and the keyboard share —
+    the editor less its toolbar, the transport and any status strip — up to
+    120 (music_drawing's `keyboardPanelHeight`, which the native app uses too).
+    On a window short enough for half to be less, the two are the same height.
+
+    That room is the score's measured height plus the keyboard's as drawn when
+    it was measured, so a new keyboard height changes how the room is split and
+    never the room: one resize settles it. The drawn height is a ref, read by
+    the measurement callback, not state.
+  */
+  const [sharedHeight, setSharedHeight] = useState<number | null>(null);
+  const keyboardHeight =
+    sharedHeight === null ? KEYBOARD_MAX_HEIGHT : keyboardPanelHeight(sharedHeight);
+  const drawnKeyboardHeight = useRef(0);
+  drawnKeyboardHeight.current = keyboardCollapsed ? 0 : keyboardHeight;
+  const onScoreHeight = useCallback((height: number) => {
+    const shared = height + drawnKeyboardHeight.current;
+    setSharedHeight((previous) => (previous === shared ? previous : shared));
+  }, []);
+  // The spatial view has no toolbar of its own, so its whole box is the score's.
+  const spatialBoxRef = useRef<HTMLDivElement | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
   /**
@@ -424,6 +441,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     // gave: never leave the flag true with nothing left to show it.
     return () => store.getState().setUnpluggedActive(false);
   }, [store, spatialActive]);
+  useEffect(() => {
+    const el = spatialBoxRef.current;
+    if (!spatialActive || !el || typeof ResizeObserver === 'undefined') return;
+    onScoreHeight(el.clientHeight);
+    const observer = new ResizeObserver(() => onScoreHeight(el.clientHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [spatialActive, onScoreHeight]);
 
   const hiddenCount = hiddenTrackCount(store);
   /**
@@ -917,7 +942,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             {/* The inspector toggle lives on the editor toolbar. It used to sit on
               a strip of its own alongside a track-panel toggle; with that gone
               the strip was a blank row holding one button. */}
-            <div className="min-h-0 flex-1">
+            <div ref={spatialBoxRef} className="min-h-0 flex-1">
               {spatialActive && hasScore ? (
                 <SpatialSection store={store} />
               ) : (
@@ -933,6 +958,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   // project is locked server-side, and leaving is safe.
                   onGenerateTrackJob={(request) => generation.start('generate-track', request)}
                   onGenerateInsertedBars={generateInsertedBars}
+                  onViewportHeight={onScoreHeight}
                 />
               )}
             </div>
@@ -1002,7 +1028,8 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         {/* Full-width piano keyboard: a sibling of the transport rather than a
           child of the centre column, so it spans the whole window beneath the
           track and inspector panels. Fixed height and its own horizontal scroll
-          when the window is too narrow for 88 keys.
+          when the window is too narrow for its keys. Its height is
+          `keyboardHeight`, above.
 
           Collapsed, it renders nothing at all — the control that brings it back
           is on the transport bar above, so there is no header row left down here
@@ -1010,7 +1037,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         {keyboardCollapsed ? null : (
           <div
             className="shrink-0 overflow-hidden border-t border-border"
-            style={{ height: PIANO_KEYBOARD_PANEL_HEIGHT }}
+            style={{ height: keyboardHeight }}
           >
             <div className="flex h-full min-h-0">
               <div className="min-w-0 flex-1">

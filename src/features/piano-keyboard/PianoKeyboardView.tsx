@@ -37,7 +37,11 @@ import type { RenderTheme } from '@sudobility/music_drawing';
 import { getAppServices } from '@/config/initialize';
 import { usePlayingPitches } from '@/features/score-editor/usePlayback';
 import type { EditorStoreApi } from '@/app-library';
-import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
+import {
+  DARK_RENDER_THEME,
+  LIGHT_RENDER_THEME,
+  keyboardScrollStart,
+} from '@sudobility/music_drawing';
 import { useResolvedColorScheme } from '@/app/theme';
 import type { PianoKey } from '@sudobility/music_drawing';
 import { keyboardKeyFill, keyboardKeys } from '@sudobility/music_drawing';
@@ -63,6 +67,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   fill,
   onPress,
   onRelease,
+  onCancel,
 }: PianoKey & {
   isLit: boolean;
   isSelected: boolean;
@@ -70,6 +75,7 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   fill: string;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
+  onCancel: () => void;
 }) {
   return (
     <div
@@ -102,9 +108,11 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         onPress(midi);
       }}
       onPointerUp={outOfRange ? undefined : () => onRelease(midi)}
-      // A pointer that leaves the key still has to release it, or the note
-      // sustains forever and the tap never gets written.
-      onPointerCancel={outOfRange ? undefined : () => onRelease(midi)}
+      // The browser took the touch — a finger panning the keyboard, which is
+      // what `pan-x` below lets it do. A pan is not a note: the press is
+      // abandoned, its sound stopped and nothing written. Capture keeps an
+      // ordinary slide off the key a release, not a cancel.
+      onPointerCancel={outOfRange ? undefined : onCancel}
       style={{
         position: 'absolute',
         left: x,
@@ -122,7 +130,9 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         transform: isLit ? 'translateY(2px)' : undefined,
         boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
         cursor: outOfRange ? 'default' : 'pointer',
-        touchAction: 'none',
+        // A keyboard wider than the panel scrolls, and on a touch screen the
+        // keys are all there is to drag — `none` left nothing to pan it with.
+        touchAction: 'pan-x',
       }}
     >
       {label && (
@@ -168,6 +178,7 @@ type KeyRowProps = {
   theme: RenderTheme;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
+  onCancel: () => void;
 };
 
 /**
@@ -190,6 +201,7 @@ const PianoKeyRow = memo(function PianoKeyRow({
   theme,
   onPress,
   onRelease,
+  onCancel,
 }: KeyRowProps) {
   // The same set until one of this track's keys changes, so a note starting on
   // another part renders nothing here.
@@ -231,6 +243,7 @@ const PianoKeyRow = memo(function PianoKeyRow({
             fill={keyboardKeyFill(key, { lit: isLit, selected: isSelected }, theme)}
             onPress={onPress}
             onRelease={onRelease}
+            onCancel={onCancel}
           />
         );
       })}
@@ -314,7 +327,9 @@ export function PianoKeyboardView({
       holds, what the audition plays, what lights and what note entry writes.
       On a B-flat trumpet the key that reads C4 is the sounding B-flat 3 the
       player writes as C;
-    - the width of *this* range, which is what the scrolling box is sized to.
+    - the width of *this* range, which is what the scrolling box is sized to:
+      white keys are `WHITE_KEY_WIDTH` (44) on every platform, so a keyboard
+      narrower than the panel is centred and a wider one scrolls.
 
     Recomputed when the track changes, which a note edit does; it walks the
     track's notes once, which is nothing next to drawing the keys.
@@ -322,12 +337,11 @@ export function PianoKeyboardView({
   const keyboard = useMemo(
     () =>
       keyboardKeys({
-        width: box.width,
         height: box.height,
         track: activeTrack,
         pitchDisplay,
       }),
-    [box.width, box.height, activeTrack, pitchDisplay],
+    [box.height, activeTrack, pitchDisplay],
   );
   const { playable, keys } = keyboard;
 
@@ -413,6 +427,17 @@ export function PianoKeyboardView({
   );
 
   /**
+   * The touch was taken from the keys — a pan of a keyboard wider than its
+   * panel. Every key down is silenced and the group dropped unwritten, so the
+   * release that follows a pan has nothing to write.
+   */
+  const abandonKeys = useCallback(() => {
+    for (const midi of groupRef.current.down) playbackController.noteOff(midi);
+    groupRef.current = EMPTY_GROUP;
+    setHeldKeys(new Set());
+  }, []);
+
+  /**
    * A MIDI keyboard plays into exactly the same handlers as the on-screen one.
    *
    * Routed through `pressKey`/`releaseKey` rather than writing notes directly,
@@ -433,6 +458,17 @@ export function PianoKeyboardView({
     });
   }, [pressKey, releaseKey]);
 
+  /*
+    A keyboard wider than the panel opens on its middle, as a narrower one is
+    centred — again when its width changes, which a new instrument's range
+    does, but not on every render: a reader who scrolled to the bass keeps it.
+  */
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    el.scrollLeft = keyboardScrollStart(box.width, keyboard.width);
+  }, [box.width, keyboard.width, collapsed]);
+
   // Nothing at all when collapsed. The control that brings it back lives on the
   // transport bar, so no part of this has to stay on screen to remain reachable
   // — which is what the header row it replaced was for.
@@ -447,7 +483,9 @@ export function PianoKeyboardView({
         <div
           role="img"
           aria-label={t('editor.pianoKeyboard')}
-          className="relative"
+          // `mx-auto` centres a keyboard narrower than the panel; a wider one
+          // leaves no margin and the box scrolls.
+          className="relative mx-auto"
           style={{ width: keyboard.width, height: box.height }}
         >
           <PianoKeyRow
@@ -459,6 +497,7 @@ export function PianoKeyboardView({
             theme={theme}
             onPress={pressKey}
             onRelease={releaseKey}
+            onCancel={abandonKeys}
           />
         </div>
       </div>

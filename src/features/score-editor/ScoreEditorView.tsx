@@ -126,6 +126,11 @@ export type ScoreEditorViewProps = {
   /** Starts AI generation for the newly inserted bars after they are selected. */
   onGenerateInsertedBars?: () => Promise<void>;
   /**
+   * The score's own height — the scrolling sheet, without the toolbar above it
+   * — whenever it changes. The host sizes the piano keyboard from it.
+   */
+  onViewportHeight?: (height: number) => void;
+  /**
    * The published-snapshot page's mode: the canvas still scrolls, zooms and
    * follows playback, but nothing on it responds to a click or a drag, no
    * keyboard shortcut fires, and none of the editing chrome (toolbar, context
@@ -172,6 +177,7 @@ export function ScoreEditorView({
   readOnly = false,
   trackInfo: fixedTrackInfo,
   controller = playbackController,
+  onViewportHeight,
 }: ScoreEditorViewProps) {
   const { t } = useTranslation();
   const clipboard = useClipboardPrompts(store);
@@ -657,13 +663,17 @@ export function ScoreEditorView({
    * redraw the (now different) visible window. Guarded for jsdom, where
    * ResizeObserver doesn't exist.
    */
+  const onViewportHeightRef = useRef(onViewportHeight);
+  onViewportHeightRef.current = onViewportHeight;
   useEffect(() => {
     const el = scrollBoxRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
+    onViewportHeightRef.current?.(el.clientHeight);
     const observer = new ResizeObserver(() => {
       syncView();
       scoreCanvas.paintNow();
       publishLayout();
+      onViewportHeightRef.current?.(el.clientHeight);
     });
     observer.observe(el);
     return () => observer.disconnect();
