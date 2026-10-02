@@ -6,7 +6,7 @@
  * four-bar quartet costs about four times a four-bar solo to produce.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { GENERATE_SCORE_STYLE_PRESETS, styleTempoRange } from '@sudobility/music_types';
 import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS } from '@/app-library';
 import type { NewProjectSubmission } from '@/app-library';
@@ -438,15 +438,29 @@ describe('NewProjectDialog: finding a style', () => {
     return screen.getAllByRole('option').map((option) => option.textContent ?? '');
   }
 
-  it('lists the styles alphabetically, with No style pinned above them', () => {
+  it('groups the styles under sorted family headings, with No style pinned above them', () => {
     // Declaration order — waltz, jazz, pop, cinematic — is the order the
-    // vocabulary grew in and no order to hunt through thirty-three entries by.
+    // vocabulary grew in and no order to hunt through thirty-six entries by.
+    // The families are headings over sorted styles, and No style belongs to
+    // none of them.
     open(1000);
     turnGenerationOn();
-    const [first, ...styles] = optionsOf('Style');
-    expect(first).toBe('No style');
-    expect(styles).toEqual([...styles].sort((a, b) => a.localeCompare(b)));
-    expect(styles[0]).toBe('Ambient');
+    fireEvent.click(screen.getByLabelText('Style'));
+    const groups = screen.getAllByRole('group');
+    const headings = groups.map((group) => group.firstElementChild?.textContent ?? '');
+    expect(headings).toEqual([...headings].sort((a, b) => a.localeCompare(b)));
+    expect(headings).toContain('Latin & Caribbean');
+    for (const group of groups) {
+      const styles = within(group)
+        .getAllByRole('option')
+        .map((option) => option.textContent ?? '');
+      expect(styles).toEqual([...styles].sort((a, b) => a.localeCompare(b)));
+    }
+    expect(screen.getAllByRole('option')[0].textContent).toBe('No style');
+    const latin = groups.find(
+      (group) => group.firstElementChild?.textContent === 'Latin & Caribbean',
+    )!;
+    expect(within(latin).getByRole('option', { name: 'Reggae' })).toBeTruthy();
   });
 
   /*

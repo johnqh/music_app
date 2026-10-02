@@ -402,7 +402,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   /*
     The keyboard's height: half of the room the score and the keyboard share —
     the editor less its toolbar, the transport and any status strip — up to
-    120 (music_drawing's `keyboardPanelHeight`, which the native app uses too).
+    160 (music_drawing's `keyboardPanelHeight`, which the native app uses too).
     On a window short enough for half to be less, the two are the same height.
 
     That room is the score's measured height plus the keyboard's as drawn when

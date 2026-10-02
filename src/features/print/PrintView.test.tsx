@@ -322,15 +322,25 @@ describe('pagination', () => {
     expect(pageBlocks(container).length).toBeGreaterThan(portraitPages);
   });
 
-  it('offers the three paper sizes', () => {
+  it('starts on the paper the browser region prints on', () => {
+    // jsdom reports en-US, which prints on Letter.
     render(<PrintView store={bigStore()} onBack={() => {}} />);
+    expect(screen.getByLabelText('Paper')).toHaveTextContent('Letter');
+  });
+
+  it('starts on a remembered paper instead, once one has been chosen', () => {
+    const store = bigStore();
+    store.getState().setPaperSize('a4');
+    render(<PrintView store={store} onBack={() => {}} />);
     expect(screen.getByLabelText('Paper')).toHaveTextContent('A4');
   });
 
   it('emits an @page rule matching the chosen paper', () => {
     // The printer and the packer must agree about the page, or the pages we
     // chose are not the pages that come out.
-    const { container } = render(<PrintView store={bigStore()} onBack={() => {}} />);
+    const store = bigStore();
+    store.getState().setPaperSize('a4');
+    const { container } = render(<PrintView store={store} onBack={() => {}} />);
     const style = container.querySelector('style');
     expect(style?.textContent).toContain('size: A4 portrait');
     expect(style?.textContent).toContain(`margin: ${PAGE_MARGIN_MM}mm`);

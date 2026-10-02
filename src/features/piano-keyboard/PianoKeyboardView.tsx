@@ -11,6 +11,7 @@
  * for notation because VexFlow requires it — not as a house style.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   findTrack,
@@ -40,7 +41,10 @@ import type { EditorStoreApi } from '@/app-library';
 import {
   DARK_RENDER_THEME,
   LIGHT_RENDER_THEME,
+  KEYBOARD_SCROLL_INDICATOR_HEIGHT,
+  keyboardScrollIndicator,
   keyboardScrollStart,
+  KineticScroller,
 } from '@sudobility/music_drawing';
 import { useResolvedColorScheme } from '@/app/theme';
 import type { PianoKey } from '@sudobility/music_drawing';
@@ -67,7 +71,6 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   fill,
   onPress,
   onRelease,
-  onCancel,
 }: PianoKey & {
   isLit: boolean;
   isSelected: boolean;
@@ -75,7 +78,6 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   fill: string;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
-  onCancel: () => void;
 }) {
   return (
     <div
@@ -108,11 +110,9 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         onPress(midi);
       }}
       onPointerUp={outOfRange ? undefined : () => onRelease(midi)}
-      // The browser took the touch — a finger panning the keyboard, which is
-      // what `pan-x` below lets it do. A pan is not a note: the press is
-      // abandoned, its sound stopped and nothing written. Capture keeps an
-      // ordinary slide off the key a release, not a cancel.
-      onPointerCancel={outOfRange ? undefined : onCancel}
+      // A pointer that leaves the key still has to release it, or the note
+      // sustains forever and the tap never gets written.
+      onPointerCancel={outOfRange ? undefined : () => onRelease(midi)}
       style={{
         position: 'absolute',
         left: x,
@@ -130,9 +130,8 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         transform: isLit ? 'translateY(2px)' : undefined,
         boxShadow: isLit ? 'inset 0 2px 4px rgba(0,0,0,0.45)' : undefined,
         cursor: outOfRange ? 'default' : 'pointer',
-        // A keyboard wider than the panel scrolls, and on a touch screen the
-        // keys are all there is to drag — `none` left nothing to pan it with.
-        touchAction: 'pan-x',
+        // A finger on a key plays it; scrolling is the strip under the keys.
+        touchAction: 'none',
       }}
     >
       {label && (
@@ -178,7 +177,6 @@ type KeyRowProps = {
   theme: RenderTheme;
   onPress: (midi: number) => void;
   onRelease: (midi: number) => void;
-  onCancel: () => void;
 };
 
 /**
@@ -201,7 +199,6 @@ const PianoKeyRow = memo(function PianoKeyRow({
   theme,
   onPress,
   onRelease,
-  onCancel,
 }: KeyRowProps) {
   // The same set until one of this track's keys changes, so a note starting on
   // another part renders nothing here.
@@ -243,7 +240,6 @@ const PianoKeyRow = memo(function PianoKeyRow({
             fill={keyboardKeyFill(key, { lit: isLit, selected: isSelected }, theme)}
             onPress={onPress}
             onRelease={onRelease}
-            onCancel={onCancel}
           />
         );
       })}
@@ -427,17 +423,6 @@ export function PianoKeyboardView({
   );
 
   /**
-   * The touch was taken from the keys — a pan of a keyboard wider than its
-   * panel. Every key down is silenced and the group dropped unwritten, so the
-   * release that follows a pan has nothing to write.
-   */
-  const abandonKeys = useCallback(() => {
-    for (const midi of groupRef.current.down) playbackController.noteOff(midi);
-    groupRef.current = EMPTY_GROUP;
-    setHeldKeys(new Set());
-  }, []);
-
-  /**
    * A MIDI keyboard plays into exactly the same handlers as the on-screen one.
    *
    * Routed through `pressKey`/`releaseKey` rather than writing notes directly,
@@ -459,15 +444,95 @@ export function PianoKeyboardView({
   }, [pressKey, releaseKey]);
 
   /*
+    Where the keyboard is scrolled to, for the indicator under the strip. The
+    browser's scrollbar is hidden: across a panel 160 high it was a full bar of
+    chrome for something a drag in the strip already does.
+  */
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const indicator = keyboardScrollIndicator(box.width, keyboard.width, scrollLeft);
+
+  /*
+    Drag-scrolling, from the strip under the keys (`labelGutter` in
+    music_drawing): the one part of the board no key covers. A finger or a
+    mouse on a key plays it, so this is the only way a touch screen scrolls a
+    keyboard wider than the panel, and the only way a mouse drags one. A
+    press that lands on a key never reaches here — the key's own handler takes
+    it — so `target === currentTarget` is exactly "the strip".
+
+    With momentum, as a touch screen scrolls: music_drawing's
+    `KineticScroller` keeps it going after the pointer lets go, slowing down,
+    and springs back from past either end. A browser does not scroll past an
+    end, so that overscroll is drawn by shifting the board instead.
+  */
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const geometry = useRef({ view: box.width, content: keyboard.width });
+  geometry.current = { view: box.width, content: keyboard.width };
+  const kinetic = useMemo(
+    () =>
+      new KineticScroller({
+        max: () => Math.max(0, geometry.current.content - geometry.current.view),
+        viewport: () => geometry.current.view,
+        apply: (position) => {
+          const el = boxRef.current;
+          if (!el) return;
+          const max = Math.max(0, geometry.current.content - geometry.current.view);
+          const scroll = Math.min(Math.max(position, 0), max);
+          el.scrollLeft = scroll;
+          if (boardRef.current) {
+            const over = position - scroll;
+            boardRef.current.style.transform = over === 0 ? '' : `translateX(${-over}px)`;
+          }
+          setScrollLeft(scroll);
+        },
+      }),
+    [],
+  );
+  useEffect(() => () => kinetic.stop(), [kinetic]);
+
+  /*
     A keyboard wider than the panel opens on its middle, as a narrower one is
     centred — again when its width changes, which a new instrument's range
     does, but not on every render: a reader who scrolled to the bass keeps it.
   */
   useEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    el.scrollLeft = keyboardScrollStart(box.width, keyboard.width);
-  }, [box.width, keyboard.width, collapsed]);
+    if (!boxRef.current) return;
+    kinetic.jumpTo(keyboardScrollStart(box.width, keyboard.width));
+  }, [kinetic, box.width, keyboard.width, collapsed]);
+
+  const dragRef = useRef<{ pointerId: number; x: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const onStripPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!boxRef.current || event.target !== event.currentTarget) return;
+      event.preventDefault();
+      try {
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Capture only keeps the drag when the pointer leaves the strip.
+      }
+      dragRef.current = { pointerId: event.pointerId, x: event.clientX };
+      kinetic.grab();
+      setDragging(true);
+    },
+    [kinetic],
+  );
+  const onStripPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      kinetic.drag(event.clientX - drag.x);
+    },
+    [kinetic],
+  );
+  const onStripPointerEnd = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (dragRef.current?.pointerId !== event.pointerId) return;
+      dragRef.current = null;
+      kinetic.release();
+      setDragging(false);
+    },
+    [kinetic],
+  );
 
   // Nothing at all when collapsed. The control that brings it back lives on the
   // transport bar, so no part of this has to stay on screen to remain reachable
@@ -475,18 +540,35 @@ export function PianoKeyboardView({
   if (collapsed) return null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <div
         ref={boxRef}
-        className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain"
+        onScroll={(event) => {
+          // A wheel or trackpad scroll, which the drag must start from next.
+          kinetic.sync(event.currentTarget.scrollLeft);
+          setScrollLeft(event.currentTarget.scrollLeft);
+        }}
+        className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div
+          ref={boardRef}
           role="img"
           aria-label={t('editor.pianoKeyboard')}
           // `mx-auto` centres a keyboard narrower than the panel; a wider one
           // leaves no margin and the box scrolls.
           className="relative mx-auto"
-          style={{ width: keyboard.width, height: box.height }}
+          style={{
+            width: keyboard.width,
+            height: box.height,
+            cursor: dragging ? 'grabbing' : 'grab',
+            // The browser's own panning would fight the drag below.
+            touchAction: 'none',
+          }}
+          data-testid="piano-keyboard-board"
+          onPointerDown={onStripPointerDown}
+          onPointerMove={onStripPointerMove}
+          onPointerUp={onStripPointerEnd}
+          onPointerCancel={onStripPointerEnd}
         >
           <PianoKeyRow
             store={store}
@@ -497,10 +579,21 @@ export function PianoKeyboardView({
             theme={theme}
             onPress={pressKey}
             onRelease={releaseKey}
-            onCancel={abandonKeys}
           />
         </div>
       </div>
+      {indicator ? (
+        <div
+          data-testid="piano-keyboard-scroll-indicator"
+          aria-hidden
+          className="pointer-events-none absolute bottom-0.5 rounded-full bg-muted-foreground/50"
+          style={{
+            left: indicator.left,
+            width: indicator.width,
+            height: KEYBOARD_SCROLL_INDICATOR_HEIGHT,
+          }}
+        />
+      ) : null}
     </div>
   );
 }

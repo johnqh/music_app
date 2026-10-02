@@ -14,7 +14,7 @@ import { findTrack } from '@/app-library';
 import type { PaperOrientation, PaperSize } from '@/app-library';
 import type { EditorStoreApi } from '@/app-library';
 import { WHOLE_SCORE, printPlan } from '@sudobility/music_drawing';
-import { ORIENTATION_OPTIONS, PAPER_OPTIONS } from '@sudobility/music_types';
+import { ORIENTATION_OPTIONS, PAPER_OPTIONS, defaultPaperSizeFor } from '@sudobility/music_types';
 import { PrintSystem } from '@/features/print/PrintSystem';
 import '@/features/print/print.css';
 
@@ -28,7 +28,19 @@ export function PrintView({ store, onBack }: PrintViewProps) {
   const score = store((s) => s.score);
   const visibleTrackIds = store(selectVisibleTrackIds);
   const [scope, setScope] = useState<string>(WHOLE_SCORE);
-  const [paper, setPaper] = useState<PaperSize>('a4');
+  /*
+    The paper is remembered (the `paperSize` device pref), because a reader's
+    printer does not change between printouts; until they choose one it
+    follows the browser's region — Letter where the region prints on Letter,
+    A4 elsewhere. Scope and orientation are about this printout, so they are
+    held here.
+  */
+  const chosenPaper = store((s) => s.paperSize);
+  const [regionPaper] = useState(() =>
+    defaultPaperSizeFor(typeof navigator === 'undefined' ? [] : navigator.languages),
+  );
+  const paper = chosenPaper ?? regionPaper;
+  const setPaper = (value: PaperSize) => store.getState().setPaperSize(value);
   const [orientation, setOrientation] = useState<PaperOrientation>('portrait');
 
   /**

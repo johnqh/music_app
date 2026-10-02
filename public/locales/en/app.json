@@ -1024,6 +1024,18 @@
       "palmMutedRiff": "One palm-muted riff, repeated and driven",
       "threeChordRush": "Three chords, fast, with no ornament"
     },
+    "styleFamily": {
+      "popRock": "Pop & Rock",
+      "americanRoots": "American Roots",
+      "jazz": "Jazz",
+      "funkSoul": "Funk & Soul",
+      "latinCaribbean": "Latin & Caribbean",
+      "hipHop": "Hip-Hop",
+      "electronic": "Electronic",
+      "classical": "Classical",
+      "danceCeremonial": "Dance & Ceremonial",
+      "screen": "Film & Atmosphere"
+    },
     "styleName": {
       "waltz": "Waltz",
       "jazz": "Jazz",

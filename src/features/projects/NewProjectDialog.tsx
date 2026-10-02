@@ -97,7 +97,6 @@ import {
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
-  GENERATE_SCORE_STYLE_OPTIONS,
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
@@ -123,7 +122,6 @@ import {
   showNewProjectDuration,
   showNewProjectLyrics,
   showNewProjectLyricsTheme,
-  styleLabelKey,
   styleGenerationSettings,
   type GenerateScoreComplexity,
   type KeySignature,
@@ -132,6 +130,7 @@ import {
   type NewProjectSubmission,
 } from '@/app-library';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
+import { StyleSelectItems } from '@/features/generation/StyleSelectItems';
 import { variants } from '@sudobility/design';
 
 export type NewProjectDialogProps = {
@@ -355,18 +354,10 @@ export function NewProjectDialog({
     cinematic, ambient — is a list nobody can find "reggae" in. Sorted on the
     translated label under the active language, with "No style" pinned above
     rather than sorted in among them; `labelledOptions` is shared with the
-    native app, which draws the same two pickers.
+    native app, which draws the same two pickers. Style is grouped under its
+    family as well (`StyleSelectItems`), since thirty-six sorted entries are
+    still thirty-six entries.
   */
-  const styleOptions = useMemo(
-    () =>
-      labelledOptions(
-        GENERATE_SCORE_STYLE_OPTIONS,
-        (value) => t(styleLabelKey(value)),
-        i18n.language,
-        t('generateScore.noStyle'),
-      ),
-    [t, i18n.language],
-  );
   const moodOptions = useMemo(
     () =>
       labelledOptions(
@@ -595,11 +586,7 @@ export function NewProjectDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {styleOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <StyleSelectItems />
               </SelectContent>
             </Select>
             <Select

@@ -530,25 +530,56 @@ describe('playing the keyboard writes notes', () => {
     expect(vi.mocked(playbackController.noteOff)).toHaveBeenCalledWith(60);
   });
 
-  it('writes nothing for a touch the browser took to pan the keyboard', () => {
-    // A keyboard wider than its panel scrolls, and on a touch screen a pan
-    // starts on a key; the browser cancels that key's pointer when it pans.
+  it('drag-scrolls from the strip under the keys, and plays nothing doing it', () => {
+    vi.mocked(playbackController.noteOn).mockClear();
     const store = makeStore();
     const before = allNotes(store.getState().score!).length;
     const { container } = render(<PianoKeyboardView store={store} />);
+    const board = container.querySelector('[data-testid="piano-keyboard-board"]') as HTMLElement;
+    const box = board.parentElement as HTMLElement;
+    box.scrollLeft = 300;
+    // As a wheel or trackpad leaves it: the drag starts from there.
+    fireEvent.scroll(box);
 
-    fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
-    fireEvent.pointerCancel(key(container, 62), { pointerId: 1 });
-    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerDown(board, { pointerId: 7, clientX: 500 });
+    fireEvent.pointerMove(board, { pointerId: 7, clientX: 380 });
+    expect(box.scrollLeft).toBe(420);
+    fireEvent.pointerUp(board, { pointerId: 7, clientX: 380 });
+    fireEvent.pointerMove(board, { pointerId: 7, clientX: 100 });
 
+    expect(box.scrollLeft).toBe(420);
+    expect(vi.mocked(playbackController.noteOn)).not.toHaveBeenCalled();
     expect(allNotes(store.getState().score!)).toHaveLength(before);
-    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it('leaves a press on a key to the key', () => {
+    const { container } = render(<PianoKeyboardView store={makeStore()} />);
+    const board = container.querySelector('[data-testid="piano-keyboard-board"]') as HTMLElement;
+    const box = board.parentElement as HTMLElement;
+    box.scrollLeft = 300;
+
+    fireEvent.pointerDown(key(container, 60), { pointerId: 1, clientX: 500 });
+    fireEvent.pointerMove(board, { pointerId: 1, clientX: 100 });
+
+    expect(box.scrollLeft).toBe(300);
+    expect(vi.mocked(playbackController.noteOn)).toHaveBeenCalled();
+  });
+
+  it('draws a thin indicator instead of a scrollbar when the keys overflow', () => {
+    // The fallback panel is 1000 wide; a piano is 2288.
+    const { container } = render(<PianoKeyboardView store={makeStore()} />);
+    const indicator = container.querySelector(
+      '[data-testid="piano-keyboard-scroll-indicator"]',
+    ) as HTMLElement;
+    expect(indicator.style.height).toBe('3px');
+    const box = indicator.previousElementSibling as HTMLElement;
+    expect(box.className).toContain('[scrollbar-width:none]');
   });
 
   it('draws 44-wide white keys, centred when they fit', () => {
     const { container } = render(<PianoKeyboardView store={makeStore()} />);
     expect(key(container, 60).style.width).toBe('44px');
-    const board = container.querySelector('[role="img"]') as HTMLElement;
+    const board = container.querySelector('[data-testid="piano-keyboard-board"]') as HTMLElement;
     expect(board.className).toContain('mx-auto');
     expect(board.style.width).toBe(`${52 * 44}px`);
   });

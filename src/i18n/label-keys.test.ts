@@ -14,7 +14,8 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { CLEF_OPTIONS, THEME_MODE_OPTIONS } from '@sudobility/music_types';
+import { CLEF_OPTIONS, STYLE_FAMILIES, THEME_MODE_OPTIONS } from '@sudobility/music_types';
+import { styleFamilyLabelKey } from '@sudobility/music_lib';
 
 const lookup = (strings: unknown, key: string): unknown =>
   key
@@ -33,6 +34,7 @@ describe.each(['en', 'zh'])('shared label keys (%s)', (lang) => {
   it.each([
     ['clef', CLEF_OPTIONS],
     ['theme mode', THEME_MODE_OPTIONS],
+    ['style family', STYLE_FAMILIES.map((family) => ({ labelKey: styleFamilyLabelKey(family) }))],
   ])('resolve for every %s', (_what, options) => {
     const strings = load(lang);
     const missing = options

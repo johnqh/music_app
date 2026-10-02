@@ -28,7 +28,6 @@ import { variants } from '@sudobility/design';
 import {
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
-  GENERATE_SCORE_STYLE_OPTIONS,
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
   REPLACE_PRESET_KEYS,
@@ -40,10 +39,10 @@ import {
   optionalFromPicker,
   optionalToPicker,
   replacePresetLabelKey,
-  styleLabelKey,
   type GenerateScoreComplexity,
   type ReplaceDraft,
 } from '@/app-library';
+import { StyleSelectItems } from '@/features/generation/StyleSelectItems';
 import type { ReplaceScope, ReplaceSubmission, ReplacementRegion } from '@/app-library';
 
 // `ReplaceSubmission` now lives in music_lib beside `prepareReplacement`,
@@ -137,17 +136,8 @@ export function ReplaceMusicDialog({
     The whole style and mood vocabularies, translated and sorted, as New Project
     offers them. This form used to carry its own six-of-each list in raw English
     tokens (`cinematic`), stale beside the thirty-odd styles the server knows.
+    Styles are drawn by `StyleSelectItems`, grouped under their families.
   */
-  const styleOptions = useMemo(
-    () =>
-      labelledOptions(
-        GENERATE_SCORE_STYLE_OPTIONS,
-        (value) => t(styleLabelKey(value)),
-        i18n.language,
-        t('generateScore.noStyle'),
-      ),
-    [t, i18n.language],
-  );
   const moodOptions = useMemo(
     () =>
       labelledOptions(
@@ -263,11 +253,7 @@ export function ReplaceMusicDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {styleOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
+                <StyleSelectItems />
               </SelectContent>
             </Select>
           </label>
