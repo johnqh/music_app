@@ -27,7 +27,10 @@
     "resetPasswordHint": "Enter your email address and we'll send you a link to reset your password.",
     "sendResetLink": "Send reset link",
     "resetEmailSent": "If an account uses that address, a link to reset its password is on its way. Check your email.",
-    "backToSignIn": "Back to sign in"
+    "backToSignIn": "Back to sign in",
+    "signUp": "Create account",
+    "orContinueWith": "Or continue with",
+    "genericError": "Authentication failed"
   },
   "breadcrumbs": {
     "home": "Home"

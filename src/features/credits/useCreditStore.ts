@@ -8,13 +8,13 @@ import {
 import type { CreditPackage } from '@sudobility/consumables_client';
 import type { CreditStorePageProps } from '@sudobility/consumables_pages';
 import { useAuth } from '@/app/AuthContext';
-import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
+import { useSignIn } from '@/features/auth/SignInModal';
 
 export type UseCreditStoreOptions = { onPurchased?: () => void };
 
 export function useCreditStore({ onPurchased }: UseCreditStoreOptions = {}): CreditStorePageProps {
   const { t } = useTranslation();
-  const navigate = useLocalizedNavigate();
+  const { openSignIn } = useSignIn();
   const { user } = useAuth();
   const balanceState = useBalance();
   // An empty offering ID asks the shared client for every configured offering.
@@ -41,7 +41,9 @@ export function useCreditStore({ onPurchased }: UseCreditStoreOptions = {}): Cre
       );
       if (purchased) onPurchased?.();
     },
-    onLoginClick: () => navigate('/signin'),
+    // Over the page that asked, never a trip to the sign-in route: signing in
+    // leaves the reader on the store (or the paywall), now signed in.
+    onLoginClick: () => openSignIn(),
     labels: {
       title: t('credits.title'),
       currentBalanceLabel: t('credits.balance'),

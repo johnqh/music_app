@@ -31,6 +31,7 @@ import { LanguageValidator as SharedLanguageValidator } from '@sudobility/compon
 import { ScreenContainer } from '@/components/shell/ScreenContainer';
 import { DocsPage } from '@/features/docs/DocsPage';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { SignInModalProvider } from '@/features/auth/SignInModal';
 import { CommunityPage } from '@/features/community/CommunityPage';
 import { PublishedView } from '@/features/community/PublishedView';
 import HomePage from '@/pages/HomePage';
@@ -242,7 +243,11 @@ function NotFoundPage() {
 
 export function AppRoutes({ store = useAppStore }: AppRouterProps) {
   return (
-    <>
+    // The sign-in modal is mounted once, above everything that can open it:
+    // the page guard, the credits store and paywall, the home page's
+    // call-to-action. See `SignInModal.tsx` for when it is the modal and when
+    // the `/signin` page.
+    <SignInModalProvider>
       {/*
         Mounted above the routes rather than in a layout, because a job can be
         refused for want of credits from the dashboard and from inside the
@@ -352,7 +357,7 @@ export function AppRoutes({ store = useAppStore }: AppRouterProps) {
         </Route>
         <Route path="*" element={<Navigate to="/en/404" replace />} />
       </Routes>
-    </>
+    </SignInModalProvider>
   );
 }
 

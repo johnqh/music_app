@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Grid, Heading, Section, Text } from '@sudobility/components';
 import { useLocalizedNavigate } from '@/hooks/useLocalizedNavigate';
 import { useAuth } from '@/app/AuthContext';
+import { useSignIn } from '@/features/auth/SignInModal';
 
 /** Feature cards, in the order they read. Keys resolve against `app.json`. */
 const FEATURES = [
@@ -36,6 +37,7 @@ export default function HomePage() {
   // This page is public now, so the CTA cannot assume a dashboard to go to: a
   // visitor has no projects and cannot reach the route behind the gate.
   const { user } = useAuth();
+  const { openSignIn } = useSignIn();
 
   return (
     <>
@@ -52,7 +54,10 @@ export default function HomePage() {
             variant="primary"
             size="lg"
             className="mt-8 shadow"
-            onClick={() => navigate(user ? '/projects' : '/signin')}
+            // A visitor's "Get started" is about starting, not about signing
+            // in: the modal opens over this page and, once they are in,
+            // carries on to their projects.
+            onClick={() => (user ? navigate('/projects') : openSignIn(() => navigate('/projects')))}
           >
             {user ? t('home.cta') : t('home.ctaVisitor')}
           </Button>

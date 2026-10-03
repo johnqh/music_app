@@ -1,8 +1,9 @@
 /**
  * Auth context: exposes the current user, the hook context music_client's
  * React Query hooks read (a token resolved per request, never captured), and
- * the auth actions. Sign-in is REQUIRED app-wide — `RequireAuth` gates
- * everything.
+ * the auth actions. Sign-in is not required app-wide: pages that need an
+ * account are wrapped in `ProtectedRoute`, which signs a visitor in over the
+ * page (`features/auth/SignInModal.tsx`).
  */
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';

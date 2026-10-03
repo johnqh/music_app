@@ -6,30 +6,36 @@
  * of the hand-rolled form this replaces — which was labelled interim from the
  * day it was written.
  *
- * The component is presentational and provider-agnostic: it takes the three
+ * The component is presentational and provider-agnostic: it takes the
  * handlers and this app supplies them from its own `AuthContext`, so nothing
  * here knows about Firebase.
+ *
+ * **This is where somebody goes in order to sign in** — the top bar's "Sign
+ * in". Everywhere sign-in interrupts something else (a page that needs an
+ * account, an action that does) opens `SignInModal` over that page instead,
+ * with the same form, handlers and words (`useSignInForm`).
  */
-import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LoginPage as LoginPageComponent } from '@sudobility/building_blocks';
-import { useLoginRedirect } from '@sudobility/components';
 import { useAuth } from '@/app/AuthContext';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 import { CONSTANTS } from '@/config/constants';
+import { useSignInForm } from '@/features/auth/useSignInForm';
 
 export default function LoginPage() {
-  const { t } = useTranslation();
   const lang = useCurrentLanguage();
-  const { user, signInEmail, signUpEmail, sendPasswordReset, signInGoogle } = useAuth();
+  const { user } = useAuth();
+  const form = useSignInForm();
 
-  // Returns whoever just signed in to the page they were trying to reach,
-  // falling back to the language root — the same hook and the same default
-  // `sudojo_app` uses.
-  const { handleLoginSuccess } = useLoginRedirect({
-    defaultRedirect: '/',
-    currentLanguage: lang,
-  });
+  const navigate = useNavigate();
+  // Home, and nowhere else. There is no `?redirect=` round trip: a page that
+  // needs an account opens the sign-in modal over itself rather than sending
+  // the reader here, so whoever is on this page came to sign in.
+  const handleLoginSuccess = useCallback(
+    () => navigate(`/${lang}`, { replace: true }),
+    [navigate, lang],
+  );
 
   // Already signed in — opening /signin directly should not present a form.
   useEffect(() => {
@@ -39,27 +45,12 @@ export default function LoginPage() {
   return (
     <LoginPageComponent
       appName={CONSTANTS.APP_NAME}
-      onEmailSignIn={signInEmail}
-      onEmailSignUp={signUpEmail}
-      onPasswordReset={sendPasswordReset}
-      onGoogleSignIn={signInGoogle}
+      onEmailSignIn={form.onEmailSignIn}
+      onEmailSignUp={form.onEmailSignUp}
+      onPasswordReset={form.onPasswordReset}
+      onGoogleSignIn={form.onGoogleSignIn}
       onSuccess={handleLoginSuccess}
-      text={{
-        signIn: t('nav.signIn'),
-        signInToAccount: t('auth.signInToAccount'),
-        createAccount: t('auth.createAccount'),
-        emailLabel: t('auth.emailLabel'),
-        passwordLabel: t('auth.passwordLabel'),
-        signInWithGoogle: t('auth.signInWithGoogle'),
-        alreadyHaveAccount: t('auth.alreadyHaveAccount'),
-        dontHaveAccount: t('auth.dontHaveAccount'),
-        resetPassword: t('auth.resetPassword'),
-        forgotPassword: t('auth.forgotPassword'),
-        resetPasswordHint: t('auth.resetPasswordHint'),
-        sendResetLink: t('auth.sendResetLink'),
-        resetEmailSent: t('auth.resetEmailSent'),
-        backToSignIn: t('auth.backToSignIn'),
-      }}
+      text={{ ...form.text, ...form.headings }}
     />
   );
 }

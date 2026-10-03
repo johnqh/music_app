@@ -1,8 +1,8 @@
 /**
  * App root (spec §6, §28): theme (light/dark/system, wired to
  * the store's `themeMode` — music_lib's device-prefs slice — persisted by
- * `bindDevicePrefs`), auth gate (sign-in
- * required app-wide), React Query provider, the router, and a top-level
+ * `bindDevicePrefs`), the auth provider (sign-in is per page — see
+ * `features/auth/SignInModal.tsx`), React Query provider, the router, and a top-level
  * ErrorBoundary so a render-time crash shows a recoverable fallback.
  *
  * Server-backed era: projects live in music_api; only device prefs (theme,

@@ -1,11 +1,12 @@
 /**
- * App root tests (server-backed era): auth gate (sign-in screen vs app),
+ * App root tests (server-backed era): sign-in (the /signin page, and the
+ * modal a page that needs an account opens over itself),
  * device-prefs bootstrap/persist (theme, developer mode), and the
  * pagehide/visibilitychange autosave flush. Firebase is never touched —
  * the test services install a fake auth backend.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createAppStore, loadPrefs, savePrefs, type TestStoreContext } from '@/app-library';
 
 vi.mock('@/app-library', async (importOriginal) => {
@@ -86,6 +87,79 @@ describe('App', () => {
     window.history.pushState({}, '', '/en/signin');
     render(<App store={store} />);
     await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeInTheDocument());
+  });
+
+  /**
+   * Signed out until `signInEmail` is called, then signed in — the way
+   * Firebase tells `observe` about a sign-in.
+   */
+  function signOutUntilSignIn(): { signInEmail: ReturnType<typeof vi.fn> } {
+    const services = getAppServices();
+    const listeners = new Set<(user: { uid: string; email: string | null } | null) => void>();
+    let token: string | null = null;
+    const signInEmail = vi.fn(async () => {
+      token = 'test-token';
+      for (const cb of listeners) cb({ uid: 'u1', email: 'a@b.c' } as never);
+    });
+    setAppServices({
+      ...services,
+      auth: {
+        ...services.auth,
+        observe: (cb) => {
+          listeners.add(cb as never);
+          cb(null);
+          return () => listeners.delete(cb as never);
+        },
+        getToken: async () => token,
+        signInEmail,
+      },
+    });
+    return { signInEmail };
+  }
+
+  async function signInThroughModal(): Promise<void> {
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/email/i), { target: { value: 'a@b.c' } });
+    fireEvent.change(within(dialog).getByLabelText(/password/i), { target: { value: 'secret1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  }
+
+  /*
+   * The rule both apps follow: a page that needs an account opens the sign-in
+   * modal over itself and stays at its URL. It used to redirect — to the
+   * language root, and before that to /signin — so a link to a project was
+   * lost on the way through.
+   */
+  it('signs a visitor in over a page that needs an account, without leaving it', async () => {
+    const { store } = setup();
+    const { signInEmail } = signOutUntilSignIn();
+    window.history.pushState({}, '', '/en/credits');
+    render(<App store={store} />);
+
+    await screen.findByText('Please sign in to continue.');
+    expect(window.location.pathname).toBe('/en/credits');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign in' }).at(-1)!);
+    await signInThroughModal();
+
+    expect(signInEmail).toHaveBeenCalledWith('a@b.c', 'secret1');
+    await waitFor(() =>
+      expect(screen.queryByText('Please sign in to continue.')).not.toBeInTheDocument(),
+    );
+    expect(window.location.pathname).toBe('/en/credits');
+  });
+
+  it("opens the modal from a visitor's Get started, then carries on to their projects", async () => {
+    const { store } = setup();
+    signOutUntilSignIn();
+    window.history.pushState({}, '', '/en');
+    render(<App store={store} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Get started free' }));
+    // A modal over the home page, not the sign-in route.
+    expect(window.location.pathname).toBe('/en');
+    await signInThroughModal();
+    await waitFor(() => expect(window.location.pathname).toBe('/en/projects'));
   });
 
   it('bootstraps persisted device prefs (theme + developer mode) into the store', async () => {
