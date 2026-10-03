@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import {
   EntityListPage,
   InvitationsPage as SharedInvitationsPage,
@@ -26,7 +25,6 @@ function EntityPageContent({
 }) {
   const { currentEntity, isLoading, selectEntity } = useCurrentEntity();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
   if (section === 'workspaces') {
     return (
@@ -39,12 +37,9 @@ function EntityPageContent({
 
   if (section === 'invitations') {
     return (
-      <SharedInvitationsPage
-        client={client}
-        onInvitationAccepted={() => {
-          void queryClient.invalidateQueries({ queryKey: ['entities'] });
-        }}
-      />
+      // Accepting refreshes this user's workspace list by itself
+      // (entity_client's useAcceptInvitation).
+      <SharedInvitationsPage client={client} />
     );
   }
 

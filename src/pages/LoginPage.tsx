@@ -21,7 +21,7 @@ import { CONSTANTS } from '@/config/constants';
 export default function LoginPage() {
   const { t } = useTranslation();
   const lang = useCurrentLanguage();
-  const { user, signInEmail, signUpEmail, signInGoogle } = useAuth();
+  const { user, signInEmail, signUpEmail, sendPasswordReset, signInGoogle } = useAuth();
 
   // Returns whoever just signed in to the page they were trying to reach,
   // falling back to the language root — the same hook and the same default
@@ -41,6 +41,7 @@ export default function LoginPage() {
       appName={CONSTANTS.APP_NAME}
       onEmailSignIn={signInEmail}
       onEmailSignUp={signUpEmail}
+      onPasswordReset={sendPasswordReset}
       onGoogleSignIn={signInGoogle}
       onSuccess={handleLoginSuccess}
       text={{
@@ -52,6 +53,12 @@ export default function LoginPage() {
         signInWithGoogle: t('auth.signInWithGoogle'),
         alreadyHaveAccount: t('auth.alreadyHaveAccount'),
         dontHaveAccount: t('auth.dontHaveAccount'),
+        resetPassword: t('auth.resetPassword'),
+        forgotPassword: t('auth.forgotPassword'),
+        resetPasswordHint: t('auth.resetPasswordHint'),
+        sendResetLink: t('auth.sendResetLink'),
+        resetEmailSent: t('auth.resetEmailSent'),
+        backToSignIn: t('auth.backToSignIn'),
       }}
     />
   );

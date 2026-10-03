@@ -49,6 +49,8 @@ export type AuthContextValue = {
   siteAdmin: boolean;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string) => Promise<void>;
+  /** Sends a link to reset the password for an address. */
+  sendPasswordReset: (email: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -89,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       siteAdmin,
       signInEmail: services.auth.signInEmail,
       signUpEmail: services.auth.signUpEmail,
+      sendPasswordReset: services.auth.sendPasswordReset,
       signInGoogle: services.auth.signInGoogle,
       signOut: services.auth.signOut,
     }),

@@ -65,6 +65,7 @@ export function installTestAppServices(
       getToken: async () => 'test-token',
       signInEmail: async () => undefined,
       signUpEmail: async () => undefined,
+      sendPasswordReset: async () => undefined,
       signInGoogle: async () => undefined,
       signOut: async () => undefined,
     },

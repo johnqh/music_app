@@ -15,6 +15,7 @@ import {
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -204,6 +205,8 @@ type AuthBackend = {
   getToken(): Promise<string | null>;
   signInEmail(email: string, password: string): Promise<void>;
   signUpEmail(email: string, password: string): Promise<void>;
+  /** Sends a link to reset the password for `email`. */
+  sendPasswordReset(email: string): Promise<void>;
   signInGoogle(): Promise<void>;
   signOut(): Promise<void>;
 };
@@ -261,6 +264,7 @@ function firebaseBackend(): AuthBackend {
     signUpEmail: async (email, password) => {
       await createUserWithEmailAndPassword(auth, email, password);
     },
+    sendPasswordReset: (email) => sendPasswordResetEmail(auth, email),
     signInGoogle: async () => {
       await signInWithPopup(auth, new GoogleAuthProvider());
     },
@@ -315,6 +319,8 @@ function e2eBackend(): AuthBackend {
       signedIn = true;
       observer?.(user);
     },
+    // There is no mailbox behind the test user; the form only needs an answer.
+    sendPasswordReset: async () => undefined,
     signInGoogle: async () => {
       signedIn = true;
       observer?.(user);
