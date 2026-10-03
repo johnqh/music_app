@@ -14,11 +14,23 @@
  * `<Navigate>`, no redirect-back round trip.
  *
  * Mounted once, above the routes (`AppRoutes`), like `PaywallDialog`: a page
- * guard and a call-to-action sit in different branches of the tree.
+ * guard and a call-to-action sit in different branches of the tree. So it
+ * belongs to the page it was opened over, not to the app: **a change of
+ * pathname closes it** (Back, a link) without carrying on with what asked —
+ * the page that needed an account is no longer the one on screen.
  */
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { LoginModal } from '@sudobility/components';
 import { useSignInForm } from './useSignInForm';
 
@@ -50,18 +62,39 @@ export function useSignIn(): SignInModalApi {
 export function SignInModalProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const form = useSignInForm();
-  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  // The pathname the modal was opened over, or null while it is closed. Open
+  // is *derived* from it, so a navigation hides the modal in the same render
+  // rather than one effect later; the effect below then forgets it, so going
+  // forward again does not bring it back.
+  const [openedOn, setOpenedOn] = useState<string | null>(null);
+  const open = openedOn !== null && openedOn === pathname;
   // Remounts the modal on every opening, so it always opens on Sign in rather
   // than on whichever mode it was closed in.
   const [generation, setGeneration] = useState(0);
   const pending = useRef<(() => void) | undefined>(undefined);
 
-  const openSignIn = useCallback((onSuccess?: () => void) => {
-    pending.current = onSuccess;
-    setGeneration((g) => g + 1);
-    setOpen(true);
-  }, []);
+  // Depends on `pathname` so that a page opening the modal on arrival (the
+  // `ProtectedRoute` effect, which runs in the commit that changed the URL)
+  // records the page it arrived at.
+  const openSignIn = useCallback(
+    (onSuccess?: () => void) => {
+      pending.current = onSuccess;
+      setGeneration((g) => g + 1);
+      setOpenedOn(pathname);
+    },
+    [pathname],
+  );
   const api = useMemo(() => ({ openSignIn }), [openSignIn]);
+
+  // An updater, not a read of `openedOn`: a page arrived at by that same
+  // navigation may already have asked for the modal (its effect runs before
+  // this one), and that request is for the new pathname. What the closed
+  // modal would have carried on with needs no clearing — the next opening
+  // replaces it, and nothing runs it before then.
+  useEffect(() => {
+    setOpenedOn((on) => (on !== null && on !== pathname ? null : on));
+  }, [pathname]);
 
   return (
     <SignInModalContext.Provider value={api}>
@@ -71,7 +104,7 @@ export function SignInModalProvider({ children }: { children: ReactNode }) {
         open={open}
         onClose={() => {
           pending.current = undefined;
-          setOpen(false);
+          setOpenedOn(null);
         }}
         onSuccess={() => {
           const next = pending.current;

@@ -954,9 +954,6 @@
     "action": "Generate",
     "prompt": "Prompt",
     "instrument": "Instrument",
-    "outOfCreditsBefore": "You’re out of credits.",
-    "buyMore": "Buy more",
-    "outOfCreditsAfter": "to keep generating.",
     "estimate": "This will use about {{count}} credits.",
     "drumKits": "Drum Kits",
     "presets": "Presets",
@@ -1703,7 +1700,12 @@
     "defaultTitle": "New Score",
     "defaultTitleGenerated": "Generated Score",
     "lyricsTheme": "What the words are about",
-    "lyricsThemePlaceholder": "e.g. a love song about coming home"
+    "lyricsThemePlaceholder": "e.g. a love song about coming home",
+    "generationNeedsSignIn": "Sign in to have a score generated for you.",
+    "generationNeedsServer": "Generating needs a project on the server. Log-in required.",
+    "generationNeedsCredits": "Your credit balance is below zero, so generating is unavailable. Buy credits to use it again.",
+    "notEnoughCredits": "This needs {{estimate}} credits, but your balance is {{balance}} ({{shortfall}} short). Buy credits, use fewer bars or instruments, or turn off “Generate for me”.",
+    "buyCredits": "Buy credits"
   },
   "generationChoices": {
     "heading": "How this piece was generated",

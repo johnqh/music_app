@@ -40,8 +40,10 @@ vi.mock('@sudobility/music_client', () => ({
 }));
 
 const useSiteAdmin = vi.fn(() => false);
+const useSignedIn = vi.fn(() => true);
 vi.mock('@/app/AuthContext', () => ({
   useSiteAdmin: () => useSiteAdmin() as unknown,
+  useSignedIn: () => useSignedIn() as unknown,
   useMusicHookContext: () => ({ networkClient: {}, baseUrl: 'http://test.local' }),
 }));
 
@@ -50,6 +52,7 @@ function open(
   siteAdmin = false,
   onSubmit = vi.fn(),
   styleSettings: unknown = undefined,
+  signedIn = true,
 ) {
   useBalance.mockReturnValue({ balance, isLoading: false });
   // No briefs unless a test says otherwise: the server owns the list, and the
@@ -57,6 +60,7 @@ function open(
   useScorePresets.mockReturnValue({ data: undefined });
   useScoreStyleSettings.mockReturnValue({ data: styleSettings });
   useSiteAdmin.mockReturnValue(siteAdmin);
+  useSignedIn.mockReturnValue(signedIn);
   // Inside a router: the out-of-credits message links to the store, and the
   // dialog is always rendered within the app's router in production.
   render(
@@ -146,7 +150,7 @@ describe('NewProjectDialog cost', () => {
     expect(screen.getByText(/about \d+ credits/i)).toBeInTheDocument();
   });
 
-  it('disables Create when the balance is spent', () => {
+  it('disables Create when the balance is spent, and says why', () => {
     open(0);
     turnGenerationOn();
     fillPrompt();
@@ -154,29 +158,58 @@ describe('NewProjectDialog cost', () => {
     selectInstruments(1);
 
     expect(createButton()).toBeDisabled();
+    expect(
+      screen.getByText(/This needs 4 credits, but your balance is 0 \(4 short\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Buy credits' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/credits'),
+    );
   });
 
-  it('disables Create when the balance is negative', () => {
-    // Overdrawing once is allowed by design; the next job is refused.
-    open(-11);
-    turnGenerationOn();
-    fillPrompt();
-    setMeasures(4);
-    selectInstruments(1);
-
-    expect(createButton()).toBeDisabled();
-  });
-
-  it('allows Create on any positive balance, even one too small', () => {
-    // The server refuses only at <= 0 and a job may overdraw once. Inventing a
-    // stricter rule here would refuse work the API would have accepted.
-    open(1);
+  it('disables Create when the estimate is more than the balance', () => {
+    // balance − estimate < 0 is refused: 32 bars × 4 instruments is 128.
+    open(100);
     turnGenerationOn();
     fillPrompt();
     setMeasures(32);
     selectInstruments(4);
 
+    expect(createButton()).toBeDisabled();
+    expect(
+      screen.getByText(/This needs 128 credits, but your balance is 100 \(28 short\)/),
+    ).toBeInTheDocument();
+  });
+
+  it('allows Create when the balance covers the estimate exactly', () => {
+    open(4);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(4);
+    selectInstruments(1);
+
     expect(createButton()).toBeEnabled();
+    expect(screen.queryByText(/This needs/)).not.toBeInTheDocument();
+  });
+
+  it('will not switch generation on below zero, and says why', () => {
+    open(-11);
+    const toggle = screen.getByRole('switch', { name: 'Generate for me' });
+
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText(/Your credit balance is below zero/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Buy credits' })).toBeInTheDocument();
+    // A blank project costs nothing, so Create is still offered.
+    expect(createButton()).toBeEnabled();
+  });
+
+  it('will not switch generation on for somebody signed out', () => {
+    open(1000, false, vi.fn(), undefined, false);
+
+    expect(screen.getByRole('switch', { name: 'Generate for me' })).toBeDisabled();
+    expect(screen.getByText('Sign in to have a score generated for you.')).toBeInTheDocument();
+    // Signing in is the way out, not buying credits.
+    expect(screen.queryByRole('link', { name: 'Buy credits' })).not.toBeInTheDocument();
   });
 
   it('disables Create for a fractional measure count', () => {
@@ -256,6 +289,18 @@ describe('NewProjectDialog: site admins', () => {
     setMeasures(4);
 
     expect(createButton()).toBeEnabled();
+  });
+
+  it('lets a site admin generate below zero, with no explanation shown', () => {
+    open(-50, true);
+    turnGenerationOn();
+    fillPrompt();
+    setMeasures(32);
+    selectInstruments(4);
+
+    expect(screen.getByRole('switch', { name: 'Generate for me' })).toBeEnabled();
+    expect(createButton()).toBeEnabled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('still refuses an ordinary user at zero', () => {

@@ -954,9 +954,6 @@
     "action": "生成",
     "prompt": "提示词",
     "instrument": "乐器",
-    "outOfCreditsBefore": "你的点数已用完。",
-    "buyMore": "购买更多",
-    "outOfCreditsAfter": "以继续生成。",
     "estimate": "这将消耗约 {{count}} 点数。",
     "drumKits": "鼓组",
     "presets": "预设",
@@ -1703,7 +1700,12 @@
     "defaultTitle": "新乐谱",
     "defaultTitleGenerated": "生成的乐谱",
     "lyricsTheme": "歌词的主题",
-    "lyricsThemePlaceholder": "例如：一首关于归乡的情歌"
+    "lyricsThemePlaceholder": "例如：一首关于归乡的情歌",
+    "generationNeedsSignIn": "登录后即可让 AI 为你生成乐谱。",
+    "generationNeedsServer": "生成功能需要服务器上的项目。需要登录。",
+    "generationNeedsCredits": "你的积分余额低于零，暂时无法生成。购买积分后即可再次使用。",
+    "notEnoughCredits": "这需要 {{estimate}} 积分，但你的余额为 {{balance}}（还差 {{shortfall}}）。请购买积分、减少小节或乐器，或关闭“由 AI 生成”。",
+    "buyCredits": "购买积分"
   },
   "generationChoices": {
     "heading": "这首作品的生成方式",

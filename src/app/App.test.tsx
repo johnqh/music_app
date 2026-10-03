@@ -139,7 +139,8 @@ describe('App', () => {
 
     await screen.findByText('Please sign in to continue.');
     expect(window.location.pathname).toBe('/en/credits');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Sign in' }).at(-1)!);
+    // The modal opens by itself on arrival, over the notice.
+    await screen.findByRole('dialog');
     await signInThroughModal();
 
     expect(signInEmail).toHaveBeenCalledWith('a@b.c', 'secret1');
@@ -147,6 +148,42 @@ describe('App', () => {
       expect(screen.queryByText('Please sign in to continue.')).not.toBeInTheDocument(),
     );
     expect(window.location.pathname).toBe('/en/credits');
+  });
+
+  it('opens the modal once on arrival; closing leaves the notice, whose button reopens it', async () => {
+    const { store } = setup();
+    signOutUntilSignIn();
+    window.history.pushState({}, '', '/en/credits');
+    render(<App store={store} />);
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Once per arrival: closing it does not bring it straight back.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Please sign in to continue.')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/en/credits');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign in' }).at(-1)!);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('closes the modal when the pathname changes (Back)', async () => {
+    const { store } = setup();
+    signOutUntilSignIn();
+    window.history.pushState({}, '', '/en/community');
+    window.history.pushState({}, '', '/en/credits');
+    render(<App store={store} />);
+
+    await screen.findByRole('dialog');
+    await act(async () => {
+      window.history.back();
+    });
+    await waitFor(() => expect(window.location.pathname).toBe('/en/community'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it("opens the modal from a visitor's Get started, then carries on to their projects", async () => {

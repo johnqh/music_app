@@ -75,7 +75,7 @@ import { useTranslation } from 'react-i18next';
 import { LocalizedLink } from '@/components/layout/LocalizedLink';
 import { useBalance } from '@sudobility/consumables_client';
 import { useScorePresets, useScoreStyleSettings } from '@sudobility/music_client';
-import { useMusicHookContext, useSiteAdmin } from '@/app/AuthContext';
+import { useMusicHookContext, useSignedIn, useSiteAdmin } from '@/app/AuthContext';
 import type { ChangeEvent, ReactNode } from 'react';
 import type * as React from 'react';
 import {
@@ -100,17 +100,15 @@ import {
   GENERATION_VARIANTS,
   GENERATION_VARIANT_LABELS,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
-  canCreateNewProject,
   canRemoveNewProjectEntry,
   complexityLabelKey,
   firstMelodyInstrumentEntryId,
   initialNewProjectDraft,
   instrumentLabelFor,
   isNewProjectEntryLocked,
-  isOutOfCredits,
   labelledOptions,
   moodLabelKey,
-  newProjectCreditEstimate,
+  newProjectCreditState,
   newProjectDefaultTitleKey,
   newProjectDurationRefused,
   newProjectSubmission,
@@ -343,9 +341,30 @@ export function NewProjectDialog({
     runs the same reducer, which is what stopped the two forms disagreeing about
     what a salsa is. This component only draws the draft and dispatches.
   */
-  const [draft, dispatch] = useReducer(reduceDraft, undefined, initialNewProjectDraft);
-  const { generating, style } = draft;
+  const [storedDraft, dispatch] = useReducer(reduceDraft, undefined, initialNewProjectDraft);
   const musicContext = useMusicHookContext();
+
+  /*
+    Every credit rule is music_lib's (`newProjectCreditState`): whether the
+    switch may be used, whether Create is refused, what the generation is quoted
+    at and which sentence explains a refusal. This component asks once a render
+    and draws the answer.
+  */
+  const signedIn = useSignedIn();
+  const { balance } = useBalance();
+  const siteAdmin = useSiteAdmin();
+  const credit = newProjectCreditState(storedDraft, { signedIn, balance, siteAdmin, submitting });
+  const { generating } = credit;
+  /*
+    The draft as the form treats it. A draft left switched on stops generating
+    the moment the switch becomes unavailable (the balance fell below zero, the
+    session ended), so the AI half, the title, the lyrics and the submission
+    all follow `generating` rather than the stored flag — otherwise Create would
+    send a generation request the switch says is not on offer.
+  */
+  const draft: NewProjectFormDraft =
+    generating === storedDraft.generating ? storedDraft : { ...storedDraft, generating };
+  const { style } = draft;
   const [picker, setPicker] = useState(DEFAULT_INSTRUMENT_VALUE);
 
   /*
@@ -411,19 +430,15 @@ export function NewProjectDialog({
   // The placeholder *and* the fallback name — see `newProjectDefaultTitleKey`.
   const defaultTitle = t(newProjectDefaultTitleKey(draft));
 
-  const { balance } = useBalance();
   /**
    * Bars times instruments: what the server bills, and "about" because the
    * charge counts what the model actually produced, which is never more.
    */
-  const estimatedCredits = newProjectCreditEstimate(draft);
-  /**
-   * Refused only at zero or below, matching `POST /jobs`, and never for a site
-   * administrator, whom the server charges nothing — see `isOutOfCredits`.
-   */
-  const siteAdmin = useSiteAdmin();
-  const outOfCredits = isOutOfCredits(balance, siteAdmin);
-  const canCreate = canCreateNewProject(draft, { submitting, outOfCredits });
+  const estimatedCredits = credit.estimate;
+  const { canCreate } = credit;
+  /** Spending or holding more credits is the way out of these two refusals. */
+  const offerBuyCredits =
+    credit.generationBlock === 'negativeBalance' || credit.createBlock === 'insufficientCredits';
   const tempoRefused = newProjectTempoRefused(draft);
   const showLyrics = showNewProjectLyrics(draft);
   const showLyricsTheme = showNewProjectLyricsTheme(draft);
@@ -463,20 +478,10 @@ export function NewProjectDialog({
     >
       <div className="flex flex-col gap-4">
         <CollapsibleReveal shown={generating}>
-          {outOfCredits ? (
-            <p className="text-sm text-muted-foreground">
-              {t('generate.outOfCreditsBefore')}{' '}
-              <LocalizedLink to="/credits" className="underline">
-                {t('generate.buyMore')}
-              </LocalizedLink>{' '}
-              {t('generate.outOfCreditsAfter')}
+          {estimatedCredits > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('generate.estimate', { count: estimatedCredits })}
             </p>
-          ) : (
-            estimatedCredits > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {t('generate.estimate', { count: estimatedCredits })}
-              </p>
-            )
           )}
         </CollapsibleReveal>
 
@@ -503,6 +508,7 @@ export function NewProjectDialog({
           <Switch
             checked={generating}
             onCheckedChange={(next) => dispatch({ type: 'setGenerating', generating: next })}
+            disabled={!credit.generationAvailable}
             aria-label={t('newProject.generateForMe')}
           />
           <span className="flex flex-col">
@@ -512,6 +518,23 @@ export function NewProjectDialog({
             </span>
           </span>
         </label>
+
+        {/* Why the switch or Create is refused, in words: a control that is
+            merely greyed out says nothing about what would make it work. Shown
+            outside the AI half, since a disabled switch leaves that collapsed. */}
+        {credit.messageKey ? (
+          <p className="text-sm text-muted-foreground" role="status">
+            {t(credit.messageKey, credit.messageValues)}
+            {offerBuyCredits ? (
+              <>
+                {' '}
+                <LocalizedLink to="/credits" className="underline">
+                  {t('newProject.buyCredits')}
+                </LocalizedLink>
+              </>
+            ) : null}
+          </p>
+        ) : null}
 
         <CollapsibleReveal shown={generating} role="group" aria-label={t('newProject.aiSettings')}>
           {/* The caption sits above the whole row rather than above the prompt

@@ -154,6 +154,20 @@ export function useSiteAdmin(): boolean {
 }
 
 /**
+ * Whether somebody is signed in, tolerant of a missing provider.
+ *
+ * Inside `AuthProvider` it is whether a user has been restored. Outside one it
+ * answers **yes**, the same assumption `useMusicHookContext` makes there: the
+ * pages that ask sit behind the sign-in gate in production, and a component
+ * test rendering one alone means a signed-in page, not a signed-out one.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useSignedIn(): boolean {
+  const ctx = useContext(AuthContext);
+  return ctx ? ctx.user !== null : true;
+}
+
+/**
  * The music_client hook context, tolerant of a missing provider.
  *
  * Inside `AuthProvider` it is the provider's, keyed by the signed-in user.
