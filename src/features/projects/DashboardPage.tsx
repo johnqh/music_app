@@ -82,6 +82,8 @@ import { MidiImportWizard } from '@/components/dialogs/MidiImportWizard';
 import { MusicXmlImportDialog } from '@/components/dialogs/MusicXmlImportDialog';
 import { AudioImportDialog } from '@/components/dialogs/AudioImportDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
+import { PendingButton } from '@/components/controls/PendingButton';
+import { usePendingAction, usePendingKeys } from '@/hooks/usePendingAction';
 
 export type DashboardPageProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore({ context })`. */
@@ -205,6 +207,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
+  /*
+    Each card's Cancel and Duplicate spin on their own row while the request is
+    out, and the delete confirmation and the template picker stay open with
+    their CTA spinning until the work has finished — see CLAUDE.md, "A CTA that
+    starts async work spins".
+  */
+  const [cardPending, runCardAction] = usePendingKeys();
+  const [deleting, runDelete] = usePendingAction();
+  const [templateCreating, runTemplate] = usePendingAction();
+  const [templateChosen, setTemplateChosen] = useState<string | null>(null);
 
   /*
     The list is music_client's `useProjects`, shared with the native dashboard.
@@ -247,15 +259,16 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     audioImportOpen ? hookContext : null,
   );
 
-  const cancelGeneration = async (projectId: string): Promise<void> => {
-    try {
-      // The job id is not on the summary; the project's running job is the
-      // only one it can have, so the server resolves it from the project.
-      await cancelProjectGeneration.mutateAsync(projectId);
-    } catch (err) {
-      reportError(err, { context: t('errors.cancelGeneration'), store });
-    }
-  };
+  const cancelGeneration = (projectId: string): Promise<void | undefined> =>
+    runCardAction(`cancel:${projectId}`, async () => {
+      try {
+        // The job id is not on the summary; the project's running job is the
+        // only one it can have, so the server resolves it from the project.
+        await cancelProjectGeneration.mutateAsync(projectId);
+      } catch (err) {
+        reportError(err, { context: t('errors.cancelGeneration'), store });
+      }
+    });
 
   /**
    * Creates the project immediately, then starts a job against it: it shows up
@@ -322,6 +335,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
    * which is what lets the same form back a local document on the native side.
    */
   const handleNewProject = async (submission: NewProjectSubmission): Promise<void> => {
+    // The dialog's Create spins and refuses a press while this runs; this is
+    // the same refusal for a press that lands before that re-render.
+    if (creatingProject) return;
     if (submission.kind === 'generate') {
       await startWholeScoreGeneration(submission);
       return;
@@ -374,45 +390,62 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
     }
   };
 
-  const handleCreateFromTemplate = async (templateId: string): Promise<void> => {
-    const template = projectTemplates(libraryCopy.templates()).find((tpl) => tpl.id === templateId);
-    if (!template) return;
-    try {
-      // A template is a starting point, not a source: it came from no file.
-      await store.getState().newProject({
-        name: template.name,
-        score: template.build(),
-        origin: { kind: 'blank' },
-      });
-      const id = store.getState().projectId;
-      resetOpenedProjectTransport();
-      if (id) onNavigate?.(`/project/${id}`);
-    } catch (err) {
-      reportError(err, { context: t('errors.createFromTemplate'), store });
-    }
-  };
+  /**
+   * Builds the chosen template into a project. The picker stays open, with the
+   * chosen card spinning, until the project exists — creating it is a request
+   * to the server, and a picker that vanished at once left nothing on screen
+   * to say anything was happening.
+   */
+  const handleCreateFromTemplate = (templateId: string): Promise<void | undefined> =>
+    runTemplate(async () => {
+      const template = projectTemplates(libraryCopy.templates()).find(
+        (tpl) => tpl.id === templateId,
+      );
+      if (!template) return;
+      setTemplateChosen(templateId);
+      try {
+        // A template is a starting point, not a source: it came from no file.
+        await store.getState().newProject({
+          name: template.name,
+          score: template.build(),
+          origin: { kind: 'blank' },
+        });
+        const id = store.getState().projectId;
+        resetOpenedProjectTransport();
+        setTemplatesOpen(false);
+        if (id) onNavigate?.(`/project/${id}`);
+      } catch (err) {
+        reportError(err, { context: t('errors.createFromTemplate'), store });
+      } finally {
+        setTemplateChosen(null);
+      }
+    });
 
-  const handleDuplicate = async (project: ProjectSummary): Promise<void> => {
-    try {
-      // Server-side: the score is copied inside the database. Downloading it
-      // to upload it again moved the whole thing twice for a copy nobody here
-      // is going to look at.
-      await duplicateProject.mutateAsync({ id: project.id });
-    } catch (err) {
-      reportError(err, { context: t('errors.duplicateProject'), store });
-    }
-  };
+  const handleDuplicate = (project: ProjectSummary): Promise<void | undefined> =>
+    runCardAction(`duplicate:${project.id}`, async () => {
+      try {
+        // Server-side: the score is copied inside the database. Downloading it
+        // to upload it again moved the whole thing twice for a copy nobody here
+        // is going to look at.
+        await duplicateProject.mutateAsync({ id: project.id });
+      } catch (err) {
+        reportError(err, { context: t('errors.duplicateProject'), store });
+      }
+    });
 
-  const handleDelete = async (): Promise<void> => {
-    const project = pendingDelete;
-    setPendingDelete(null);
-    if (!project) return;
-    try {
-      await deleteProject.mutateAsync(project.id);
-    } catch (err) {
-      reportError(err, { context: t('errors.deleteProject'), store });
-    }
-  };
+  /** The confirmation stays open, its Delete spinning, until the server answers. */
+  const handleDelete = (): Promise<void | undefined> =>
+    runDelete(async () => {
+      const project = pendingDelete;
+      if (!project) return;
+      try {
+        await deleteProject.mutateAsync(project.id);
+      } catch (err) {
+        reportError(err, { context: t('errors.deleteProject'), store });
+      } finally {
+        setPendingDelete(null);
+      }
+    });
 
   const handleImportJsonFile = async (file: File): Promise<void> => {
     setJsonError(null);
@@ -501,6 +534,9 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
    * is in front of the score rather than on a card with a badge.
    */
   const handleAudioImport = (file: File): void => {
+    // The dialog's Import spins while the recording uploads; a second press
+    // would send it twice.
+    if (audioBusy) return;
     void (async () => {
       setAudioBusy(true);
       setAudioError(null);
@@ -552,25 +588,29 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         </Button>
         <div className="flex gap-1 border-t border-border p-2">
           {project.status === 'generating' && (
-            <Button
+            <PendingButton
               type="button"
               variant="ghost"
               aria-label={t('dashboard.cancelGenerationFor', { name: project.name })}
               onClick={() => void cancelGeneration(project.id)}
+              pending={cardPending(`cancel:${project.id}`)}
+              pendingLabel={t('common.cancelling')}
               className="px-3 py-1"
             >
               {t('dashboard.cancelGeneration')}
-            </Button>
+            </PendingButton>
           )}
-          <Button
+          <PendingButton
             type="button"
             variant="ghost"
             aria-label={t('dashboard.duplicateProject', { name: project.name })}
             onClick={() => void handleDuplicate(project)}
+            pending={cardPending(`duplicate:${project.id}`)}
+            pendingLabel={t('common.duplicating')}
             className="px-3 py-1"
           >
             {t('dashboard.duplicate')}
-          </Button>
+          </PendingButton>
           {/* `variant="ghost"` + an explicit className override, not
             `variant="destructive-outline"`: see `DeveloperSettingsDialog`'s
             "Reset local database" button doc comment -- that CVA enum
@@ -736,6 +776,8 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         confirmLabel={t('common.delete')}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => void handleDelete()}
+        busy={deleting}
+        busyLabel={t('common.deleting')}
       />
 
       <MidiImportWizard
@@ -754,6 +796,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         key={`audioImportOpen-${importRequest}`}
         open={audioImportOpen}
         busy={audioBusy}
+        importing={audioBusy}
         error={audioError}
         canTranscribe={canTranscribe ?? true}
         onImport={handleAudioImport}
@@ -817,10 +860,8 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       <TemplatePickerDialog
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
-        onChoose={(templateId) => {
-          setTemplatesOpen(false);
-          void handleCreateFromTemplate(templateId);
-        }}
+        creating={templateCreating ? templateChosen : null}
+        onChoose={(templateId) => void handleCreateFromTemplate(templateId)}
       />
       <NewProjectDialog
         open={newProjectOpen}

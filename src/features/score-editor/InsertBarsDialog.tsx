@@ -14,9 +14,19 @@ export type InsertBarsDialogProps = {
   open: boolean;
   onClose: () => void;
   onSubmit: (result: InsertBarsDialogResult) => void;
+  /**
+   * True while the generation asked for here is being started: Insert spins
+   * and the dialog stays open until the job is accepted.
+   */
+  submitting?: boolean;
 };
 
-export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogProps) {
+export function InsertBarsDialog({
+  open,
+  onClose,
+  onSubmit,
+  submitting = false,
+}: InsertBarsDialogProps) {
   const { t } = useTranslation();
   const [count, setCount] = useState('4');
   const [position, setPosition] = useState<InsertBarsPosition>('after');
@@ -31,6 +41,7 @@ export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogPr
   }, [open]);
 
   const submit = (): void => {
+    if (submitting) return;
     const parsed = Number(count);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) return;
     onSubmit({ count: parsed, position, generate });
@@ -43,6 +54,8 @@ export function InsertBarsDialog({ open, onClose, onSubmit }: InsertBarsDialogPr
       title={t('editor.insertBarsTitle')}
       onSave={submit}
       saveLabel={t('editor.insertBars')}
+      saving={submitting}
+      savingLabel={t('common.starting')}
       closeAriaLabel={t('common.closeDialog')}
     >
       <div className="flex flex-col gap-4">

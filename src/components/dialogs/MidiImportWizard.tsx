@@ -44,7 +44,6 @@ import { getAppServices } from '@/config/initialize';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
   Checkbox,
   Input,
   Select,
@@ -72,6 +71,7 @@ import { useAppStore } from '@/app-library';
 import type { EditorStoreApi } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FileImportModal } from '@/components/dialogs/FileImportModal';
+import { PendingButton } from '@/components/controls/PendingButton';
 
 /** The parse half of the wizard, injectable so tests can force a failure. */
 export type MidiImportApi = {
@@ -190,6 +190,8 @@ export function MidiImportWizard({
     warnings: string[];
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Which CTA started the current work, so that one spins: Preview or Import. */
+  const [pressed, setPressed] = useState<'preview' | 'import' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReplace, setConfirmingReplace] = useState(false);
 
@@ -201,6 +203,7 @@ export function MidiImportWizard({
     setPreview(null);
     setError(null);
     setBusy(false);
+    setPressed(null);
   };
 
   const handleClose = (): void => {
@@ -227,8 +230,9 @@ export function MidiImportWizard({
   };
 
   const handlePreview = async (): Promise<void> => {
-    if (!fileBuffer || !options) return;
+    if (!fileBuffer || !options || busy) return;
     setBusy(true);
+    setPressed('preview');
     setError(null);
     try {
       const result = await service.import(fileBuffer, options);
@@ -242,12 +246,14 @@ export function MidiImportWizard({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      setPressed(null);
     }
   };
 
   const commitImport = async (): Promise<void> => {
-    if (!fileBuffer || !options) return;
+    if (!fileBuffer || !options || busy) return;
     setBusy(true);
+    setPressed('import');
     setError(null);
     try {
       const result = await service.import(fileBuffer, options);
@@ -270,6 +276,7 @@ export function MidiImportWizard({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+      setPressed(null);
     }
   };
 
@@ -309,6 +316,7 @@ export function MidiImportWizard({
         error={error}
         canImport={Boolean(summary) && canImportMidi(options)}
         onImport={handleImportClick}
+        importing={pressed === 'import'}
         onClose={handleClose}
         size="large"
         description={t('importMidi.description')}
@@ -492,16 +500,18 @@ export function MidiImportWizard({
               />
             </div>
 
-            <Button
+            <PendingButton
               type="button"
               variant="outline"
               aria-label={t('importMidi.previewImport')}
               disabled={busy}
+              pending={pressed === 'preview'}
+              pendingLabel={t('importMidi.preview')}
               onClick={() => void handlePreview()}
               className="self-start px-3 py-1.5"
             >
               {t('importMidi.preview')}
-            </Button>
+            </PendingButton>
 
             {preview && (
               <div className="flex flex-col gap-2">

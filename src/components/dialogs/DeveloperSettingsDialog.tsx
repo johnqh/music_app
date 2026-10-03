@@ -37,6 +37,7 @@ import { LEGACY_FONT_SIZE_KEY, PREFS_KEY, reportError } from '@/app-library';
 import { useAppStore } from '@/app-library';
 import type { EditorStoreApi } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { PendingButton } from '@/components/controls/PendingButton';
 import { getAppServices } from '@/config/initialize';
 import { runBenchmark, toBenchmarkTable } from '@/app-library';
 import type { BenchmarkReport, BenchmarkSize } from '@/app-library';
@@ -201,16 +202,17 @@ export function DeveloperSettingsDialog({
           >
             {t('devSettings.stressTest')}
           </Button>
-          <Button
+          <PendingButton
             type="button"
             variant="outline"
             aria-label={t('devSettings.runBenchmark')}
             onClick={handleRunBenchmark}
-            disabled={benchmarkRunning}
+            pending={benchmarkRunning}
+            pendingLabel="Running benchmark…"
             className="px-3 py-1.5"
           >
-            {benchmarkRunning ? 'Running benchmark…' : 'Run benchmark'}
-          </Button>
+            Run benchmark
+          </PendingButton>
           <Button
             type="button"
             variant="outline"

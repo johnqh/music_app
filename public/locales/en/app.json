@@ -101,7 +101,19 @@
     "loading": "Loading…",
     "confirm": "Confirm",
     "close": "Close",
-    "save": "Save"
+    "save": "Save",
+    "working": "Working…",
+    "saving": "Saving…",
+    "creating": "Creating…",
+    "deleting": "Deleting…",
+    "exporting": "Exporting…",
+    "starting": "Starting…",
+    "opening": "Opening…",
+    "importing": "Importing…",
+    "duplicating": "Duplicating…",
+    "cancelling": "Cancelling…",
+    "removing": "Removing…",
+    "uploading": "Uploading…"
   },
   "community": {
     "title": "Community",
@@ -1378,7 +1390,8 @@
     "paperLetter": "Letter",
     "paperLegal": "Legal",
     "portrait": "Portrait",
-    "landscape": "Landscape"
+    "landscape": "Landscape",
+    "preparing": "Preparing pages…"
   },
   "published": {
     "notFound": "Not found",

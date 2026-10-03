@@ -18,7 +18,8 @@
  * `libraryCopy.templates()`.
  */
 import { useTranslation } from 'react-i18next';
-import { Button, FormModal, Text, cn } from '@sudobility/components';
+import { FormModal, Text, cn } from '@sudobility/components';
+import { PendingButton } from '@/components/controls/PendingButton';
 import { variants } from '@sudobility/design';
 import { projectTemplates } from '@/app-library';
 import { libraryCopy } from '@/i18n/library-copy';
@@ -28,10 +29,22 @@ export type TemplatePickerDialogProps = {
   onClose: () => void;
   /** Receives the chosen template's id; the dashboard builds and opens it. */
   onChoose: (templateId: string) => void;
+  /**
+   * The template whose project is being created, or null. Its card spins, the
+   * others refuse a press, and the dialog stays open until the dashboard closes
+   * it — creating the project is a request to the server.
+   */
+  creating?: string | null;
 };
 
-export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePickerDialogProps) {
+export function TemplatePickerDialog({
+  open,
+  onClose,
+  onChoose,
+  creating = null,
+}: TemplatePickerDialogProps) {
   const { t } = useTranslation();
+  const busy = creating !== null;
   return (
     <FormModal
       open={open}
@@ -39,7 +52,8 @@ export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePicker
       onClose={onClose}
       size="large"
       closeAriaLabel={t('common.closeDialog')}
-      actions={[{ label: t('common.cancel'), onClick: onClose, variant: 'ghost' }]}
+      saving={busy}
+      actions={[{ label: t('common.cancel'), onClick: onClose, variant: 'ghost', disabled: busy }]}
     >
       <div className="flex flex-col gap-4">
         <Text as="p" size="sm" color="muted">
@@ -53,12 +67,15 @@ export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePicker
         */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {projectTemplates(libraryCopy.templates()).map((template) => (
-            <Button
+            <PendingButton
               key={template.id}
               type="button"
               variant="ghost"
               aria-label={t('dashboard.newFromTemplate', { name: template.name })}
               onClick={() => onChoose(template.id)}
+              pending={creating === template.id}
+              pendingLabel={t('common.creating')}
+              disabled={busy}
               className={cn(
                 variants.card.default.interactive(),
                 'h-auto flex-col items-start gap-1 rounded-md p-4 text-left',
@@ -66,7 +83,7 @@ export function TemplatePickerDialog({ open, onClose, onChoose }: TemplatePicker
             >
               <span className="text-sm font-medium text-foreground">{template.name}</span>
               <span className="text-xs text-muted-foreground">{template.description}</span>
-            </Button>
+            </PendingButton>
           ))}
         </div>
       </div>

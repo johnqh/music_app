@@ -61,6 +61,8 @@ export type ReplaceMusicDialogProps = {
   onSubmit: (submission: ReplaceSubmission) => void;
   /** The bars the region touches times its tracks: what the server bills. */
   estimatedCredits?: number;
+  /** True while the job is being submitted: Replace spins, the dialog stays open. */
+  submitting?: boolean;
 };
 
 /**
@@ -106,6 +108,7 @@ export function ReplaceMusicDialog({
   onClose,
   onSubmit,
   estimatedCredits = 0,
+  submitting = false,
 }: ReplaceMusicDialogProps) {
   const { t, i18n } = useTranslation();
   /*
@@ -151,7 +154,7 @@ export function ReplaceMusicDialog({
 
   const submission = buildReplaceSubmission(draft);
   const submit = (): void => {
-    if (!submission || !region) return;
+    if (submitting || !submission || !region) return;
     onSubmit(submission);
   };
 
@@ -162,13 +165,16 @@ export function ReplaceMusicDialog({
       onClose={onClose}
       size="small"
       closeAriaLabel={t('common.closeDialog')}
+      saving={submitting}
       actions={[
-        { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
+        { label: t('common.cancel'), onClick: onClose, variant: 'ghost', disabled: submitting },
         {
           label: t('replace.action'),
           onClick: submit,
           variant: 'primary',
           disabled: !region || !submission,
+          loading: submitting,
+          loadingLabel: t('common.starting'),
         },
       ]}
     >

@@ -15,12 +15,14 @@ import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormModal, Input } from '@sudobility/components';
 import { AS_TYPED_INPUT_CLASS } from '@/components/controls/input-classes';
+import { usePendingAction } from '@/hooks/usePendingAction';
 import type { SnapshotSummary } from '@sudobility/music_types';
 
 export type ManagePublishedDialogProps = {
   open: boolean;
   snapshots: readonly SnapshotSummary[];
-  onRename: (snapshotId: string, publicName: string) => void;
+  /** Resolves once the rename has landed (or failed and been reported). */
+  onRename: (snapshotId: string, publicName: string) => Promise<void>;
   onClose: () => void;
 };
 
@@ -33,6 +35,8 @@ export function ManagePublishedDialog({
   const { t } = useTranslation();
   const published = snapshots.filter((s) => s.publicId);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Save stays on screen, spinning, until every rename has been answered.
+  const [saving, runSave] = usePendingAction();
 
   // Reopening shows what the server holds, not what was typed and abandoned.
   useEffect(() => {
@@ -49,21 +53,27 @@ export function ManagePublishedDialog({
       onClose={onClose}
       size="small"
       closeAriaLabel={t('common.closeDialog')}
+      saving={saving}
       actions={[
-        { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
+        { label: t('common.cancel'), onClick: onClose, variant: 'ghost', disabled: saving },
         {
           label: t('common.save'),
           variant: 'primary',
-          onClick: () => {
-            for (const snapshot of published) {
-              const next = titleOf(snapshot).trim();
-              // Only what actually changed, and never to nothing: a blank
-              // title would leave the page with no name at all.
-              if (next.length === 0 || next === (snapshot.publicName ?? snapshot.name)) continue;
-              onRename(snapshot.id, next);
-            }
-            onClose();
-          },
+          loading: saving,
+          loadingLabel: t('common.saving'),
+          onClick: () =>
+            void runSave(async () => {
+              const renames: Promise<void>[] = [];
+              for (const snapshot of published) {
+                const next = titleOf(snapshot).trim();
+                // Only what actually changed, and never to nothing: a blank
+                // title would leave the page with no name at all.
+                if (next.length === 0 || next === (snapshot.publicName ?? snapshot.name)) continue;
+                renames.push(onRename(snapshot.id, next));
+              }
+              await Promise.all(renames);
+              onClose();
+            }),
         },
       ]}
     >

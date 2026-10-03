@@ -95,6 +95,7 @@ import { LyricEntryBar } from '@/features/score-editor/LyricEntryBar';
 import { ScoreContextMenu } from '@/features/score-editor/ScoreContextMenu';
 import type { EditorStoreApi } from '@/app-library';
 import { useEditorShortcuts } from '@/features/score-editor/useEditorShortcuts';
+import { usePendingAction } from '@/hooks/usePendingAction';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode, TrackInfoMode } from '@sudobility/music_types';
@@ -270,6 +271,7 @@ export function ScoreEditorView({
   const [generateTrackOpen, setGenerateTrackOpen] = useState(false);
   const [generateTrackPending, setGenerateTrackPending] = useState(false);
   const [insertBarsOpen, setInsertBarsOpen] = useState(false);
+  const [insertBarsPending, runInsertBars] = usePendingAction();
 
   /**
    * Generates one track and appends it, matched to the score already open.
@@ -320,23 +322,40 @@ export function ScoreEditorView({
     [store, onGenerateTrackJob],
   );
 
+  /*
+    Inserting is immediate; generating into the new bars starts a job, which
+    is a save and a request first. With Generate on, the dialog stays open
+    with Insert spinning until the job is accepted — closing at once left a
+    reader looking at blank bars with nothing to say anything was coming.
+  */
   const insertBars = useCallback(
-    async ({ count, position, generate }: InsertBarsDialogResult): Promise<void> => {
-      const inserted = insertBlankMeasuresAtCaret(store, count, position);
-      if (!inserted) return;
-      setInsertBarsOpen(false);
-      if (!generate || !onGenerateInsertedBars) return;
-      const nextScore = store.getState().score;
-      if (!nextScore) return;
-      const measureIds = nextScore.tracks.flatMap((track) =>
-        track.measures
-          .slice(inserted.startIndex, inserted.startIndex + inserted.count)
-          .map((measure) => measure.id),
-      );
-      store.getState().selectMeasures(measureIds);
-      await onGenerateInsertedBars();
-    },
-    [onGenerateInsertedBars, store],
+    (result: InsertBarsDialogResult) =>
+      runInsertBars(async (): Promise<void> => {
+        const { count, position, generate } = result;
+        const inserted = insertBlankMeasuresAtCaret(store, count, position);
+        if (!inserted) return;
+        if (!generate || !onGenerateInsertedBars) {
+          setInsertBarsOpen(false);
+          return;
+        }
+        const nextScore = store.getState().score;
+        if (!nextScore) {
+          setInsertBarsOpen(false);
+          return;
+        }
+        const measureIds = nextScore.tracks.flatMap((track) =>
+          track.measures
+            .slice(inserted.startIndex, inserted.startIndex + inserted.count)
+            .map((measure) => measure.id),
+        );
+        store.getState().selectMeasures(measureIds);
+        try {
+          await onGenerateInsertedBars();
+        } finally {
+          setInsertBarsOpen(false);
+        }
+      }),
+    [onGenerateInsertedBars, runInsertBars, store],
   );
 
   /**
@@ -1185,6 +1204,7 @@ export function ScoreEditorView({
           <InsertBarsDialog
             open={insertBarsOpen}
             onClose={() => setInsertBarsOpen(false)}
+            submitting={insertBarsPending}
             onSubmit={(result) => void insertBars(result)}
           />
           <EditorToolbar

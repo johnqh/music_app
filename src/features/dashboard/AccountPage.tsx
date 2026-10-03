@@ -15,7 +15,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Text } from '@sudobility/components';
+import { Input, Text } from '@sudobility/components';
+import { PendingButton } from '@/components/controls/PendingButton';
 import {
   useDeleteAvatar,
   useProfile,
@@ -89,10 +90,13 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const trimmed = nickname.trim();
-  const busy = update.isPending || upload.isPending || remove.isPending;
+  /** Reading and shrinking a chosen picture, before its upload starts. */
+  const [preparing, setPreparing] = useState(false);
+  const busy = update.isPending || upload.isPending || remove.isPending || preparing;
   const avatarId = profile.data?.avatarId ?? null;
 
   const saveNickname = () => {
+    if (busy) return;
     setProblem(null);
     update.mutate(
       { nickname: trimmed === '' ? null : trimmed },
@@ -107,11 +111,14 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
     if (!source) return;
     setProblem(null);
     let prepared: PreparedAvatar;
+    setPreparing(true);
     try {
       prepared = await prepare(source);
     } catch {
       setProblem(t('account.pictureUnsupported'));
       return;
+    } finally {
+      setPreparing(false);
     }
     upload.mutate(prepared, { onError: () => setProblem(t('account.saveFailed')) });
   };
@@ -136,13 +143,15 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
             onChange={(event: ChangeEvent<HTMLInputElement>) => setNickname(event.target.value)}
             disabled={profile.isLoading}
           />
-          <Button
+          <PendingButton
             type="button"
             onClick={saveNickname}
             disabled={busy || profile.isLoading || trimmed === saved}
+            pending={update.isPending}
+            pendingLabel={t('common.saving')}
           >
             {t('common.save')}
-          </Button>
+          </PendingButton>
         </div>
         <Text as="p" size="sm" color="muted">
           {t('account.nicknameHint')}
@@ -180,12 +189,15 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
               accept="image/jpeg,image/png,image/webp"
               aria-label={t('account.choosePicture')}
               className="sr-only"
+              disabled={busy}
               onChange={(event) => void choosePicture(event)}
             />
-            <Button
+            <PendingButton
               type="button"
               variant="outline"
               disabled={busy}
+              pending={preparing || upload.isPending}
+              pendingLabel={t('common.uploading')}
               onClick={() => fileInput.current?.click()}
               // The input above carries the name; this is the same control
               // to somebody not looking at it.
@@ -193,12 +205,14 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
               tabIndex={-1}
             >
               {t('account.choosePicture')}
-            </Button>
+            </PendingButton>
             {avatarId ? (
-              <Button
+              <PendingButton
                 type="button"
                 variant="outline"
                 disabled={busy}
+                pending={remove.isPending}
+                pendingLabel={t('common.removing')}
                 onClick={() => {
                   setProblem(null);
                   remove.mutate(undefined, {
@@ -207,7 +221,7 @@ export function AccountPage({ prepare = prepareAvatar }: AccountPageProps) {
                 }}
               >
                 {t('account.removePicture')}
-              </Button>
+              </PendingButton>
             ) : null}
           </div>
         </div>

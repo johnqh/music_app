@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { GenerationRecord } from '@sudobility/music_types';
 import { regenerateWithLocks } from '@/app-library';
 import { GenerationChoices } from './GenerationChoices';
@@ -49,6 +49,32 @@ describe('GenerationChoices', () => {
     expect(regenerateWithLocks(record, onGenerateAgain.mock.calls[0]![0]).choices).toEqual({
       groove: 'songo',
     });
+  });
+});
+
+describe('GenerationChoices: starting the job', () => {
+  it('keeps the confirmation open, spinning, until the job is accepted, and sends it once', async () => {
+    let accept!: () => void;
+    const onGenerateAgain = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          accept = resolve;
+        }),
+    );
+    render(
+      <GenerationChoices record={record} generating={false} onGenerateAgain={onGenerateAgain} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /generate again/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /generate again/i }).at(-1)!);
+
+    const busy = screen.getByRole('button', { name: 'Starting…' });
+    expect(busy).toBeDisabled();
+    fireEvent.click(busy);
+    expect(onGenerateAgain).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    await act(async () => accept());
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 

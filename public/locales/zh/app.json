@@ -101,7 +101,19 @@
     "loading": "加载中…",
     "confirm": "确认",
     "close": "关闭",
-    "save": "保存"
+    "save": "保存",
+    "working": "处理中…",
+    "saving": "正在保存…",
+    "creating": "正在创建…",
+    "deleting": "正在删除…",
+    "exporting": "正在导出…",
+    "starting": "正在启动…",
+    "opening": "正在打开…",
+    "importing": "正在导入…",
+    "duplicating": "正在复制…",
+    "cancelling": "正在取消…",
+    "removing": "正在移除…",
+    "uploading": "正在上传…"
   },
   "community": {
     "title": "社区",
@@ -1378,7 +1390,8 @@
     "paperLetter": "信纸",
     "paperLegal": "法律用纸",
     "portrait": "纵向",
-    "landscape": "横向"
+    "landscape": "横向",
+    "preparing": "正在准备页面…"
   },
   "published": {
     "notFound": "未找到",

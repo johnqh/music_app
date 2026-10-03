@@ -21,6 +21,8 @@ export type AudioImportDialogProps = {
   open: boolean;
   /** True while the file is being uploaded. */
   busy?: boolean;
+  /** True while the recording is being sent, after Import: the button spins. */
+  importing?: boolean;
   /** Why the recording could not be sent, when it could not. */
   error?: string | null;
   /** Whether this deployment can transcribe at all. */
@@ -54,6 +56,7 @@ function roughMinutes(bytes: number): number {
 export function AudioImportDialog({
   open,
   busy = false,
+  importing = false,
   error,
   canTranscribe = true,
   onImport,
@@ -73,6 +76,7 @@ export function AudioImportDialog({
       fileName={file?.name ?? null}
       onFile={setFile}
       busy={busy}
+      importing={importing}
       busyLabel={t('importAudio.sending')}
       error={error ?? null}
       canImport={Boolean(file) && canTranscribe}

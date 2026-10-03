@@ -92,6 +92,7 @@ import type { ExportFormatId, ExportPlan } from '@/app-library';
 import { renderScoreAudio } from '@sudobility/music_player';
 import { useProjectSnapshots } from '@sudobility/music_client';
 import { THEME_MODE_OPTIONS, publishedSnapshotUrl } from '@sudobility/music_types';
+import type { GenerationJobKind } from '@sudobility/music_types';
 import { SOUNDFONT_ASSETS } from '@/config/initialize';
 import { findEvent, findMeasure, findTrack } from '@/app-library';
 import { playbackController } from '@/app-library';
@@ -118,6 +119,9 @@ import { DeveloperSettingsDialog } from '@/components/dialogs/DeveloperSettingsD
 import { getAppServices } from '@/config/initialize';
 import { CreateSnapshotDialog, OpenSnapshotDialog } from '@/features/snapshots/SnapshotDialogs';
 import { ManagePublishedDialog } from '@/features/snapshots/ManagePublishedDialog';
+import { ButtonSpinner } from '@/components/controls/PendingButton';
+import { usePendingAction } from '@/hooks/usePendingAction';
+import type { ExportScope } from '@/components/dialogs/ExportScopeDialog';
 import { useCurrentLanguage } from '@/hooks/useLocalizedNavigate';
 import { useMusicHookContext } from '@/app/AuthContext';
 import { SpatialSection } from '@/features/spatial/SpatialSection';
@@ -305,14 +309,29 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     trackIds: string[];
   } | null>(null);
 
+  /*
+    Starting a job is a save, a token and a POST before `generating` turns
+    true, and for all of that the CTA that asked — Replace, Generate Again,
+    Generate in Insert Bars — would otherwise sit there live and pressable. One
+    pending flag for every way in, since a project runs one job at a time; each
+    dialog stays open with its button spinning until the job is accepted.
+  */
+  const [startingJob, runStartJob] = usePendingAction();
+  const { start: startGeneration } = generation;
+  const startJob = useCallback(
+    (kind: GenerationJobKind, request: unknown) =>
+      runStartJob(() => startGeneration(kind, request)),
+    [runStartJob, startGeneration],
+  );
+
   const startReplacement = useCallback(
     async (scope: ReplaceScope, submission: ReplaceSubmission): Promise<void> => {
       const prepared = prepareReplacement(store, scope, submission);
       if (!prepared) return;
       lastReplacedRangeRef.current = prepared.range;
-      await generation.start(prepared.kind, prepared.request);
+      await startJob(prepared.kind, prepared.request);
     },
-    [generation, store],
+    [startJob, store],
   );
 
   const generateInsertedBars = useCallback(async (): Promise<void> => {
@@ -367,34 +386,41 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
   });
   const snapshots = history.snapshots ?? [];
 
-  const createSnapshot = async (name: string, publisher?: string, publicName?: string) => {
-    try {
-      const snapshot = await history.create({
-        name,
-        ...(publisher && publicName ? { publish: { publisherName: publisher, publicName } } : {}),
-      });
-      setCreateSnapshotOpen(false);
-      if (snapshot?.publicId) {
-        store.getState().pushToast({
-          message: t('snapshot.publishedAt', {
-            url: publishedSnapshotUrl(window.location.origin, lang, snapshot.publicId),
-          }),
-          severity: 'success',
-        });
-      }
-    } catch (err) {
-      reportError(err, { context: t('errors.createSnapshot'), store });
-    }
-  };
+  const [creatingSnapshot, runCreateSnapshot] = usePendingAction();
+  const [openingSnapshot, runOpenSnapshot] = usePendingAction();
+  const [savingNow, runSaveNow] = usePendingAction();
 
-  const openSnapshot = async (snapshotId: string) => {
-    try {
-      await history.open(snapshotId);
-      setOpenSnapshotOpen(false);
-    } catch (err) {
-      reportError(err, { context: t('errors.openSnapshot'), store });
-    }
-  };
+  /** The dialog stays open, its Create spinning, until the snapshot exists. */
+  const createSnapshot = (name: string, publisher?: string, publicName?: string) =>
+    runCreateSnapshot(async () => {
+      try {
+        const snapshot = await history.create({
+          name,
+          ...(publisher && publicName ? { publish: { publisherName: publisher, publicName } } : {}),
+        });
+        setCreateSnapshotOpen(false);
+        if (snapshot?.publicId) {
+          store.getState().pushToast({
+            message: t('snapshot.publishedAt', {
+              url: publishedSnapshotUrl(window.location.origin, lang, snapshot.publicId),
+            }),
+            severity: 'success',
+          });
+        }
+      } catch (err) {
+        reportError(err, { context: t('errors.createSnapshot'), store });
+      }
+    });
+
+  const openSnapshot = (snapshotId: string) =>
+    runOpenSnapshot(async () => {
+      try {
+        await history.open(snapshotId);
+        setOpenSnapshotOpen(false);
+      } catch (err) {
+        reportError(err, { context: t('errors.openSnapshot'), store });
+      }
+    });
 
   // A device pref, not component state: remembered across reloads by the
   // binding `App.tsx` installs, and expanded until somebody collapses it.
@@ -462,6 +488,14 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     report: TrackerFitReport;
     write: () => Promise<void>;
   }>(null);
+  /*
+    An export can take seconds — audio is rendered through the soundfont
+    first — so the Export button spins until the file is written, and the
+    scope and tracker-fit dialogs stay open with their chosen button spinning
+    rather than closing on a click whose result has not happened yet.
+  */
+  const [exporting, runExport] = usePendingAction();
+  const [exportScopeChosen, setExportScopeChosen] = useState<ExportScope | null>(null);
 
   const errorIssues = validationIssues.filter((i) => i.severity === 'error');
 
@@ -570,7 +604,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     const route = WRITABLE_EXPORT_FORMATS.find((f) => f.id === format)?.route;
     if (route === 'project' || !exportScopeNeedsPrompt(store)) {
       const plan = planExport(store, format, 'all');
-      if (plan) void writeExport(plan);
+      if (plan) void runExport(() => writeExport(plan));
       return;
     }
     setPendingExport(format);
@@ -653,10 +687,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
             <button
               type="button"
               aria-label={t('editor.save')}
-              onClick={() => void store.getState().saveNow()}
+              aria-busy={savingNow || undefined}
+              disabled={savingNow}
+              onClick={() => void runSaveNow(() => store.getState().saveNow())}
               className={ICON_BUTTON_CLASS}
             >
-              <ArrowDownTrayIcon className={ICON_GLYPH_CLASS} />
+              {savingNow ? <ButtonSpinner /> : <ArrowDownTrayIcon className={ICON_GLYPH_CLASS} />}
             </button>
           </Tooltip>
           <Tooltip
@@ -773,10 +809,16 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 aria-label={t('editor.exportMenu')}
                 aria-haspopup="menu"
                 aria-expanded={exportMenu.open}
+                aria-busy={exporting || undefined}
+                disabled={exporting}
                 onClick={() => exportMenu.setOpen((v) => !v)}
                 className={ICON_BUTTON_CLASS}
               >
-                <DocumentArrowDownIcon className={ICON_GLYPH_CLASS} />
+                {exporting ? (
+                  <ButtonSpinner />
+                ) : (
+                  <DocumentArrowDownIcon className={ICON_GLYPH_CLASS} />
+                )}
               </button>
             </Tooltip>
             {exportMenu.open && (
@@ -956,7 +998,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   // The same runner the Replace buttons use, so adding a track
                   // behaves like every other generation: the overlay appears, the
                   // project is locked server-side, and leaving is safe.
-                  onGenerateTrackJob={(request) => generation.start('generate-track', request)}
+                  onGenerateTrackJob={(request) => startJob('generate-track', request)}
                   onGenerateInsertedBars={generateInsertedBars}
                   onViewportHeight={onScoreHeight}
                 />
@@ -975,17 +1017,19 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
               <div className="shrink-0">
                 <InspectorPanel
                   store={store}
-                  onReplace={(scope, submission) => void startReplacement(scope, submission)}
+                  onReplace={(scope, submission) => startReplacement(scope, submission)}
                   origin={projectId ? { origin: projectOrigin, projectId } : undefined}
                   generation={
                     lastGeneration
                       ? {
                           record: lastGeneration,
-                          generating: generation.generating,
+                          // Also while another job is being started, so a
+                          // Replace in flight cannot be raced by this one.
+                          generating: generation.generating || startingJob,
                           // The same request, with only the locked choices kept
                           // and everything else rolled again by the server.
                           onGenerateAgain: (lockedKeys) =>
-                            void generation.start(
+                            startJob(
                               'generate-score',
                               regenerateWithLocks(lastGeneration, lockedKeys),
                             ),
@@ -1154,6 +1198,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           ? { defaultPublisherName: history.defaultPublisherName }
           : {})}
         onCreate={(name, publisher, publicName) => void createSnapshot(name, publisher, publicName)}
+        creating={creatingSnapshot}
         onClose={() => setCreateSnapshotOpen(false)}
       />
 
@@ -1161,9 +1206,12 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         open={managePublishedOpen}
         snapshots={snapshots}
         onRename={(id, publicName) =>
-          void history.rename(id, publicName).catch((err: unknown) => {
-            reportError(err, { context: t('errors.renamePublished'), store });
-          })
+          history.rename(id, publicName).then(
+            () => undefined,
+            (err: unknown) => {
+              reportError(err, { context: t('errors.renamePublished'), store });
+            },
+          )
         }
         onClose={() => setManagePublishedOpen(false)}
       />
@@ -1172,6 +1220,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
         open={openSnapshotOpen}
         nodes={history.nodes}
         onOpen={(id) => void openSnapshot(id)}
+        opening={openingSnapshot}
         onSnapshotFirst={() => {
           // The non-destructive escape: keep the work, then choose again.
           setOpenSnapshotOpen(false);
@@ -1197,11 +1246,20 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
       <ExportScopeDialog
         open={pendingExport !== null}
         hiddenCount={hiddenCount}
+        busy={exportScopeChosen}
         onChoose={(scope) => {
+          if (exporting) return;
           const format = pendingExport;
-          setPendingExport(null);
           const plan = format ? planExport(store, format, scope) : null;
-          if (plan) void writeExport(plan);
+          if (!plan) {
+            setPendingExport(null);
+            return;
+          }
+          setExportScopeChosen(scope);
+          void runExport(() => writeExport(plan)).finally(() => {
+            setExportScopeChosen(null);
+            setPendingExport(null);
+          });
         }}
         onCancel={() => setPendingExport(null)}
       />
@@ -1210,13 +1268,16 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           open
           format={pendingModule.format.toUpperCase()}
           report={pendingModule.report}
+          busy={exporting}
           onCancel={() => setPendingModule(null)}
           onConfirm={() => {
+            if (exporting) return;
             const pending = pendingModule;
-            setPendingModule(null);
-            void pending.write().catch((err) => {
-              reportError(err, { context: t('errors.moduleExport'), store });
-            });
+            void runExport(() =>
+              pending.write().catch((err) => {
+                reportError(err, { context: t('errors.moduleExport'), store });
+              }),
+            ).finally(() => setPendingModule(null));
           }}
         />
       )}

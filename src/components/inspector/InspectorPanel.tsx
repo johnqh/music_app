@@ -165,15 +165,20 @@ import type { ReplaceScope } from '@/app-library';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
 import type { ReplaceSubmission } from '@/app-library';
 import { OTTAVAS } from '@sudobility/music_types';
+import { usePendingAction } from '@/hooks/usePendingAction';
+
+/** Starts a Replace job; resolves once the server has accepted (or refused) it. */
+type ReplaceHandler = (scope: ReplaceScope, submission: ReplaceSubmission) => void | Promise<void>;
 
 export type InspectorPanelProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
   store?: EditorStoreApi;
   /**
    * Starts a replacement job. Omitted in isolation tests, where the buttons
-   * still render and disable correctly but do nothing.
+   * still render and disable correctly but do nothing. The Replace dialog
+   * stays open, its button spinning, until the returned promise settles.
    */
-  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+  onReplace?: ReplaceHandler;
   /**
    * The open project's last generation and how to run it again, shown on the
    * Score tab. Omitted where the project was never generated.
@@ -203,9 +208,10 @@ function ReplaceButton({
   store: EditorStoreApi;
   scope: ReplaceScope;
   label: string;
-  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+  onReplace?: ReplaceHandler;
 }) {
   const [open, setOpen] = useState(false);
+  const [submitting, runSubmit] = usePendingAction();
   const score = store((s) => s.score);
   const selection = store((s) => s.selection);
   const activeTrackId = store(selectActiveTrackId);
@@ -234,11 +240,14 @@ function ReplaceButton({
         region={region}
         estimatedCredits={score && region ? estimateReplacementCredits(score, region) : 0}
         trackLabel={trackLabel}
+        submitting={submitting}
         onClose={() => setOpen(false)}
-        onSubmit={(submission) => {
-          setOpen(false);
-          onReplace?.(scope, submission);
-        }}
+        onSubmit={(submission) =>
+          void runSubmit(async () => {
+            await onReplace?.(scope, submission);
+            setOpen(false);
+          })
+        }
       />
     </>
   );
@@ -246,7 +255,7 @@ function ReplaceButton({
 
 type TabProps = {
   store: EditorStoreApi;
-  onReplace?: (scope: ReplaceScope, submission: ReplaceSubmission) => void;
+  onReplace?: ReplaceHandler;
 };
 
 function NoteTab({ store, onReplace }: TabProps) {

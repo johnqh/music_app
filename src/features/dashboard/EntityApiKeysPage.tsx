@@ -7,6 +7,7 @@ import {
   type CreatedEntityApiKey,
 } from '@sudobility/entity_client';
 import { Button, Input } from '@sudobility/components';
+import { PendingButton } from '@/components/controls/PendingButton';
 import { AS_TYPED_INPUT_CLASS } from '@/components/controls/input-classes';
 import { getAppServices } from '@/config/initialize';
 import { CONSTANTS } from '@/config/constants';
@@ -26,7 +27,7 @@ export function EntityApiKeysPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!slug) return;
+    if (!slug || create.isPending) return;
     setMessage(null);
     try {
       const key = await create.mutateAsync({
@@ -103,9 +104,15 @@ export function EntityApiKeysPage() {
             placeholder="e.g. Production integration"
           />
         </label>
-        <Button type="submit" variant="primary" disabled={create.isPending || !name.trim()}>
-          {create.isPending ? 'Creating…' : 'Create key'}
-        </Button>
+        <PendingButton
+          type="submit"
+          variant="primary"
+          disabled={!name.trim()}
+          pending={create.isPending}
+          pendingLabel="Creating…"
+        >
+          Create key
+        </PendingButton>
       </form>
       <section>
         <h2 className="mb-2 text-lg font-semibold">Entity keys</h2>
@@ -125,10 +132,13 @@ export function EntityApiKeysPage() {
                   </p>
                 </div>
                 {key.isActive && (
-                  <Button
+                  <PendingButton
                     type="button"
                     variant="destructive"
+                    // Only the key being revoked spins; the others wait.
                     disabled={revoke.isPending}
+                    pending={revoke.isPending && revoke.variables?.keyId === key.id}
+                    pendingLabel="Revoking…"
                     onClick={() =>
                       void revoke
                         .mutateAsync({ entitySlug: slug, keyId: key.id })
@@ -140,7 +150,7 @@ export function EntityApiKeysPage() {
                     }
                   >
                     Revoke
-                  </Button>
+                  </PendingButton>
                 )}
               </li>
             ))}

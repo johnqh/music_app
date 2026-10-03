@@ -17,6 +17,11 @@ export type ExportScopeDialogProps = {
   hiddenCount: number;
   onChoose: (scope: ExportScope) => void;
   onCancel: () => void;
+  /**
+   * The scope being exported, while the file is written: that button spins,
+   * the other refuses a press, and the dialog stays open until it is done.
+   */
+  busy?: ExportScope | null;
 };
 
 export function ExportScopeDialog({
@@ -24,8 +29,13 @@ export function ExportScopeDialog({
   hiddenCount,
   onChoose,
   onCancel,
+  busy = null,
 }: ExportScopeDialogProps) {
   const { t } = useTranslation();
+  const working = busy !== null;
+  const choose = (scope: ExportScope): void => {
+    if (!working) onChoose(scope);
+  };
   return (
     <FormModal
       open={open}
@@ -33,14 +43,25 @@ export function ExportScopeDialog({
       onClose={onCancel}
       size="small"
       closeAriaLabel={t('common.closeDialog')}
+      saving={working}
       actions={[
-        { label: t('common.cancel'), onClick: onCancel, variant: 'ghost' },
+        { label: t('common.cancel'), onClick: onCancel, variant: 'ghost', disabled: working },
         {
           label: t('exportScope.visibleOnly'),
-          onClick: () => onChoose('visible'),
+          onClick: () => choose('visible'),
           variant: 'outline',
+          disabled: working,
+          loading: busy === 'visible',
+          loadingLabel: t('common.exporting'),
         },
-        { label: t('print.wholeScore'), onClick: () => onChoose('all'), variant: 'primary' },
+        {
+          label: t('print.wholeScore'),
+          onClick: () => choose('all'),
+          variant: 'primary',
+          disabled: working,
+          loading: busy === 'all',
+          loadingLabel: t('common.exporting'),
+        },
       ]}
     >
       <p className="text-sm text-muted-foreground">

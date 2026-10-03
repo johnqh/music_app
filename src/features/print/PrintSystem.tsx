@@ -15,9 +15,14 @@ export type PrintSystemProps = {
   score: Score;
   slice: PrintSystemSlice;
   trackIds: string[];
+  /**
+   * Called once this system has been drawn (or found nothing to draw on), so
+   * the print view knows when every page is ready for paper.
+   */
+  onDrawn?: (systemIndex: number) => void;
 };
 
-export function PrintSystem({ score, slice, trackIds }: PrintSystemProps) {
+export function PrintSystem({ score, slice, trackIds, onDrawn }: PrintSystemProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -30,13 +35,14 @@ export function PrintSystem({ score, slice, trackIds }: PrintSystemProps) {
     canvas.height = Math.floor(slice.height * PRINT_SCALE);
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    new CanvasScoreRenderer().render(score, ctx, {
-      ...printRenderOptions(trackIds),
-      viewport: { top: slice.top, bottom: slice.bottom },
-    });
-  }, [score, slice, trackIds]);
+    if (ctx) {
+      new CanvasScoreRenderer().render(score, ctx, {
+        ...printRenderOptions(trackIds),
+        viewport: { top: slice.top, bottom: slice.bottom },
+      });
+    }
+    onDrawn?.(slice.systemIndex);
+  }, [score, slice, trackIds, onDrawn]);
 
   return (
     <div

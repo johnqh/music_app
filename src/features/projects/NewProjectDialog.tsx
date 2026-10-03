@@ -452,7 +452,7 @@ export function NewProjectDialog({
   };
 
   const handleCreate = (): void => {
-    if (!canCreate) return;
+    if (!canCreate || submitting) return;
     const submission = newProjectSubmission(draft, defaultTitle);
     if (submission) onSubmit(submission);
   };
@@ -472,7 +472,7 @@ export function NewProjectDialog({
           variant: 'primary',
           disabled: !canCreate,
           loading: submitting,
-          loadingLabel: t('common.loading'),
+          loadingLabel: t('common.creating'),
         },
       ]}
     >

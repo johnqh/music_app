@@ -24,6 +24,8 @@ export type CreateSnapshotDialogProps = {
   defaultPublisherName?: string;
   onCreate: (name: string, publisherName?: string, publicName?: string) => void;
   onClose: () => void;
+  /** True while the snapshot is being created: Create spins, the dialog stays open. */
+  creating?: boolean;
 };
 
 export function CreateSnapshotDialog({
@@ -33,6 +35,7 @@ export function CreateSnapshotDialog({
   defaultPublisherName,
   onCreate,
   onClose,
+  creating = false,
 }: CreateSnapshotDialogProps) {
   const { t } = useTranslation();
   // Global creation order, not per-branch: "Version 4" off "Version 2" reads
@@ -71,14 +74,17 @@ export function CreateSnapshotDialog({
       onClose={onClose}
       size="small"
       closeAriaLabel={t('common.closeDialog')}
+      saving={creating}
       actions={[
-        { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
+        { label: t('common.cancel'), onClick: onClose, variant: 'ghost', disabled: creating },
         {
           label: t('snapshot.createTitle'),
           variant: 'primary',
+          loading: creating,
+          loadingLabel: t('common.creating'),
           // Guarded rather than disabled: a disabled button gives no reason.
           onClick: () => {
-            if (trimmed.length === 0) return;
+            if (creating || trimmed.length === 0) return;
             const publisher = publisherName.trim();
             const title = publicName.trim();
             // Publishing without a name would put an unattributable row on a
@@ -166,6 +172,8 @@ export type OpenSnapshotDialogProps = {
   onOpen: (snapshotId: string) => void;
   onSnapshotFirst: () => void;
   onClose: () => void;
+  /** True while the snapshot is being opened: Open spins, the dialog stays open. */
+  opening?: boolean;
 };
 
 /** Pixels per generation and per lane in the flowchart. */
@@ -178,6 +186,7 @@ export function OpenSnapshotDialog({
   onOpen,
   onSnapshotFirst,
   onClose,
+  opening = false,
 }: OpenSnapshotDialogProps) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
@@ -190,14 +199,22 @@ export function OpenSnapshotDialog({
       onClose={onClose}
       size="large"
       closeAriaLabel={t('common.closeDialog')}
+      saving={opening}
       actions={[
-        { label: t('snapshot.snapshotFirst'), onClick: onSnapshotFirst, variant: 'ghost' },
-        { label: t('common.cancel'), onClick: onClose, variant: 'ghost' },
+        {
+          label: t('snapshot.snapshotFirst'),
+          onClick: onSnapshotFirst,
+          variant: 'ghost',
+          disabled: opening,
+        },
+        { label: t('common.cancel'), onClick: onClose, variant: 'ghost', disabled: opening },
         {
           label: t('snapshot.open'),
           variant: 'primary',
+          loading: opening,
+          loadingLabel: t('common.opening'),
           onClick: () => {
-            if (selected && selected !== LIVE_NODE_ID) onOpen(selected);
+            if (!opening && selected && selected !== LIVE_NODE_ID) onOpen(selected);
           },
         },
       ]}

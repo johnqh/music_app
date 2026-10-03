@@ -22,6 +22,7 @@ import {
   type LockableChoice,
 } from '@/app-library';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { usePendingAction } from '@/hooks/usePendingAction';
 
 export type GenerationChoicesProps = {
   record: GenerationRecord;
@@ -34,13 +35,15 @@ export type GenerationChoicesProps = {
    * locks must not carry over — so this panel cannot send something the native
    * one would not.
    */
-  onGenerateAgain: (lockedKeys: LockableChoice[]) => void;
+  onGenerateAgain: (lockedKeys: LockableChoice[]) => void | Promise<unknown>;
 };
 
 export function GenerationChoices({ record, generating, onGenerateAgain }: GenerationChoicesProps) {
   const { t } = useTranslation();
   const [locked, setLocked] = useState<ReadonlySet<LockableChoice>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  // The confirmation stays open, its button spinning, until the job is accepted.
+  const [starting, runStart] = usePendingAction();
   const { choices } = record;
 
   // Which choices are lockable, in which order, and how each reads, are
@@ -105,10 +108,14 @@ export function GenerationChoices({ record, generating, onGenerateAgain }: Gener
         title={t('generationChoices.confirmTitle')}
         message={t('generationChoices.confirmMessage')}
         confirmLabel={t('generationChoices.confirm')}
-        onConfirm={() => {
-          setConfirming(false);
-          onGenerateAgain(rows.filter((key) => locked.has(key)));
-        }}
+        onConfirm={() =>
+          void runStart(async () => {
+            await onGenerateAgain(rows.filter((key) => locked.has(key)));
+            setConfirming(false);
+          })
+        }
+        busy={starting}
+        busyLabel={t('common.starting')}
         onCancel={() => setConfirming(false)}
       />
     </section>

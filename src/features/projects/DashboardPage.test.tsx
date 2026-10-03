@@ -410,6 +410,79 @@ describe('DashboardPage', () => {
     const rows = await context.fakeClient.listProjects('t');
     expect(rows.map((r) => r.name)).toEqual(['Original']);
   });
+
+  it('Duplicate spins on its own card while the copy is out, and a second press sends nothing', async () => {
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'Original', score: createEmptyScore({ title: 'Original' }) },
+      't',
+    );
+    render(withQueryClient(<DashboardPage store={store} />));
+    await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
+    const user = userEvent.setup();
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = context.fakeClient.duplicateProject.bind(context.fakeClient);
+    const duplicate = vi
+      .spyOn(context.fakeClient, 'duplicateProject')
+      .mockImplementation(async (...args) => {
+        await gate;
+        return original(...args);
+      });
+
+    const button = screen.getByRole('button', { name: 'Duplicate project: Original' });
+    await user.click(button);
+    await waitFor(() => expect(button).toHaveAttribute('aria-busy', 'true'));
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Duplicating…');
+    await user.click(button);
+
+    release();
+    await waitFor(() => expect(screen.getByText('Original (copy)')).toBeInTheDocument());
+    expect(duplicate).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Duplicate project: Original' })).toBeEnabled(),
+    );
+  });
+
+  it('keeps the delete confirmation open, its button spinning, until the server answers', async () => {
+    const { store, context } = setup();
+    await context.fakeClient.createProject(
+      { name: 'Doomed', score: createEmptyScore({ title: 'Doomed' }) },
+      't',
+    );
+    render(withQueryClient(<DashboardPage store={store} />));
+    await waitFor(() => expect(screen.getByText('Doomed')).toBeInTheDocument());
+    const user = userEvent.setup();
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = context.fakeClient.deleteProject.bind(context.fakeClient);
+    const remove = vi
+      .spyOn(context.fakeClient, 'deleteProject')
+      .mockImplementation(async (...args) => {
+        await gate;
+        return original(...args);
+      });
+
+    await user.click(screen.getByRole('button', { name: 'Delete project: Doomed' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const busy = await screen.findByRole('button', { name: 'Deleting…' });
+    expect(busy).toBeDisabled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(busy);
+
+    release();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Doomed')).not.toBeInTheDocument());
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('DashboardPage generation', () => {

@@ -46,4 +46,20 @@ describe('ExportScopeDialog', () => {
     );
     expect(screen.queryByText('Export hidden tracks?')).toBeNull();
   });
+
+  it('spins the chosen scope while the file is written, and refuses another choice', async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <ExportScopeDialog open hiddenCount={2} busy="all" onChoose={onChoose} onCancel={onCancel} />,
+    );
+    expect(screen.getByRole('button', { name: 'Exporting…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Visible tracks only' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Exporting…' }));
+    await user.keyboard('{Escape}');
+    expect(onChoose).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
 });

@@ -22,6 +22,13 @@ export type ConfirmDialogProps = {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * True while the confirmed work is running. The confirm button shows
+   * `busyLabel` and refuses a second press, and the dialog cannot be dismissed
+   * meanwhile: it stays open until the caller closes it.
+   */
+  busy?: boolean;
+  busyLabel?: string;
 };
 
 export function ConfirmDialog({
@@ -33,6 +40,8 @@ export function ConfirmDialog({
   destructive = true,
   onConfirm,
   onCancel,
+  busy = false,
+  busyLabel,
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
   // Resolved here rather than as parameter defaults: a default is evaluated
@@ -46,15 +55,21 @@ export function ConfirmDialog({
       title={title}
       onClose={onCancel}
       size="small"
+      // Blocks Escape, the overlay and the × while the work runs.
+      saving={busy}
       // Not `cancelLabel`: the footer already has a button by that name, and
       // two controls sharing an accessible name is ambiguous to a screen
       // reader and an outright strict-mode failure in tests.
       closeAriaLabel={t('common.closeDialog')}
       actions={[
-        { label: cancel, onClick: onCancel, variant: 'ghost' },
+        { label: cancel, onClick: onCancel, variant: 'ghost', disabled: busy },
         {
           label: confirm,
-          onClick: onConfirm,
+          onClick: () => {
+            if (!busy) onConfirm();
+          },
+          loading: busy,
+          loadingLabel: busyLabel ?? t('common.working'),
           variant: destructive ? 'destructive' : 'primary',
           autoFocus: true,
         },

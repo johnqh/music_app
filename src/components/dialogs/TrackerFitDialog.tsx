@@ -19,6 +19,8 @@ export type TrackerFitDialogProps = {
   report: TrackerFitReport;
   onConfirm: () => void;
   onCancel: () => void;
+  /** True while the module is being written: Export anyway spins, the dialog stays. */
+  busy?: boolean;
 };
 
 /**
@@ -43,6 +45,7 @@ export function TrackerFitDialog({
   report,
   onConfirm,
   onCancel,
+  busy = false,
 }: TrackerFitDialogProps) {
   const { t } = useTranslation();
   return (
@@ -51,9 +54,17 @@ export function TrackerFitDialog({
       title={t('trackerFit.title', { format })}
       onClose={onCancel}
       closeAriaLabel={t('common.closeDialog')}
+      saving={busy}
       actions={[
-        { label: t('common.cancel'), onClick: onCancel },
-        { label: t('trackerFit.exportAnyway'), onClick: onConfirm },
+        { label: t('common.cancel'), onClick: onCancel, disabled: busy },
+        {
+          label: t('trackerFit.exportAnyway'),
+          onClick: () => {
+            if (!busy) onConfirm();
+          },
+          loading: busy,
+          loadingLabel: t('common.exporting'),
+        },
       ]}
     >
       <div className="space-y-3 text-sm">

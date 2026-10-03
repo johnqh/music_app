@@ -63,6 +63,8 @@ export function MusicXmlImportDialog({
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<MusicXmlImportResult | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Writing a new project after Import was pressed: the button spins meanwhile. */
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingReplace, setConfirmingReplace] = useState(false);
 
@@ -94,13 +96,14 @@ export function MusicXmlImportDialog({
   };
 
   const commitImport = (): void => {
-    if (!result) return;
+    if (!result || importing) return;
     const hasProject = !forceNewProject && store.getState().projectId !== null;
     if (hasProject) {
       importScore(store, result.score);
       handleClose();
       return;
     }
+    setImporting(true);
     void store
       .getState()
       .newProject({
@@ -117,7 +120,8 @@ export function MusicXmlImportDialog({
         handleClose();
         if (projectId) onImportedNewProject?.(projectId);
       })
-      .catch((err: unknown) => reportError(err, { context: t('errors.musicXmlImport'), store }));
+      .catch((err: unknown) => reportError(err, { context: t('errors.musicXmlImport'), store }))
+      .finally(() => setImporting(false));
   };
 
   const handleImportClick = (): void => {
@@ -139,6 +143,7 @@ export function MusicXmlImportDialog({
         error={error}
         canImport={Boolean(result)}
         onImport={handleImportClick}
+        importing={importing}
         onClose={handleClose}
         description={t('importXml.description')}
       >

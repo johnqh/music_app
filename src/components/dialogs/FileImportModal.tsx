@@ -69,6 +69,13 @@ export type FileImportModalProps = {
   canImport: boolean;
   importLabel?: string;
   onImport: () => void;
+  /**
+   * True while the work the Import button started is running (writing the
+   * project, sending the recording). The button spins and refuses a second
+   * press, and the dialog cannot be dismissed meanwhile. Distinct from `busy`,
+   * which also covers reading a file nobody pressed Import for.
+   */
+  importing?: boolean;
   onClose: () => void;
   size?: 'small' | 'medium' | 'large';
   /** Format-specific fields, shown under the chooser once there is something to show. */
@@ -90,6 +97,7 @@ export function FileImportModal({
   canImport,
   importLabel,
   onImport,
+  importing = false,
   onClose,
   size = 'small',
   children,
@@ -173,9 +181,18 @@ export function FileImportModal({
         // `actions`, not `onSave`: a Cancel belongs beside an import that creates
         // a project, and the shorthand renders one full-width button.
         actions={[
-          { label: t('common.cancel'), onClick: onClose },
-          { label: importText, onClick: onImport, disabled: !canImport || busy },
+          { label: t('common.cancel'), onClick: onClose, disabled: importing },
+          {
+            label: importText,
+            onClick: () => {
+              if (!importing) onImport();
+            },
+            disabled: !canImport || busy,
+            loading: importing,
+            loadingLabel: t('common.importing'),
+          },
         ]}
+        saving={importing}
         // The top-bar × is named "Cancel" by default, which would collide with
         // the footer's Cancel and make both ambiguous.
         closeAriaLabel={t('common.closeDialog')}

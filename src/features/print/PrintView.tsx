@@ -6,9 +6,10 @@
  * document — mounting only this is simpler than hiding the editor's chrome
  * with print rules.
  */
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Select, SelectContent, SelectItem, SelectTrigger } from '@sudobility/components';
+import { PendingButton } from '@/components/controls/PendingButton';
 import { PAGE_MARGIN_MM, selectVisibleTrackIds } from '@/app-library';
 import { findTrack } from '@/app-library';
 import type { PaperOrientation, PaperSize } from '@/app-library';
@@ -60,6 +61,34 @@ export function PrintView({ store, onBack }: PrintViewProps) {
   );
   // `PrintSystem` takes a mutable array; the plan's is read-only by contract.
   const trackIds = useMemo(() => (plan ? [...plan.trackIds] : []), [plan]);
+
+  /*
+    Print waits for the pages. Every system is drawn into its own canvas after
+    the view commits, and a long score is seconds of VexFlow — so pressing
+    Print before the last canvas has been drawn sent blank systems to paper,
+    with nothing on screen to say the pages were not ready. The button spins,
+    and refuses a press, until every system of the current plan has reported
+    itself drawn; a new plan (another scope, paper or orientation) starts the
+    count again.
+  */
+  const [drawn, setDrawn] = useState<{ plan: unknown; systems: ReadonlySet<number> }>({
+    plan: null,
+    systems: new Set(),
+  });
+  const onDrawn = useCallback(
+    (systemIndex: number) =>
+      setDrawn((previous) => {
+        const systems = previous.plan === plan ? previous.systems : new Set<number>();
+        if (previous.plan === plan && systems.has(systemIndex)) return previous;
+        return { plan, systems: new Set(systems).add(systemIndex) };
+      }),
+    [plan],
+  );
+  const systemCount = plan
+    ? plan.pages.reduce((count, page) => count + page.systemIndices.length, 0)
+    : 0;
+  const drawnCount = drawn.plan === plan ? drawn.systems.size : 0;
+  const preparing = systemCount > 0 && drawnCount < systemCount;
 
   const scopeLabel =
     scope === WHOLE_SCORE
@@ -122,9 +151,15 @@ export function PrintView({ store, onBack }: PrintViewProps) {
           </SelectContent>
         </Select>
 
-        <Button type="button" variant="primary" onClick={() => window.print()}>
+        <PendingButton
+          type="button"
+          variant="primary"
+          onClick={() => window.print()}
+          pending={preparing}
+          pendingLabel={t('print.preparing')}
+        >
           {t('print.action')}
-        </Button>
+        </PendingButton>
         <Button type="button" variant="ghost" onClick={onBack}>
           {t('print.backToEditor')}
         </Button>
@@ -140,6 +175,7 @@ export function PrintView({ store, onBack }: PrintViewProps) {
                   score={plan.score}
                   slice={plan.slices[systemIndex]}
                   trackIds={trackIds}
+                  onDrawn={onDrawn}
                 />
               ))}
             </div>

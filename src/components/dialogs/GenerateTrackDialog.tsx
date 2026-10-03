@@ -71,8 +71,11 @@ export function GenerateTrackDialog({
       open={open}
       title={t('generateTrack.title')}
       onClose={onClose}
-      onSave={() => onGenerate(trimmed, instrumentChoiceFor(value), variant)}
+      onSave={() => {
+        if (!pending) onGenerate(trimmed, instrumentChoiceFor(value), variant);
+      }}
       saving={pending}
+      savingLabel={t('common.starting')}
       canSave={trimmed.length > 0}
       saveLabel={t('generate.action')}
       size="small"

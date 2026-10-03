@@ -324,4 +324,24 @@ describe('ReplaceMusicDialog: the credit quote', () => {
     );
     expect(screen.getByText('This will use about 8 credits.')).toBeInTheDocument();
   });
+
+  it('spins Replace while the job is being submitted, and refuses a second press', () => {
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ReplaceMusicDialog
+        open
+        scope="notes"
+        region={region()}
+        submitting
+        onClose={onClose}
+        onSubmit={onSubmit}
+      />,
+    );
+    const busy = screen.getByRole('button', { name: 'Starting…' });
+    expect(busy).toBeDisabled();
+    fireEvent.click(busy);
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
 });

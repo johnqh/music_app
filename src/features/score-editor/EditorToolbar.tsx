@@ -127,6 +127,8 @@ import {
   QUANTIZE_GRID_SHORT,
 } from '@/app-library';
 import type { EditorMoreAction, QuantizeGrid } from '@/app-library';
+import { PendingButton } from '@/components/controls/PendingButton';
+import { usePendingAction } from '@/hooks/usePendingAction';
 
 export type EditorToolbarProps = {
   /** Defaults to the app-wide singleton (`useAppStore`); tests inject an isolated store via `createAppStore()`. */
@@ -305,6 +307,8 @@ export function EditorToolbar({
   const noteInput = store((s) => s.noteInput);
 
   const [quantizeGrid, setQuantizeGrid] = useState<QuantizeGrid>('sixteenth');
+  // Quantizing is async (it may ask first); the button spins until it is done.
+  const [quantizing, runQuantize] = usePendingAction();
   const [articulationOpen, setArticulationOpen] = useState(false);
   const articulationRef = useRef<HTMLDivElement | null>(null);
 
@@ -366,7 +370,7 @@ export function EditorToolbar({
   };
 
   const handleQuantize = (): void => {
-    void quantizeSelectionToGrid(store, quantizeGrid);
+    void runQuantize(() => quantizeSelectionToGrid(store, quantizeGrid));
   };
 
   const handleZoomIn = (): void => store.getState().setZoom(zoomIn(zoom));
@@ -833,16 +837,17 @@ export function EditorToolbar({
           </Select>
         </Tooltip>
         <Tooltip placement="bottom" content={t('editor.quantizeHint')}>
-          <Button
+          <PendingButton
             type="button"
             variant="outline"
             aria-label={t('editor.quantize')}
             disabled={!available.quantize}
+            pending={quantizing}
             onClick={handleQuantize}
             className={ICON_BUTTON_CLASS}
           >
             <QuantizeIcon className={ICON_GLYPH_CLASS} />
-          </Button>
+          </PendingButton>
         </Tooltip>
 
         <VerticalDivider />
