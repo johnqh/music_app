@@ -31,8 +31,9 @@ import {
   configureConsumablesWebAdapter,
   createConsumablesWebAdapter,
 } from '@sudobility/consumables_client/adapter/web';
-import { configureTheme } from '@sudobility/design';
-import { generateThemeCSS, swissTheme } from '@sudobility/design/themes';
+// The theme is configured by its own module, imported first by `main.tsx`;
+// imported here too so nothing that loads this module can precede it.
+import '@/config/theme';
 import { MusicClient } from '@sudobility/music_client';
 import type { MusicHookContext } from '@sudobility/music_client';
 import {
@@ -46,22 +47,6 @@ import { libraryCopy } from '@/i18n/library-copy';
 import { createMusicIo, type MusicIo } from '@sudobility/music_io';
 import { createMusicPlayer, initializeMusicPlayer } from '@sudobility/music_player';
 import { CONSTANTS } from '@/config/constants';
-
-// Activate the design-system theme (Swiss). configureTheme() registers the
-// JS class overrides; the semantic tokens (`bg-background`, `text-foreground`,
-// `text-muted-foreground`, `border-border`, the component palette) resolve
-// via the CSS custom properties injected below (:root light + .dark) — same
-// pattern as sudojo_app / sider_app. Without this style tag every one of
-// them resolves to an undefined variable. What it injects is `--border`,
-// `--muted-foreground` and so on; it has never injected `--color-*`, which
-// is what this app's `theme-*` classes used to read.
-configureTheme(swissTheme);
-if (typeof document !== 'undefined' && !document.getElementById('sudobility-design-theme')) {
-  const styleEl = document.createElement('style');
-  styleEl.id = 'sudobility-design-theme';
-  styleEl.textContent = generateThemeCSS(swissTheme);
-  document.head.appendChild(styleEl);
-}
 
 // ---------------------------------------------------------------------------
 // Network

@@ -1,3 +1,5 @@
+// First, as in `main.tsx`: library modules read the theme when they load.
+import '@/config/theme';
 import i18n from 'i18next';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

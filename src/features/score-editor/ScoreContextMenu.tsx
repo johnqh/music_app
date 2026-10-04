@@ -28,6 +28,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@sudobility/components';
+import { variants } from '@sudobility/design';
 import type { ScoreContextAction, ScoreContextMenuModel } from '@/app-library';
 
 export type ScoreContextMenuProps = {
@@ -80,7 +81,10 @@ export function ScoreContextMenu({ x, y, model, onAction, onClose }: ScoreContex
         top: Math.min(y, window.innerHeight - entries.length * 34 - 40),
         width: MENU_WIDTH,
       }}
-      className="fixed z-50 rounded-md border border-border bg-background py-1 shadow-lg outline-none"
+      className={cn(
+        variants.card.default.base(),
+        'fixed z-50 rounded-md py-1 shadow-lg outline-none',
+      )}
     >
       {/*
         The subject, before the verbs. Not a heading and not clickable — it says
@@ -105,8 +109,11 @@ export function ScoreContextMenu({ x, y, model, onAction, onClose }: ScoreContex
             onClose();
           }}
           className={cn(
+            // A raw menu item, not the library Button: its variants carry a
+            // 44px minimum and the theme's upper-case tracking, neither of
+            // which belongs in a menu row.
             'block w-full px-3 py-1.5 text-left text-sm',
-            'hover:bg-muted disabled:pointer-events-none disabled:opacity-40',
+            'hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40',
           )}
         >
           {t(entry.labelKey)}

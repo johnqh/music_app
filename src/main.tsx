@@ -1,3 +1,7 @@
+// First, before any other import: the design-system theme has to be active
+// before a single `@sudobility/components` module is evaluated (see the
+// module's doc comment). Imports are hoisted, so only import order counts.
+import '@/config/theme';
 // Configure the Firebase China proxy before anything initializes Firebase.
 // Blank/unset means standard Firebase (the library holds no default).
 import { setFirebaseProxy } from '@sudobility/di';

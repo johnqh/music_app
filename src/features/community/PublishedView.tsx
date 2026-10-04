@@ -208,7 +208,7 @@ export function PublishedView() {
           {t('published.share')}
         </Button>
         {shareOpen && (
-          <code className="rounded bg-accent px-2 py-1 text-xs">
+          <code className="rounded bg-muted px-2 py-1 text-xs text-foreground">
             {publishedSnapshotUrl(window.location.origin, lang, publicId)}
           </code>
         )}

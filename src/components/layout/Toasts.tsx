@@ -71,6 +71,9 @@ export function Toasts({ store = useAppStore }: ToastsProps) {
         className={`flex items-center gap-3 rounded-md px-4 py-3 shadow-lg ${SEVERITY_CLASSES[current.severity] ?? SEVERITY_CLASSES.info}`}
       >
         <span className="flex-1 text-sm">{current.message}</span>
+        {/* Raw buttons that inherit the severity's foreground: every library
+            Button variant paints its own text colour, which is the wrong one on
+            a destructive, warning or success background. */}
         {current.action ? (
           <button
             type="button"

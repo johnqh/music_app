@@ -31,7 +31,7 @@
  * Committing is the caller's business — see `CommitSlider` — because a mixer
  * drag fires continuously and each commit would otherwise be an undo entry.
  */
-import { cn } from '@sudobility/components';
+import { Button, cn } from '@sudobility/components';
 /*
   `panReadout` is music_types', not this app's, and so are `volumeReadout` and
   the two clamps beside it. It was three lines here and
@@ -173,8 +173,11 @@ export function PanSlider({
       <span className={ROW_READOUT_CLASS}>{panReadout(clamped)}</span>
       <div className={ROW_ACTION_CLASS}>
         {onReset ? (
-          <button
+          <Button
             type="button"
+            // The colours are the ghost variant's; the rest only shrinks the
+            // library's 44px control to fit the row's 20px action column.
+            variant="ghost"
             aria-label={resetLabel}
             title={resetLabel}
             // Nothing to do when it is already centred, and saying so is
@@ -182,15 +185,14 @@ export function PanSlider({
             disabled={disabled || clamped === 0}
             onClick={onReset}
             className={cn(
-              'flex size-5 items-center justify-center rounded text-sm leading-none',
-              'text-muted-foreground hover:bg-muted hover:text-foreground',
+              'size-5 min-h-0 rounded p-0 text-sm leading-none hover:scale-100 hover:text-foreground',
               'disabled:pointer-events-none disabled:opacity-40',
             )}
           >
             {/* A reset arrow: ⌖ was the obvious "centre" mark and was
                 illegible at this size. */}
             ↺
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

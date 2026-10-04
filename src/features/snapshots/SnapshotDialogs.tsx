@@ -254,7 +254,7 @@ export function OpenSnapshotDialog({
               <div
                 key={node.id}
                 data-testid="snapshot-node-live"
-                className="absolute rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground"
+                className="absolute rounded border border-dashed border-border bg-card px-2 py-1 text-xs text-muted-foreground"
                 style={{ left: node.lane * LANE_STEP, top: node.depth * DEPTH_STEP }}
               >
                 {t('snapshot.currentWork')}
@@ -265,9 +265,13 @@ export function OpenSnapshotDialog({
                 type="button"
                 onClick={() => setSelected(node.id)}
                 aria-pressed={selected === node.id}
-                className={`absolute rounded border px-2 py-1 text-xs ${
-                  selected === node.id ? 'border-primary bg-accent' : 'border-border'
-                }`}
+                // Opaque, so the edges drawn beneath do not run through the
+                // name; chosen is the pressed pair the toolbars use.
+                className={
+                  selected === node.id
+                    ? 'absolute rounded border border-primary bg-primary px-2 py-1 text-xs text-primary-foreground'
+                    : 'absolute rounded border border-border bg-card px-2 py-1 text-xs text-card-foreground hover:bg-accent hover:text-accent-foreground'
+                }
                 style={{ left: node.lane * LANE_STEP, top: node.depth * DEPTH_STEP }}
               >
                 {node.name}

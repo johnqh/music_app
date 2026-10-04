@@ -32,7 +32,7 @@ import { getAppServices } from '@/config/initialize';
 /** The project tile's frame, from `DashboardPage`, with the hover a link needs. */
 const TILE_CLASS = cn(
   variants.card.default.base(),
-  'flex h-full flex-col gap-3 overflow-hidden rounded-md p-4 hover:bg-accent',
+  'flex h-full flex-col gap-3 overflow-hidden rounded-md p-4 hover:bg-accent hover:text-accent-foreground',
 );
 
 /** How wide the publisher's picture is drawn, in pixels. */

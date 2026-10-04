@@ -873,7 +873,10 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                       store.getState().setThemeMode(mode);
                       themeMenu.setOpen(false);
                     }}
-                    className={cn(MENU_ITEM_CLASS, themeMode === mode && 'bg-accent')}
+                    className={cn(
+                      MENU_ITEM_CLASS,
+                      themeMode === mode && 'bg-accent text-accent-foreground',
+                    )}
                   >
                     {t(labelKey)}
                   </Button>
@@ -1144,7 +1147,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                         navigateToIssue(issue);
                       }
                     }}
-                    className="cursor-pointer rounded p-1 hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+                    className="cursor-pointer rounded p-1 hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
                   >
                     <span
                       className={`mr-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -1167,7 +1170,7 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                 than to offer a button that silently does nothing.
               */}
               {validationIssues.length > 0 && (
-                <div className="sticky bottom-0 mt-1 border-t border-border bg-popover p-1">
+                <div className="sticky bottom-0 mt-1 border-t border-border bg-card p-1">
                   <Button
                     type="button"
                     variant="primary"

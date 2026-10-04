@@ -28,6 +28,9 @@ const ALLOWED_NON_UI = new Set([
   // The composition root: it *constructs* the platform services rather than
   // implementing them, which is exactly music_app's job.
   'src/config/initialize.ts',
+  // The design-system theme, configured and its variables injected: part of
+  // the composition root, split out so the entry point can load it first.
+  'src/config/theme.ts',
   // i18n wiring and the copy the library's warnings are phrased in.
   'src/i18n.ts',
   'src/i18n/library-copy.ts',
