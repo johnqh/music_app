@@ -547,7 +547,7 @@
       "keyboard": {
         "heading": "The piano keyboard",
         "p1": "Below the score is a full-width keyboard showing the active track's sounding notes as they play. Its range is the active track's instrument, not always all 88 keys, so it follows a track change and an instrument change alike.",
-        "p2": "It is an input device as well as a display. Pressing a key auditions it; releasing writes a note at the caret whose length is how long you held the key, snapped to a value the duration buttons could also have produced.",
+        "p2": "It is an input device as well as a display. Pressing a key auditions it; releasing writes a note at the caret whose length is how long you held the key. With one note selected, a plain click changes its pitch. Shift-click a key to add that tone to the selected chord, or remove it if it is already there. The lit selection updates with every change. Shift-click respects the instrument's chord limit, does not build chords on vocal tracks, and never removes the last tone.",
         "p3": "On a drum track every key is labelled with its drum, black keys included, because a drum map has no pattern to learn the way a keyboard does."
       },
       "following": {
@@ -797,6 +797,8 @@
     "layoutMode": "Layout mode",
     "leaveSilence": "Leave silence",
     "leaveSilenceDetail": "The rest of the track stays where it is",
+    "lineDrawing": "Draw melody line",
+    "lineDrawingHint": "Draw a melody left to right on one pitched track",
     "lyricEntry": "Lyric entry",
     "lyricKeysHint": "Space = next word · - = next syllable · Enter = done",
     "lyricNoteOf": "Note {{current}} of {{total}}",
@@ -1677,6 +1679,11 @@
     "quantisedNotes_other": "{{count}} notes moved slightly to land on the row grid."
   },
   "transport": {
+    "audioOutput": "Audio output",
+    "systemDefault": "System default",
+    "chooseOutput": "Choose another output…",
+    "outputNumber": "Audio output {{number}}",
+    "outputUnavailable": "Could not switch to that audio output",
     "preparing": "Preparing instruments {{percent}}%",
     "preparingUnknown": "Preparing instruments",
     "play": "Play",

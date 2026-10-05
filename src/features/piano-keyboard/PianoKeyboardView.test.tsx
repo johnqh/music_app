@@ -725,7 +725,7 @@ describe('the keyboard edits a selected chord', () => {
     const { store } = storeWithChord();
     const { container } = render(<PianoKeyboardView store={store} />);
 
-    fireEvent.pointerDown(key(container, 64), { pointerId: 1 });
+    fireEvent.pointerDown(key(container, 64), { pointerId: 1, shiftKey: true });
     fireEvent.pointerUp(key(container, 64), { pointerId: 1 });
 
     expect(
@@ -740,7 +740,7 @@ describe('the keyboard edits a selected chord', () => {
     const { container } = render(<PianoKeyboardView store={store} />);
 
     fireEvent.pointerDown(key(container, 62), { pointerId: 1 }); // D4
-    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1, shiftKey: true });
 
     const atZero = allNotes(store.getState().score!).filter((n) => n.startTick === 0);
     expect(atZero.map((n) => n.pitch.step).sort()).toEqual(['C', 'D', 'E', 'G']);
@@ -753,7 +753,7 @@ describe('the keyboard edits a selected chord', () => {
     const seek = vi.mocked(playbackController.seek);
     seek.mockClear();
 
-    fireEvent.pointerDown(key(container, 62), { pointerId: 1 });
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1, shiftKey: true });
     fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
 
     // Seeks to the chord's own tick, never past it.
@@ -788,6 +788,79 @@ describe('the keyboard edits a selected chord', () => {
 
     // Entry mode advances the caret past what it wrote; edit mode never does.
     expect(getMusicPosition().reportedTick).toBeGreaterThan(0);
+  });
+
+  it('Shift-click builds a chord at the selected note length and keeps its last note', () => {
+    const store = makeStore(createEmptyScore({ title: 'Selected', measures: 2 }));
+    const track = store.getState().score!.tracks[0]!;
+    store.getState().dispatchCommand(
+      addNoteCommand(
+        {
+          trackId: track.id,
+          measureId: track.measures[0]!.id,
+          voiceIndex: 0,
+          pitch: { step: 'C', accidental: 0, octave: 4 },
+          startTick: 0,
+          durationTicks: store.getState().score!.ppq * 2,
+        },
+        commandLabel('addNote'),
+      ),
+    );
+    const first = allNotes(store.getState().score!)[0]!;
+    store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    store.getState().setSnapGrid('sixteenth');
+    const { container } = render(<PianoKeyboardView store={store} />);
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1, shiftKey: true });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+    expect(
+      allNotes(store.getState().score!)
+        .map((note) => pitchToMidi(note.pitch))
+        .sort(),
+    ).toEqual([60, 62]);
+    expect(key(container, 60)).toHaveAttribute('data-selected', 'true');
+    expect(key(container, 62)).toHaveAttribute('data-selected', 'true');
+    expect(
+      allNotes(store.getState().score!).every((note) => note.durationTicks === first.durationTicks),
+    ).toBe(true);
+
+    fireEvent.pointerDown(key(container, 60), { pointerId: 1, shiftKey: true });
+    fireEvent.pointerUp(key(container, 60), { pointerId: 1 });
+    expect(allNotes(store.getState().score!).map((note) => pitchToMidi(note.pitch))).toEqual([62]);
+    expect(key(container, 60)).toHaveAttribute('data-selected', 'false');
+    expect(key(container, 62)).toHaveAttribute('data-selected', 'true');
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1, shiftKey: true });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+    expect(allNotes(store.getState().score!).map((note) => pitchToMidi(note.pitch))).toEqual([62]);
+    expect(key(container, 62)).toHaveAttribute('data-selected', 'true');
+
+    fireEvent.pointerDown(key(container, 64), { pointerId: 1 });
+    fireEvent.pointerUp(key(container, 64), { pointerId: 1 });
+    expect(allNotes(store.getState().score!).map((note) => pitchToMidi(note.pitch))).toEqual([64]);
+    expect(key(container, 62)).toHaveAttribute('data-selected', 'false');
+    expect(key(container, 64)).toHaveAttribute('data-selected', 'true');
+    expect(allNotes(store.getState().score!)[0]!.durationTicks).toBe(first.durationTicks);
+  });
+
+  it('does not Shift-toggle a selected note on a vocal track', () => {
+    const store = makeStore(twinkleScore());
+    const score = store.getState().score!;
+    store.getState().setScore({
+      ...score,
+      tracks: score.tracks.map((track) => ({
+        ...track,
+        midiProgram: 53,
+        instrumentName: 'Voice Oohs',
+      })),
+    });
+    const first = allNotes(store.getState().score!)[0]!;
+    store.getState().setSelection({ eventIds: [first.id], measureIds: [], trackIds: [] });
+    const { container } = render(<PianoKeyboardView store={store} />);
+    const before = allNotes(store.getState().score!).map((note) => note.id);
+
+    fireEvent.pointerDown(key(container, 62), { pointerId: 1, shiftKey: true });
+    fireEvent.pointerUp(key(container, 62), { pointerId: 1 });
+    expect(allNotes(store.getState().score!).map((note) => note.id)).toEqual(before);
   });
 });
 

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getMusicPosition, getMusicPositionSource } from '@sudobility/music_types';
+import {
+  getMusicPosition,
+  getMusicPositionSource,
+  trackKeyboardRange,
+} from '@sudobility/music_types';
 import { testStoreContext } from '@/app-library';
 import { act, fireEvent, render } from '@testing-library/react';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -185,6 +189,44 @@ beforeEach(() => {
 });
 
 describe('ScoreEditorView', () => {
+  it('draws a line on one track and commits the melody as one undo step', async () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const original = store.getState().score!;
+    const notes = allNotes(original);
+    const bboxes = referenceRender(original).idToBBox;
+    const from = center(bboxes.get(notes[0]!.id)!);
+    const to = center(bboxes.get(notes[2]!.id)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Draw melody line' }));
+    const surface = interactionSurface();
+    fireEvent.pointerDown(surface, { ...from, button: 0, pointerId: 31 });
+    fireEvent.pointerMove(surface, { ...to, pointerId: 31 });
+    expect(screen.getByTestId('line-drawing-preview')).toBeInTheDocument();
+    fireEvent.pointerUp(surface, { ...to, pointerId: 31 });
+    expect(screen.queryByTestId('line-drawing-preview')).not.toBeInTheDocument();
+    expect(store.getState().score).not.toEqual(original);
+    act(() => store.getState().undo());
+    expect(store.getState().score).toEqual(original);
+  });
+
+  it('cancels an unfinished line with Escape without changing the score', async () => {
+    const store = makeStore();
+    render(<ScoreEditorView store={store} />);
+    const original = store.getState().score!;
+    const notes = allNotes(original);
+    const bboxes = referenceRender(original).idToBBox;
+    const from = center(bboxes.get(notes[0]!.id)!);
+    const to = center(bboxes.get(notes[2]!.id)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Draw melody line' }));
+    const surface = interactionSurface();
+    fireEvent.pointerDown(surface, { ...from, button: 0, pointerId: 32 });
+    fireEvent.pointerMove(surface, { ...to, pointerId: 32 });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.pointerUp(surface, { ...to, pointerId: 32 });
+    expect(screen.queryByTestId('line-drawing-preview')).not.toBeInTheDocument();
+    expect(store.getState().score).toEqual(original);
+  });
+
   it('renders without a score loaded (empty state)', () => {
     const store = createAppStore({ context: testStoreContext() });
     expect(() => render(<ScoreEditorView store={store} />)).not.toThrow();
@@ -1498,6 +1540,29 @@ describe('drag a selected note to change its pitch', () => {
 
     const updated = findEvent(store.getState().score!, note.id) as NoteEvent;
     expect(pitchToMidi(updated.pitch)).toBeLessThan(pitchToMidi(note.pitch));
+  });
+
+  it('stops a long pitch drag at the instrument range', () => {
+    const score = twinkleScore();
+    const violin = {
+      ...score,
+      tracks: score.tracks.map((track) => ({
+        ...track,
+        midiProgram: 40,
+        instrumentName: 'Violin',
+      })),
+    };
+    const store = makeStore(violin);
+    const note = allNotes(store.getState().score!)[0] as NoteEvent;
+    store.getState().setSelection({ eventIds: [note.id], measureIds: [], trackIds: [] });
+    render(<ScoreEditorView store={store} />);
+
+    dragNote(store.getState().score!, note.id, -1000);
+
+    const landed = findEvent(store.getState().score!, note.id) as NoteEvent;
+    const range = trackKeyboardRange(store.getState().score!.tracks[0]!);
+    expect(pitchToMidi(landed.pitch)).toBeGreaterThan(pitchToMidi(note.pitch));
+    expect(pitchToMidi(landed.pitch)).toBeLessThanOrEqual(range.max);
   });
 
   it('does nothing when the drag never crosses a staff position', () => {

@@ -76,8 +76,8 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
   isSelected: boolean;
   /** The key's colour, from `keyboardKeyFill` — a string, so `memo` still compares a primitive. */
   fill: string;
-  onPress: (midi: number) => void;
-  onRelease: (midi: number) => void;
+  onPress: (midi: number, shiftKey: boolean) => void;
+  onRelease: (midi: number, shiftKey: boolean) => void;
 }) {
   return (
     <div
@@ -107,12 +107,12 @@ const PianoKeyDiv = memo(function PianoKeyDiv({
         } catch {
           // Nothing to do: the key still sounds and still writes its note.
         }
-        onPress(midi);
+        onPress(midi, event.shiftKey);
       }}
-      onPointerUp={outOfRange ? undefined : () => onRelease(midi)}
+      onPointerUp={outOfRange ? undefined : (event) => onRelease(midi, event.shiftKey)}
       // A pointer that leaves the key still has to release it, or the note
       // sustains forever and the tap never gets written.
-      onPointerCancel={outOfRange ? undefined : () => onRelease(midi)}
+      onPointerCancel={outOfRange ? undefined : (event) => onRelease(midi, event.shiftKey)}
       style={{
         position: 'absolute',
         left: x,
@@ -175,8 +175,8 @@ type KeyRowProps = {
   heldKeys: ReadonlySet<number>;
   selectedMidis: ReadonlySet<number>;
   theme: RenderTheme;
-  onPress: (midi: number) => void;
-  onRelease: (midi: number) => void;
+  onPress: (midi: number, shiftKey: boolean) => void;
+  onRelease: (midi: number, shiftKey: boolean) => void;
 };
 
 /**
@@ -370,11 +370,12 @@ export function PianoKeyboardView({
    * key can be drawn pressed.
    */
   const groupRef = useRef<KeyGroup>(EMPTY_GROUP);
+  const shiftGroupRef = useRef(false);
 
   /**
    * The selected chord, when the selection is exactly one — the keyboard's
-   * second job. With one of these the keys toggle its pitches instead of
-   * entering notes; without, they enter as before.
+   * second job. Shift-click toggles a pitch in it; a plain click changes a
+   * single selected note's pitch.
    */
   const selectedNotes = store(selectSelectedNotes);
   const editableChord = useMemo(() => chordSelection(selectedNotes), [selectedNotes]);
@@ -385,10 +386,11 @@ export function PianoKeyboardView({
   const [heldKeys, setHeldKeys] = useState<ReadonlySet<number>>(() => new Set());
 
   const pressKey = useCallback(
-    (midi: number) => {
+    (midi: number, shiftKey = false) => {
       // Out of the instrument's compass: neither sounded nor written. The
       // drawn key is inert already; this is the MIDI keyboard's route in.
       if (playable && !midiIsInRange(midi, playable)) return;
+      if (groupRef.current.down.length === 0) shiftGroupRef.current = shiftKey;
       groupRef.current = pressGroupKey(groupRef.current, midi, performance.now());
       setHeldKeys((held) => new Set(held).add(midi));
       // Sound it immediately. This is an audition, not transport playback: it
@@ -399,7 +401,10 @@ export function PianoKeyboardView({
   );
 
   const releaseKey = useCallback(
-    (midi: number) => {
+    (midi: number, shiftKey = false) => {
+      // Desktop browsers report modifiers on both ends of a pointer gesture.
+      // Keep either report so a shifted release still edits the chord.
+      shiftGroupRef.current ||= shiftKey;
       setHeldKeys((held) => {
         if (!held.has(midi)) return held;
         const next = new Set(held);
@@ -417,7 +422,8 @@ export function PianoKeyboardView({
       // One call, because it is one user action. Which of the two things it
       // means — writing a chord at the caret, or toggling the pitches of a
       // selected one — is a rule about editing, and lives with the editing.
-      playKeyGroup(store, finished);
+      playKeyGroup(store, { ...finished, toggleSelected: shiftGroupRef.current });
+      shiftGroupRef.current = false;
     },
     [store],
   );

@@ -57,7 +57,13 @@ import {
 } from '@/app-library';
 import type { BBox, PlaybackAdapter, RenderTheme } from '@/app-library';
 import type { LayoutPlan } from '@/app-library';
-import { findTrack, isNoteEvent, isVocalInstrumentValue } from '@sudobility/music_types';
+import {
+  findTrack,
+  isNoteEvent,
+  isVocalInstrumentValue,
+  isPercussionTrack,
+  soundingPitchForDrawn,
+} from '@sudobility/music_types';
 import type { GenerateScoreRequest, NoteEvent, Pitch } from '@sudobility/music_types';
 import {
   findEvent,
@@ -99,12 +105,24 @@ import { usePendingAction } from '@/hooks/usePendingAction';
 import { ChoiceDialog } from '@/components/dialogs/ChoiceDialog';
 import { EditorToolbar } from '@/features/score-editor/EditorToolbar';
 import type { LayoutMode, TrackInfoMode } from '@sudobility/music_types';
-import { ScoreCanvas, bindPlaybackToCanvas, boxFromPoints } from '@sudobility/music_drawing';
+import {
+  ScoreCanvas,
+  bindPlaybackToCanvas,
+  boxFromPoints,
+  pitchAtStavePoint,
+} from '@sudobility/music_drawing';
 import type { Point, ViewPoint } from '@sudobility/music_drawing';
 import { DARK_RENDER_THEME, LIGHT_RENDER_THEME } from '@sudobility/music_drawing';
 import { autoscrollDelta } from '@/features/score-editor/autoscroll';
 import { scoreWithPitch, stepsForDrag } from '@/app-library';
 import { STAVE_POSITION_HEIGHT } from '@sudobility/music_drawing';
+import {
+  boundedPitchDragSteps,
+  commitLineDrawing,
+  lineNotes,
+  reviseLine,
+} from '@sudobility/music_editing';
+import type { LineSample } from '@sudobility/music_editing';
 import { outOfRangeNoteIds } from '@sudobility/music_types';
 import {
   createWebCanvasSurface,
@@ -195,6 +213,7 @@ export function ScoreEditorView({
   const themeMode = store((s) => s.themeMode);
   const pitchDisplay = store((s) => s.pitchDisplay);
   const snapGrid = store((s) => s.snapGrid);
+  const noteInput = store((s) => s.noteInput);
   const selectionRegenerated = store((s) => s.selectionRegenerated);
   const activeTrackId = store(selectActiveTrackId);
   const visibleTrackIds = store(selectVisibleTrackIds);
@@ -203,6 +222,29 @@ export function ScoreEditorView({
 
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('page');
   const [dragBox, setDragBox] = useState<BBox | null>(null);
+  const [lineDrawing, setLineDrawing] = useState(false);
+  const [linePreview, setLinePreview] = useState<LineSample[]>([]);
+  const lineRef = useRef<{
+    trackId: string;
+    voiceIndex: number;
+    systemIndex: number;
+    pointerId: number;
+    samples: LineSample[];
+    lastView: ViewPoint;
+  } | null>(null);
+  const linePreviewNotes = useMemo(() => {
+    const gesture = lineRef.current;
+    const track = gesture && score ? findTrack(score, gesture.trackId) : null;
+    return score && track ? lineNotes(linePreview, score, track) : [];
+  }, [linePreview, score]);
+  useEffect(() => {
+    if (noteInput && lineDrawing) {
+      if (lineRef.current) containerRef.current?.releasePointerCapture?.(lineRef.current.pointerId);
+      lineRef.current = null;
+      setLinePreview([]);
+      setLineDrawing(false);
+    }
+  }, [noteInput, lineDrawing]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollBoxRef = useRef<HTMLDivElement | null>(null);
@@ -760,6 +802,7 @@ export function ScoreEditorView({
   const handleClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (readOnly) return;
+      if (lineDrawing) return;
       if (suppressNextClickRef.current) {
         suppressNextClickRef.current = false;
         return;
@@ -794,7 +837,7 @@ export function ScoreEditorView({
         pointTick: scoreCanvas.tickAt(point),
       });
     },
-    [store, scoreCanvas, viewPointFromEvent, pitchDisplay, readOnly],
+    [store, scoreCanvas, viewPointFromEvent, pitchDisplay, readOnly, lineDrawing],
   );
 
   /**
@@ -909,6 +952,93 @@ export function ScoreEditorView({
     [viewPointFromEvent],
   );
 
+  /** Map a pointer to the stroke's original row and track, even over a note or another track. */
+  const lineSampleAt = useCallback(
+    (view: ViewPoint, gesture: NonNullable<typeof lineRef.current>): LineSample | null => {
+      const plan = scoreCanvas.plan;
+      const box = scrollBoxRef.current;
+      const stored = store.getState().score;
+      if (!plan || !box || !stored || !displayScore) return null;
+      const system = plan.systems[gesture.systemIndex];
+      const trackLayout = plan.trackLayouts.find((item) => item.track.id === gesture.trackId);
+      if (!system || !trackLayout) return null;
+      const logicalY = (view.y + box.scrollTop) / zoom;
+      if (logicalY < system.yTop || logicalY >= system.yBottom) return null;
+      const firstMeasure = trackLayout.measures.find((item) =>
+        system.measureIndices.includes(item.measureIndex),
+      );
+      if (!firstMeasure) return null;
+      const fixedY = (firstMeasure.box.y + firstMeasure.box.height / 2) * zoom - box.scrollTop;
+      const tick = scoreCanvas.tickAt({ x: view.x, y: fixedY });
+      if (tick === null || tick < gesture.samples[0]!.tick) return null;
+      const measureIndex = trackLayout.measures.find((item) => {
+        const measure = stored.tracks.find((track) => track.id === gesture.trackId)?.measures[
+          item.measureIndex
+        ];
+        return (
+          measure && tick >= measure.startTick && tick < measure.startTick + measure.durationTicks
+        );
+      })?.measureIndex;
+      const placement = measureIndex === undefined ? null : trackLayout.measures[measureIndex];
+      if (measureIndex === undefined || !placement || !system.measureIndices.includes(measureIndex))
+        return null;
+      const staveY = Math.max(
+        placement.box.y + 0.01,
+        Math.min(placement.box.y + placement.box.height - 0.01, logicalY),
+      );
+      const logicalX = (view.x + box.scrollLeft) / zoom;
+      const staveX = Math.max(
+        placement.box.x + 0.01,
+        Math.min(placement.box.x + placement.box.width - 0.01, logicalX),
+      );
+      const drawn = pitchAtStavePoint(plan, displayScore, { x: staveX, y: staveY });
+      if (!drawn || drawn.trackId !== gesture.trackId) return null;
+      return {
+        tick,
+        pitch: soundingPitchForDrawn(stored, gesture.trackId, tick, drawn.pitch, pitchDisplay),
+        x: view.x + box.scrollLeft,
+        y: staveY * zoom,
+      };
+    },
+    [scoreCanvas, store, displayScore, zoom, pitchDisplay],
+  );
+
+  const extendLine = useCallback(
+    (view: ViewPoint) => {
+      const gesture = lineRef.current;
+      if (!gesture) return;
+      const from = gesture.lastView;
+      const distance = Math.hypot(view.x - from.x, view.y - from.y);
+      const steps = Math.max(1, Math.ceil(distance / 3));
+      for (let index = 1; index <= steps; index++) {
+        const fraction = index / steps;
+        const sample = lineSampleAt(
+          {
+            x: from.x + (view.x - from.x) * fraction,
+            y: from.y + (view.y - from.y) * fraction,
+          },
+          gesture,
+        );
+        if (sample) gesture.samples = reviseLine(gesture.samples, sample);
+      }
+      gesture.lastView = view;
+      setLinePreview([...gesture.samples]);
+    },
+    [lineSampleAt],
+  );
+
+  useEffect(() => {
+    if (!lineDrawing) return;
+    const cancel = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !lineRef.current) return;
+      containerRef.current?.releasePointerCapture?.(lineRef.current.pointerId);
+      lineRef.current = null;
+      setLinePreview([]);
+    };
+    window.addEventListener('keydown', cancel);
+    return () => window.removeEventListener('keydown', cancel);
+  }, [lineDrawing]);
+
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (readOnly) return;
@@ -924,6 +1054,48 @@ export function ScoreEditorView({
       const point = pointFromEvent(event);
       const view = viewPointFromEvent(event);
       if (!point || !view) return;
+
+      if (lineDrawing) {
+        const current = store.getState();
+        const plan = scoreCanvas.plan;
+        const hit = scoreCanvas.hitTest(view);
+        if (
+          current.state === 'playing' ||
+          !current.score ||
+          !plan ||
+          !hit ||
+          (hit.kind !== 'note' && hit.kind !== 'stave')
+        )
+          return;
+        const track = findTrack(current.score, hit.trackId);
+        if (!track || isPercussionTrack(track)) return;
+        const systemIndex = plan.systems.findIndex((system) =>
+          system.measureIndices.includes(hit.measureIndex),
+        );
+        if (systemIndex < 0) return;
+        const gesture: NonNullable<typeof lineRef.current> = {
+          trackId: hit.trackId,
+          voiceIndex: current.activeVoiceIndex,
+          systemIndex,
+          pointerId: event.pointerId,
+          samples: [
+            {
+              tick: hit.tick,
+              pitch: { step: 'C' as const, accidental: 0 as const, octave: 4 },
+              x: point.x,
+              y: point.y,
+            },
+          ],
+          lastView: view,
+        };
+        const sample = lineSampleAt(view, gesture);
+        if (!sample) return;
+        gesture.samples = [sample];
+        lineRef.current = gesture;
+        setLinePreview([sample]);
+        containerRef.current?.setPointerCapture?.(event.pointerId);
+        return;
+      }
 
       /*
         What the press starts is music_editing's (`startPointerGesture`, shared
@@ -959,16 +1131,25 @@ export function ScoreEditorView({
       }
       dragStateRef.current = { start: point, moved: false, additive: gesture.additive };
     },
-    // Deps are narrow on purpose: anything read in here that changes per frame
-    // goes through a ref (`pitchDragRef`, `dropTargetRef`). Listing the rule's
-    // suggestions captures a stale value instead — that shipped as a bug once,
-    // and only the e2e caught it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pointFromEvent, viewPointFromEvent, scoreCanvas, setDropTargetBoth, readOnly],
+    [
+      pointFromEvent,
+      viewPointFromEvent,
+      scoreCanvas,
+      setDropTargetBoth,
+      readOnly,
+      lineDrawing,
+      lineSampleAt,
+      store,
+    ],
   );
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (lineRef.current) {
+        const view = viewPointFromEvent(event);
+        if (view) extendLine(view);
+        return;
+      }
       const noteDrag = noteDragRef.current;
       if (noteDrag) {
         const point = pointFromEvent(event);
@@ -990,14 +1171,21 @@ export function ScoreEditorView({
       const pitchDrag = pitchDragRef.current;
       if (pitchDrag) {
         const point = pointFromEvent(event);
-        if (!point) return;
+        const currentScore = store.getState().score;
+        if (!point || !currentScore) return;
+        const note = findEvent(currentScore, pitchDrag.eventId);
+        const track = note ? findTrack(currentScore, note.trackId) : null;
         // Only re-renders when the step count actually changes -- about ten
         // times in a drag, not once per pointermove.
         setPitchDragSteps(
           // The pixels-per-staff-position is the RENDERER's fact, so the
           // renderer's constant is passed in rather than the editing engine
           // importing a drawing package it must not depend on.
-          stepsForDrag(point.y - pitchDrag.startY, zoom, STAVE_POSITION_HEIGHT),
+          boundedPitchDragSteps(
+            track,
+            pitchDrag.pitch,
+            stepsForDrag(point.y - pitchDrag.startY, zoom, STAVE_POSITION_HEIGHT),
+          ),
         );
         return;
       }
@@ -1024,11 +1212,35 @@ export function ScoreEditorView({
     // suggestions captures a stale value instead — that shipped as a bug once,
     // and only the e2e caught it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pointFromEvent, viewPointFromEvent, stepAutoscroll, scoreCanvas, snapGrid, setDropTargetBoth],
+    [
+      pointFromEvent,
+      viewPointFromEvent,
+      stepAutoscroll,
+      scoreCanvas,
+      snapGrid,
+      setDropTargetBoth,
+      extendLine,
+    ],
   );
 
   const handlePointerUp = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      const line = lineRef.current;
+      if (line) {
+        const view = viewPointFromEvent(event);
+        if (view) extendLine(view);
+        containerRef.current?.releasePointerCapture?.(event.pointerId);
+        lineRef.current = null;
+        setLinePreview([]);
+        suppressNextClickRef.current = true;
+        const current = store.getState();
+        const track = current.score && findTrack(current.score, line.trackId);
+        if (current.state !== 'playing' && current.score && track) {
+          const notes = lineNotes(line.samples, current.score, track);
+          commitLineDrawing(store, line.trackId, line.voiceIndex, notes);
+        }
+        return;
+      }
       const noteDrag = noteDragRef.current;
       if (noteDrag) {
         containerRef.current?.releasePointerCapture?.(event.pointerId);
@@ -1098,7 +1310,15 @@ export function ScoreEditorView({
       setDragBox(null);
       dragStateRef.current = null;
     },
-    [viewPointFromEvent, scoreCanvas, store, stopAutoscroll, pitchDragSteps, setDropTargetBoth],
+    [
+      viewPointFromEvent,
+      scoreCanvas,
+      store,
+      stopAutoscroll,
+      pitchDragSteps,
+      setDropTargetBoth,
+      extendLine,
+    ],
   );
 
   /**
@@ -1109,6 +1329,8 @@ export function ScoreEditorView({
    */
   const handlePointerCancel = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      lineRef.current = null;
+      setLinePreview([]);
       stopAutoscroll();
       containerRef.current?.releasePointerCapture?.(event.pointerId);
       setDragBox(null);
@@ -1209,6 +1431,14 @@ export function ScoreEditorView({
           />
           <EditorToolbar
             store={store}
+            lineDrawing={lineDrawing}
+            onLineDrawingChange={(on) => {
+              if (lineRef.current)
+                containerRef.current?.releasePointerCapture?.(lineRef.current.pointerId);
+              lineRef.current = null;
+              setLinePreview([]);
+              setLineDrawing(on);
+            }}
             onEnterLyrics={beginLyricEntry}
             onGoToBar={() => setGoToBarOpen(true)}
             onAddMeasure={() => setInsertBarsOpen(true)}
@@ -1276,7 +1506,7 @@ export function ScoreEditorView({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
-          className="relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          className={`relative w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary ${lineDrawing ? 'cursor-crosshair' : ''}`}
           style={{
             // The canvas's own content size, copied back after it laid out
             // (see `layout`) — never the plan's size times zoom worked out here.
@@ -1301,6 +1531,49 @@ export function ScoreEditorView({
             <canvas ref={canvasElementRef} data-testid="score-canvas" />
           </div>
         </div>
+        {linePreview.length > 0 && (
+          <svg
+            data-testid="line-drawing-preview"
+            aria-hidden="true"
+            width={layout.width}
+            height={layout.height}
+            className="pointer-events-none absolute left-0 top-0 overflow-visible"
+          >
+            {linePreviewNotes.map((note, index) => {
+              const start =
+                linePreview.find((sample) => sample.tick >= note.startTick) ?? linePreview[0]!;
+              const end =
+                [...linePreview].reverse().find((sample) => sample.tick <= note.endTick) ??
+                linePreview.at(-1)!;
+              const middle =
+                linePreview.find((sample) => sample.tick >= (note.startTick + note.endTick) / 2) ??
+                start;
+              return (
+                <g key={`${note.startTick}-${index}`} opacity="0.55">
+                  <line
+                    x1={start.x}
+                    x2={Math.max(start.x + 4, end.x)}
+                    y1={middle.y}
+                    y2={middle.y}
+                    stroke={renderTheme.noteSelected}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                  />
+                  <circle cx={start.x} cy={middle.y} r="5" fill={renderTheme.noteSelected} />
+                </g>
+              );
+            })}
+            <polyline
+              points={linePreview.map((sample) => `${sample.x},${sample.y}`).join(' ')}
+              fill="none"
+              stroke={renderTheme.noteSelected}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.8"
+            />
+          </svg>
+        )}
         {dragBox && (
           <div
             data-testid="drag-selection-box"

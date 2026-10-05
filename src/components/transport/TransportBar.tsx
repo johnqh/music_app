@@ -42,6 +42,7 @@ import { getMusicPlayerIfInitialized } from '@sudobility/music_player/core';
 import { usePlaybackReadiness } from '@sudobility/music_player/react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { LevelSlider } from '@/components/controls/level-slider';
+import { AudioOutputSelect } from './AudioOutputSelect';
 import {
   Button,
   Input,
@@ -696,6 +697,8 @@ export function TransportBar({
           onChange={handleVolumeChange}
         />
       </div>
+
+      <AudioOutputSelect />
 
       {/*
         `flex items-center` to match the volume block beside it. Without it the
