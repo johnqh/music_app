@@ -6,10 +6,12 @@
  * the program table and has to be carried by the clef instead. Getting that
  * wrong is silent: the request still generates, just as a melodic track.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GM_FAMILIES, GM_KITS, GM_FAMILY_LABELS, gmInstrumentsByFamily } from '@/app-library';
+import { getAppStore, initializeAppStore } from '@/app-library';
+import { testStoreContext } from '@/test/store-context';
 import { GenerateTrackDialog } from '@/components/dialogs/GenerateTrackDialog';
 import { instrumentChoiceFor } from '@/app-library';
 
@@ -52,6 +54,10 @@ function gmName(program: number): string {
 }
 
 describe('GenerateTrackDialog', () => {
+  beforeEach(() => {
+    initializeAppStore(testStoreContext());
+  });
+
   it('offers a drum kit alongside the GM families, under section headings', async () => {
     const user = userEvent.setup();
     render(
@@ -97,6 +103,31 @@ describe('GenerateTrackDialog', () => {
 
     expect(onGenerate).toHaveBeenCalledTimes(1);
     expect(onGenerate.mock.calls[0][2]).toBe('deepseek');
+  });
+
+  it('remembers the selected provider for the next generation dialog', async () => {
+    const user = userEvent.setup();
+    render(
+      <GenerateTrackDialog
+        open
+        pending={false}
+        onGenerate={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    await user.click(screen.getByLabelText('Model'));
+    await user.click(screen.getByRole('option', { name: 'Claude' }));
+    expect(getAppStore().getState().generationVariant).toBe('claude');
+
+    render(
+      <GenerateTrackDialog
+        open
+        pending={false}
+        onGenerate={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+    expect(screen.getAllByLabelText('Model')[1]).toHaveTextContent('Claude');
   });
 });
 

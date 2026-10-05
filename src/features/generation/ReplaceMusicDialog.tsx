@@ -28,8 +28,6 @@ import { variants } from '@sudobility/design';
 import {
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
-  GENERATION_VARIANTS,
-  GENERATION_VARIANT_LABELS,
   REPLACE_PRESET_KEYS,
   buildReplaceSubmission,
   complexityLabelKey,
@@ -41,7 +39,10 @@ import {
   replacePresetLabelKey,
   type GenerateScoreComplexity,
   type ReplaceDraft,
+  useGenerationProviders,
+  type EditorStoreApi,
 } from '@/app-library';
+import { useAppStore } from '@/app-library';
 import { StyleSelectItems } from '@/features/generation/StyleSelectItems';
 import type { ReplaceScope, ReplaceSubmission, ReplacementRegion } from '@/app-library';
 
@@ -63,6 +64,7 @@ export type ReplaceMusicDialogProps = {
   estimatedCredits?: number;
   /** True while the job is being submitted: Replace spins, the dialog stays open. */
   submitting?: boolean;
+  store?: EditorStoreApi;
 };
 
 /**
@@ -109,8 +111,10 @@ export function ReplaceMusicDialog({
   onSubmit,
   estimatedCredits = 0,
   submitting = false,
+  store = useAppStore,
 }: ReplaceMusicDialogProps) {
   const { t, i18n } = useTranslation();
+  const { providers, selected, setSelected } = useGenerationProviders(store);
   /*
     The form's defaults and what it submits are music_lib's
     (`defaultReplaceSubmission`/`buildReplaceSubmission`), shared with the
@@ -130,10 +134,10 @@ export function ReplaceMusicDialog({
   // instruction, which would silently apply to music it was not written for.
   useEffect(() => {
     if (open) {
-      setDraft((d) => ({ ...d, instruction: '' }));
+      setDraft((d) => ({ ...d, instruction: '', variant: selected }));
       setPresetsOpen(false);
     }
-  }, [open, scope]);
+  }, [open, scope, selected]);
 
   /*
     The whole style and mood vocabularies, translated and sorted, as New Project
@@ -304,14 +308,20 @@ export function ReplaceMusicDialog({
 
         <label className="flex flex-col gap-1 text-sm">
           <span className="text-muted-foreground">{t('generateScore.model')}</span>
-          <Select value={draft.variant} onValueChange={(v) => patch({ variant: v })}>
+          <Select
+            value={draft.variant}
+            onValueChange={(v) => {
+              patch({ variant: v });
+              setSelected(v);
+            }}
+          >
             <SelectTrigger aria-label={t('generateScore.model')} className={SELECT_CLASS}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {GENERATION_VARIANTS.map((v) => (
+              {providers.map(({ value: v, label }) => (
                 <SelectItem key={v} value={v}>
-                  {GENERATION_VARIANT_LABELS[v]}
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

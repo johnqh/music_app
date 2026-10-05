@@ -8,8 +8,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { GENERATE_SCORE_STYLE_PRESETS, styleTempoRange } from '@sudobility/music_types';
-import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS } from '@/app-library';
+import { GENERATE_SCORE_KEY_FIFTHS_OPTIONS, initializeAppStore } from '@/app-library';
 import type { NewProjectSubmission } from '@/app-library';
+import { testStoreContext } from '@/test/store-context';
 import { MemoryRouter } from 'react-router-dom';
 import { NewProjectDialog } from './NewProjectDialog';
 import { installTestAppServices, resetTestAppServices } from '@/test/app-services';
@@ -21,6 +22,7 @@ import { installTestAppServices, resetTestAppServices } from '@/test/app-service
 */
 beforeEach(() => {
   installTestAppServices();
+  initializeAppStore(testStoreContext());
 });
 afterEach(() => {
   resetTestAppServices();

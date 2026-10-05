@@ -1453,6 +1453,7 @@ export function ScoreEditorView({
             open={generateTrackOpen}
             pending={generateTrackPending}
             estimatedCredits={score ? estimateGenerateTrackCredits(score) : 0}
+            store={store}
             onGenerate={(prompt, instrument, variant) =>
               void generateTrack(prompt, instrument, variant)
             }

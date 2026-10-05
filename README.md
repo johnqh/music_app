@@ -27,7 +27,8 @@ bun install
 # 2. Set up and start music_api (sibling checkout, e.g. ../music_api)
 cd ../music_api
 bun install
-cp .env.example .env   # fill in DATABASE_URL, Firebase service-account creds, OPENAI_API_KEY
+cp .env.example .env   # fill in DATABASE_URL, Firebase service-account creds, and ShapeShyft settings
+# Configure generate-score-claude, plan-arrangement-claude, and regenerate-region-claude in ShapeShyft to enable Claude.
 bun run db:init
 bun run dev             # http://localhost:8022
 

@@ -286,7 +286,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
       // The dialog chooses the backend; the developer setting fills in when it
       // did not.
       const project = await createGeneratedProject(client, token, submission, {
-        variant: store.getState().devSettings.generationVariant,
+        variant: store.getState().generationVariant,
       });
       setNewProjectOpen(false);
       /*
@@ -867,6 +867,7 @@ export function DashboardPage({ store = useAppStore, onNavigate }: DashboardPage
         open={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
         submitting={creatingProject}
+        store={store}
         onSubmit={(submission) => void handleNewProject(submission)}
       />
     </div>

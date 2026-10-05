@@ -76,6 +76,7 @@ PROJECTS=(
     # check. Its Jest component suite runs under `test:components` rather than
     # `test`, so `bun run test` covers the vitest half only.
     "../music_app_rn:0"
+    "../music_harness:0"
     "../midi_transcriber_api:0"
 )
 

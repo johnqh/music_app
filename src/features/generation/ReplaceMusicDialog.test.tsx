@@ -1,8 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReplacementRegion } from '@/app-library';
+import { initializeAppStore } from '@/app-library';
+import { testStoreContext } from '@/test/store-context';
 import { ReplaceMusicDialog } from '@/features/generation/ReplaceMusicDialog';
+
+beforeEach(() => {
+  initializeAppStore(testStoreContext());
+});
 
 function region(over: Partial<ReplacementRegion> = {}): ReplacementRegion {
   return {

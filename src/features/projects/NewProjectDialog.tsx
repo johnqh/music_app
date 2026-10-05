@@ -97,8 +97,6 @@ import {
   GENERATE_SCORE_COMPLEXITY_OPTIONS,
   GENERATE_SCORE_KEY_FIFTHS_OPTIONS,
   GENERATE_SCORE_MOOD_OPTIONS,
-  GENERATION_VARIANTS,
-  GENERATION_VARIANT_LABELS,
   GENERATE_SCORE_TIME_SIGNATURE_OPTIONS,
   canRemoveNewProjectEntry,
   complexityLabelKey,
@@ -126,7 +124,10 @@ import {
   type NewProjectDraftAction,
   type NewProjectFormDraft,
   type NewProjectSubmission,
+  useGenerationProviders,
+  type EditorStoreApi,
 } from '@/app-library';
+import { useAppStore } from '@/app-library';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 import { StyleSelectItems } from '@/features/generation/StyleSelectItems';
 import { variants } from '@sudobility/design';
@@ -143,6 +144,7 @@ export type NewProjectDialogProps = {
   onSubmit: (submission: NewProjectSubmission) => void;
   /** True while the project is being created, to disable the CTA. */
   submitting?: boolean;
+  store?: EditorStoreApi;
 };
 
 /*
@@ -330,8 +332,10 @@ export function NewProjectDialog({
   onClose,
   onSubmit,
   submitting = false,
+  store = useAppStore,
 }: NewProjectDialogProps) {
   const { t, i18n } = useTranslation();
+  const { providers, selected, setSelected } = useGenerationProviders(store);
   /*
     The whole form is one draft, and every rule that changes it is music_lib's
     (`reduceNewProjectDraft`): choosing a style fills the roster, tempo, bars
@@ -342,6 +346,11 @@ export function NewProjectDialog({
     what a salsa is. This component only draws the draft and dispatches.
   */
   const [storedDraft, dispatch] = useReducer(reduceDraft, undefined, initialNewProjectDraft);
+  useEffect(() => {
+    if (open && storedDraft.variant !== selected) {
+      dispatch({ type: 'setVariant', variant: selected });
+    }
+  }, [open, selected, storedDraft.variant]);
   const musicContext = useMusicHookContext();
 
   /*
@@ -652,7 +661,10 @@ export function NewProjectDialog({
             </Select>
             <Select
               value={draft.variant}
-              onValueChange={(v) => dispatch({ type: 'setVariant', variant: v })}
+              onValueChange={(v) => {
+                dispatch({ type: 'setVariant', variant: v });
+                setSelected(v);
+              }}
             >
               <SelectTrigger
                 aria-label={t('generateScore.model')}
@@ -661,9 +673,9 @@ export function NewProjectDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {GENERATION_VARIANTS.map((v) => (
+                {providers.map(({ value: v, label }) => (
                   <SelectItem key={v} value={v}>
-                    {GENERATION_VARIANT_LABELS[v]}
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>

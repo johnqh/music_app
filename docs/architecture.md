@@ -25,7 +25,7 @@ Moosiac is a browser-based, AI-assisted sheet-music composition app, split acros
 | [`music_types`](https://github.com/johnqh/music_types)   | `@sudobility/music_types`            | Shared TypeScript types + Zod schemas: the score model, generation contracts, project API shapes, the `{success,data,error,code}` response envelope. No logic, no I/O — the contract every other repo compiles against.                                                                                                                                      |
 | [`music_client`](https://github.com/johnqh/music_client) | `@sudobility/music_client`           | Typed network client (`MusicClient`) + React Query hooks for `music_api`. Zero direct `fetch` calls — takes an injected `NetworkClient` (SudojoClient DI pattern).                                                                                                                                                                                           |
 | [`music_lib`](https://github.com/johnqh/music_lib)       | `@sudobility/music_lib`              | The entire non-UI application layer: the domain score model, undoable commands, validation/quantization/voicing, VexFlow/Tone.js/MIDI/MusicXML adapters, and the Zustand app store. Calls `music_api` through an injected `MusicClient`, not directly.                                                                                                       |
-| [`music_api`](https://github.com/johnqh/music_api)       | `music_api` (private, not published) | Backend: Hono + Drizzle ORM + PostgreSQL, Firebase-authenticated. Proxies AI generation through OpenAI (the API key never reaches the browser) and persists per-user projects.                                                                                                                                                                               |
+| [`music_api`](https://github.com/johnqh/music_api)       | `music_api` (private, not published) | Backend: Hono + Drizzle ORM + PostgreSQL, Firebase-authenticated. Proxies AI generation through the selected OpenAI, DeepSeek, Claude, or local LM Studio backend (provider credentials stay server-side) and persists per-user projects.                                                                                                                    |
 | [`music_io`](https://github.com/johnqh/music_io)         | `@sudobility/music_io`               | Platform implementations of the interfaces in `music_types`: audio playback, XML parsing, file export and the MIDI codec, for web and React Native. A `react-native` export condition means consumers write one import and Metro or Vite each resolve their own build. Runtime dependencies are empty by design; every platform library is an optional peer. |
 | `music_app` (this repo)                                  | `scoresmith` (private)               | The web app: routing, page-level React components, Tailwind styling, and the composition root that wires `music_client`/`music_lib` together with real browser services (fetch, Firebase auth, `localStorage`). No business logic lives here — see [Known limitations](#known-limitations) for what that means in practice.                                  |
 
@@ -69,7 +69,7 @@ flowchart TB
     subgraph Api["music_api -- Hono backend"]
         Routes["routes/ (ai/generate, ai/regenerate, projects CRUD)"]
         AuthMw["middleware/auth.ts (Firebase bearer verification)"]
-        GenSvc["services/generation (OpenAI transport, prompts, response validation, quota)"]
+        GenSvc["services/generation (provider transport, prompts, response validation, quota)"]
         DB[("PostgreSQL (projects, ai_usage)")]
     end
 
@@ -87,20 +87,20 @@ flowchart TB
     AuthMw --> Routes
     Routes --> GenSvc
     Routes --> DB
-    GenSvc -->|validated request/response| OpenAI["OpenAI API"]
+    GenSvc -->|validated request/response| Models["OpenAI / DeepSeek / Claude / local LM Studio"]
     MusicClient -.->|compiles against| Schemas
     Routes -.->|validates against| Schemas
 ```
 
 ## Request flows
 
-### Auth token → `MusicClient` → `music_api` → OpenAI
+### Auth token → `MusicClient` → `music_api` → selected model
 
 1. `music_app`'s composition root (`src/config/initialize.ts`) builds one `AuthBackend` — Firebase (`firebaseBackend()`) in normal use, or a fixed-identity e2e shim (`e2eBackend()`, gated on `VITE_E2E=1`) under Playwright.
 2. That backend's `getToken()` is wired into `music_lib`'s `StoreContext.getToken` — the store never touches Firebase directly, it only knows "call this function to get a bearer token right before a request."
 3. Every `music_client` call (`MusicClient`'s single `request<T>()` funnel, or a React Query hook built on it) calls `getToken()` fresh per request, sends it as an `Authorization: Bearer <token>` header, and never caches or stores it.
 4. `music_api`'s `authMiddleware` verifies the Firebase ID token (or, in `AI_TEST_MODE`, accepts a fixed `TEST_AUTH_BYPASS_TOKEN` as a stand-in "test-user" identity — e2e/test only, never enabled in production) and sets `userId`/`userEmail` request context; every route except `/health` requires it.
-5. `POST /ai/generate` / `POST /ai/regenerate` check the caller's daily quota (`AI_DAILY_LIMIT`), call OpenAI server-side with `OPENAI_API_KEY` (which never reaches the browser), and run the model's response through schema validation/sanitization (`sanitizeGeneratedScore`-equivalent on the API side) before it's returned — untrusted model output is never persisted or forwarded as-is.
+5. `POST /ai/generate` / `POST /ai/regenerate` check the caller's daily quota (`AI_DAILY_LIMIT`), route the saved provider preference through ShapeShyft on the server, and run the model's response through schema validation/sanitization before it's returned — untrusted model output is never persisted or forwarded as-is. The provider choice is stored in device preferences, so every generation dialog opens with the last selection.
 6. The response comes back through the same envelope shape (`{success,data,error,code}`, from `music_types`) that `MusicClient` unwraps, mapping specific failure codes to typed errors (`QuotaExceededError`, `AiOutputInvalidError`, `AiGenerationError`, `ProjectNotFoundError`, generic `ApiError`).
 
 ### Generation jobs
@@ -108,7 +108,7 @@ flowchart TB
 Generation is slow enough that it cannot hold a browser request, so it is a persisted server-side job.
 
 ```
-browser                     music_api                       OpenAI
+browser                     music_api                       model provider
   │ POST /jobs ───────────────►│ insert job + project.status = 'generating'
   │◄── {jobId} ────────────────│   (one transaction)
   │                            ├─ run ────────────────────────►
@@ -121,15 +121,15 @@ browser                     music_api                       OpenAI
   │◄── {status, updatedAt} ────│    change while generating)
 ```
 
-Cancel writes `ready` to the project; the running job discards its result when it next looks. Writes to a generating project are rejected with 409 `PROJECT_GENERATING`, which is what makes applying the result sound.
+Cancel writes `ready` to the project; the running job discards its result when it next looks. Writes to a generating project are rejected with 409 `PROJECT_GENERATING`, which is what makes applying the result sound. Claude uses the same project, track, measure, and note-generation routes as the other providers; the server selects the matching provider endpoint from the request variant.
 
 ### Project CRUD
 
-`DashboardPage` (via `music_client`'s `useProjects`/`useCreateProject`/`useUpdateProject`/`useDeleteProject` React Query hooks) and the editor's autosave path (via `music_lib`'s project-slice calling `MusicClient` directly, with its own abort/token discipline rather than a hook) both go through the same `GET/POST /projects`, `GET/PUT/DELETE /projects/:id` routes, each user-scoped by the authenticated `userId`. There is no local persistence layer anymore — projects live entirely in `music_api`'s PostgreSQL `projects` table; the app only keeps device-local _preferences_ (theme, developer mode, view settings) in `localStorage` via the injected `PrefsStorage`.
+`DashboardPage` (via `music_client`'s `useProjects`/`useCreateProject`/`useUpdateProject`/`useDeleteProject` React Query hooks) and the editor's autosave path (via `music_lib`'s project-slice calling `MusicClient` directly, with its own abort/token discipline rather than a hook) both go through the same `GET/POST /projects`, `GET/PUT/DELETE /projects/:id` routes, each user-scoped by the authenticated `userId`. There is no local project persistence layer — projects live entirely in `music_api`'s PostgreSQL `projects` table; the app keeps device-local preferences, including the last selected generation provider, in `localStorage` via the injected `PrefsStorage`.
 
 ### e2e test mode
 
-`e2e/global-setup.ts` truncates the `music_test` Postgres database before each Playwright run. Playwright's `webServer` config boots two processes: `music_api` with `AI_TEST_MODE=1`/`TEST_AUTH_BYPASS_TOKEN=e2e-token` (deterministic fixture AI responses, no real OpenAI calls, auth bypass), and the Vite dev server with `VITE_E2E=1`/`VITE_E2E_TOKEN=e2e-token`/`VITE_API_URL=http://localhost:8023` (points `music_app` at that same bypass token and a separate port from normal dev use). This lets the full authenticated flow — sign-in gate, project CRUD, AI generation — run deterministically with no real Firebase project or OpenAI key.
+`e2e/global-setup.ts` truncates the `music_test` Postgres database before each Playwright run. Playwright's `webServer` config boots two processes: `music_api` with `AI_TEST_MODE=1`/`TEST_AUTH_BYPASS_TOKEN=e2e-token` (deterministic fixture AI responses, no real model-provider calls, auth bypass), and the Vite dev server with `VITE_E2E=1`/`VITE_E2E_TOKEN=e2e-token`/`VITE_API_URL=http://localhost:8023` (points `music_app` at that same bypass token and a separate port from normal dev use). This lets the full authenticated flow — sign-in gate, project CRUD, AI generation — run deterministically with no real Firebase project or model API credentials.
 
 ## The store-context injection pattern
 

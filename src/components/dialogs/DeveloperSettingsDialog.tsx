@@ -30,9 +30,8 @@ import {
   cn,
 } from '@sudobility/components';
 import { variants } from '@sudobility/design';
-import { createEmptyScore } from '@/app-library';
+import { createEmptyScore, useGenerationProviders } from '@/app-library';
 import type { Clef } from '@sudobility/music_types';
-import { GENERATION_VARIANTS, GENERATION_VARIANT_LABELS } from '@sudobility/music_types';
 import { LEGACY_FONT_SIZE_KEY, PREFS_KEY, reportError } from '@/app-library';
 import { useAppStore } from '@/app-library';
 import type { EditorStoreApi } from '@/app-library';
@@ -71,7 +70,7 @@ export function DeveloperSettingsDialog({
   benchmarkSizes,
 }: DeveloperSettingsDialogProps) {
   const { t } = useTranslation();
-  const devSettings = store((s) => s.devSettings);
+  const { providers, selected, setSelected } = useGenerationProviders(store);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [benchmarkReport, setBenchmarkReport] = useState<BenchmarkReport | null>(null);
@@ -161,30 +160,21 @@ export function DeveloperSettingsDialog({
       >
         <div className="flex flex-col">
           {/*
-            Which backend generation is asked from.
-
-            A developer setting rather than a control in the Generate dialog:
-            the answer is the same for every generation until somebody is
-            deliberately comparing two of them, and asking every user to pick a
-            model is asking a question they have no basis to answer. The labels
-            come from music_types so the picker and the server cannot disagree
-            about what is on offer; the server resolves the value through its
-            own allow-list and falls back to the default, so a stale choice
-            stored here is harmless.
+            Which provider generation uses. This is the same device preference
+            shown in the generation dialogs, so changing it here updates their
+            next selection too. The shared hook gets the provider catalog from
+            music_types and reads/writes the preference through music_lib.
           */}
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-sm text-foreground">{t('devSettings.generationBackend')}</span>
-            <Select
-              value={devSettings.generationVariant}
-              onValueChange={(v) => store.getState().setDevSettings({ generationVariant: v })}
-            >
+            <Select value={selected} onValueChange={setSelected}>
               <SelectTrigger aria-label={t('devSettings.generationBackend')} className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {GENERATION_VARIANTS.map((v) => (
+                {providers.map(({ value: v, label }) => (
                   <SelectItem key={v} value={v}>
-                    {GENERATION_VARIANT_LABELS[v]}
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>

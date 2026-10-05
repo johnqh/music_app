@@ -238,6 +238,7 @@ function ReplaceButton({
         open={open}
         scope={scope}
         region={region}
+        store={store}
         estimatedCredits={score && region ? estimateReplacementCredits(score, region) : 0}
         trackLabel={trackLabel}
         submitting={submitting}

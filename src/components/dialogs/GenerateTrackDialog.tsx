@@ -26,13 +26,13 @@ import {
   TextArea,
 } from '@sudobility/components';
 import {
-  DEFAULT_GENERATION_VARIANT,
   DEFAULT_INSTRUMENT_VALUE,
-  GENERATION_VARIANTS,
-  GENERATION_VARIANT_LABELS,
   instrumentChoiceFor,
   type InstrumentChoice,
+  useGenerationProviders,
+  type EditorStoreApi,
 } from '@/app-library';
+import { useAppStore } from '@/app-library';
 import { InstrumentSelectItems } from '@/features/instruments/InstrumentSelectItems';
 
 export type GenerateTrackDialogProps = {
@@ -42,23 +42,21 @@ export type GenerateTrackDialogProps = {
   onClose: () => void;
   /** Bars times one track: what the server bills for the new part. */
   estimatedCredits?: number;
+  store?: EditorStoreApi;
 };
 
 export function GenerateTrackDialog({
   open,
   pending,
   estimatedCredits = 0,
+  store = useAppStore,
   onGenerate,
   onClose,
 }: GenerateTrackDialogProps) {
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState('');
   const [value, setValue] = useState(DEFAULT_INSTRUMENT_VALUE);
-  // The same default the New Project and Replace forms open on, from the one
-  // constant all three read. Not remembered across openings on purpose: it is a
-  // per-call choice, and the setting that does persist is the developer one
-  // behind it.
-  const [variant, setVariant] = useState<string>(DEFAULT_GENERATION_VARIANT);
+  const { providers, selected, setSelected } = useGenerationProviders(store);
 
   useEffect(() => {
     if (open) setPrompt('');
@@ -72,7 +70,7 @@ export function GenerateTrackDialog({
       title={t('generateTrack.title')}
       onClose={onClose}
       onSave={() => {
-        if (!pending) onGenerate(trimmed, instrumentChoiceFor(value), variant);
+        if (!pending) onGenerate(trimmed, instrumentChoiceFor(value), selected);
       }}
       saving={pending}
       savingLabel={t('common.starting')}
@@ -116,14 +114,14 @@ export function GenerateTrackDialog({
           <Text as="label" size="sm" color="muted">
             {t('generateScore.model')}
           </Text>
-          <Select value={variant} onValueChange={setVariant}>
+          <Select value={selected} onValueChange={setSelected}>
             <SelectTrigger aria-label={t('generateScore.model')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {GENERATION_VARIANTS.map((v) => (
+              {providers.map(({ value: v, label }) => (
                 <SelectItem key={v} value={v}>
-                  {GENERATION_VARIANT_LABELS[v]}
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>
