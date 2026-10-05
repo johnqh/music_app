@@ -798,7 +798,7 @@
     "leaveSilence": "保留空白",
     "leaveSilenceDetail": "轨道其余部分保持原位",
     "lineDrawing": "绘制旋律线",
-    "lineDrawingHint": "在一个有音高的轨道上从左向右绘制旋律",
+    "lineDrawingHint": "在一个有音高的轨道上从左向右绘制旋律；音符时值取整为八分、四分、二分或整小节",
     "lyricEntry": "歌词输入",
     "lyricKeysHint": "空格＝下一个词 · - ＝下一个音节 · 回车＝完成",
     "lyricNoteOf": "第 {{current}} / {{total}} 个音符",

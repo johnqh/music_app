@@ -31,9 +31,9 @@ describe('line drawing', () => {
       track,
     );
     expect(notes.map((note) => [note.startTick, note.endTick])).toEqual([
-      [0, 120],
-      [120, 240],
-      [240, 300],
+      [0, 240],
+      [240, 480],
+      [480, 720],
     ]);
     expect(pitchToMidi(notes[2]!.pitch)).toBeLessThan(pitchToMidi(pitch('C', 9)));
   });

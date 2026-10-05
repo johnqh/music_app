@@ -798,7 +798,7 @@
     "leaveSilence": "Leave silence",
     "leaveSilenceDetail": "The rest of the track stays where it is",
     "lineDrawing": "Draw melody line",
-    "lineDrawingHint": "Draw a melody left to right on one pitched track",
+    "lineDrawingHint": "Draw a melody left to right on one pitched track; note lengths round to eighth, quarter, half, or full bar",
     "lyricEntry": "Lyric entry",
     "lyricKeysHint": "Space = next word · - = next syllable · Enter = done",
     "lyricNoteOf": "Note {{current}} of {{total}}",
