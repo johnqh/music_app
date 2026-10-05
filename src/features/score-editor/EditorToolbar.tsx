@@ -435,6 +435,36 @@ export function EditorToolbar({
               ))}
             </SelectContent>
           </Select>
+          {onLineDrawingChange && (
+            <Tooltip placement="bottom" content={t('editor.lineDrawingHint')}>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label={t('editor.lineDrawing')}
+                aria-pressed={lineDrawing}
+                disabled={
+                  !available.noteInput || !score?.tracks.some((track) => !isPercussionTrack(track))
+                }
+                onClick={() => {
+                  store.getState().setNoteInput(false);
+                  onLineDrawingChange(!lineDrawing);
+                }}
+                className={TOGGLE_BUTTON_CLASS}
+              >
+                <svg
+                  className={ICON_GLYPH_CLASS}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 17 C7 17 7 6 12 6 S17 18 21 7" />
+                </svg>
+              </Button>
+            </Tooltip>
+          )}
         </div>
 
         <VerticalDivider />
@@ -796,42 +826,6 @@ export function EditorToolbar({
             <PencilIcon className={ICON_GLYPH_CLASS} />
           </Button>
         </Tooltip>
-
-        {onLineDrawingChange && (
-          <Tooltip placement="bottom" content={t('editor.lineDrawingHint')}>
-            <Button
-              type="button"
-              variant="ghost"
-              aria-label={t('editor.lineDrawing')}
-              aria-pressed={lineDrawing}
-              disabled={
-                !available.noteInput || !score?.tracks.some((track) => !isPercussionTrack(track))
-              }
-              onClick={() => {
-                store.getState().setNoteInput(false);
-                onLineDrawingChange(!lineDrawing);
-              }}
-              className={TOGGLE_BUTTON_CLASS}
-            >
-              <svg
-                className={ICON_GLYPH_CLASS}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 17 8 8l5 5 8-9" />
-                <circle cx="3" cy="17" r="1.5" fill="currentColor" stroke="none" />
-                <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
-                <circle cx="13" cy="13" r="1.5" fill="currentColor" stroke="none" />
-                <circle cx="21" cy="4" r="1.5" fill="currentColor" stroke="none" />
-              </svg>
-            </Button>
-          </Tooltip>
-        )}
 
         <Tooltip placement="bottom" content={t('editor.insertRestHint')}>
           <Button
