@@ -69,6 +69,10 @@ export class PlaybackAdapter {
     return this.binding.togglePlay();
   }
 
+  pause(): void {
+    this.binding.pause();
+  }
+
   stop(): void {
     this.binding.stop();
   }

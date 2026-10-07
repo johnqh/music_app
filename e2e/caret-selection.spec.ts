@@ -45,7 +45,7 @@ test.describe('caret-anchored selection', () => {
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(status).toContainText('No selection');
 
-    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.getByRole('button', { name: 'Pause' }).click();
     expect(getErrors()).toEqual([]);
   });
 

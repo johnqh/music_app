@@ -17,6 +17,7 @@ vi.mock('@/app-library', async (importOriginal) => {
       // A real bus: the scrubber and the timecode read the playhead from it.
       bus: new actual.PlaybackBus(),
       togglePlay: vi.fn(),
+      pause: vi.fn(),
       stop: vi.fn(),
       seek: vi.fn(),
       seekToMeasure: vi.fn(),
@@ -121,43 +122,29 @@ describe('TransportBar: transport buttons', () => {
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
   });
 
-  it('stop button calls playbackController.stop()', async () => {
-    const store = makeStore();
-    renderBar(store);
-    const user = userEvent.setup();
-
-    await user.click(screen.getByRole('button', { name: 'Stop' }));
-
-    expect(playbackController.stop).toHaveBeenCalledTimes(1);
-  });
-
-  it('go to start / previous / next measure buttons delegate to the controller', async () => {
+  it('reset pauses and goes to the start', async () => {
     const store = makeStore();
     renderBar(store);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Go to start' }));
-    await user.click(screen.getByRole('button', { name: 'Previous bar' }));
-    await user.click(screen.getByRole('button', { name: 'Next bar' }));
 
+    expect(playbackController.pause).toHaveBeenCalledTimes(1);
     expect(playbackController.goToStart).toHaveBeenCalledTimes(1);
-    expect(playbackController.previousMeasure).toHaveBeenCalledTimes(1);
-    expect(playbackController.nextMeasure).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers reset and play/pause only: no stop or bar stepping', () => {
+    renderBar(makeStore());
+    for (const name of ['Stop', 'Previous bar', 'Next bar']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
   });
 
   it('disables every transport button when no score is loaded', () => {
     const store = makeStore(false);
     renderBar(store);
 
-    for (const name of [
-      'Go to start',
-      'Previous bar',
-      'Play',
-      'Stop',
-      'Next bar',
-      'Toggle loop',
-      'Toggle metronome',
-    ]) {
+    for (const name of ['Go to start', 'Play', 'Toggle loop', 'Toggle metronome']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
   });
@@ -574,10 +561,8 @@ function fakeController() {
     // directly, the same as the mocked `playbackController.bus` above.
     bus: new PlaybackBus(),
     togglePlay: vi.fn().mockResolvedValue(undefined),
+    pause: vi.fn(),
     goToStart: vi.fn(),
-    previousMeasure: vi.fn(),
-    nextMeasure: vi.fn(),
-    stop: vi.fn(),
     toggleLoop: vi.fn(),
     setMetronome: vi.fn(),
     seek: vi.fn(),
@@ -604,20 +589,13 @@ describe('TransportBar: injected controller (the published-snapshot page)', () =
     const user = userEvent.setup();
 
     await user.click(screen.getByRole('button', { name: 'Go to start' }));
-    await user.click(screen.getByRole('button', { name: 'Previous bar' }));
-    await user.click(screen.getByRole('button', { name: 'Stop' }));
-    await user.click(screen.getByRole('button', { name: 'Next bar' }));
     await user.click(screen.getByRole('button', { name: 'Toggle loop' }));
     await user.click(screen.getByRole('button', { name: 'Toggle metronome' }));
 
     expect(controller.goToStart).toHaveBeenCalledTimes(1);
-    expect(controller.previousMeasure).toHaveBeenCalledTimes(1);
-    expect(controller.stop).toHaveBeenCalledTimes(1);
-    expect(controller.nextMeasure).toHaveBeenCalledTimes(1);
     expect(controller.toggleLoop).toHaveBeenCalledTimes(1);
     expect(controller.setMetronome).toHaveBeenCalledTimes(1);
     expect(playbackController.goToStart).not.toHaveBeenCalled();
-    expect(playbackController.stop).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,7 @@
 /**
- * Playback transport bar (spec §22): go-to-start, previous/next measure,
- * play/pause, stop, loop toggle, metronome toggle, current measure/beat,
+ * Playback transport bar (spec §22): reset (pause and go to start),
+ * play/pause, loop
+ * toggle, metronome toggle, current measure/beat,
  * tempo display+edit, playback speed, master volume, and a timeline
  * scrubber.
  *
@@ -73,9 +74,7 @@ import {
   ICON_CONTROL_CLASS,
   ICON_GLYPH_CLASS,
   MetronomeIcon,
-  NextMeasureIcon,
   PianoKeysIcon,
-  PreviousMeasureIcon,
   TEXT_CONTROL_CLASS,
 } from '@/components/icons/notation-icons';
 import {
@@ -83,7 +82,6 @@ import {
   ExclamationTriangleIcon,
   PauseIcon,
   PlayIcon,
-  StopIcon,
 } from '@heroicons/react/24/solid';
 
 /**
@@ -98,10 +96,8 @@ import {
 export type TransportController = Pick<
   PlaybackAdapter,
   | 'togglePlay'
+  | 'pause'
   | 'goToStart'
-  | 'previousMeasure'
-  | 'nextMeasure'
-  | 'stop'
   | 'toggleLoop'
   | 'setMetronome'
   | 'seek'
@@ -535,23 +531,14 @@ export function TransportBar({
           size="icon"
           aria-label={t('transport.goToStart')}
           disabled={!hasScore}
-          onClick={() => controller.goToStart()}
+          onClick={() => {
+            // Reset: stop where you are and go back to the beginning.
+            controller.pause();
+            controller.goToStart();
+          }}
           className={ICON_BUTTON_CLASS}
         >
           <GoToStartIcon className={ICON_GLYPH_CLASS} />
-        </Button>
-      </Tooltip>
-      <Tooltip content={t('transport.previousMeasure')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={t('transport.previousMeasure')}
-          disabled={!hasScore}
-          onClick={() => controller.previousMeasure()}
-          className={ICON_BUTTON_CLASS}
-        >
-          <PreviousMeasureIcon className={ICON_GLYPH_CLASS} />
         </Button>
       </Tooltip>
       <PlayPauseButton
@@ -560,35 +547,6 @@ export function TransportBar({
         controller={controller}
         playDisabled={playDisabled}
       />
-      <Tooltip content={t('transport.stop')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={t('transport.stop')}
-          disabled={!hasScore}
-          onClick={() => {
-            // Stop both the main transport and any candidate preview
-            controller.stop();
-          }}
-          className={ICON_BUTTON_CLASS}
-        >
-          <StopIcon className={ICON_GLYPH_CLASS} />
-        </Button>
-      </Tooltip>
-      <Tooltip content={t('transport.nextMeasure')}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={t('transport.nextMeasure')}
-          disabled={!hasScore}
-          onClick={() => controller.nextMeasure()}
-          className={ICON_BUTTON_CLASS}
-        >
-          <NextMeasureIcon className={ICON_GLYPH_CLASS} />
-        </Button>
-      </Tooltip>
 
       <Tooltip content={t('transport.toggleLoop')}>
         <Button

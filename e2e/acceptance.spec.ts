@@ -60,7 +60,7 @@ test.describe('spec §39 acceptance scenario', () => {
     await expect
       .poll(async () => (await readPlaybackState(page)).state, { timeout: 10_000 })
       .toBe('playing');
-    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.getByRole('button', { name: 'Pause' }).click();
 
     // 8-13. Select measures 3-4 and replace them. One result, applied by the
     // job — no candidate list to preview or accept.
@@ -148,7 +148,7 @@ test.describe('spec §39 acceptance scenario', () => {
 
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.locator('[data-playing="true"]').first()).toBeVisible({ timeout: 10_000 });
-    await page.getByRole('button', { name: 'Stop' }).click();
+    await page.getByRole('button', { name: 'Pause' }).click();
     await expect(page.locator('[data-playing="true"]')).toHaveCount(0);
 
     await waitForNotation(page);
