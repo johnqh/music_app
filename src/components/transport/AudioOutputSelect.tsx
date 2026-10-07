@@ -2,14 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SpeakerWaveIcon } from '@heroicons/react/24/solid';
 import { getMusicPlayerIfInitialized } from '@sudobility/music_player/core';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Tooltip,
-} from '@sudobility/components';
+import { Select, SelectContent, SelectItem, SelectTrigger, Tooltip } from '@sudobility/components';
 
 type OutputPlayer = {
   setAudioOutputDevice?: (deviceId: string) => Promise<void>;
@@ -90,7 +83,6 @@ export function AudioOutputSelect() {
       >
         <SelectTrigger aria-label={t('transport.audioOutput')} className="h-9 w-11 px-2">
           <SpeakerWaveIcon className="size-[18px]" />
-          <SelectValue className="sr-only" />
         </SelectTrigger>
         <SelectContent position="popper" side="top" sideOffset={4}>
           <SelectItem value={DEFAULT_DEVICE}>{t('transport.systemDefault')}</SelectItem>

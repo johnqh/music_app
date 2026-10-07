@@ -50,6 +50,10 @@ export default defineConfig({
     // esbuild's dep pre-bundler does not handle `new Worker(new URL(...))`,
     // which music_lib uses for MIDI import and quantize.
     exclude: [
+      // This app consumes freshly rebuilt local music_editing exports during
+      // development; keep Vite from serving a stale prebundle after package
+      // rebuilds add or change named exports.
+      '@sudobility/music_editing',
       '@sudobility/music_lib',
       '@sudobility/music_io',
       // music_player for the same reason and one of its own: its web entry

@@ -317,6 +317,15 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
     dialog stays open with its button spinning until the job is accepted.
   */
   const [startingJob, runStartJob] = usePendingAction();
+  const [voiceJob, setVoiceJob] = useState<{
+    cancel: () => void;
+    progress: {
+      stage: 'plan' | 'part' | 'section' | 'chunk';
+      label: string;
+      done: number;
+      total: number;
+    } | null;
+  } | null>(null);
   const { start: startGeneration } = generation;
   const startJob = useCallback(
     (kind: GenerationJobKind, request: unknown) =>
@@ -1003,6 +1012,9 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
                   // project is locked server-side, and leaving is safe.
                   onGenerateTrackJob={(request) => startJob('generate-track', request)}
                   onGenerateInsertedBars={generateInsertedBars}
+                  onVoiceTranscriptionJob={(projectId, cancel, progress) =>
+                    setVoiceJob(projectId ? { cancel, progress: progress ?? null } : null)
+                  }
                   onViewportHeight={onScoreHeight}
                 />
               )}
@@ -1053,11 +1065,13 @@ export function AppLayout({ store = useAppStore, onNavigate }: AppLayoutProps) {
           and it is optional — so with it in between, opening or closing it moved
           the transport, which is the row a reader's hand goes to without
           looking. Fixed rows first, the variable one last. */}
-        {generating && (
+        {(generating || voiceJob) && (
           <GenerationStatusStrip
-            status={generation.status}
-            onCancel={() => void generation.cancel()}
-            progress={generation.progress}
+            status={voiceJob && !generating ? 'transcribing' : generation.status}
+            onCancel={() =>
+              voiceJob && !generating ? voiceJob.cancel() : void generation.cancel()
+            }
+            progress={voiceJob && !generating ? voiceJob.progress : generation.progress}
             live={generation.live}
             error={generation.error}
           />

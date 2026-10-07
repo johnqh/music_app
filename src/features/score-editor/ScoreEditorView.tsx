@@ -144,6 +144,16 @@ export type ScoreEditorViewProps = {
   onGenerateTrackJob?: (request: GenerateScoreRequest) => Promise<void>;
   /** Starts AI generation for the newly inserted bars after they are selected. */
   onGenerateInsertedBars?: () => Promise<void>;
+  onVoiceTranscriptionJob?: (
+    projectId: string,
+    cancel: () => void,
+    progress?: {
+      stage: 'plan' | 'part' | 'section' | 'chunk';
+      label: string;
+      done: number;
+      total: number;
+    },
+  ) => void;
   /**
    * The score's own height — the scrolling sheet, without the toolbar above it
    * — whenever it changes. The host sizes the piano keyboard from it.
@@ -193,6 +203,7 @@ export function ScoreEditorView({
   onToggleInspector,
   onGenerateTrackJob,
   onGenerateInsertedBars,
+  onVoiceTranscriptionJob,
   readOnly = false,
   trackInfo: fixedTrackInfo,
   controller = playbackController,
@@ -1447,6 +1458,7 @@ export function ScoreEditorView({
             inspectorOpen={inspectorOpen}
             onToggleInspector={onToggleInspector}
             onGenerateTrack={() => setGenerateTrackOpen(true)}
+            onVoiceTranscriptionJob={onVoiceTranscriptionJob}
           />
 
           <GenerateTrackDialog

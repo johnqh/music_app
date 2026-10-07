@@ -129,6 +129,7 @@ import {
 } from '@/app-library';
 import type { EditorMoreAction, QuantizeGrid } from '@/app-library';
 import { PendingButton } from '@/components/controls/PendingButton';
+import { VoiceRecordButton } from './VoiceRecordButton';
 import { usePendingAction } from '@/hooks/usePendingAction';
 
 export type EditorToolbarProps = {
@@ -141,6 +142,16 @@ export type EditorToolbarProps = {
   onToggleInspector?: () => void;
   /** Opens the generate-track modal. Omitted when no host provides one. */
   onGenerateTrack?: () => void;
+  onVoiceTranscriptionJob?: (
+    projectId: string,
+    cancel: () => void,
+    progress?: {
+      stage: 'plan' | 'part' | 'section' | 'chunk';
+      label: string;
+      done: number;
+      total: number;
+    },
+  ) => void;
   /** Opens the Go to bar prompt. Omitted in isolation tests. */
   onGoToBar?: () => void;
   /** Opens the add/insert-bars form. Omitted in isolation tests. */
@@ -253,6 +264,7 @@ export function EditorToolbar({
   onAddMeasure,
   onEnterLyrics,
   onGenerateTrack,
+  onVoiceTranscriptionJob,
   lineDrawing = false,
   onLineDrawingChange,
 }: EditorToolbarProps) {
@@ -464,6 +476,15 @@ export function EditorToolbar({
                 </svg>
               </Button>
             </Tooltip>
+          )}
+          {onLineDrawingChange && (
+            <VoiceRecordButton
+              store={store}
+              className={TOGGLE_BUTTON_CLASS}
+              iconClassName={ICON_GLYPH_CLASS}
+              onStart={() => onLineDrawingChange(false)}
+              onTranscriptionJob={onVoiceTranscriptionJob}
+            />
           )}
         </div>
 

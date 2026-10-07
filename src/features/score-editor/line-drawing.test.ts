@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allNotes, pitchToMidi, validateScore } from '@sudobility/music_types';
+import { allNotes, validateScore } from '@sudobility/music_types';
 import { twinkleScore } from '@/app-library';
 import type { Pitch } from '@sudobility/music_types';
 import { drawLineCommand, lineNotes, reviseLine, type LineSample } from '@sudobility/music_editing';
@@ -15,7 +15,7 @@ describe('line drawing', () => {
     ]);
   });
 
-  it('makes one note per pitch run with durations from horizontal distance and clamps range', () => {
+  it('preserves pitch runs when they fit the stroke duration', () => {
     const score = twinkleScore();
     const track = score.tracks[0]!;
     const notes = lineNotes(
@@ -24,8 +24,8 @@ describe('line drawing', () => {
         sample(60, pitch('C')),
         sample(120, pitch('E')),
         sample(180, pitch('E')),
-        sample(240, pitch('C', 9)),
-        sample(300, pitch('C', 9)),
+        sample(240, pitch('G')),
+        sample(960, pitch('G')),
       ],
       score,
       track,
@@ -33,9 +33,29 @@ describe('line drawing', () => {
     expect(notes.map((note) => [note.startTick, note.endTick])).toEqual([
       [0, 240],
       [240, 480],
-      [480, 720],
+      [480, 960],
     ]);
-    expect(pitchToMidi(notes[2]!.pitch)).toBeLessThan(pitchToMidi(pitch('C', 9)));
+  });
+
+  it('drops rapid pitch changes rather than extending beyond the stroke', () => {
+    const score = twinkleScore();
+    const track = score.tracks[0]!;
+    const notes = lineNotes(
+      [
+        sample(0, pitch('C')),
+        sample(60, pitch('C')),
+        sample(120, pitch('E')),
+        sample(180, pitch('E')),
+        sample(240, pitch('G')),
+        sample(300, pitch('G')),
+      ],
+      score,
+      track,
+    );
+    expect(notes.length).toBeLessThan(3);
+    expect(notes[0]!.startTick).toBe(0);
+    expect(notes.at(-1)!.endTick).toBe(300);
+    expect(notes.every((note) => note.endTick <= 300)).toBe(true);
   });
 
   it('replaces just the drawn span, ties across a barline, and undoes as one command', () => {

@@ -686,6 +686,8 @@ export function TransportBar({
         </Select>
       </Tooltip>
 
+      <AudioOutputSelect />
+
       <div className="flex w-[120px] items-center gap-2">
         <span className="text-sm text-foreground">{t('transport.volume')}</span>
         <LevelSlider
@@ -697,8 +699,6 @@ export function TransportBar({
           onChange={handleVolumeChange}
         />
       </div>
-
-      <AudioOutputSelect />
 
       {/*
         `flex items-center` to match the volume block beside it. Without it the

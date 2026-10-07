@@ -25,6 +25,12 @@ import { globSync } from 'node:fs';
  * somebody makes on purpose.
  */
 const ALLOWED_NON_UI = new Set([
+  // The authenticated client and existing project job handle transcription;
+  // this module only wires that app service to the editor.
+  'src/features/score-editor/transcribe-recording.ts',
+  // Browser MediaRecorder produces containers the transcriber cannot read;
+  // this platform adapter decodes them and uses music_io's MP3 encoder.
+  'src/features/score-editor/microphone-mp3.ts',
   // The composition root: it *constructs* the platform services rather than
   // implementing them, which is exactly music_app's job.
   'src/config/initialize.ts',
