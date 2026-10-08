@@ -978,7 +978,7 @@
   },
   "footer": {
     "rights": "保留所有权利",
-    "tagline": "在浏览器中编写、生成并播放乐谱。",
+    "tagline": "音乐的源代码。让 AI 为你所用，而不是取代你。",
     "create": "创作",
     "account": "账户",
     "browseShared": "浏览分享的乐谱",
@@ -1150,15 +1150,20 @@
     "sourceFree": "赠送"
   },
   "home": {
-    "heroTitle": "用 AI 创作，逐音修改",
-    "heroBody": "{{appName}} 将完整的记谱编辑器和可弹奏的钢琴键盘与 AI 生成结合：描述你想要的音乐，然后编辑每一个音符。",
+    "heroTitle": "音乐的源代码",
+    "heroBody": "{{appName}} 面向希望掌控创作过程、同时借助 AI 助力的音乐人。用标准乐谱创作、检查并编辑每一个音符。",
+    "heroPromise": "让 AI 为你所用，而不是取代你。",
     "cta": "打开我的项目",
-    "featureEditorTitle": "真正的记谱编辑",
-    "featureEditorBody": "同一份乐谱上的雕版记谱，下方配有钢琴键盘，并具备完整的撤销历史。",
-    "featureAiTitle": "AI 生成",
-    "featureAiBody": "生成整首作品，或重新生成选中的小节。",
-    "featureFormatsTitle": "导入音频，创作属于你的版本",
-    "featureFormatsBody": "导入 MP3、MPA 或 WAV 录音，将音频转换为可编辑的音符。无论是来自 Suno、Udio 等 AI 音乐生成器的作品，还是你喜欢的歌曲，都可以提取音符来编辑或练习乐器。",
+    "featureEditorTitle": "逐音创作，掌控作品",
+    "featureEditorBody": "使用标准记谱法塑造音乐的每个部分。AI 可以帮你起步，作曲的主导权始终在你手中。",
+    "featureAiTitle": "听从你方向的 AI",
+    "featureAiBody": "生成乐谱或改写选中的小节，然后亲自检查并打磨音符。",
+    "featureFormatsTitle": "按你的方式导入和导出",
+    "featureFormatsBody": "可导入音频录音（MP3、MPA、WAV）、MIDI 和 MusicXML；可导出 MIDI、MusicXML、WAV 和 MP3。",
+    "featureRightsTitle": "没有 AI 音频模型的授权负担",
+    "featureRightsBody": "AI 协助生成结构化音符，而不是生成音频录音，因此你的作品不是 AI 生成的音频曲目。",
+    "featureWatermarkTitle": "乐谱没有水印",
+    "featureWatermarkBody": "乐谱以标准、可移植的格式保存音符，而不是带有水印的 AI 音频文件。",
     "ctaVisitor": "免费开始使用"
   },
   "import": {
@@ -1633,7 +1638,7 @@
     "publishedAt": "已发布：{{url}}",
     "defaultName": "版本 {{number}}"
   },
-  "tagline": "AI 辅助的乐谱创作",
+  "tagline": "音乐的源代码",
   "templates": {
     "lead-sheet": {
       "name": "主旋律谱",

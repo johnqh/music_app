@@ -44,9 +44,7 @@ describe('App', () => {
     const { store } = setup();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
   });
 
@@ -74,9 +72,7 @@ describe('App', () => {
     signOut();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
   });
@@ -211,9 +207,7 @@ describe('App', () => {
     const { store, context } = setup();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
     act(() => {
       store.getState().setThemeMode('dark');
@@ -234,9 +228,7 @@ describe('App', () => {
     const { store, context } = setup();
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
     act(() => {
       store.getState().setKeyboardCollapsed(true);
@@ -267,9 +259,7 @@ describe('App', () => {
     await store.getState().newProject({ name: 'Flush Me' });
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
 
     const saveNow = vi.fn().mockResolvedValue(undefined);
@@ -285,9 +275,7 @@ describe('App', () => {
     await store.getState().newProject({ name: 'Clean' });
     render(<App store={store} />);
     await waitFor(() =>
-      expect(
-        screen.getByRole('heading', { name: 'Compose with AI, refine by hand' }),
-      ).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Source code for music' })).toBeInTheDocument(),
     );
     const saveNow = vi.fn().mockResolvedValue(undefined);
     store.setState({ dirty: false, saveNow } as never);

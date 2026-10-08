@@ -29,6 +29,8 @@ const FEATURES = [
   { key: 'editor', title: 'home.featureEditorTitle', body: 'home.featureEditorBody' },
   { key: 'ai', title: 'home.featureAiTitle', body: 'home.featureAiBody' },
   { key: 'formats', title: 'home.featureFormatsTitle', body: 'home.featureFormatsBody' },
+  { key: 'rights', title: 'home.featureRightsTitle', body: 'home.featureRightsBody' },
+  { key: 'watermark', title: 'home.featureWatermarkTitle', body: 'home.featureWatermarkBody' },
 ] as const;
 
 export default function HomePage() {
@@ -48,6 +50,15 @@ export default function HomePage() {
           </Heading>
           <Text as="p" size="lg" color="muted" align="center" className="mx-auto mt-4 max-w-3xl">
             {t('home.heroBody')}
+          </Text>
+          <Text
+            as="p"
+            size="base"
+            weight="semibold"
+            align="center"
+            className="mx-auto mt-4 max-w-3xl"
+          >
+            {t('home.heroPromise')}
           </Text>
           <Button
             type="button"

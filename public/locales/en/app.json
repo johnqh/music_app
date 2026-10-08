@@ -978,7 +978,7 @@
   },
   "footer": {
     "rights": "All rights reserved",
-    "tagline": "Write, generate and play sheet music in your browser.",
+    "tagline": "Source code for music. Make AI work for you, don't be replaced by AI.",
     "create": "Create",
     "account": "Account",
     "browseShared": "Browse shared scores",
@@ -1150,15 +1150,20 @@
     "sourceFree": "Free"
   },
   "home": {
-    "heroTitle": "Compose with AI, refine by hand",
-    "heroBody": "{{appName}} pairs a full notation editor and a playable piano keyboard with AI generation: describe the music you want, then edit every note.",
+    "heroTitle": "Source code for music",
+    "heroBody": "{{appName}} is for musicians who want creative control, with AI to help. Compose, inspect, and edit every note in a standard score.",
+    "heroPromise": "Make AI work for you, don't be replaced by AI.",
     "cta": "Open your projects",
-    "featureEditorTitle": "Real notation editing",
-    "featureEditorBody": "Engraved notation with a piano keyboard beneath it, over one score, with full undo history.",
-    "featureAiTitle": "AI generation",
-    "featureAiBody": "Generate whole pieces, or regenerate a selection of bars.",
-    "featureFormatsTitle": "Bring in audio. Make it yours.",
-    "featureFormatsBody": "Import MP3, MPA, or WAV recordings and turn them into editable notes. Work with songs from AI music generators like Suno and Udio, or pull notes from a favorite song to practice an instrument.",
+    "featureEditorTitle": "Your music, note by note",
+    "featureEditorBody": "Work in standard notation and shape every part yourself. AI can help you get started; you stay the composer.",
+    "featureAiTitle": "AI that follows your direction",
+    "featureAiBody": "Generate a score or rework selected bars, then review and refine the notes yourself.",
+    "featureFormatsTitle": "Import and export music your way",
+    "featureFormatsBody": "Import audio recordings (MP3, MPA, WAV), MIDI, and MusicXML. Export MIDI, MusicXML, WAV, and MP3.",
+    "featureRightsTitle": "No AI-audio licensing baggage",
+    "featureRightsBody": "AI helps create structured musical notes instead of generating an audio recording, so your composition is not an AI-generated audio track.",
+    "featureWatermarkTitle": "No watermark in your score",
+    "featureWatermarkBody": "Your score contains standard musical notes in a portable format—not a watermarked AI-audio file.",
     "ctaVisitor": "Get started free"
   },
   "import": {
@@ -1633,7 +1638,7 @@
     "publishedAt": "Published: {{url}}",
     "defaultName": "Version {{number}}"
   },
-  "tagline": "AI-assisted sheet music composition",
+  "tagline": "Source code for music",
   "templates": {
     "lead-sheet": {
       "name": "Lead Sheet",
